@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "fixture_id": "krea2-sim-model-0101",
+  "feature_id": "COMFY-MODEL-0101",
+  "source_symbol": "Krea2",
+  "source_ordinal": 79,
+  "latent_feature_id": "COMFY-MODEL-0053",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/krea2/model.py", "sha256": "c6bce005d5c902b310c63cb9e4f1717e0fea01ad2d8449a0f46e5dd617944daa"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/krea2.py", "sha256": "be316682d4787ff0eb2bda9f2396b3769efa8f1f28bd1a688069f414de04c5e4"}
+  ],
+  "source_projection": "Krea2|79|image_model=krea2|latent=Wan21|dtypes=bf16,f16,f32|memory=2.2|patch=2|head_dim=128|text_layers=12|clip=qwen3vl_4b",
+  "source_projection_sha256": "4602a810b8b6194ec87baa252a02054d7122396204150a944c5ee1929df6953f",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

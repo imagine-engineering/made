@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixture_id": "omnigen2-sim-model-0108",
+  "feature_id": "COMFY-MODEL-0108",
+  "source_symbol": "Omnigen2",
+  "source_ordinal": 75,
+  "source_files": [
+    { "path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69" },
+    { "path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd" },
+    { "path": "projects/sim/ComfyUI/sim/ldm/omnigen/omnigen2.py", "sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3" },
+    { "path": "projects/sim/ComfyUI/sim/text_encoders/omnigen2.py", "sha256": "ef76972277b8b2141172ea2e53685bdeb26f2ff383c679946f10ff3396067c92" },
+    { "path": "crates/sim_model/src/omnigen2_boogu_family.rs", "sha256": "049b3b9066cb8e2bd7e845c0a401f859098346f48eaa900439f8a15f98a86bb2" }
+  ],
+  "source_projection": "source_symbol=Omnigen2\nsource_ordinal=75\nunet_config.image_model=omnigen2\nsampling_settings.multiplier=1.0\nsampling_settings.shift=2.6\nlatent_format=Flux\nmemory_usage_factor=1.95\nsupported_inference_dtypes=bf16,f32\nextended_fp16=capability-gated\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.Omnigen2\nclip_tokenizer=sim.text_encoders.omnigen2.Omnigen2Tokenizer\nclip_model=sim.text_encoders.omnigen2.te\nclip_detect=sim.text_encoders.hunyuan_video.llama_detect(text_encoders.qwen25_3b.transformer.)\nlayouts=prefixed-native,standalone-native\ndiffusers=unsupported\nconfiguration.hidden_size=2520\nconfiguration.layers=32\nconfiguration.refiner_layers=2\nconfiguration.heads=21\nconfiguration.kv_heads=7\nstate_mapping=canonical-omnigen2-boogu\n",
+  "source_projection_sha256": "d7c697805b6e0d6244cdb4171cef04600f121354f02907a0ec22ae7791e63314",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

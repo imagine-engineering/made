@@ -1,0 +1,143 @@
+{
+  "canonical_target": "torch.float16",
+  "consumer_output_expectations": [],
+  "definition_call_reconciliation": [],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-6542124fe760-v1",
+  "inventory_kind": "namespace-or-value-reference",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-6542124FE760",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "a18373c323c8aed0fdc120dcaca9ab4da72da5bffb5b4415e0b69dff53619316",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/float.py",
+        "sha256": "3a6e6c6fb306b5827378f8b2a551984d89b2b9719c24cff39abc423fc1f37c01"
+      },
+      {
+        "path": "comfy/ldm/ace/attention.py",
+        "sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f"
+      },
+      {
+        "path": "comfy/ldm/cosmos/predict2.py",
+        "sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b"
+      },
+      {
+        "path": "comfy/ldm/flux/layers.py",
+        "sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc"
+      },
+      {
+        "path": "comfy/ldm/flux/model.py",
+        "sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/model.py",
+        "sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27"
+      },
+      {
+        "path": "comfy/ldm/lightricks/embeddings_connector.py",
+        "sha256": "baf7cded994414160aa57edccfabc94ad185d699d02558465332c12125e69847"
+      },
+      {
+        "path": "comfy/ldm/lumina/model.py",
+        "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"
+      },
+      {
+        "path": "comfy/ldm/modules/attention.py",
+        "sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e"
+      },
+      {
+        "path": "comfy/model_management.py",
+        "sha256": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/sd.py",
+        "sha256": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42"
+      },
+      {
+        "path": "comfy/supported_models.py",
+        "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+      },
+      {
+        "path": "comfy/supported_models_base.py",
+        "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"
+      },
+      {
+        "path": "comfy/text_encoders/t5.py",
+        "sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc"
+      },
+      {
+        "path": "comfy/utils.py",
+        "sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"
+      },
+      {
+        "path": "comfy/weight_adapter/bypass.py",
+        "sha256": "618c286c5f74e823318f41774e02cfcfa02d74ee9d51320ec0aa2694cd74aa8e"
+      },
+      {
+        "path": "comfy_extras/nodes_depth_anything_3.py",
+        "sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02"
+      },
+      {
+        "path": "comfy_extras/nodes_frame_interpolation.py",
+        "sha256": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_train.py",
+        "sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      },
+      {
+        "path": "node_helpers.py",
+        "sha256": "22317a033cce556331bfedc5f4ab6c2833184fd2bbdf9496c9182a4973a7098a"
+      },
+      {
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+      },
+      {
+        "path": "tests-unit/comfy_quant/test_mixed_precision.py",
+        "sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "dtype",
+    "value": "torch.float16"
+  },
+  "resolution": {
+    "blocker_reason": "",
+    "expected_resolution_module": "value_or_constant_contract_03",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": false,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-value-or-constant-contract-comfy-tensor-op-6542124fe760",
+    "state": "resolved_reference"
+  },
+  "schema_version": 1,
+  "static_call_sites": [],
+  "static_definition": null
+}

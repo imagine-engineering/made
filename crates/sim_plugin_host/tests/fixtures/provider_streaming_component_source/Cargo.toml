@@ -1,0 +1,29 @@
+[package]
+name = "sim-provider-streaming-plugin-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+rust-version = "1.95"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+path = "guest.rs"
+
+[[bin]]
+name = "rebuild_fixture"
+path = "rebuild_fixture.rs"
+
+[dependencies]
+wit-bindgen = { version = "=0.41.0", default-features = false, features = ["macros", "realloc"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wit-component = "=0.227.1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = "symbols"

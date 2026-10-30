@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "fixture_id": "anima-sim-model-0063",
+  "feature_id": "COMFY-MODEL-0063",
+  "source_symbol": "Anima",
+  "source_ordinal": 84,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/anima/model.py",
+      "sha256": "af8cf8bca4709b69f82e59fb24b3a893065c677951fe568f0fbf3306c6053a7f"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/anima.py",
+      "sha256": "7eef5186d57c7f6d4b23ecdebb454ae9b64def8117d0e7a57b0b537de64c69c5"
+    }
+  ],
+  "source_projection": "source_symbol=Anima\nsource_ordinal=84\nunet_config.image_model=anima\nsampling_settings.multiplier=1.0\nsampling_settings.shift=3.0\nlatent_format=Wan21\nmemory_usage_factor=1.0\nsupported_inference_dtypes=bf16,f16,f32\narchitecture=model_base.Anima\nclip_tokenizer=sim.text_encoders.anima.AnimaTokenizer\nclip_model=sim.text_encoders.anima.te\n",
+  "source_projection_sha256": "86ad91672cb271baa2fe7f18b2ca75bca61aafe7e3200e9f91943655f24f6a21",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI sources; no production Python dependency"
+}

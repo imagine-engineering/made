@@ -1,0 +1,5726 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.quiver",
+  "scope": "Pinned source node AST/Pydantic and actual SVG ordered BytesIO wrapper; native upload/artifact allocation injected, no native ABI result. Reference mapping insertion order uses ordered_entries boundary.",
+  "source_sha256": {
+    "sim_api_nodes/nodes_quiver.py": "5ab37aba355046eb66dc2f36c5edec4ff5e42fec17cbb0195fd90f4ee3115e0d",
+    "sim_api_nodes/apis/quiver.py": "af2492f72b24a6ea4d4860b3dcf553ea180df395abd1357f1d2a445f93e0f219",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api/latest/_util/image_types.py": "1704789d3bbb5570eb7dae16537a20aa88b63cd551dd54b5ee91781732efc606"
+  },
+  "contracts": {
+    "QuiverTextToSVGNode": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "instructions",
+        "reference_images"
+      ],
+      "defaults": {
+        "instructions": null,
+        "reference_images": null
+      },
+      "schema": "IO.Schema(node_id='QuiverTextToSVGNode', display_name='Quiver Text to SVG', category='partner/image/Quiver', description='Generate an SVG from a text prompt using Quiver AI.', inputs=[IO.String.Input('prompt', multiline=True, default='', tooltip='Text description of the desired SVG output.'), IO.String.Input('instructions', multiline=True, default='', tooltip='Additional style or formatting guidance.', optional=True, advanced=True), IO.Autogrow.Input('reference_images', template=IO.Autogrow.TemplatePrefix(IO.Image.Input('image'), prefix='ref_', min=0, max=4), tooltip='Up to 4 reference images to guide the generation.', optional=True), IO.DynamicCombo.Input('model', options=[IO.DynamicCombo.Option(m, _arrow_sampling_inputs()) for m in _ARROW_MODELS], tooltip='Model to use for SVG generation.'), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed to determine if node should re-run; actual results are nondeterministic regardless of seed.')], outputs=[IO.SVG.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['model']), expr='\\n                (\\n                  $contains(widgets.model, \"max\")\\n                    ? {\"type\":\"usd\",\"usd\":0.3575}\\n                    : $contains(widgets.model, \"preview\")\\n                      ? {\"type\":\"usd\",\"usd\":0.429}\\n                      : {\"type\":\"usd\",\"usd\":0.286}\\n                )\\n                '))",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.SVG.Output()]"
+    },
+    "QuiverImageToSVGNode": {
+      "arguments": [
+        "image",
+        "auto_crop",
+        "model",
+        "seed"
+      ],
+      "defaults": {},
+      "schema": "IO.Schema(node_id='QuiverImageToSVGNode', display_name='Quiver Image to SVG', category='partner/image/Quiver', description='Vectorize a raster image into SVG using Quiver AI.', inputs=[IO.Image.Input('image', tooltip='Input image to vectorize.'), IO.Boolean.Input('auto_crop', default=False, tooltip='Automatically crop to the dominant subject.', advanced=True), IO.DynamicCombo.Input('model', options=[IO.DynamicCombo.Option(m, [IO.Int.Input('target_size', default=1024, min=128, max=4096, tooltip='Square resize target in pixels.', advanced=True), *_arrow_sampling_inputs()]) for m in _ARROW_MODELS], tooltip='Model to use for SVG vectorization.'), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed to determine if node should re-run; actual results are nondeterministic regardless of seed.')], outputs=[IO.SVG.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['model']), expr='\\n                (\\n                  $contains(widgets.model, \"max\")\\n                    ? {\"type\":\"usd\",\"usd\":0.3575}\\n                    : $contains(widgets.model, \"preview\")\\n                      ? {\"type\":\"usd\",\"usd\":0.429}\\n                      : {\"type\":\"usd\",\"usd\":0.286}\\n                )\\n                '))",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.SVG.Output()]"
+    }
+  },
+  "models": [
+    "arrow-1.1",
+    "arrow-1.1-max",
+    "arrow-preview"
+  ],
+  "cases": [
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1-max"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1-max",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "prompt": "  source prompt  ",
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1-max",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "prompt": "  source prompt  ",
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1-max",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "prompt": "  source prompt  ",
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-preview"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-preview",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "prompt": "  source prompt  ",
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-preview",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "prompt": "  source prompt  ",
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-preview",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "prompt": "  source prompt  ",
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "prompt": "  source prompt  ",
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "prompt": "  source prompt  ",
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "prompt": "  source prompt  ",
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom-max-preview"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom-max-preview",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "prompt": "  source prompt  ",
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom-max-preview",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "prompt": "  source prompt  ",
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "custom-max-preview",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "prompt": "  source prompt  ",
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": ""
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "prompt": "  source prompt  ",
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "prompt": "  source prompt  ",
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "prompt": "  source prompt  ",
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [],
+      "response": {
+        "data": []
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        ""
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": ""
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "6e6f7420786d6c"
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": "not xml",
+            "mime_type": "ignored/source"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c7376673eceb1f09f9880003c2f7376673e",
+        "3c7376673e7365636f6e643c2f7376673e"
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": "<svg>α😀\u0000</svg>"
+          },
+          {
+            "svg": "<svg>second</svg>"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1-max"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1-max",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1-max",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1-max",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1-max",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-preview"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-preview",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-preview",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-preview",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom-max-preview"
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom-max-preview",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom-max-preview",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "custom-max-preview",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "custom-max-preview",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": ""
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "",
+            "temperature": 0,
+            "top_p": 0,
+            "presence_penalty": -2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 0.0,
+            "top_p": 0.0,
+            "presence_penalty": -2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "",
+            "temperature": 2,
+            "top_p": 1,
+            "presence_penalty": 2
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 2.0,
+            "top_p": 1.0,
+            "presence_penalty": 2.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "",
+            "temperature": 1,
+            "top_p": 0.05,
+            "presence_penalty": 0
+          },
+          "seed": 2147483647
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "temperature": 1.0,
+            "top_p": 0.05,
+            "presence_penalty": 0.0
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [],
+      "response": {
+        "data": []
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        ""
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": ""
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "6e6f7420786d6c"
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": "not xml",
+            "mime_type": "ignored/source"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c7376673eceb1f09f9880003c2f7376673e",
+        "3c7376673e7365636f6e643c2f7376673e"
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": "<svg>α😀\u0000</svg>"
+          },
+          {
+            "svg": "<svg>second</svg>"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": " ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": " "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "\u001c\u001f",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "\u001c\u001f"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "instructions": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "instructions": ""
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "instructions": " "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "instructions": "\u001c\u001f source\u001c\u001f"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "instructions": "source"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "instructions": "​source​"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "instructions": "​source​"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "instructions": " source guidance "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "instructions": "source guidance"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": []
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": [
+              {
+                "key": "ref_9",
+                "image": {
+                  "native_slot": "ref-0",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "references": [
+              {
+                "url": "https://storage.fixture.invalid/ref-0.png"
+              }
+            ]
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-0",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": [
+              {
+                "key": "ref_9",
+                "image": {
+                  "native_slot": "ref-0",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_8",
+                "image": {
+                  "native_slot": "ref-1",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "references": [
+              {
+                "url": "https://storage.fixture.invalid/ref-0.png"
+              },
+              {
+                "url": "https://storage.fixture.invalid/ref-1.png"
+              }
+            ]
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-0",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-1",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": [
+              {
+                "key": "ref_9",
+                "image": {
+                  "native_slot": "ref-0",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_8",
+                "image": {
+                  "native_slot": "ref-1",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_7",
+                "image": {
+                  "native_slot": "ref-2",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "references": [
+              {
+                "url": "https://storage.fixture.invalid/ref-0.png"
+              },
+              {
+                "url": "https://storage.fixture.invalid/ref-1.png"
+              },
+              {
+                "url": "https://storage.fixture.invalid/ref-2.png"
+              }
+            ]
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-0",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-1",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-2",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": [
+              {
+                "key": "ref_9",
+                "image": {
+                  "native_slot": "ref-0",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_8",
+                "image": {
+                  "native_slot": "ref-1",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_7",
+                "image": {
+                  "native_slot": "ref-2",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_6",
+                "image": {
+                  "native_slot": "ref-3",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  ",
+            "references": [
+              {
+                "url": "https://storage.fixture.invalid/ref-0.png"
+              },
+              {
+                "url": "https://storage.fixture.invalid/ref-1.png"
+              },
+              {
+                "url": "https://storage.fixture.invalid/ref-2.png"
+              },
+              {
+                "url": "https://storage.fixture.invalid/ref-3.png"
+              }
+            ]
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-0",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-1",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-2",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-3",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": null
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 128
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "target_size": 128
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 1024
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "target_size": 1024
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 4096
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "target_size": 4096
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": true,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": null
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "auto_crop": true
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": true,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 128
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "auto_crop": true,
+            "target_size": 128
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": true,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 1024
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "auto_crop": true,
+            "target_size": 1024
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": true,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 4096
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            },
+            "auto_crop": true,
+            "target_size": 4096
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "svg_utf8_hex": [
+        "3c73766720786d6c6e733d22687474703a2f2f7777772e77332e6f72672f323030302f737667223e3c746578743e736f7572636520ceb120f09f98803c2f746578743e3c2f7376673e",
+        ""
+      ]
+    }
+  ],
+  "preflight_errors": [
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": -0.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverTextToSVGRequest\ntemperature\n  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 2.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverTextToSVGRequest\ntemperature\n  Input should be less than or equal to 2 [type=less_than_equal, input_value=2.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "top_p": -0.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverTextToSVGRequest\ntop_p\n  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "top_p": 1.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverTextToSVGRequest\ntop_p\n  Input should be less than or equal to 1 [type=less_than_equal, input_value=1.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "presence_penalty": -2.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverTextToSVGRequest\npresence_penalty\n  Input should be greater than or equal to -2 [type=greater_than_equal, input_value=-2.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1",
+            "presence_penalty": 2.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverTextToSVGRequest\npresence_penalty\n  Input should be less than or equal to 2 [type=less_than_equal, input_value=2.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {},
+          "seed": 0
+        }
+      },
+      "message": "'model'",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": -0.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\ntemperature\n  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "temperature": 2.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\ntemperature\n  Input should be less than or equal to 2 [type=less_than_equal, input_value=2.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "top_p": -0.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\ntop_p\n  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "top_p": 1.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\ntop_p\n  Input should be less than or equal to 1 [type=less_than_equal, input_value=1.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "presence_penalty": -2.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\npresence_penalty\n  Input should be greater than or equal to -2 [type=greater_than_equal, input_value=-2.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "presence_penalty": 2.1
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\npresence_penalty\n  Input should be less than or equal to 2 [type=less_than_equal, input_value=2.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {},
+          "seed": 0
+        }
+      },
+      "message": "'model'",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "Field 'prompt' cannot be shorter than 1 characters; was 0 characters long.",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": null,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "Field 'prompt' cannot be empty.",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": [
+              {
+                "key": "ref_9",
+                "image": {
+                  "native_slot": "ref-0",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_8",
+                "image": {
+                  "native_slot": "ref-1",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_7",
+                "image": {
+                  "native_slot": "ref-2",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_6",
+                "image": {
+                  "native_slot": "ref-3",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_5",
+                "image": {
+                  "native_slot": "ref-4",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "message": "Maximum 4 reference images are allowed.",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-0",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-1",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-2",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-3",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "ref-4",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0,
+          "reference_images": {
+            "ordered_entries": [
+              {
+                "key": "ref_2",
+                "image": {
+                  "native_slot": "first",
+                  "shape": [
+                    1,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              },
+              {
+                "key": "ref_1",
+                "image": {
+                  "native_slot": "empty",
+                  "shape": [
+                    0,
+                    720,
+                    720,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "message": "source first uploaded image absent",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "first",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        },
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "empty",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "empty",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "source first uploaded image absent",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "empty",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 127
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\ntarget_size\n  Input should be greater than or equal to 128 [type=greater_than_equal, input_value=127, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1",
+            "target_size": 4097
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverImageToSVGRequest\ntarget_size\n  Input should be less than or equal to 4096 [type=less_than_equal, input_value=4097, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ]
+    }
+  ],
+  "response_errors": [
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {}
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata\n  Input should be a valid list [type=list_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/list_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {
+        "data": null
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.svg\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {
+        "data": [
+          {}
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.svg\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {
+        "data": [
+          {
+            "svg": null
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.svg\n  Input should be a valid string [type=string_type, input_value=42, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {
+        "data": [
+          {
+            "svg": 42
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.mime_type\n  Input should be a valid string [type=string_type, input_value=42, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {
+        "data": [
+          {
+            "svg": "source",
+            "mime_type": 42
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverTextToSVGNode",
+        "arguments": {
+          "prompt": "  source prompt  ",
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\nusage.total_tokens\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='invalid', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/generations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "response": {
+        "data": [
+          {
+            "svg": "source"
+          }
+        ],
+        "usage": {
+          "total_tokens": "invalid"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {}
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata\n  Input should be a valid list [type=list_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/list_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {
+        "data": null
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.svg\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {
+        "data": [
+          {}
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.svg\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": null
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.svg\n  Input should be a valid string [type=string_type, input_value=42, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": 42
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\ndata.0.mime_type\n  Input should be a valid string [type=string_type, input_value=42, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": "source",
+            "mime_type": 42
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "node": "QuiverImageToSVGNode",
+        "arguments": {
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "auto_crop": false,
+          "model": {
+            "model": "arrow-1.1"
+          },
+          "seed": 0
+        }
+      },
+      "message": "1 validation error for QuiverSVGResponse\nusage.total_tokens\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='invalid', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing",
+      "requests": [
+        {
+          "path": "/proxy/quiver/v1/svgs/vectorizations",
+          "method": "POST",
+          "body": {
+            "model": "arrow-1.1",
+            "image": {
+              "url": "https://storage.fixture.invalid/image.png"
+            }
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "mime_type": "image/png",
+          "max_images": 1,
+          "wait_label": "Uploading",
+          "show_batch_index": false,
+          "total_pixels": 4194304
+        }
+      ],
+      "response": {
+        "data": [
+          {
+            "svg": "source"
+          }
+        ],
+        "usage": {
+          "total_tokens": "invalid"
+        }
+      }
+    }
+  ],
+  "price_expressions": {
+    "QuiverTextToSVGNode": "\n                (\n                  $contains(widgets.model, \"max\")\n                    ? {\"type\":\"usd\",\"usd\":0.3575}\n                    : $contains(widgets.model, \"preview\")\n                      ? {\"type\":\"usd\",\"usd\":0.429}\n                      : {\"type\":\"usd\",\"usd\":0.286}\n                )\n                ",
+    "QuiverImageToSVGNode": "\n                (\n                  $contains(widgets.model, \"max\")\n                    ? {\"type\":\"usd\",\"usd\":0.3575}\n                    : $contains(widgets.model, \"preview\")\n                      ? {\"type\":\"usd\",\"usd\":0.429}\n                      : {\"type\":\"usd\",\"usd\":0.286}\n                )\n                "
+  },
+  "price_rates": {
+    "max": 0.3575,
+    "preview": 0.429,
+    "base": 0.286
+  },
+  "price_cases": [
+    {
+      "model": "arrow-1.1",
+      "maximum_microunits": 286000
+    },
+    {
+      "model": "arrow-1.1-max",
+      "maximum_microunits": 357500
+    },
+    {
+      "model": "arrow-preview",
+      "maximum_microunits": 429000
+    },
+    {
+      "model": "custom",
+      "maximum_microunits": 286000
+    },
+    {
+      "model": "custom-max-preview",
+      "maximum_microunits": 357500
+    },
+    {
+      "model": "",
+      "maximum_microunits": 286000
+    }
+  ],
+  "api_schemas": {
+    "QuiverTextToSVGRequest": {
+      "$defs": {
+        "QuiverImageObject": {
+          "properties": {
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "title": "QuiverImageObject",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "model": {
+          "default": "arrow-preview",
+          "title": "Model",
+          "type": "string"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "instructions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instructions"
+        },
+        "references": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/QuiverImageObject"
+              },
+              "maxItems": 4,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "References"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        },
+        "top_p": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top P"
+        },
+        "presence_penalty": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": -2,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presence Penalty"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "title": "QuiverTextToSVGRequest",
+      "type": "object"
+    },
+    "QuiverImageToSVGRequest": {
+      "$defs": {
+        "QuiverImageObject": {
+          "properties": {
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "title": "QuiverImageObject",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "model": {
+          "default": "arrow-preview",
+          "title": "Model",
+          "type": "string"
+        },
+        "image": {
+          "$ref": "#/$defs/QuiverImageObject"
+        },
+        "auto_crop": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Crop"
+        },
+        "target_size": {
+          "anyOf": [
+            {
+              "maximum": 4096,
+              "minimum": 128,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Size"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        },
+        "top_p": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top P"
+        },
+        "presence_penalty": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": -2,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presence Penalty"
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "title": "QuiverImageToSVGRequest",
+      "type": "object"
+    },
+    "QuiverSVGResponse": {
+      "$defs": {
+        "QuiverSVGResponseItem": {
+          "properties": {
+            "svg": {
+              "title": "Svg",
+              "type": "string"
+            },
+            "mime_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "image/svg+xml",
+              "title": "Mime Type"
+            }
+          },
+          "required": [
+            "svg"
+          ],
+          "title": "QuiverSVGResponseItem",
+          "type": "object"
+        },
+        "QuiverSVGUsage": {
+          "properties": {
+            "total_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Total Tokens"
+            },
+            "input_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Tokens"
+            },
+            "output_tokens": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Output Tokens"
+            }
+          },
+          "title": "QuiverSVGUsage",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "created": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created"
+        },
+        "data": {
+          "items": {
+            "$ref": "#/$defs/QuiverSVGResponseItem"
+          },
+          "title": "Data",
+          "type": "array"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuiverSVGUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "QuiverSVGResponse",
+      "type": "object"
+    }
+  }
+}

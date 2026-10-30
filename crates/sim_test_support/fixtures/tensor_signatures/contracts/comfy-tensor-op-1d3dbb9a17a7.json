@@ -1,0 +1,1060 @@
+{
+  "canonical_target": "torch.as_tensor",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:144:33 (BrownianTreeNoiseSampler.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:144:77 (BrownianTreeNoiseSampler.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:148:33 (BrownianTreeNoiseSampler.__call__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:148:73 (BrownianTreeNoiseSampler.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/utils.py:225:17 (rand_log_logistic)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/utils.py:226:17 (rand_log_logistic)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/moge/geometry.py:27:23 (intrinsics_from_focal_center)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/model.py:307:19 (MoGeModel.infer.focal_from_fov_deg)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/triposplat/gaussian.py:119:13 (GaussianModel.render_tensors)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy_extras/nodes_camera_trajectory.py:67:9 (process_pose_params)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy_extras/nodes_camera_trajectory.py:69:12 (process_pose_params)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1317:10 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1318:10 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1383:16 (_surface_nets)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1498:10 (_sample_vertex_colours_gpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1499:11 (_sample_vertex_colours_gpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:594:11 (_lookat_camera_info)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:595:11 (_lookat_camera_info)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:609:11 (_quat_camera_info)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:666:19 (_render_gaussian)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_ideogram4.py:16:9 (_logit_normal_schedule)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_stable3d.py:8:17 (camera_embeddings)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_stable3d.py:9:15 (camera_embeddings)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/sampling.py:144:33 (BrownianTreeNoiseSampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:144:77 (BrownianTreeNoiseSampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:148:33 (BrownianTreeNoiseSampler.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:148:73 (BrownianTreeNoiseSampler.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/utils.py:225:17 (rand_log_logistic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/utils.py:226:17 (rand_log_logistic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/geometry.py:27:23 (intrinsics_from_focal_center)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/model.py:307:19 (MoGeModel.infer.focal_from_fov_deg)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/gaussian.py:119:13 (GaussianModel.render_tensors)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_camera_trajectory.py:67:9 (process_pose_params)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_camera_trajectory.py:69:12 (process_pose_params)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1317:10 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1318:10 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1383:16 (_surface_nets)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1498:10 (_sample_vertex_colours_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1499:11 (_sample_vertex_colours_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:594:11 (_lookat_camera_info)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:595:11 (_lookat_camera_info)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:609:11 (_quat_camera_info)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:666:19 (_render_gaussian)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_ideogram4.py:16:9 (_logit_normal_schedule)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_stable3d.py:8:17 (camera_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_stable3d.py:9:15 (camera_embeddings)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-1d3dbb9a17a7-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-1D3DBB9A17A7",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "352452234a586881e60e9e1705587320135972437a1215a01374a39e4e03fcff",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/k_diffusion/utils.py",
+        "sha256": "fc30630d8a0e4520b2e864c8f84deea3231c9b04d3f1404fec93fc425f629272"
+      },
+      {
+        "path": "comfy/ldm/moge/geometry.py",
+        "sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c"
+      },
+      {
+        "path": "comfy/ldm/moge/model.py",
+        "sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c"
+      },
+      {
+        "path": "comfy/ldm/triposplat/gaussian.py",
+        "sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e"
+      },
+      {
+        "path": "comfy_extras/nodes_camera_trajectory.py",
+        "sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_ideogram4.py",
+        "sha256": "2ef584e244ecb5614b7284eacfaaab7bbdfa398f0595c32c1562d99150ebe301"
+      },
+      {
+        "path": "comfy_extras/nodes_stable3d.py",
+        "sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.as_tensor"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "tensor_creation_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-tensor-creation-comfy-tensor-op-00009bb729df",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 144,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sigma_min",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BrownianTreeNoiseSampler.__init__",
+      "site": "comfy/k_diffusion/sampling.py:144:33 (BrownianTreeNoiseSampler.__init__)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 77,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 144,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sigma_max",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BrownianTreeNoiseSampler.__init__",
+      "site": "comfy/k_diffusion/sampling.py:144:77 (BrownianTreeNoiseSampler.__init__)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 148,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sigma",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BrownianTreeNoiseSampler.__call__",
+      "site": "comfy/k_diffusion/sampling.py:148:33 (BrownianTreeNoiseSampler.__call__)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 73,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 148,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sigma_next",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BrownianTreeNoiseSampler.__call__",
+      "site": "comfy/k_diffusion/sampling.py:148:73 (BrownianTreeNoiseSampler.__call__)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 225,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "min_value",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "rand_log_logistic",
+      "site": "comfy/k_diffusion/utils.py:225:17 (rand_log_logistic)",
+      "source_path": "comfy/k_diffusion/utils.py",
+      "source_sha256": "fc30630d8a0e4520b2e864c8f84deea3231c9b04d3f1404fec93fc425f629272",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 226,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "max_value",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "rand_log_logistic",
+      "site": "comfy/k_diffusion/utils.py:226:17 (rand_log_logistic)",
+      "source_path": "comfy/k_diffusion/utils.py",
+      "source_sha256": "fc30630d8a0e4520b2e864c8f84deea3231c9b04d3f1404fec93fc425f629272",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 27,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "v",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "intrinsics_from_focal_center",
+      "site": "comfy/ldm/moge/geometry.py:27:23 (intrinsics_from_focal_center)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "points.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "points.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 307,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "deg",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MoGeModel.infer.focal_from_fov_deg",
+      "site": "comfy/ldm/moge/model.py:307:19 (MoGeModel.infer.focal_from_fov_deg)",
+      "source_path": "comfy/ldm/moge/model.py",
+      "source_sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "xyz.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 119,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self._DEFAULT_TRANSFORM",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "GaussianModel.render_tensors",
+      "site": "comfy/ldm/triposplat/gaussian.py:119:13 (GaussianModel.render_tensors)",
+      "source_path": "comfy/ldm/triposplat/gaussian.py",
+      "source_sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [],
+      "line": 67,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "intrinsic",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "process_pose_params",
+      "site": "comfy_extras/nodes_camera_trajectory.py:67:9 (process_pose_params)",
+      "source_path": "comfy_extras/nodes_camera_trajectory.py",
+      "source_sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [],
+      "line": 69,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c2ws",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "process_pose_params",
+      "site": "comfy_extras/nodes_camera_trajectory.py:69:12 (process_pose_params)",
+      "source_path": "comfy_extras/nodes_camera_trajectory.py",
+      "source_sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 10,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1317,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "verts",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1317:10 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 10,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1318,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "faces",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1318:10 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1383,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "origin",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_surface_nets",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1383:16 (_surface_nets)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 10,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1498,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "verts",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_sample_vertex_colours_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1498:10 (_sample_vertex_colours_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1499,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "origin",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_sample_vertex_colours_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1499:11 (_sample_vertex_colours_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "dev",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 594,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "position",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_lookat_camera_info",
+      "site": "comfy_extras/nodes_gaussian_splat.py:594:11 (_lookat_camera_info)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "dev",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 595,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "target",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_lookat_camera_info",
+      "site": "comfy_extras/nodes_gaussian_splat.py:595:11 (_lookat_camera_info)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "dev",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 609,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "position",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_quat_camera_info",
+      "site": "comfy_extras/nodes_gaussian_splat.py:609:11 (_quat_camera_info)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "dev",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 666,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "a",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_render_gaussian",
+      "site": "comfy_extras/nodes_gaussian_splat.py:666:19 (_render_gaussian)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 16,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "u",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_logit_normal_schedule",
+      "site": "comfy_extras/nodes_ideogram4.py:16:9 (_logit_normal_schedule)",
+      "source_path": "comfy_extras/nodes_ideogram4.py",
+      "source_sha256": "2ef584e244ecb5614b7284eacfaaab7bbdfa398f0595c32c1562d99150ebe301",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 8,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[elevation]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "camera_embeddings",
+      "site": "comfy_extras/nodes_stable3d.py:8:17 (camera_embeddings)",
+      "source_path": "comfy_extras/nodes_stable3d.py",
+      "source_sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 9,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[azimuth]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "camera_embeddings",
+      "site": "comfy_extras/nodes_stable3d.py:9:15 (camera_embeddings)",
+      "source_path": "comfy_extras/nodes_stable3d.py",
+      "source_sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54",
+      "status": "static-call-observed",
+      "target_syntax": "torch.as_tensor"
+    }
+  ],
+  "static_definition": null
+}

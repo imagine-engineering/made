@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin>
+  <extension point="org.eclipse.jdt.ls.core.delegateCommandHandler">
+    <delegateCommandHandler class="dev.made.groovy.GradleModelHandler">
+      <command id="groovy.gradle.projects"/>
+      <command id="groovy.gradle.projectDetails"/>
+      <command id="groovy.gradle.projectDetails.v3"/>
+      <command id="groovy.gradle.projectDetails.v4"/>
+      <command id="groovy.gradle.sourceOutputs"/>
+      <command id="groovy.gradle.dependencyGraph"/>
+    </delegateCommandHandler>
+    <delegateCommandHandler class="dev.made.groovy.MavenModelHandler">
+      <command id="groovy.maven.projects"/>
+      <command id="groovy.maven.projectDetails"/>
+      <command id="groovy.maven.goalDetails"/>
+      <command id="groovy.maven.dependencyGraph"/>
+    </delegateCommandHandler>
+    <delegateCommandHandler class="dev.made.groovy.GradleImportHandler">
+      <command id="groovy.gradle.defaultImportRoots"/>
+      <command id="groovy.gradle.importSelected"/>
+      <command id="groovy.gradle.importSelected.v2"/>
+      <command id="groovy.gradle.applyModuleStates"/>
+      <command id="groovy.gradle.moduleStates"/>
+      <command id="groovy.gradle.rootState"/>
+      <command id="groovy.gradle.moduleStates.v2"/>
+      <command id="groovy.gradle.applyModuleStates.v2"/>
+      <command id="groovy.gradle.rootState.v2"/>
+      <command id="groovy.gradle.applyRootState.v2"/>
+      <command id="groovy.gradle.applyRootState"/>
+    </delegateCommandHandler>
+    <delegateCommandHandler class="dev.made.groovy.MavenImportHandler">
+      <command id="groovy.maven.defaultImportRoots"/>
+      <command id="groovy.maven.importSelected"/>
+      <command id="groovy.maven.importReactor"/>
+      <command id="groovy.maven.importReactorWithMasks"/>
+    </delegateCommandHandler>
+    <delegateCommandHandler class="dev.made.groovy.ProjectUnlinkHandler">
+      <command id="groovy.maven.importedProjects"/>
+      <command id="groovy.gradle.importedProjects"/>
+      <command id="groovy.gradle.importedBuildRoots"/>
+      <command id="groovy.maven.unlinkSelected"/>
+      <command id="groovy.gradle.unlinkSelected"/>
+    </delegateCommandHandler>
+  </extension>
+</plugin>

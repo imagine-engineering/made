@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.ideogram",
+  "source_sha256": "8798f8a43b27656a98d68daf30b8120524f3191d00539919efb794d04ad2ccc3",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0238",
+      "node_identifier": "IdeogramV3"
+    },
+    {
+      "feature_id": "COMFY-NODE-0239",
+      "node_identifier": "IdeogramV4"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0052",
+      "method": "POST",
+      "path": "/proxy/ideogram/ideogram-v3/edit",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0053",
+      "method": "POST",
+      "path": "/proxy/ideogram/ideogram-v3/generate",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0054",
+      "method": "POST",
+      "path": "/proxy/ideogram/ideogram-v4/generate",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending"
+}

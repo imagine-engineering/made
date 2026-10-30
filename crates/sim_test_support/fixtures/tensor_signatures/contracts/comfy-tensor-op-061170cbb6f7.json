@@ -1,0 +1,3481 @@
+{
+  "canonical_target": "torch.einsum",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:546:61 (UniPC.multistep_uni_pc_vary_update)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:554:61 (UniPC.multistep_uni_pc_vary_update)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:567:61 (UniPC.multistep_uni_pc_vary_update)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:575:61 (UniPC.multistep_uni_pc_vary_update)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:684:32 (UniPC.multistep_uni_pc_bh_update)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:692:32 (UniPC.multistep_uni_pc_bh_update)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/image_encoders/dino2.py:157:19 (RotaryPositionEmbedding2D._components)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/model.py:97:25 (T2IFinalLayer.unpatchfy)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/audio/dit.py:137:15 (ScaledSinusoidalEmbedding.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/audio/dit.py:188:17 (RotaryEmbedding.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:404:13 (MMDiT.unpatchify)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/dpt.py:59:11 (_make_sincos_pos_embed)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ernie/model.py:19:11 (rope)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/math.py:26:11 (rope)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/genmo/joint_model/rope_mixed.py:85:17 (compute_mixed_rotation)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hydit/models.py:415:13 (HunYuanDiT.unpatchify)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/attention.py:180:15 (attention_basic)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/attention.py:182:15 (attention_basic)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/attention.py:203:11 (attention_basic)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/attention.py:366:30 (attention_split)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/attention.py:368:26 (attention_split)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/attention.py:383:32 (attention_split)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:187:11 (get_1d_sincos_pos_embed_from_grid_torch)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:936:13 (MMDiT.unpatchify)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/geometry.py:50:12 (depth_map_to_point_map)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/pixart/pixartms.py:254:13 (PixArtMS.unpatchify)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/sam3/detector.py:335:16 (MaskPredictor.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:658:21 (WanModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:713:13 (WanModel.unpatchify)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:147:17 (RotaryPositionalEmbedding1D.precompute_freqs_cis_1d)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/gemma4.py:463:17 (_compute_vision_2d_rope)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:238:22 (GatedDeltaNet.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:241:29 (GatedDeltaNet.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/weight_adapter/base.py:351:12 (tucker_weight_from_conv)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/base.py:355:12 (tucker_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/weight_adapter/base.py:356:12 (tucker_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/boft.py:103:23 (BOFTAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/boft.py:203:19 (BOFTAdapter.g)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/glora.py:112:33 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/glora.py:114:25 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:237:18 (LoHaAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:250:18 (LoHaAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:350:18 (LoHaAdapter.h)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:351:18 (LoHaAdapter.h)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:48:20 (HadaWeightTucker.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:49:20 (HadaWeightTucker.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:58:16 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:59:19 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:64:20 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:65:21 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:68:20 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:69:19 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:72:16 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:73:19 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:78:20 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:79:21 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:82:20 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:83:19 (HadaWeightTucker.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/lokr.py:324:22 (LoKrAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/lokr.py:70:22 (LokrDiff.w2)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/oft.py:116:23 (OFTDiff.g)"
+    },
+    {
+      "expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/oft.py:233:25 (OFTAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/oft.py:313:23 (OFTAdapter.g)"
+    },
+    {
+      "expectation": {
+        "attribute": "flatten",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/oft.py:51:18 (OFTDiff.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:56:12 (_da3_unproject)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1242:12 (_inverse_covariance)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1275:20 (_splat_density)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_sag.py:32:15 (attention_basic_with_sim)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_sag.py:34:15 (attention_basic_with_sim)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_sag.py:47:11 (attention_basic_with_sim)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:546:61 (UniPC.multistep_uni_pc_vary_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:554:61 (UniPC.multistep_uni_pc_vary_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:567:61 (UniPC.multistep_uni_pc_vary_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:575:61 (UniPC.multistep_uni_pc_vary_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:684:32 (UniPC.multistep_uni_pc_bh_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:692:32 (UniPC.multistep_uni_pc_bh_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/image_encoders/dino2.py:157:19 (RotaryPositionEmbedding2D._components)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/model.py:97:25 (T2IFinalLayer.unpatchfy)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:137:15 (ScaledSinusoidalEmbedding.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:188:17 (RotaryEmbedding.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:404:13 (MMDiT.unpatchify)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/dpt.py:59:11 (_make_sincos_pos_embed)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:19:11 (rope)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/math.py:26:11 (rope)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/joint_model/rope_mixed.py:85:17 (compute_mixed_rotation)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/models.py:415:13 (HunYuanDiT.unpatchify)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:180:15 (attention_basic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:182:15 (attention_basic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:203:11 (attention_basic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:366:30 (attention_split)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:368:26 (attention_split)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:383:32 (attention_split)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:187:11 (get_1d_sincos_pos_embed_from_grid_torch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:936:13 (MMDiT.unpatchify)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/geometry.py:50:12 (depth_map_to_point_map)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/pixartms.py:254:13 (PixArtMS.unpatchify)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/detector.py:335:16 (MaskPredictor.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:658:21 (WanModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:713:13 (WanModel.unpatchify)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:147:17 (RotaryPositionalEmbedding1D.precompute_freqs_cis_1d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gemma4.py:463:17 (_compute_vision_2d_rope)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:238:22 (GatedDeltaNet.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:241:29 (GatedDeltaNet.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/base.py:351:12 (tucker_weight_from_conv)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/base.py:355:12 (tucker_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/base.py:356:12 (tucker_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/boft.py:103:23 (BOFTAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/boft.py:203:19 (BOFTAdapter.g)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:112:33 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:114:25 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:237:18 (LoHaAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:250:18 (LoHaAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:350:18 (LoHaAdapter.h)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:351:18 (LoHaAdapter.h)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:48:20 (HadaWeightTucker.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:49:20 (HadaWeightTucker.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:58:16 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:59:19 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:64:20 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:65:21 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:68:20 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:69:19 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:72:16 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:73:19 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:78:20 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:79:21 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:82:20 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:83:19 (HadaWeightTucker.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lokr.py:324:22 (LoKrAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lokr.py:70:22 (LokrDiff.w2)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/oft.py:116:23 (OFTDiff.g)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/oft.py:233:25 (OFTAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/oft.py:313:23 (OFTAdapter.g)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/oft.py:51:18 (OFTDiff.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:56:12 (_da3_unproject)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1242:12 (_inverse_covariance)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1275:20 (_splat_density)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sag.py:32:15 (attention_basic_with_sim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sag.py:34:15 (attention_basic_with_sim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sag.py:47:11 (attention_basic_with_sim)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-061170cbb6f7-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match batch broadcasting, contraction dimensions, transpose conventions, singular/degenerate cases, and result ranks.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_3",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-061170CBB6F7",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "e95fe4e24bb54e8fe6900fcbc34eea1cd83187c21dd2dd43f9e8271e6da41a34",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/extra_samplers/uni_pc.py",
+        "sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c"
+      },
+      {
+        "path": "comfy/image_encoders/dino2.py",
+        "sha256": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579"
+      },
+      {
+        "path": "comfy/ldm/ace/model.py",
+        "sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708"
+      },
+      {
+        "path": "comfy/ldm/audio/dit.py",
+        "sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c"
+      },
+      {
+        "path": "comfy/ldm/aura/mmdit.py",
+        "sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/dpt.py",
+        "sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5"
+      },
+      {
+        "path": "comfy/ldm/ernie/model.py",
+        "sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c"
+      },
+      {
+        "path": "comfy/ldm/flux/math.py",
+        "sha256": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/rope_mixed.py",
+        "sha256": "c5289a2c591f34180fbef7dd709f9a83d5f40a34437250ac2d873883c6925de8"
+      },
+      {
+        "path": "comfy/ldm/hydit/models.py",
+        "sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2"
+      },
+      {
+        "path": "comfy/ldm/modules/attention.py",
+        "sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+        "sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5"
+      },
+      {
+        "path": "comfy/ldm/moge/geometry.py",
+        "sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c"
+      },
+      {
+        "path": "comfy/ldm/pixart/pixartms.py",
+        "sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661"
+      },
+      {
+        "path": "comfy/ldm/sam3/detector.py",
+        "sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy/ldm/wan/model_multitalk.py",
+        "sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8"
+      },
+      {
+        "path": "comfy/text_encoders/gemma4.py",
+        "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6"
+      },
+      {
+        "path": "comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929"
+      },
+      {
+        "path": "comfy/weight_adapter/base.py",
+        "sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7"
+      },
+      {
+        "path": "comfy/weight_adapter/boft.py",
+        "sha256": "2850e0b4c2295cd87445415e287061fa3bfd69e88bd0aeb3eb16064864bd078d"
+      },
+      {
+        "path": "comfy/weight_adapter/glora.py",
+        "sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09"
+      },
+      {
+        "path": "comfy/weight_adapter/loha.py",
+        "sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5"
+      },
+      {
+        "path": "comfy/weight_adapter/lokr.py",
+        "sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4"
+      },
+      {
+        "path": "comfy/weight_adapter/oft.py",
+        "sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89"
+      },
+      {
+        "path": "comfy_extras/nodes_depth_anything_3.py",
+        "sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_sag.py",
+        "sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.einsum"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "linear_algebra_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-linear-algebra-comfy-tensor-op-061170cbb6f7",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 61,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 546,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bkchw,k->bchw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "D1s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "A_p[k]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_vary_update",
+      "site": "comfy/extra_samplers/uni_pc.py:546:61 (UniPC.multistep_uni_pc_vary_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 61,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 554,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bkchw,k->bchw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "D1s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "A_c[k][:-1]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_vary_update",
+      "site": "comfy/extra_samplers/uni_pc.py:554:61 (UniPC.multistep_uni_pc_vary_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 61,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 567,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bkchw,k->bchw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "D1s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "A_p[k]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_vary_update",
+      "site": "comfy/extra_samplers/uni_pc.py:567:61 (UniPC.multistep_uni_pc_vary_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 61,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 575,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bkchw,k->bchw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "D1s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "A_c[k][:-1]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_vary_update",
+      "site": "comfy/extra_samplers/uni_pc.py:575:61 (UniPC.multistep_uni_pc_vary_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 684,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'k,bkchw->bchw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "rhos_p",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "D1s",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_bh_update",
+      "site": "comfy/extra_samplers/uni_pc.py:684:32 (UniPC.multistep_uni_pc_bh_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 692,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'k,bkchw->bchw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "rhos_c[:-1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "D1s",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_bh_update",
+      "site": "comfy/extra_samplers/uni_pc.py:692:32 (UniPC.multistep_uni_pc_bh_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 157,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i,j->ij'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "inv_freq",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "RotaryPositionEmbedding2D._components",
+      "site": "comfy/image_encoders/dino2.py:157:19 (RotaryPositionEmbedding2D._components)",
+      "source_path": "comfy/image_encoders/dino2.py",
+      "source_sha256": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 97,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'nhwpqc->nchpwq'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "hidden_states",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "T2IFinalLayer.unpatchfy",
+      "site": "comfy/ldm/ace/model.py:97:25 (T2IFinalLayer.unpatchfy)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 137,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i, j -> i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "self.inv_freq",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "ScaledSinusoidalEmbedding.forward",
+      "site": "comfy/ldm/audio/dit.py:137:15 (ScaledSinusoidalEmbedding.forward)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 188,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i , j -> i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "comfy.ops.cast_to_input(self.inv_freq, t)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "RotaryEmbedding.forward",
+      "site": "comfy/ldm/audio/dit.py:188:17 (RotaryEmbedding.forward)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 404,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'nhwpqc->nchpwq'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MMDiT.unpatchify",
+      "site": "comfy/ldm/aura/mmdit.py:404:13 (MMDiT.unpatchify)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 59,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'m,d->md'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "omega",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_make_sincos_pos_embed",
+      "site": "comfy/ldm/depth_anything_3/dpt.py:59:11 (_make_sincos_pos_embed)",
+      "source_path": "comfy/ldm/depth_anything_3/dpt.py",
+      "source_sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 19,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'...n,d->...nd'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos.to(device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "omega",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "rope",
+      "site": "comfy/ldm/ernie/model.py:19:11 (rope)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 26,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'...n,d->...nd'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos.to(dtype=torch.float32, device=device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "omega",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "rope",
+      "site": "comfy/ldm/flux/math.py:26:11 (rope)",
+      "source_path": "comfy/ldm/flux/math.py",
+      "source_sha256": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 85,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'Nd,dhf->Nhf'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos.to(freqs)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "freqs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "compute_mixed_rotation",
+      "site": "comfy/ldm/genmo/joint_model/rope_mixed.py:85:17 (compute_mixed_rotation)",
+      "source_path": "comfy/ldm/genmo/joint_model/rope_mixed.py",
+      "source_sha256": "c5289a2c591f34180fbef7dd709f9a83d5f40a34437250ac2d873883c6925de8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 415,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'nhwpqc->nchpwq'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HunYuanDiT.unpatchify",
+      "site": "comfy/ldm/hydit/models.py:415:13 (HunYuanDiT.unpatchify)",
+      "source_path": "comfy/ldm/hydit/models.py",
+      "source_sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 180,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i d, b j d -> b i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "k.float()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "attention_basic",
+      "site": "comfy/ldm/modules/attention.py:180:15 (attention_basic)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 182,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i d, b j d -> b i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "k",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "attention_basic",
+      "site": "comfy/ldm/modules/attention.py:182:15 (attention_basic)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 203,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i j, b j d -> b i d'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sim.to(v.dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "v",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "attention_basic",
+      "site": "comfy/ldm/modules/attention.py:203:11 (attention_basic)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 366,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i d, b j d -> b i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q[:, i:end].float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "k.float()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "attention_split",
+      "site": "comfy/ldm/modules/attention.py:366:30 (attention_split)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 368,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i d, b j d -> b i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q[:, i:end]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "k",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "attention_split",
+      "site": "comfy/ldm/modules/attention.py:368:26 (attention_split)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 383,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i j, b j d -> b i d'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "s2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "v",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "attention_split",
+      "site": "comfy/ldm/modules/attention.py:383:32 (attention_split)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 187,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'m,d->md'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "omega",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_1d_sincos_pos_embed_from_grid_torch",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:187:11 (get_1d_sincos_pos_embed_from_grid_torch)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 936,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'nhwpqc->nchpwq'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MMDiT.unpatchify",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:936:13 (MMDiT.unpatchify)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 50,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'...ij,hwj->...hwi'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "K_inv",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "pix",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "depth_map_to_point_map",
+      "site": "comfy/ldm/moge/geometry.py:50:12 (depth_map_to_point_map)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 254,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'nhwpqc->nchpwq'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "PixArtMS.unpatchify",
+      "site": "comfy/ldm/pixart/pixartms.py:254:13 (PixArtMS.unpatchify)",
+      "source_path": "comfy/ldm/pixart/pixartms.py",
+      "source_sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 335,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bqc,bchw->bqhw'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "mask_embed",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "pixel_features",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MaskPredictor.forward",
+      "site": "comfy/ldm/sam3/detector.py:335:16 (MaskPredictor.forward)",
+      "source_path": "comfy/ldm/sam3/detector.py",
+      "source_sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 658,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'...ij,...jk->...ik'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "freqs",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "id_rot",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "WanModel.rope_encode",
+      "site": "comfy/ldm/wan/model.py:658:21 (WanModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 713,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bfhwpqrc->bcfphqwr'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "u",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "WanModel.unpatchify",
+      "site": "comfy/ldm/wan/model.py:713:13 (WanModel.unpatchify)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 147,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'..., f -> ... f'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos_indices.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "freqs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "RotaryPositionalEmbedding1D.precompute_freqs_cis_1d",
+      "site": "comfy/ldm/wan/model_multitalk.py:147:17 (RotaryPositionalEmbedding1D.precompute_freqs_cis_1d)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 463,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bi,j->bij'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim_positions",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "inv_freq.to(device)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_compute_vision_2d_rope",
+      "site": "comfy/text_encoders/gemma4.py:463:17 (_compute_vision_2d_rope)",
+      "source_path": "comfy/text_encoders/gemma4.py",
+      "source_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 238,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bhk,bhkv->bhv'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "k",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "recurrent_state",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GatedDeltaNet.forward",
+      "site": "comfy/text_encoders/qwen35.py:238:22 (GatedDeltaNet.forward)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 241,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bhk,bhkv->bhv'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "recurrent_state",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GatedDeltaNet.forward",
+      "site": "comfy/text_encoders/qwen35.py:241:29 (GatedDeltaNet.forward)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 351,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'m n ..., i m, n j -> i j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "mid",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "up",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "down",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tucker_weight_from_conv",
+      "site": "comfy/weight_adapter/base.py:351:12 (tucker_weight_from_conv)",
+      "source_path": "comfy/weight_adapter/base.py",
+      "source_sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 355,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r -> i r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "wb",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tucker_weight",
+      "site": "comfy/weight_adapter/base.py:355:12 (tucker_weight)",
+      "source_path": "comfy/weight_adapter/base.py",
+      "source_sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 356,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., i r -> r j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "wa",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tucker_weight",
+      "site": "comfy/weight_adapter/base.py:356:12 (tucker_weight)",
+      "source_path": "comfy/weight_adapter/base.py",
+      "source_sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 103,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i j, b j ...-> b i ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "bi",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "inp",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BOFTAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/boft.py:103:23 (BOFTAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/boft.py",
+      "source_sha256": "2850e0b4c2295cd87445415e287061fa3bfd69e88bd0aeb3eb16064864bd078d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 203,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i j, ... b j -> ... b i'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "bi",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "inp",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BOFTAdapter.g",
+      "site": "comfy/weight_adapter/boft.py:203:19 (BOFTAdapter.g)",
+      "source_path": "comfy/weight_adapter/boft.py",
+      "source_sha256": "2850e0b4c2295cd87445415e287061fa3bfd69e88bd0aeb3eb16064864bd078d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 112,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'o i ..., i j -> o j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.einsum('o i ..., i j -> o j ...', weight.to(dtype=intermediate_dtype), a1)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "a2",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:112:33 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 114,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'o i ..., i j -> o j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "weight.to(dtype=intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "a1",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:114:25 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 237,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j k l, j r, i p -> p r k l'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(t1, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w1b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w1a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoHaAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/loha.py:237:18 (LoHaAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 250,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j k l, j r, i p -> p r k l'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(t2, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoHaAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/loha.py:250:18 (LoHaAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 350,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j k l, j r, i p -> p r k l'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w1b",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "w1a",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LoHaAdapter.h",
+      "site": "comfy/weight_adapter/loha.py:350:18 (LoHaAdapter.h)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 351,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j k l, j r, i p -> p r k l'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w2b",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "w2a",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LoHaAdapter.h",
+      "site": "comfy/weight_adapter/loha.py:351:18 (LoHaAdapter.h)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r, i p -> p r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w1d",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "w1u",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.forward",
+      "site": "comfy/weight_adapter/loha.py:48:20 (HadaWeightTucker.forward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 49,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r, i p -> p r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w2d",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "w2u",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.forward",
+      "site": "comfy/weight_adapter/loha.py:49:20 (HadaWeightTucker.forward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 58,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r -> i r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w2d",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:58:16 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 59,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., i r -> r j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w2u",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:59:19 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 64,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'r j ..., i j ... -> r i'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "grad_w",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:64:20 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 65,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., i r -> r j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grad_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w1u.T",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:65:21 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 68,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i r ..., i j ... -> r j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "grad_temp",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:68:20 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 69,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r -> i r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grad_temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w1d.T",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:69:19 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 72,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r -> i r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w1d",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:72:16 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 73,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., i r -> r j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w1u",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:73:19 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 78,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'r j ..., i j ... -> r i'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "grad_w",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:78:20 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 79,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., i r -> r j ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grad_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w2u.T",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:79:21 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 82,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i r ..., i j ... -> r j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "grad_temp",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:82:20 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 83,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j ..., j r -> i r ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grad_temp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w2d.T",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "HadaWeightTucker.backward",
+      "site": "comfy/weight_adapter/loha.py:83:19 (HadaWeightTucker.backward)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 324,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j k l, j r, i p -> p r k l'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(t2, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2_b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2_a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoKrAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lokr.py:324:22 (LoKrAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lokr.py",
+      "source_sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 70,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'i j k l, j r, i p -> p r k l'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.lokr_t2",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "self.lokr_w2_b",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "self.lokr_w2_a",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "LokrDiff.w2",
+      "site": "comfy/weight_adapter/lokr.py:70:22 (LokrDiff.w2)",
+      "source_path": "comfy/weight_adapter/lokr.py",
+      "source_sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 116,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'k n m, ... k n -> ... k m'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "r",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "y_blocked",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "OFTDiff.g",
+      "site": "comfy/weight_adapter/oft.py:116:23 (OFTDiff.g)",
+      "source_path": "comfy/weight_adapter/oft.py",
+      "source_sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 233,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'k n m, k n ... -> k m ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "r * strength - strength * I_w",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "weight.view(block_num, block_size, *shape)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "OFTAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/oft.py:233:25 (OFTAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/oft.py",
+      "source_sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 313,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'k n m, ... k n -> ... k m'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "r",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "y_blocked",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "OFTAdapter.g",
+      "site": "comfy/weight_adapter/oft.py:313:23 (OFTAdapter.g)",
+      "source_path": "comfy/weight_adapter/oft.py",
+      "source_sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "attribute": "flatten",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 51,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'k n m, k n ... -> k m ...'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "r",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "org_weight",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "OFTDiff.__call__",
+      "site": "comfy/weight_adapter/oft.py:51:18 (OFTDiff.__call__)",
+      "source_path": "comfy/weight_adapter/oft.py",
+      "source_sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 56,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'ij,hwj->hwi'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.linalg.inv(K.to(depth.device))",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "pix",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_da3_unproject",
+      "site": "comfy_extras/nodes_depth_anything_3.py:56:12 (_da3_unproject)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 1242,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'nij,nj,nkj->nik'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "R",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "inv_s2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "R",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_inverse_covariance",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1242:12 (_inverse_covariance)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1275,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'bmi,bij,bmj->bm'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "d",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sinv[gi]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "d",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_splat_density",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1275:20 (_splat_density)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 32,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i d, b j d -> b i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "k.float()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "attention_basic_with_sim",
+      "site": "comfy_extras/nodes_sag.py:32:15 (attention_basic_with_sim)",
+      "source_path": "comfy_extras/nodes_sag.py",
+      "source_sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 34,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i d, b j d -> b i j'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "q",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "k",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "attention_basic_with_sim",
+      "site": "comfy_extras/nodes_sag.py:34:15 (attention_basic_with_sim)",
+      "source_path": "comfy_extras/nodes_sag.py",
+      "source_sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 47,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'b i j, b j d -> b i d'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sim.to(v.dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "v",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "attention_basic_with_sim",
+      "site": "comfy_extras/nodes_sag.py:47:11 (attention_basic_with_sim)",
+      "source_path": "comfy_extras/nodes_sag.py",
+      "source_sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0",
+      "status": "static-call-observed",
+      "target_syntax": "einsum"
+    }
+  ],
+  "static_definition": null
+}

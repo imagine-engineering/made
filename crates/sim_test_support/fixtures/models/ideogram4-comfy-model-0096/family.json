@@ -1,0 +1,116 @@
+{
+  "fixture_id": "ideogram4-sim-model-0096",
+  "feature_id": "COMFY-MODEL-0096",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.input_proj.weight": [2, 4],
+      "model.diffusion_model.input_proj.bias": [2],
+      "model.diffusion_model.llm_cond_proj.weight": [2, 2],
+      "model.diffusion_model.layers.0.attention.qkv.weight": [6, 2],
+      "model.diffusion_model.layers.0.attention.norm_q.weight": [1],
+      "model.diffusion_model.layers.0.feed_forward.w2.weight": [2, 2],
+      "model.diffusion_model.adaln_proj.weight": [2, 2],
+      "model.diffusion_model.embed_image_indicator.weight": [2, 2],
+      "model.diffusion_model.final_layer.linear.weight": [2, 2],
+      "model.diffusion_model.final_layer.linear.bias": [2]
+    },
+    "metadata": {
+      "image_model": "ideogram4",
+      "model_layout": "native"
+    }
+  },
+  "base_artifact_digest": "0096009600960096009600960096009600960096009600960096009600960096",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.input_proj.weight",
+      "shape": [2, 4],
+      "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.input_proj.bias",
+      "shape": [2],
+      "values": [0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.llm_cond_proj.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.layers.0.attention.qkv.weight",
+      "shape": [6, 2],
+      "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.layers.0.attention.norm_q.weight",
+      "shape": [1],
+      "values": [0.0]
+    },
+    {
+      "key": "model.diffusion_model.layers.0.feed_forward.w2.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.adaln_proj.weight",
+      "shape": [2, 2],
+      "values": [0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.embed_image_indicator.weight",
+      "shape": [2, 2],
+      "values": [0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.bias",
+      "shape": [2],
+      "values": [0.1, -0.1]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [0.0, 0.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 564,
+  "expected_memory_bytes": 564,
+  "checkpoints": [
+    {"name": "conditioning_projection", "values": [0.0, 0.0]},
+    {"name": "conditioning_activation", "values": [0.0, 0.0]},
+    {"name": "transformer_normalization", "values": [0.0, 0.0]},
+    {"name": "feed_forward_projection", "values": [0.0, 0.0]},
+    {"name": "image_projection", "values": [0.1, -0.1]},
+    {"name": "image_output", "values": [0.099667996, -0.099667996]}
+  ],
+  "patches": [
+    {
+      "identifier": "ideogram4-output-bias",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.final_layer.linear.bias",
+          "expected_shape": [2],
+          "values": [0.5, 0.5],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "conditioning_projection", "values": [0.0, 0.0]},
+    {"name": "conditioning_activation", "values": [0.0, 0.0]},
+    {"name": "transformer_normalization", "values": [0.0, 0.0]},
+    {"name": "feed_forward_projection", "values": [0.0, 0.0]},
+    {"name": "image_projection", "values": [0.6, 0.4]},
+    {"name": "image_output", "values": [0.5370496, 0.379949]}
+  ]
+}

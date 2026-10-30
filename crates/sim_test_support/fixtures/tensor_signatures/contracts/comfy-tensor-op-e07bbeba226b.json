@@ -1,0 +1,462 @@
+{
+  "canonical_target": "torch.flip",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:172:115 (NoiseScheduleVP.inverse_lambda)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:172:60 (NoiseScheduleVP.inverse_lambda)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:779:23 (EspnetRelPositionalEncoding.extend_pe)"
+    },
+    {
+      "expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:228:9 (upfirdn2d_native)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy_extras/nodes_custom_sampler.py:153:21 (SDTurboScheduler.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_images.py:654:21 (ImageFlip.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_images.py:656:21 (ImageFlip.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "nodes.py:1413:28 (LatentFlip.flip)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "nodes.py:1415:28 (LatentFlip.flip)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:172:115 (NoiseScheduleVP.inverse_lambda)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:172:60 (NoiseScheduleVP.inverse_lambda)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:779:23 (EspnetRelPositionalEncoding.extend_pe)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:228:9 (upfirdn2d_native)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_custom_sampler.py:153:21 (SDTurboScheduler.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:654:21 (ImageFlip.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:656:21 (ImageFlip.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:1413:28 (LatentFlip.flip)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:1415:28 (LatentFlip.flip)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-e07bbeba226b-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dims",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-E07BBEBA226B",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "9889e61449840961df33e5fd1673908ec32ae6a3b9c290c0c57bdf88ea266e08",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/extra_samplers/uni_pc.py",
+        "sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c"
+      },
+      {
+        "path": "comfy/ldm/ace/lyric_encoder.py",
+        "sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103"
+      },
+      {
+        "path": "comfy/ldm/wan/model_animate.py",
+        "sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449"
+      },
+      {
+        "path": "comfy_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4"
+      },
+      {
+        "path": "comfy_extras/nodes_images.py",
+        "sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448"
+      },
+      {
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.flip"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_20",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-d54af27b4d70",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 115,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 172,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.t_array.to(lamb.device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "NoiseScheduleVP.inverse_lambda",
+      "site": "comfy/extra_samplers/uni_pc.py:172:115 (NoiseScheduleVP.inverse_lambda)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 60,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 172,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.log_alpha_array.to(lamb.device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "NoiseScheduleVP.inverse_lambda",
+      "site": "comfy/extra_samplers/uni_pc.py:172:60 (NoiseScheduleVP.inverse_lambda)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 779,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "pe_positive",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[0]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "EspnetRelPositionalEncoding.extend_pe",
+      "site": "comfy/ldm/ace/lyric_encoder.py:779:23 (EspnetRelPositionalEncoding.extend_pe)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 228,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "kernel",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[0, 1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "upfirdn2d_native",
+      "site": "comfy/ldm/wan/model_animate.py:228:9 (upfirdn2d_native)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [],
+      "line": 153,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.arange(1, 11) * 100 - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "(0,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "SDTurboScheduler.execute",
+      "site": "comfy_extras/nodes_custom_sampler.py:153:21 (SDTurboScheduler.execute)",
+      "source_path": "comfy_extras/nodes_custom_sampler.py",
+      "source_sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dims",
+          "syntax": "[1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 654,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "image",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ImageFlip.execute",
+      "site": "comfy_extras/nodes_images.py:654:21 (ImageFlip.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dims",
+          "syntax": "[2]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 656,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "image",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ImageFlip.execute",
+      "site": "comfy_extras/nodes_images.py:656:21 (ImageFlip.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dims",
+          "syntax": "[2]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 1413,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "samples['samples']",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LatentFlip.flip",
+      "site": "nodes.py:1413:28 (LatentFlip.flip)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dims",
+          "syntax": "[3]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 1415,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "samples['samples']",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LatentFlip.flip",
+      "site": "nodes.py:1415:28 (LatentFlip.flip)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.flip"
+    }
+  ],
+  "static_definition": null
+}

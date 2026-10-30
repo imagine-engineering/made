@@ -1,0 +1,59 @@
+{
+  "artifact": "zed-native-film-multi-timestep-v1",
+  "evidence_kind": "source-fingerprinted reduced exact-weight pair synthesis plus production retained orchestration",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": ["FILM.forward", "FeatureExtractor.forward", "PyramidFlowEstimator.forward", "Fusion.forward"]
+  },
+  "dependency": {
+    "fixture": "../film-fusion/manifest.json",
+    "sha256": "91934f24d4323b888b2f31fefc97bf1db9c23d5c24c253115616903aba24fa2d"
+  },
+  "production_schedule": {
+    "pair_batch": 1,
+    "image_pyramid_levels_per_endpoint": 7,
+    "feature_pyramid_levels_per_endpoint": 7,
+    "flow_directions_computed_once": ["forward", "backward"],
+    "warped_and_fused_levels": 5,
+    "per_timestep": [
+      "backward flow multiplied by t",
+      "forward flow multiplied by one minus t",
+      "first endpoint targets warped by scaled backward flow",
+      "second endpoint targets warped by scaled forward flow",
+      "aligned channels concatenate forward-warped, backward-warped, scaled-backward-flow, scaled-forward-flow",
+      "retained Fusion graph emits RGB"
+    ],
+    "result_axis": "timestep results concatenated on batch axis"
+  },
+  "reduced_graph": {
+    "levels": 5,
+    "first_target_value": 10.0,
+    "second_target_value": 20.0,
+    "forward_flow_xy": [4.0, 0.0],
+    "backward_flow_xy": [2.0, 0.0],
+    "timesteps": [0.25, 0.75],
+    "selected_aligned_channels": ["scaled backward x", "scaled forward x"],
+    "fusion_scalar_by_timestep": [3.5, 2.5],
+    "output_projection_weights": [1.0, 2.0, 3.0],
+    "expected_rgb_batch": [[3.5, 7.0, 10.5], [2.5, 5.0, 7.5]],
+    "fresh_output_storage": true,
+    "source_tensors_are_immutable": true,
+    "pre_cancelled_scratch_in_use_bytes": 0
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "production_dense_weight_numeric_parity": false,
+    "image_feature_flow_warp_or_fusion_equations_reimplemented": false,
+    "adjacent_pair_sequence_reuse": false,
+    "codec_or_container_execution": false,
+    "handle_or_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

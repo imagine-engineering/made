@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-general-ffmpeg-abi-v1",
+  "truth_mode": "official-source-reviewed-declaration-only-general-video-abi",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "video_input_types_sha256": "6cba96f1f254094436de6c3e64c0a7b469e7cbaf3578c234c18eea88cf93926d",
+    "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+    "ffmpeg_release": "7.1",
+    "ffmpeg_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "detached_signature_verified": true
+  },
+  "oracle": {
+    "compiler": "gcc 15.2.0",
+    "compiler_target": "x86_64-linux-gnu",
+    "oci_index_sha256": "3ae15afe768b06d0c0fe088d822ba5f8045c26630bdacc8d8e7713cf5d8e7289",
+    "oci_linux_amd64_manifest_sha256": "c101370f78e4a30be178c11dd18aeee64c65d617908a98157db2392ca73ab04f",
+    "evidence_sha256": "458f76946b75cefe3b70c674031d87286169beb1aaad1413d08ab380dda56a29",
+    "general_abi_manifest_sha256": "772b01d7db041e0da57dd7d5a09e1b5ae267804b934b2b533ce1fc62e521089d",
+    "warning_denied_c_verifier_sha256": "aac6a120eeff8d3df4d2a90461dc4958210925873dcac1006c52429b4da07024",
+    "object_format": "ELF 64-bit LSB relocatable, x86-64",
+    "object_sha256": "c9eb3db4d182c44e71439513cc1108e239f63cc3cda8ee7decc52bbd5c029ae2",
+    "required_library_count": 6,
+    "historical_symbol_count": 54,
+    "supplemental_symbol_count": 24,
+    "general_symbol_count": 78,
+    "libavfilter_abi_major": 10,
+    "libavfilter_symbol_version_namespace": "LIBAVFILTER_10"
+  },
+  "ownership": {
+    "canonical_declaration_owner": "sim_runtime::native_video_codec_abi",
+    "declaration_validation_adapter": "sim_runtime::review_general_video_codec_declarations",
+    "canonical_certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "future_loader_owner": "sim_runtime::native_video_codec_ffi"
+  },
+  "claims": {
+    "official_source_signature_verified": true,
+    "reviewed_typed_c_declarations": true,
+    "installed_ffmpeg_package": false,
+    "loadable_native_library": false,
+    "certified_native_ffi": false,
+    "native_library_loaded": false,
+    "runtime_symbol_address_resolved": false,
+    "runtime_version_checked": false,
+    "codec_availability_probed": false,
+    "codec_available": false,
+    "executable": false,
+    "codec_execution": false,
+    "media_allocation": false,
+    "publication": false
+  }
+}

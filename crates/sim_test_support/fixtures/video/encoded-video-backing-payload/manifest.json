@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-encoded-backing-payload-v1",
+  "truth_mode": "synthetic-encoded-video-backing-payload",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "video_input_sha256": "6cba96f1f254094436de6c3e64c0a7b469e7cbaf3578c234c18eea88cf93926d",
+    "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+    "video_util_sha256": "5d2f7dd2b82aecec3c05f8f5bd9519530736825d33590207ea0aa32b8cc8627f"
+  },
+  "dependencies": {
+    "component_h264_mp4_backing_service_manifest_sha256": "9635836a06059bd41c255910acf07d7813988a0678151c2a1b5fd233b8b449d5"
+  },
+  "contract": {
+    "canonical_owner": "sim_media::NativeVideoPayload",
+    "representations": [
+      "Components",
+      "Encoded"
+    ],
+    "encoded_profile": "path-free MP4, H.264, YUV420P, eight-bit, no audio, no alpha, and no container metadata",
+    "source_binding": "the encoded semantic identity binds the exact source component VIDEO semantic digest, encoded content digest, dimensions, reduced frame rate, and frame count",
+    "service_result": "NativeComponentH264Mp4BackingService returns the canonical Encoded VIDEO representation",
+    "post_actor_copy_count": 0,
+    "stored_handle_kind": "one existing VIDEO variant in NativeStoredPayload",
+    "component_only_consumers": [
+      "native codec planning",
+      "GetVideoComponents",
+      "provider materialization",
+      "plugin tensor projection"
+    ]
+  },
+  "synthetic_fixture": {
+    "component_dimensions": [
+      2,
+      2
+    ],
+    "component_frame_rate": [
+      30,
+      1
+    ],
+    "frame_count": 1,
+    "encoded_bytes": "HMP4",
+    "test_cases": [
+      "the existing component constructor preserves the component semantic digest and alias-aware residency contract",
+      "the narrow encoded constructor accepts only one valid eight-bit CPU F32 component source and one checked CPU U8 encoded Tensor",
+      "the encoded representation recomputes the content digest and derives the source digest rather than accepting caller-forged source identity",
+      "the actor output Tensor StorageId is unchanged in the canonical encoded payload",
+      "component and encoded representations have distinct semantic domains while retaining one VIDEO handle kind",
+      "component-only planners, nodes, provider transport, and plugin projection reject encoded backing without decoding it",
+      "projection failure and cancellation drop the candidate encoded payload without publication and allow a clean retry"
+    ]
+  },
+  "claims": {
+    "canonical_component_and_encoded_video_tags_executed": true,
+    "canonical_encoded_service_result_executed": true,
+    "actor_owned_tensor_moved_without_second_copy": true,
+    "source_and_content_digests_bound": true,
+    "component_consumers_reject_encoded_without_decode": true,
+    "one_video_handle_kind_retained": true,
+    "trim_window_or_video_slice_reachable": false,
+    "ten_bit_h264_aac_audio_or_arbitrary_metadata": false,
+    "file_path_asset_demux_or_decode_reachable": false,
+    "save_video_effect_or_output_publication_reachable": false,
+    "cache_persistence_or_recovery_owned": false,
+    "installed_playable_numeric_or_pyav_byte_identity": false,
+    "all_process_or_native_heap_allocations_intercepted": false
+  }
+}

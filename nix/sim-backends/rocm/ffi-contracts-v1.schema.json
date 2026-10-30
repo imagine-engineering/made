@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/rocm/ffi-contracts-v1.schema.json",
+  "title": "Zed ROCm native FFI contracts v1",
+  "$comment": "The packaging validator additionally enforces UTF-8 byte size, sorted unique identities and symbols, exact filename/SONAME equality, the complete primary set, and recursive identity equality with rocm-dependency:<soname>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "backend",
+    "abi_floor",
+    "libraries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "backend": {
+      "const": "rocm"
+    },
+    "abi_floor": {
+      "const": "6.1.0"
+    },
+    "libraries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/library"
+      }
+    }
+  },
+  "$defs": {
+    "library": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "role",
+        "filename",
+        "soname",
+        "sha256",
+        "abi",
+        "required_symbols",
+        "unsafe_owner"
+      ],
+      "properties": {
+        "identity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 272,
+          "pattern": "^(libMIOpen|libamdhip64|libhiprtc|librocblas|rocm-dependency:[A-Za-z0-9][A-Za-z0-9._+-]*)$"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "recursive_dependency"
+          ]
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "soname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "abi": {
+          "const": "6.1.0"
+        },
+        "required_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9_.]+$"
+          }
+        },
+        "unsafe_owner": {
+          "const": "sim_backend_rocm::loader"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "primary"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identity": {
+                "enum": [
+                  "libMIOpen",
+                  "libamdhip64",
+                  "libhiprtc",
+                  "librocblas"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "identity": {
+                "pattern": "^rocm-dependency:[A-Za-z0-9][A-Za-z0-9._+-]*$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "libMIOpen"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "libMIOpen.so"
+              },
+              "soname": {
+                "const": "libMIOpen.so"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "libamdhip64"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "libamdhip64.so"
+              },
+              "soname": {
+                "const": "libamdhip64.so"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "libhiprtc"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "libhiprtc.so"
+              },
+              "soname": {
+                "const": "libhiprtc.so"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "librocblas"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "librocblas.so"
+              },
+              "soname": {
+                "const": "librocblas.so"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

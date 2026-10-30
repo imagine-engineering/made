@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wan21-causalar-t2v-sim-model-0139",
+  "feature_id": "COMFY-MODEL-0139",
+  "source_symbol": "WAN21_CausalAR_T2V",
+  "source_ordinal": 51,
+  "source_architecture": "model_base.WAN21_CausalAR",
+  "latent_feature_id": "COMFY-MODEL-0053",
+  "latent_identifier": "Wan21",
+  "catalog_projection_sha256": "fd7a6e48e53e67c38b606c445dba881acece5f07678c3e40f00f18a59b662a3b",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/wan/model.py", "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/wan/ar_model.py", "sha256": "823806b0b8b02a780ab3f8e2a6816dfb31b9598aef4e6d8fb3039319a14984a3"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/wan.py", "sha256": "e9a6ca356790c76f7a36550842fc8a93c8c584cd175d69615eaddb7b4cd276bc"}
+  ],
+  "source_projection": "source_symbol=WAN21_CausalAR_T2V\nsource_ordinal=51\ninheritance=WAN21_CausalAR_T2V,WAN21_T2V,supported_models_base.BASE\nunet_config.image_model=wan2.1\nunet_config.model_type=t2v\nunet_config.causal_ar=true\nconstructor_removes=causal_ar before model initialization\nsampling_settings.shift=5.0\nlatent_format=sim.latent_formats.Wan21\nmemory_usage_factor.runtime=dim/2222\nsupported_inference_dtypes=f16,bf16,f32\narchitecture=model_base.WAN21_CausalAR\narchitecture_weights=weight-compatible with model_base.WAN21\nselection_metadata=config.transformer.causal_ar=true\nclip_tokenizer=sim.text_encoders.wan.WanT5Tokenizer\nclip_model=sim.text_encoders.wan.te\nclip_configuration=sim.text_encoders.sd3_clip.t5_xxl_detect(text_encoders.umt5xxl.transformer.)\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "205035482d27bde9c40e9458ee54fb46653325e142e21097b01fd0a5b26ea16c",
+  "alternate_layout": "CausalAR is weight-compatible with ordinary WAN21_T2V, so source config metadata is mandatory and missing or malformed causal_ar metadata fails closed.",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI WAN21_CausalAR_T2V sources; no production Python dependency"
+}

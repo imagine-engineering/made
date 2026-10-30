@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "truth": "source-fingerprinted reduced exact equation",
+  "source": {
+    "snapshot": "ComfyUI 0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": [
+      "FilmConv2d.__init__",
+      "FilmConv2d.forward"
+    ]
+  },
+  "dependencies": {
+    "film_warp_manifest": {
+      "path": "crates/sim_test_support/fixtures/models/frame-interpolation/film-warp/manifest.json",
+      "sha256": "1fd82ab4d13068753c26e8191e30e6d05789f73248c757b73405407d1c02fce5"
+    }
+  },
+  "cases": [
+    {
+      "name": "even_kernel_right_bottom_zero_padding",
+      "input_shape_nchw": [1, 1, 2, 2],
+      "input_f32": [1.0, 2.0, 3.0, 4.0],
+      "weight_shape_oihw": [1, 1, 2, 2],
+      "weight_f32": [1.0, 1.0, 1.0, 1.0],
+      "bias_f32": [0.0],
+      "pre_padding_left_right_top_bottom": [0, 1, 0, 1],
+      "convolution_padding": [0, 0],
+      "activation": false,
+      "output_shape_nchw": [1, 1, 2, 2],
+      "output_f32": [10.0, 6.0, 7.0, 4.0]
+    },
+    {
+      "name": "odd_kernel_symmetric_padding_and_leaky_relu",
+      "input_shape_nchw": [1, 1, 2, 2],
+      "input_f32": [-2.0, 1.0, 3.0, 4.0],
+      "weight_shape_oihw": [1, 1, 3, 3],
+      "weight_f32": [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+      "bias_f32": [0.0],
+      "pre_padding_left_right_top_bottom": [0, 0, 0, 0],
+      "convolution_padding": [1, 1],
+      "activation": true,
+      "negative_slope": 0.2,
+      "output_f32": [-0.4, 1.0, 3.0, 4.0]
+    }
+  ],
+  "dtypes": ["F16", "BF16", "F32"],
+  "workspace_failure_bytes": 35,
+  "claim_limits": {
+    "licensed_checkpoint_included": false,
+    "upstream_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "film_checkpoint_execution": false,
+    "film_pyramid_flow_or_fusion_execution": false,
+    "codec_execution": false,
+    "handle_or_cache_execution": false,
+    "output_effect_or_publication": false
+  }
+}

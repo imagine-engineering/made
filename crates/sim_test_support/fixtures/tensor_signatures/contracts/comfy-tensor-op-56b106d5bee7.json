@@ -1,0 +1,232 @@
+{
+  "canonical_target": "comfy.ops.cast_to",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/clip_model.py:145:70 (CLIPEmbeddings.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/clip_model.py:165:26 (CLIPTextModel_.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/genmo/joint_model/asymm_models_joint.py:474:19 (AsymmDiTJoint.prepare)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/clip_model.py:145:70 (CLIPEmbeddings.forward)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/clip_model.py:165:26 (CLIPTextModel_.forward)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/genmo/joint_model/asymm_models_joint.py:474:19 (AsymmDiTJoint.prepare)",
+      "status": "definition-call-signature-not-declared"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-56b106d5bee7-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-56B106D5BEE7",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "5d0e263213625e952eaf8480aa3aa19dc649266b4b3ae4ec491a4dd7f8137d48",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/clip_model.py",
+        "sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/asymm_models_joint.py",
+        "sha256": "59137d17f39231ca7b3db318d863a49f8d47857ba73e7db6993e1f1f62609dbe"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.cast_to"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-227f5d04687a",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 70,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "input_tokens.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 145,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.position_embedding.weight",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "CLIPEmbeddings.forward",
+      "site": "comfy/clip_model.py:145:70 (CLIPEmbeddings.forward)",
+      "source_path": "comfy/clip_model.py",
+      "source_sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_to"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "embeds.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 165,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.embeddings.position_embedding.weight",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "CLIPTextModel_.forward",
+      "site": "comfy/clip_model.py:165:26 (CLIPTextModel_.forward)",
+      "source_path": "comfy/clip_model.py",
+      "source_sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_to"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 474,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.pos_frequencies",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "AsymmDiTJoint.prepare",
+      "site": "comfy/ldm/genmo/joint_model/asymm_models_joint.py:474:19 (AsymmDiTJoint.prepare)",
+      "source_path": "comfy/ldm/genmo/joint_model/asymm_models_joint.py",
+      "source_sha256": "59137d17f39231ca7b3db318d863a49f8d47857ba73e7db6993e1f1f62609dbe",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_to"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "Assign",
+    "definition_line": 77,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "callable-alias-or-value",
+    "parameters": [],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [],
+      "types": []
+    }
+  }
+}

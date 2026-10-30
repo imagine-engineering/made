@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "contract_sha256": "dd46b24dbbb59f90d125e0f37394478a0087f646df3a1ada07677f32d57d032e",
+  "architecture_count": 52,
+  "admitted_architecture_count": 0,
+  "cases": [
+    {
+      "layout": "flat",
+      "state_keys": ["body.0.weight", "body.1.weight"],
+      "architecture_id": "Compact",
+      "diagnostic": "rejected-missing-individual-license-artifact"
+    },
+    {
+      "layout": "state_dict",
+      "state_keys": [
+        "conv_first.weight",
+        "layers.0.residual_group.blocks.0.attn.aligned_relative_position_index",
+        "layers.0.residual_group.blocks.0.mlp.fc1.bias",
+        "layers.0.residual_group.blocks.0.norm1.weight"
+      ],
+      "architecture_id": "SRFormer",
+      "diagnostic": "rejected-reference-only-extra-architecture"
+    }
+  ],
+  "forbidden_substitutes": [
+    "image-resize",
+    "generic-neural-fallback",
+    "python-runtime",
+    "source-tree-runtime-access",
+    "model-weight-bundling"
+  ]
+}

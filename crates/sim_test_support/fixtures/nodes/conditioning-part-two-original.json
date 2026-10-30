@@ -1,0 +1,3065 @@
+{
+  "format": "sim.source.conditioning-part-two.original-cpu-f32.v1",
+  "producer_sha256": "e89d5073961b6a1cb1c6653417b4a2c7fe7112b39e32ec117c2581d12aa166f6",
+  "source_sha256": {
+    "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+    "node_helpers.py": "22317a033cce556331bfedc5f4ab6c2833184fd2bbdf9496c9182a4973a7098a"
+  },
+  "torch_version": "2.8.0+cpu",
+  "cases": [
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": -100.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              42.85714340209961,
+              28.571430206298828,
+              14.285715103149414,
+              -0.0,
+              -14.285715103149414,
+              -28.571430206298828
+            ],
+            "storage_sha256": "d6762ea8a6d4fb5f19c3d13060d407af107f2f86ae5d420370aa2d2e3c0a609e"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": -0.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.0
+            ],
+            "storage_sha256": "4c862632109713410d6554dcf5dc898490bc6077c68379cff64e5955785fbe5d"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 0.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "storage_sha256": "54116d8ad63600bfd28a297524173456a599de81c67847a3b5620a8068ee6815"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.04285714402794838,
+              -0.02857143059372902,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "71b689497f1b5878ce6c8abf05d05101c63c6c1e2b21a9edb3555d643a6b7630"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 1.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 100.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -42.85714340209961,
+              -28.571430206298828,
+              -14.285715103149414,
+              0.0,
+              14.285715103149414,
+              28.571430206298828
+            ],
+            "storage_sha256": "2ec8d1492164d7384559228cd07a8729a81f94a17cfa95851dd19ef809b5ea7d"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 5.551115123125783e-17,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -2.37904936211621e-17,
+              -1.5860329632228476e-17,
+              -7.930164816114238e-18,
+              0.0,
+              7.930164816114238e-18,
+              1.5860329632228476e-17
+            ],
+            "storage_sha256": "2b42e8ebf4cb0ad92f7c1ab2b4a2495b356f362a3a8960fbc5c3138fb1aaf767"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": -100.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              42.85714340209961,
+              28.571430206298828,
+              14.285715103149414,
+              -0.0,
+              -14.285715103149414,
+              -28.571430206298828
+            ],
+            "storage_sha256": "d6762ea8a6d4fb5f19c3d13060d407af107f2f86ae5d420370aa2d2e3c0a609e"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": -0.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.0
+            ],
+            "storage_sha256": "4c862632109713410d6554dcf5dc898490bc6077c68379cff64e5955785fbe5d"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 0.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "storage_sha256": "54116d8ad63600bfd28a297524173456a599de81c67847a3b5620a8068ee6815"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.04285714402794838,
+              -0.02857143059372902,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "71b689497f1b5878ce6c8abf05d05101c63c6c1e2b21a9edb3555d643a6b7630"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 1.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 100.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -42.85714340209961,
+              -28.571430206298828,
+              -14.285715103149414,
+              0.0,
+              14.285715103149414,
+              28.571430206298828
+            ],
+            "storage_sha256": "2ec8d1492164d7384559228cd07a8729a81f94a17cfa95851dd19ef809b5ea7d"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 5.551115123125783e-17,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -2.37904936211621e-17,
+              -1.5860329632228476e-17,
+              -7.930164816114238e-18,
+              0.0,
+              7.930164816114238e-18,
+              1.5860329632228476e-17
+            ],
+            "storage_sha256": "2b42e8ebf4cb0ad92f7c1ab2b4a2495b356f362a3a8960fbc5c3138fb1aaf767"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": -100.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              42.85714340209961,
+              28.571430206298828,
+              14.285715103149414,
+              -0.0,
+              -14.285715103149414,
+              -28.571430206298828
+            ],
+            "storage_sha256": "d6762ea8a6d4fb5f19c3d13060d407af107f2f86ae5d420370aa2d2e3c0a609e"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              350.0,
+              -10.0
+            ],
+            "storage_sha256": "bcdedfc0544ad6eb704d5579634b55dc25971bb7c319f24351aec360ad097367"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": -0.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.0
+            ],
+            "storage_sha256": "4c862632109713410d6554dcf5dc898490bc6077c68379cff64e5955785fbe5d"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              0.0,
+              -0.0
+            ],
+            "storage_sha256": "e6ad6c9a3a3b7658c35bacf6553fcb8ffe34387534a648fe18f875b8f7a86ddb"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 0.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.0,
+              -0.0,
+              -0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "storage_sha256": "54116d8ad63600bfd28a297524173456a599de81c67847a3b5620a8068ee6815"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -0.0,
+              0.0
+            ],
+            "storage_sha256": "a9765c4805658a968e5abdccd437e25907681a1cff6375e363239c53b125fcd4"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.04285714402794838,
+              -0.02857143059372902,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "71b689497f1b5878ce6c8abf05d05101c63c6c1e2b21a9edb3555d643a6b7630"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -0.3499999940395355,
+              0.010000000707805157
+            ],
+            "storage_sha256": "eef9e12f4a8b41c1f80efc12fd6d0f8a9fd3c769cce6856612d54e35fb3c88a8"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 1.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 100.0,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -42.85714340209961,
+              -28.571430206298828,
+              -14.285715103149414,
+              0.0,
+              14.285715103149414,
+              28.571430206298828
+            ],
+            "storage_sha256": "2ec8d1492164d7384559228cd07a8729a81f94a17cfa95851dd19ef809b5ea7d"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -350.0,
+              10.0
+            ],
+            "storage_sha256": "7e785b2ff14852525fe95cb477ff69609bb4a563211edfa8f4c9933ab19fa5dd"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningMultiply",
+      "scalar": 5.551115123125783e-17,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -2.37904936211621e-17,
+              -1.5860329632228476e-17,
+              -7.930164816114238e-18,
+              0.0,
+              7.930164816114238e-18,
+              1.5860329632228476e-17
+            ],
+            "storage_sha256": "2b42e8ebf4cb0ad92f7c1ab2b4a2495b356f362a3a8960fbc5c3138fb1aaf767"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -1.942890293094024e-16,
+              5.551115205843844e-18
+            ],
+            "storage_sha256": "66e1eb9c7d34495663d26ebd3187060fcaab318f9800e8588f0e12d7434471ac"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.6999999284744263,
+              -0.25
+            ],
+            "storage_sha256": "5008e6e4bc95d9654468c0272f60ca6d530e60ee240280c68be25103f88d13c9"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.6999999284744263,
+              -0.25
+            ],
+            "storage_sha256": "5008e6e4bc95d9654468c0272f60ca6d530e60ee240280c68be25103f88d13c9"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.1799999475479126,
+              -0.2149999886751175
+            ],
+            "storage_sha256": "9404d21e2305d04911b50a83bb347b0450b8c4cf78c099267417c6e42b1f7f55"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningAverage",
+      "scalar": 0.1,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.7000000476837158,
+              -0.25
+            ],
+            "storage_sha256": "3660a22429d5d3c8711b45f857ded6d38c54776192cb69aa1c3ee4126fecb8e1"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.01428571529686451,
+              0.0,
+              0.01428571529686451,
+              0.02857143059372902
+            ],
+            "storage_sha256": "91a9af8ab5b5620e16f34d6b728d1fb5e749e1e6fae411c340208f909d5b82f5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              1.1799999475479126,
+              -0.2149999886751175
+            ],
+            "storage_sha256": "9404d21e2305d04911b50a83bb347b0450b8c4cf78c099267417c6e42b1f7f55"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningCombine",
+      "scalar": null,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              4,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096,
+              0.4285714328289032,
+              0.5714285969734192
+            ],
+            "storage_sha256": "9ee2fd853e48a997095d4d715cf94b3eb72c215407884fe94920476700cba275"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              4,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096,
+              0.4285714328289032,
+              0.5714285969734192
+            ],
+            "storage_sha256": "9ee2fd853e48a997095d4d715cf94b3eb72c215407884fe94920476700cba275"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ]
+    },
+    {
+      "class_type": "ConditioningConcat",
+      "scalar": null,
+      "first": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              2,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0
+            ],
+            "storage_sha256": "0ffe514fcb37d15bab68e7a0b5a57d5bbb8ed7d9b424c6ceb06439495d064fb5"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              1,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096
+            ],
+            "storage_sha256": "4fbd63606d10a33e62dc7b985fae5c81ff205564091b19d7f6dee4866028ff8b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ],
+      "second": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              3,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "b3c982de735c45c0cd7adfc9397a208866064a004f11765dbfc196b11de08ed4"
+          },
+          "pool_state": "absent",
+          "pooled": null,
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              4,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096,
+              0.4285714328289032,
+              0.5714285969734192
+            ],
+            "storage_sha256": "9ee2fd853e48a997095d4d715cf94b3eb72c215407884fe94920476700cba275"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        }
+      ],
+      "output": [
+        {
+          "primary": {
+            "shape": [
+              1,
+              5,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "6f03d592a783de424c09bdc8e593afe623b09fd80ac425b1e5ad1a8eaeddf2d0"
+          },
+          "pool_state": "some",
+          "pooled": {
+            "shape": [
+              1,
+              2
+            ],
+            "values": [
+              -3.5,
+              0.10000000149011612
+            ],
+            "storage_sha256": "6fedf9812c26a530a4969405ee3b0c96914ea4f5eaf0fc53a693fcc45a4aaf92"
+          },
+          "tag_preserved": true
+        },
+        {
+          "primary": {
+            "shape": [
+              1,
+              4,
+              2
+            ],
+            "values": [
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.4285714328289032,
+              -0.2857142984867096,
+              -0.1428571492433548,
+              0.0,
+              0.1428571492433548,
+              0.2857142984867096
+            ],
+            "storage_sha256": "36d2a3124424193765b5fd864b458f4e2f894b6c55f46c0d6dae679fdee7116b"
+          },
+          "pool_state": "none",
+          "pooled": null,
+          "tag_preserved": true
+        }
+      ]
+    }
+  ],
+  "case_count": 41,
+  "comparison": "Exact finite F32 shape and bit pattern, including signed zero; no tolerance adjustment",
+  "qualification": "Genuine imported unchanged Source nodes and real Torch CPU/F32 arithmetic; reduced synthetic conditioning only; no model or application acceptance."
+}

@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-frame-interpolate-node-foundation",
+  "feature_id": "COMFY-NODE-0190",
+  "source": {
+    "path": "sim_extras/nodes_frame_interpolation.py",
+    "sha256": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369",
+    "byte_length": 8689,
+    "class_type": "FrameInterpolate",
+    "class_line": 75,
+    "execute_line": 94,
+    "definition_sha256": "e0b9dd6ec3b09e665bcc0f95d2b7a0209d9045ba9b96828e46f126e6914f049c",
+    "schema_definition_sha256": "ffdcf5a153782ebd928e50bc35e99e420e7283edd994b7706eb543a97bd5694a"
+  },
+  "prerequisites": {
+    "sequence_fallback_manifest_sha256": "38e80d61bce763996a40921437e10591e6c12ef25c1d5fb65c8ae19e8d33db92",
+    "retained_resource_manifest_sha256": "786eef227780460e9dc1bc9510bd788f328bc5870dde375762686527cbdcadfd"
+  },
+  "contract": {
+    "category": "video",
+    "display_name": "Run Frame Interpolation Model",
+    "search_aliases": ["rife", "film", "frame interpolation", "slow motion", "interpolate frames", "vfi"],
+    "inputs": {"interp_model": "INTERP_MODEL", "images": "IMAGE", "multiplier": "INT"},
+    "multiplier": {"default": 2, "minimum": 2, "maximum": 16},
+    "outputs": ["IMAGE"],
+    "native_output_port": "images",
+    "effect": "pure",
+    "cache": "input_identity"
+  },
+  "behavior": {
+    "bypass": "after_exact_handle_resolution_N_below_2_returns_the_identical_IMAGE_handle_without_compute_or_publication",
+    "execution": "canonical_CPU_F32_BHWC_casts_to_retained_model_dtype_then_delegates_once_to_interpolate_sequence",
+    "result": "complete_clamped_CPU_F32_BHWC_IMAGE_is_published_atomically",
+    "resource_exhaustion": "terminal_typed_failure_after_the_source_fallback_schedule",
+    "cancellation": "interrupted_and_no_partial_output",
+    "late_cancellation": "post_publish_cancellation_revokes_the_new_output_before_failure_returns",
+    "retry": "resource_or_cancellation_failure_leaves_the_input_and_model_reusable_for_a_clean_attempt",
+    "stream": "IMAGE_INTERP_MODEL_and_compute_streams_must_match"
+  },
+  "evidence_claims": {
+    "native_node_descriptor_and_execution": true,
+    "retained_frame_interpolation_delegation": true,
+    "identity_preserving_bypass": true,
+    "final_only_handle_publication": true,
+    "model_loader_or_checkpoint_acquisition": false,
+    "licensed_checkpoint_or_accelerator_numeric_oracle": false,
+    "progress_event_parity": false,
+    "codec_container_file_or_output_effect": false,
+    "cache_persistence_or_recovery_owner": false,
+    "external_media_publication": false
+  }
+}

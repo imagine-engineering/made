@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-gemma4-decoder-exactness-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source": {
+    "path": "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py",
+    "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+    "symbols": [
+      "Gemma4Config",
+      "Gemma4_E2B_Config",
+      "Gemma4_31B_Config",
+      "Gemma4Attention",
+      "TransformerBlockGemma4",
+      "Gemma4Transformer",
+      "Gemma4Base"
+    ]
+  },
+  "profiles": {
+    "gemma4_e2b": {
+      "hidden_size": 1536,
+      "intermediate_size": 6144,
+      "layers": 35,
+      "query_heads": 8,
+      "key_value_heads": 1,
+      "sliding_layers_per_cycle": 4,
+      "shared_key_value_layers": 20,
+      "double_wide_shared_mlp": true
+    },
+    "gemma4_e4b": {
+      "hidden_size": 2560,
+      "intermediate_size": 10240,
+      "layers": 42,
+      "query_heads": 8,
+      "key_value_heads": 2,
+      "sliding_layers_per_cycle": 5,
+      "shared_key_value_layers": 18,
+      "double_wide_shared_mlp": false
+    },
+    "gemma4_31b": {
+      "hidden_size": 5376,
+      "intermediate_size": 21504,
+      "layers": 60,
+      "query_heads": 32,
+      "key_value_heads": 16,
+      "sliding_layers_per_cycle": 5,
+      "shared_key_value_layers": 0,
+      "double_wide_shared_mlp": false
+    },
+    "shared": {
+      "vocabulary_size": 262144,
+      "maximum_tokens": 131072,
+      "local_head_dimension": 256,
+      "global_head_dimension": 512,
+      "global_rotary_pairs": 64,
+      "local_rope_theta": 10000.0,
+      "global_rope_theta": 1000000.0,
+      "hidden_size_per_layer_input": 256,
+      "normalization_epsilon": 0.000001,
+      "final_logit_soft_cap": 30.0,
+      "stop_tokens": [1, 50, 106]
+    }
+  },
+  "reduced_fixture": {
+    "vocabulary_size": 8,
+    "hidden_size": 4,
+    "intermediate_size": 8,
+    "layers": 10,
+    "query_heads": 2,
+    "key_value_heads": 1,
+    "local_head_dimension": 2,
+    "global_head_dimension": 4,
+    "hidden_size_per_layer_input": 2,
+    "shared_key_value_layers": 5,
+    "prompt_tokens": [1, 2, 3],
+    "full_logits_sha256": "10080fb49e529b5b7f341c47c112dba564b067c6f908d7604c200c3b78d02e16"
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "runtime_oracle_observed": false,
+    "accelerator_numeric_parity": false,
+    "external_server_required": false
+  }
+}

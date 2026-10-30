@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "resolution_module": "value_or_constant_contract_03",
+  "operation_id": "COMFY-TENSOR-OP-77DB8879A02F",
+  "baseline_overload_id": "COMFY-TENSOR-OP-77DB8879A02F:reference",
+  "baseline_fixture_sha256": "2c7d8f19f02bcf7f1398393c4b48abcc8b6fcc221095af91b410014875b8e40c",
+  "owner_task_id": "comfy-parity-tensor-ops-value-or-constant-contract-comfy-tensor-op-6542124fe760",
+  "inventory_kind": "namespace_value_reference",
+  "canonical_target": "torch.finfo().min",
+  "reference_semantic": {
+    "category": "numeric-constant",
+    "value": "torch.finfo().min"
+  },
+  "canonical_rust_semantic": "NumericConstantReference::FloatInfoMinimum",
+  "executable": false,
+  "source_observations": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/ldm/ace/ace_step15.py",
+      "line": 232,
+      "use": "attention mask minimum value"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/gpt_oss.py",
+      "line": 279,
+      "use": "causal mask minimum value"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "provenance": "source-derived invocation planning",
+  "source": {
+    "path": "sim_extras/nodes_frame_interpolation.py",
+    "sha256": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369"
+  },
+  "cases": {
+    "rife_three_frames_multiplier_four_65x66": {
+      "output_frames": 9,
+      "interpolation_steps": 6,
+      "timesteps": [0.25, 0.5, 0.75],
+      "padded_extent": [128, 128],
+      "padding_bottom_right": [63, 62],
+      "initial_single_batch": 3,
+      "first_single_oom_batch": 1
+    },
+    "film_five_frames_multiplier_two_65x66": {
+      "output_frames": 9,
+      "timesteps": [0.5],
+      "padded_extent": [65, 66]
+    }
+  },
+  "bounds": {
+    "multiplier_minimum_for_execution": 2,
+    "multiplier_schema_maximum": 16,
+    "rife_alignment": 64,
+    "film_alignment": 1
+  },
+  "claims": {
+    "model_execution": false,
+    "licensed_checkpoint_included": false,
+    "runtime_cache_or_publication": false
+  }
+}

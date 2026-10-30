@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.rodin",
+  "source_sha256": "e833ab2c68c6c619b4666b269e04e2f3c36a076f6a9e2b44f1bc845ba3614555",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0549",
+      "node_identifier": "Rodin3D_Detail"
+    },
+    {
+      "feature_id": "COMFY-NODE-0550",
+      "node_identifier": "Rodin3D_Gen2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0551",
+      "node_identifier": "Rodin3D_Gen25_Image"
+    },
+    {
+      "feature_id": "COMFY-NODE-0552",
+      "node_identifier": "Rodin3D_Gen25_Text"
+    },
+    {
+      "feature_id": "COMFY-NODE-0553",
+      "node_identifier": "Rodin3D_Regular"
+    },
+    {
+      "feature_id": "COMFY-NODE-0554",
+      "node_identifier": "Rodin3D_Sketch"
+    },
+    {
+      "feature_id": "COMFY-NODE-0555",
+      "node_identifier": "Rodin3D_Smooth"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0148",
+      "method": "POST",
+      "path": "/proxy/rodin/api/v2/download",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0149",
+      "method": "POST",
+      "path": "/proxy/rodin/api/v2/rodin",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0150",
+      "method": "POST",
+      "path": "/proxy/rodin/api/v2/status",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and multipart/poll/download transport; canonical native model and guest integration pending"
+}

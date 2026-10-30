@@ -1,0 +1,584 @@
+{
+  "canonical_target": "torch.nn.Upsample",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/autoencoder.py:149:17 (DecoderBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c.py:29:25 (UpDownBlock2d.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/modules.py:59:18 (Resampler.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:79:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:83:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:33:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:38:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taehv.py:158:121 (TAEHV.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taehv.py:159:121 (TAEHV.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taehv.py:160:121 (TAEHV.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taesd.py:55:82 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taesd.py:56:58 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taesd.py:57:58 (Decoder.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/audio/autoencoder.py:149:17 (DecoderBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c.py:29:25 (UpDownBlock2d.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/modules.py:59:18 (Resampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:79:17 (Resample.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:83:17 (Resample.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:33:17 (Resample.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:38:17 (Resample.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:158:121 (TAEHV.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:159:121 (TAEHV.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:160:121 (TAEHV.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:55:82 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:56:58 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:57:58 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-3f14adc9e576-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "align_corners",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "mode",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "scale_factor",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-3F14ADC9E576",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "9b59f4404463ccc401fc4091bbd4cd6c6d4199f4b4013d58255df1ed4147307f",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/audio/autoencoder.py",
+        "sha256": "4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_c.py",
+        "sha256": "be52f2650be0643c8358cf29c4d20ba8432c84147bc3d5d46526007f1de11e68"
+      },
+      {
+        "path": "comfy/ldm/moge/modules.py",
+        "sha256": "3655abdce2de058624bd4ea2f02757ab42bd811d9afab0fef824fe480afdb2a6"
+      },
+      {
+        "path": "comfy/ldm/wan/vae.py",
+        "sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4"
+      },
+      {
+        "path": "comfy/ldm/wan/vae2_2.py",
+        "sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5"
+      },
+      {
+        "path": "comfy/taesd/taehv.py",
+        "sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9"
+      },
+      {
+        "path": "comfy/taesd/taesd.py",
+        "sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.Upsample"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "neural_network_module_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-neural-network-module-comfy-tensor-op-0e602e58360a",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "stride",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'nearest'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 149,
+      "positional_arguments": [],
+      "scope": "DecoderBlock.__init__",
+      "site": "comfy/ldm/audio/autoencoder.py:149:17 (DecoderBlock.__init__)",
+      "source_path": "comfy/ldm/audio/autoencoder.py",
+      "source_sha256": "4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2 if mode == 'up' else 0.5",
+          "syntax_kind": "IfExp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 29,
+      "positional_arguments": [],
+      "scope": "UpDownBlock2d.__init__",
+      "site": "comfy/ldm/cascade/stage_c.py:29:25 (UpDownBlock2d.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c.py",
+      "source_sha256": "be52f2650be0643c8358cf29c4d20ba8432c84147bc3d5d46526007f1de11e68",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 59,
+      "positional_arguments": [],
+      "scope": "Resampler.__init__",
+      "site": "comfy/ldm/moge/modules.py:59:18 (Resampler.__init__)",
+      "source_path": "comfy/ldm/moge/modules.py",
+      "source_sha256": "3655abdce2de058624bd4ea2f02757ab42bd811d9afab0fef824fe480afdb2a6",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "(2.0, 2.0)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'nearest-exact'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 79,
+      "positional_arguments": [],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae.py:79:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "(2.0, 2.0)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'nearest-exact'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 83,
+      "positional_arguments": [],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae.py:83:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "(2.0, 2.0)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'nearest-exact'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 33,
+      "positional_arguments": [],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:33:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "(2.0, 2.0)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'nearest-exact'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 38,
+      "positional_arguments": [],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:38:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 121,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2 if decoder_space_upscale[0] else 1",
+          "syntax_kind": "IfExp"
+        }
+      ],
+      "line": 158,
+      "positional_arguments": [],
+      "scope": "TAEHV.__init__",
+      "site": "comfy/taesd/taehv.py:158:121 (TAEHV.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 121,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2 if decoder_space_upscale[1] else 1",
+          "syntax_kind": "IfExp"
+        }
+      ],
+      "line": 159,
+      "positional_arguments": [],
+      "scope": "TAEHV.__init__",
+      "site": "comfy/taesd/taehv.py:159:121 (TAEHV.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 121,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2 if decoder_space_upscale[2] else 1",
+          "syntax_kind": "IfExp"
+        }
+      ],
+      "line": 160,
+      "positional_arguments": [],
+      "scope": "TAEHV.__init__",
+      "site": "comfy/taesd/taehv.py:160:121 (TAEHV.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 82,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 55,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/taesd/taesd.py:55:82 (Decoder.__init__)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 58,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 56,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/taesd/taesd.py:56:58 (Decoder.__init__)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 58,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "scale_factor",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 57,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/taesd/taesd.py:57:58 (Decoder.__init__)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Upsample"
+    }
+  ],
+  "static_definition": null
+}

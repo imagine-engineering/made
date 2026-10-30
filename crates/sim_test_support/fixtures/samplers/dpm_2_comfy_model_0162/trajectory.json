@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "identity": "dpm_2",
+  "feature_id": "COMFY-MODEL-0162",
+  "source_ordinal": 8,
+  "source": {
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "equation_lines": [304, 308, 310, 311, 317, 318, 319, 320, 322, 325, 326, 329, 330, 331, 332, 333, 334, 335],
+    "registry_line": 970
+  },
+  "rng_contract_id": "COMFY-RNG-D68A0DD3FBE1",
+  "seed": 42,
+  "options": {
+    "s_churn": 0.6,
+    "s_tmin": 1.5,
+    "s_tmax": 4.0,
+    "s_noise": 1.0
+  },
+  "tolerance": 0.00001,
+  "shape": [2],
+  "sigmas": [4.0, 2.0, 1.0, 0.0],
+  "initial": [1.25, -0.75],
+  "steps": [
+    {
+      "sigma": 4.0,
+      "next_sigma": 2.0,
+      "gamma": 0.2,
+      "sigma_hat": 4.8,
+      "noise": [-0.24535465, -0.4494974],
+      "noise_bits": [3195747904, 3202753670],
+      "churned": [0.5990006, -1.9426514],
+      "primary_denoised": [0.4, -0.2],
+      "primary_derivative": [0.04145845, -0.36305237],
+      "midpoint_sigma": 3.0983868,
+      "midpoint_input": [0.5284543, -1.3248767],
+      "midpoint_denoised": [0.1, 0.3],
+      "midpoint_derivative": [0.13828303, -0.5244267],
+      "next_latent": [0.21180803, -0.47425663]
+    },
+    {
+      "sigma": 2.0,
+      "next_sigma": 1.0,
+      "gamma": 0.2,
+      "sigma_hat": 2.4,
+      "noise": [2.5769968, 0.8974629],
+      "noise_bits": [1076161924, 1063632929],
+      "churned": [3.6305807, 0.7163624],
+      "primary_denoised": [-0.5, 0.7],
+      "primary_derivative": [1.7210752, 0.00681765],
+      "midpoint_sigma": 1.5491934,
+      "midpoint_input": [2.1662784, 0.7105619],
+      "midpoint_denoised": [0.2, -0.1],
+      "midpoint_derivative": [1.2692271, 0.5232154],
+      "next_latent": [1.8536627, -0.0161392]
+    },
+    {
+      "sigma": 1.0,
+      "next_sigma": 0.0,
+      "gamma": 0.0,
+      "sigma_hat": 1.0,
+      "noise": null,
+      "noise_bits": null,
+      "churned": [1.8536627, -0.0161392],
+      "primary_denoised": [0.0, 0.25],
+      "primary_derivative": [1.8536627, -0.2661392],
+      "midpoint_sigma": null,
+      "midpoint_input": null,
+      "midpoint_denoised": null,
+      "midpoint_derivative": null,
+      "next_latent": [0.0, 0.25]
+    }
+  ]
+}

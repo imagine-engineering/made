@@ -1,0 +1,56 @@
+{
+  "artifact": "zed-native-film-fusion-v1",
+  "evidence_kind": "source-fingerprinted reduced exact-weight fusion graph plus production retained-weight schedule",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": ["Fusion.__init__", "Fusion.forward"]
+  },
+  "dependency": {
+    "fixture": "../film-pyramid-algebra/manifest.json",
+    "sha256": "819a72c87e021862f4d9952cf7fcd4c2c9e496bf740a11f4dc9a4c0f2003e1fc"
+  },
+  "production_schedule": {
+    "input_levels": 5,
+    "input_channels_fine_to_coarse": [138, 394, 906, 1930, 1930],
+    "groups_coarse_to_fine": [
+      {"index": 0, "level": 3, "input": 1930, "joined": 2442, "output": 512},
+      {"index": 1, "level": 2, "input": 512, "joined": 1162, "output": 256},
+      {"index": 2, "level": 1, "input": 256, "joined": 522, "output": 128},
+      {"index": 3, "level": 0, "input": 128, "joined": 202, "output": 64}
+    ],
+    "group_operations": [
+      "nearest resize to the target pyramid level",
+      "nonactivated even-kernel 2x2 FILM convolution",
+      "channel concatenate target level and resized net",
+      "activated 3x3 FILM convolution",
+      "activated 3x3 FILM convolution"
+    ],
+    "output_projection": "fuse.output_conv biasful 1x1 64-to-3 convolution"
+  },
+  "reduced_graph": {
+    "pyramid_values_fine_to_coarse": [1.0, 2.0, 3.0, 4.0, 5.0],
+    "spatial_sizes_fine_to_coarse": [16, 8, 4, 2, 1],
+    "group_outputs_coarse_to_fine": [9.0, 12.0, 14.0, 15.0],
+    "output_projection_weights": [1.0, 2.0, 3.0],
+    "expected_rgb": [15.0, 30.0, 45.0],
+    "fresh_output_storage": true,
+    "source_tensors_are_immutable": true,
+    "pre_cancelled_scratch_in_use_bytes": 0
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "production_dense_weight_numeric_parity": false,
+    "feature_or_flow_execution_reimplemented": false,
+    "multi_timestep_or_sequence_execution": false,
+    "codec_or_container_execution": false,
+    "handle_or_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

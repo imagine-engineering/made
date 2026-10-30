@@ -1,0 +1,27 @@
+{
+  "source_sha256": {
+    "sim_extras/nodes_latent.py": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+    "sim_extras/nodes_mask.py": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+    "sim_extras/nodes_post_processing.py": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+    "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+  },
+  "tonemap": {
+    "input": [1.0, 2.0, 3.0],
+    "multiplier": 1.0,
+    "expected": [0.875, 1.5555555555555556, 2.1]
+  },
+  "composite": {
+    "destination_shape": [1, 1, 4, 4],
+    "source_shape": [1, 1, 2, 2],
+    "x": 8,
+    "y": 8,
+    "feather": 16,
+    "expected_overlay": [0.25, 0.25, 0.25, 0.25],
+    "oversized_feather": 32,
+    "oversized_expected_overlay": [0.015625, 0.015625, 0.015625, 0.015625]
+  },
+  "masked": {
+    "mask": [1.0, 0.0, 0.0, 1.0],
+    "expected_overlay": [1.0, 0.0, 0.0, 1.0]
+  }
+}

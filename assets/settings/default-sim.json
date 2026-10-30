@@ -1,0 +1,43 @@
+{
+  "$schema": "zed://schemas/settings",
+  "sim_runtime": {
+    "active_profile": "00000000-0000-4000-8000-000000000001",
+    "group_selected_nodes_padding": 10.0,
+    "native_node_renderer": true,
+    "show_reroute_types": false,
+    "profiles": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "name": "Native Local",
+        "model_roots": [],
+        "device": "cpu",
+        "memory_policy": "balanced",
+        "api_host_enabled": false,
+        "api_bind": "127.0.0.1:8188",
+        "plugin_policy": "approved_only",
+        "rocm_package_root": null,
+        "rocm_package_signer": null,
+        "rocm_package_public_key_hex": null,
+        "metal_package_root": null,
+        "metal_package_signer": null,
+        "metal_package_public_key_hex": null,
+        "mlu_package_root": null,
+        "mlu_package_signer": null,
+        "mlu_package_public_key_hex": null,
+        "npu_package_root": null,
+        "npu_package_signer": null,
+        "npu_package_public_key_hex": null,
+        "cuda_package_root": null,
+        "cuda_package_signer": null,
+        "cuda_package_public_key_hex": null,
+        "xpu_package_root": null,
+        "xpu_package_signer": null,
+        "xpu_package_public_key_hex": null,
+        "directml_package_root": null,
+        "directml_package_signer": null,
+        "directml_package_public_key_hex": null,
+        "provider_scope": "local"
+      }
+    ]
+  }
+}

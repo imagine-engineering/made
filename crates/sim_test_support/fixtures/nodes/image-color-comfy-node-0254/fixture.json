@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-color-sim-node-0254",
+  "feature_ids": [
+    "COMFY-NODE-0254",
+    "COMFY-NODE-0260",
+    "COMFY-NODE-0270",
+    "COMFY-NODE-0456"
+  ],
+  "sources": [
+    {
+      "path": "nodes.py",
+      "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "byte_length": 106950,
+      "classes": [{ "class_type": "ImageInvert", "class_line": 1918, "execute_line": 1931 }]
+    },
+    {
+      "path": "sim_extras/nodes_morphology.py",
+      "sha256": "2638e6d5b1a2c6a3257c2a15f1ee53215712890cc60674db5a2908e2eb505344",
+      "byte_length": 4068,
+      "classes": [
+        { "class_type": "ImageRGBToYUV", "class_line": 56, "execute_line": 75 },
+        { "class_type": "ImageYUVToRGB", "class_line": 79, "execute_line": 98 }
+      ]
+    },
+    {
+      "path": "sim_extras/nodes_dataset.py",
+      "sha256": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+      "byte_length": 59648,
+      "classes": [{ "class_type": "NormalizeImages", "class_line": 800, "execute_line": 826 }]
+    }
+  ],
+  "image": {
+    "shape": [1, 1, 2, 3],
+    "rgb": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+    "inverted": [0.0, 1.0, 1.0, 1.0, 0.0, 1.0],
+    "y": [0.299, 0.299, 0.299, 0.587, 0.587, 0.587],
+    "u": [0.331364, 0.331364, 0.331364, 0.168932, 0.168932, 0.168932],
+    "v": [0.999813, 0.999813, 0.999813, 0.081469, 0.081469, 0.081469]
+  },
+  "normalize": {
+    "mean": 0.5,
+    "std": 0.25,
+    "input": [0.0, 0.25, 0.5, 0.75, 1.0, 1.25],
+    "expected": [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
+  },
+  "behavior": {
+    "image_invert_owner": "native_image_early_slice",
+    "new_family_descriptors": ["ImageRGBToYUV", "ImageYUVToRGB", "NormalizeImages"],
+    "cache": "input_identity",
+    "effect": "pure",
+    "cancellation": "interrupted_without_output_or_publication",
+    "recovery": "stale_worker_handles_fail_and_fresh_handles_succeed"
+  }
+}

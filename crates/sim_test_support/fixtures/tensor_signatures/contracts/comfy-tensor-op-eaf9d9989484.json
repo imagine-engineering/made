@@ -1,0 +1,1662 @@
+{
+  "canonical_target": "torch.nn.Module",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:531:20 (EncoderBase.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:540:20 (EncoderBase.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:649:20 (DecoderBase.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:682:18 (DecoderBase.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:815:20 (EncoderFactorized.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:830:20 (EncoderFactorized.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:948:20 (DecoderFactorized.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:990:18 (DecoderFactorized.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:68:21 (Upsampler.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:101:20 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:110:21 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:50:21 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:63:20 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:161:21 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:174:20 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:252:20 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:262:21 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:490:20 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:499:20 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:636:20 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:678:18 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:211:20 (Encoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:219:20 (Encoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:292:20 (Decoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:308:18 (Decoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:402:25 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:433:20 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:442:20 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:470:18 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:592:20 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:610:20 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:732:20 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:760:18 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:260:17 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:531:20 (EncoderBase.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:540:20 (EncoderBase.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:649:20 (DecoderBase.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:682:18 (DecoderBase.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:815:20 (EncoderFactorized.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:830:20 (EncoderFactorized.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:948:20 (DecoderFactorized.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:990:18 (DecoderFactorized.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:68:21 (Upsampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:101:20 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:110:21 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:50:21 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:63:20 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:161:21 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:174:20 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:252:20 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:262:21 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:490:20 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:499:20 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:636:20 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:678:18 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:211:20 (Encoder1D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:219:20 (Encoder1D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:292:20 (Decoder1D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:308:18 (Decoder1D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:402:25 (Model.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:433:20 (Model.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:442:20 (Model.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:470:18 (Model.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:592:20 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:610:20 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:732:20 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:760:18 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:260:17 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-eaf9d9989484-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-EAF9D9989484",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "37f023f0798368b003942bb0df48842e73e01919e772177c1aea40d65276427e",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/audio_encoders/wav2vec2.py",
+        "sha256": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7"
+      },
+      {
+        "path": "comfy/audio_encoders/whisper.py",
+        "sha256": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22"
+      },
+      {
+        "path": "comfy/background_removal/birefnet.py",
+        "sha256": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1"
+      },
+      {
+        "path": "comfy/cldm/cldm.py",
+        "sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d"
+      },
+      {
+        "path": "comfy/cldm/dit_embedder.py",
+        "sha256": "b369b4ac62b85378554ffd985ccd537af08b1c5de2aa0243c081d4545f561160"
+      },
+      {
+        "path": "comfy/clip_model.py",
+        "sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845"
+      },
+      {
+        "path": "comfy/controlnet.py",
+        "sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57"
+      },
+      {
+        "path": "comfy/gligen.py",
+        "sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c"
+      },
+      {
+        "path": "comfy/image_encoders/dino2.py",
+        "sha256": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579"
+      },
+      {
+        "path": "comfy/image_encoders/dino3.py",
+        "sha256": "8140f477c73fbdc8c94c005340809aa756d0c518964ff9404f9ba461f7a29df7"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/ace/ace_step15.py",
+        "sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e"
+      },
+      {
+        "path": "comfy/ldm/ace/attention.py",
+        "sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f"
+      },
+      {
+        "path": "comfy/ldm/ace/lyric_encoder.py",
+        "sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103"
+      },
+      {
+        "path": "comfy/ldm/ace/model.py",
+        "sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_dcae_pipeline.py",
+        "sha256": "21c2740c2c06544a7cb91ce526e248a2b4d9a85068612dee80a12f79b66ea608"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_log_mel.py",
+        "sha256": "81f34c4e5b69ce0f5c2cc338840b1a0bc45c76505c0c84a332c9691778565fe1"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/anima/model.py",
+        "sha256": "af8cf8bca4709b69f82e59fb24b3a893065c677951fe568f0fbf3306c6053a7f"
+      },
+      {
+        "path": "comfy/ldm/audio/autoencoder.py",
+        "sha256": "4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8"
+      },
+      {
+        "path": "comfy/ldm/audio/dit.py",
+        "sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c"
+      },
+      {
+        "path": "comfy/ldm/audio/embedders.py",
+        "sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd"
+      },
+      {
+        "path": "comfy/ldm/audio/vae_sa3.py",
+        "sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75"
+      },
+      {
+        "path": "comfy/ldm/aura/mmdit.py",
+        "sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1"
+      },
+      {
+        "path": "comfy/ldm/boogu/model.py",
+        "sha256": "a9293d6e4fb635ff1cc43477dcf34c633d9a2f4d3205946ded88c869d53356bb"
+      },
+      {
+        "path": "comfy/ldm/cascade/common.py",
+        "sha256": "a89d6aff5ae6fc5362bb2c312a41d673c931ee992a874b3d7a76b3d496038d49"
+      },
+      {
+        "path": "comfy/ldm/cascade/controlnet.py",
+        "sha256": "d3e73da50ea4abee4d25aec6b015b3390235fad507c336db336e16ce041047b6"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_b.py",
+        "sha256": "b37db6fb8022a1af93b919afbf3728189ab00c519ed67771ed07ee06b89ce292"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_c.py",
+        "sha256": "be52f2650be0643c8358cf29c4d20ba8432c84147bc3d5d46526007f1de11e68"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_c_coder.py",
+        "sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8"
+      },
+      {
+        "path": "comfy/ldm/chroma/layers.py",
+        "sha256": "1d08fdde7b1a9ea98b6ce9a79bcd4394e5df9a0bb3872a458f79cb11bcfec25f"
+      },
+      {
+        "path": "comfy/ldm/chroma/model.py",
+        "sha256": "e8bdf9b0f080c71a5d215a11d5a1344af8ef220b6251466c124e261ccddbfb0e"
+      },
+      {
+        "path": "comfy/ldm/chroma_radiance/layers.py",
+        "sha256": "5fb5db77eb257e40ba4f1a02674bcee96a864dd3779abdf061c66b00f4ef7684"
+      },
+      {
+        "path": "comfy/ldm/chroma_radiance/model.py",
+        "sha256": "c8a356f24b99e4351917fba91d062b819330c89edfa999cf2e7d530b7e473251"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/model.py",
+        "sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/vae.py",
+        "sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7"
+      },
+      {
+        "path": "comfy/ldm/cosmos/blocks.py",
+        "sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b"
+      },
+      {
+        "path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+        "sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805"
+      },
+      {
+        "path": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py",
+        "sha256": "fc616c155fcf610a8436ca567f971d1bbe57e84a6eba7dfc5146a8b5c624802d"
+      },
+      {
+        "path": "comfy/ldm/cosmos/cosmos_tokenizer/utils.py",
+        "sha256": "1ad10120d40c9bf16a0377c14ae69827fc803f449f67add26fa799adcaa723e4"
+      },
+      {
+        "path": "comfy/ldm/cosmos/model.py",
+        "sha256": "70e1cf6ddc1e47a370cd86dcdd6e9e4f5ad078cbe352cad4457ba5407bdc66c2"
+      },
+      {
+        "path": "comfy/ldm/cosmos/position_embedding.py",
+        "sha256": "ab27e03b9af1ecafba7062ef9e63d6092f71fa12c872e43ad8107df7b27b7fa0"
+      },
+      {
+        "path": "comfy/ldm/cosmos/predict2.py",
+        "sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b"
+      },
+      {
+        "path": "comfy/ldm/cosmos/vae.py",
+        "sha256": "3a61205726e35fb1d7235d75a470ae118f32e564d49f1c38b7575884f74f6734"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/camera.py",
+        "sha256": "b9c1bc79862c8f2b59a6058da1bf47c1aaef84ca75ec5131805fbdf2f81dca9a"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/dpt.py",
+        "sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/model.py",
+        "sha256": "6f05ba0c22a34304f6bd6cde7e6dd26ceef474a99ad51d6632940f8d2decf6b0"
+      },
+      {
+        "path": "comfy/ldm/ernie/model.py",
+        "sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c"
+      },
+      {
+        "path": "comfy/ldm/flux/controlnet.py",
+        "sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742"
+      },
+      {
+        "path": "comfy/ldm/flux/layers.py",
+        "sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc"
+      },
+      {
+        "path": "comfy/ldm/flux/model.py",
+        "sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368"
+      },
+      {
+        "path": "comfy/ldm/flux/redux.py",
+        "sha256": "3b7abf43e15fc7b9613a64e701635f943351fa47f5036d87427ea672f93c7952"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/asymm_models_joint.py",
+        "sha256": "59137d17f39231ca7b3db318d863a49f8d47857ba73e7db6993e1f1f62609dbe"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/layers.py",
+        "sha256": "bb0ae6cc4dee093547688f667e307bc37d83697d7342dc944f20499682321c95"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/utils.py",
+        "sha256": "1aaa9f12fcdb6b0889d20bcb28a5447dc9a2639d39f3c217fb210d4584be76cd"
+      },
+      {
+        "path": "comfy/ldm/genmo/vae/model.py",
+        "sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce"
+      },
+      {
+        "path": "comfy/ldm/hidream/model.py",
+        "sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e"
+      },
+      {
+        "path": "comfy/ldm/hidream_o1/model.py",
+        "sha256": "e588d2b9906d22d9b2f5aa6f90124bc1d087c7f79dcfdec4422d00602f03382d"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/model.py",
+        "sha256": "a3772417ab78adf948b748f12c3fc056aab708ce8987c5ace0acb2e38c3822f2"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+        "sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/model.py",
+        "sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/upsampler.py",
+        "sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/vae.py",
+        "sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+        "sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302"
+      },
+      {
+        "path": "comfy/ldm/hydit/attn_layers.py",
+        "sha256": "667b14aff9a834392e424845c0002c5c24d62d6a89cf29f26ea0cf0fd2a2d8ea"
+      },
+      {
+        "path": "comfy/ldm/hydit/controlnet.py",
+        "sha256": "9032da47faac4f9c6720a038ee253bac29037d53918e0ce51e8b8e90269e5402"
+      },
+      {
+        "path": "comfy/ldm/hydit/models.py",
+        "sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2"
+      },
+      {
+        "path": "comfy/ldm/hydit/poolers.py",
+        "sha256": "6cdc7f171c65a9676fcdccc24598feda7fc991e3eef2c3fe8d183965f9c0d4ae"
+      },
+      {
+        "path": "comfy/ldm/ideogram4/model.py",
+        "sha256": "886e9e114fe3546c2e699c8d736816ede5aaca442b09d8bea7ba090279537666"
+      },
+      {
+        "path": "comfy/ldm/kandinsky5/model.py",
+        "sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc"
+      },
+      {
+        "path": "comfy/ldm/krea2/model.py",
+        "sha256": "c6bce005d5c902b310c63cb9e4f1717e0fea01ad2d8449a0f46e5dd617944daa"
+      },
+      {
+        "path": "comfy/ldm/lens/model.py",
+        "sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002"
+      },
+      {
+        "path": "comfy/ldm/lightricks/av_model.py",
+        "sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7"
+      },
+      {
+        "path": "comfy/ldm/lightricks/embeddings_connector.py",
+        "sha256": "baf7cded994414160aa57edccfabc94ad185d699d02558465332c12125e69847"
+      },
+      {
+        "path": "comfy/ldm/lightricks/latent_upsampler.py",
+        "sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/audio_vae.py",
+        "sha256": "fafef1fd6709d6f58bfdf0c49029bf2f45d3c83f438839d2c95a7455b0575449"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+        "sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_conv3d.py",
+        "sha256": "dc6f748e9d559009800c46e2fa44796ecab45533d30d8adbb72432ac70d3faea"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+        "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/dual_conv3d.py",
+        "sha256": "2683701b800960aac74766f03cb4bc7a3cb10b80e881422e63cf5d6f5896b2c9"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/pixel_norm.py",
+        "sha256": "37163441070d3ea85bcccf9a603bc1f19a4ee8e9da2afadfa8bba7a1db6e96da"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+        "sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d"
+      },
+      {
+        "path": "comfy/ldm/lumina/controlnet.py",
+        "sha256": "8330e0f92d70b23b4f6d4fa0661e240fac2cf211ff70d897f99ffebfd9f1d541"
+      },
+      {
+        "path": "comfy/ldm/lumina/model.py",
+        "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/activations.py",
+        "sha256": "59994f9372c5dd2996a9617d648c7684a89075aedd1d093c0281538e40e38faf"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/alias_free_torch.py",
+        "sha256": "c9f316a443b00bed4c2d50fbd23a4d7b2f7d16656a2a7642744f216f12e2ae8d"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/autoencoder.py",
+        "sha256": "4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+        "sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/vae.py",
+        "sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+        "sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78"
+      },
+      {
+        "path": "comfy/ldm/models/autoencoder.py",
+        "sha256": "24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0"
+      },
+      {
+        "path": "comfy/ldm/modules/attention.py",
+        "sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+        "sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+        "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/upscaling.py",
+        "sha256": "396721fe4d6c8b825f06264aa8b62ec52b399908e8c51d519d67a4d072699084"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/util.py",
+        "sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e"
+      },
+      {
+        "path": "comfy/ldm/modules/ema.py",
+        "sha256": "6185e8296e3ed8adf6fe857b09761cc469240e400a3f0f291917b5ffb8169e4c"
+      },
+      {
+        "path": "comfy/ldm/modules/sdpose.py",
+        "sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a"
+      },
+      {
+        "path": "comfy/ldm/moge/model.py",
+        "sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c"
+      },
+      {
+        "path": "comfy/ldm/moge/modules.py",
+        "sha256": "3655abdce2de058624bd4ea2f02757ab42bd811d9afab0fef824fe480afdb2a6"
+      },
+      {
+        "path": "comfy/ldm/omnigen/omnigen2.py",
+        "sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3"
+      },
+      {
+        "path": "comfy/ldm/pixart/blocks.py",
+        "sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281"
+      },
+      {
+        "path": "comfy/ldm/pixart/pixartms.py",
+        "sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661"
+      },
+      {
+        "path": "comfy/ldm/pixeldit/model.py",
+        "sha256": "fff32b630e0eeb437c9defd68122513566070bd90d6225e062922accf6ed28bb"
+      },
+      {
+        "path": "comfy/ldm/pixeldit/modules.py",
+        "sha256": "6b28c1da83f899dc352f017f4b097568b07bd2eaee1a2a27ba17bd7e7237bd9a"
+      },
+      {
+        "path": "comfy/ldm/pixeldit/pid.py",
+        "sha256": "e85c99e74d566b3850d0208f6078d8fbc36e389e1308a9fe417c60223c5a2a04"
+      },
+      {
+        "path": "comfy/ldm/qwen_image/controlnet.py",
+        "sha256": "807f9932af334410e8491f79bbb7d327dba654f28f4d01e5cedf0435218c7afd"
+      },
+      {
+        "path": "comfy/ldm/qwen_image/model.py",
+        "sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28"
+      },
+      {
+        "path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+        "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"
+      },
+      {
+        "path": "comfy/ldm/sam3/detector.py",
+        "sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8"
+      },
+      {
+        "path": "comfy/ldm/sam3/sam.py",
+        "sha256": "53ed995e1130d10361f989549695ef2d06498b0b3588a952753b0c6633613a40"
+      },
+      {
+        "path": "comfy/ldm/sam3/tracker.py",
+        "sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e"
+      },
+      {
+        "path": "comfy/ldm/supir/supir_modules.py",
+        "sha256": "d91113036b86f05796ec56297c4533271f8cc67555c0f8abe371f81a7365c8cf"
+      },
+      {
+        "path": "comfy/ldm/triposplat/model.py",
+        "sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0"
+      },
+      {
+        "path": "comfy/ldm/triposplat/vae.py",
+        "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+      },
+      {
+        "path": "comfy/ldm/wan/ar_model.py",
+        "sha256": "823806b0b8b02a780ab3f8e2a6816dfb31b9598aef4e6d8fb3039319a14984a3"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy/ldm/wan/model_animate.py",
+        "sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449"
+      },
+      {
+        "path": "comfy/ldm/wan/model_multitalk.py",
+        "sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8"
+      },
+      {
+        "path": "comfy/ldm/wan/model_wandancer.py",
+        "sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1"
+      },
+      {
+        "path": "comfy/ldm/wan/vae.py",
+        "sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4"
+      },
+      {
+        "path": "comfy/ldm/wan/vae2_2.py",
+        "sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy/model_patcher.py",
+        "sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0"
+      },
+      {
+        "path": "comfy/model_sampling.py",
+        "sha256": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/pixel_space_convert.py",
+        "sha256": "60cc5e4ea109da1e384ca3121121098b0f295e012dec6ca1c73779c2ed9d8cbf"
+      },
+      {
+        "path": "comfy/sd1_clip.py",
+        "sha256": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2"
+      },
+      {
+        "path": "comfy/sdxl_clip.py",
+        "sha256": "dd3c01e1c302876612897c0051baa6e108751e36abcba7327490b25a571f97fd"
+      },
+      {
+        "path": "comfy/t2i_adapter/adapter.py",
+        "sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af"
+      },
+      {
+        "path": "comfy/taesd/taehv.py",
+        "sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9"
+      },
+      {
+        "path": "comfy/taesd/taesd.py",
+        "sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc"
+      },
+      {
+        "path": "comfy/text_encoders/ace.py",
+        "sha256": "f200d0a8579b43e4e9994bdba7298063c5fc8aa5f06fe0c377f704341a5f4bb4"
+      },
+      {
+        "path": "comfy/text_encoders/ace15.py",
+        "sha256": "21106ab99d7d543a2d157202531e60a80bfa55c88740f9708d2bf7415466f04e"
+      },
+      {
+        "path": "comfy/text_encoders/bert.py",
+        "sha256": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c"
+      },
+      {
+        "path": "comfy/text_encoders/flux.py",
+        "sha256": "c522ad47ccdad9878f0e8ae4c219dadfc4f12409adceaa7e663571766cbbe46b"
+      },
+      {
+        "path": "comfy/text_encoders/gemma4.py",
+        "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6"
+      },
+      {
+        "path": "comfy/text_encoders/gpt_oss.py",
+        "sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc"
+      },
+      {
+        "path": "comfy/text_encoders/hidream.py",
+        "sha256": "fa4c0e7c438254a12fe877d9e1db1b13723b473ddab8f43bf5e2cf2b56ad6d75"
+      },
+      {
+        "path": "comfy/text_encoders/hidream_o1.py",
+        "sha256": "d49e31c803d12133c54229788bb9775fb32a6046aea2724fd1d835a6188c5bae"
+      },
+      {
+        "path": "comfy/text_encoders/hunyuan_video.py",
+        "sha256": "5e9001d75b3eaaed8bb145be1b1b2a39d012140c11a45078b21beed2ddabae4e"
+      },
+      {
+        "path": "comfy/text_encoders/hydit.py",
+        "sha256": "3a56925c2ef403e888b2bd2187aaa5c0fdbf16ad16c88c282da095603873e748"
+      },
+      {
+        "path": "comfy/text_encoders/jina_clip_2.py",
+        "sha256": "d5f8f32dc9ebcdc55956bc6249f115c78483555bdd895b82814376d06a6fb3d1"
+      },
+      {
+        "path": "comfy/text_encoders/llama.py",
+        "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a"
+      },
+      {
+        "path": "comfy/text_encoders/lt.py",
+        "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2"
+      },
+      {
+        "path": "comfy/text_encoders/newbie.py",
+        "sha256": "444a1bed8e47d27a1b5672e488689f8adb92879198326b99fc1ca03180d52ac4"
+      },
+      {
+        "path": "comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929"
+      },
+      {
+        "path": "comfy/text_encoders/qwen3vl.py",
+        "sha256": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06"
+      },
+      {
+        "path": "comfy/text_encoders/qwen_vl.py",
+        "sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f"
+      },
+      {
+        "path": "comfy/text_encoders/sa3.py",
+        "sha256": "e6603d11cf57923518b1393d0fe915d590f23b348072f61c11aa2e83a770f994"
+      },
+      {
+        "path": "comfy/text_encoders/sd3_clip.py",
+        "sha256": "61bde2b4a428779469a01f342a9195d115f2a207c7a3d2c0d6c0a5715fdc03ed"
+      },
+      {
+        "path": "comfy/text_encoders/t5.py",
+        "sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc"
+      },
+      {
+        "path": "comfy/weight_adapter/base.py",
+        "sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7"
+      },
+      {
+        "path": "comfy/weight_adapter/bypass.py",
+        "sha256": "618c286c5f74e823318f41774e02cfcfa02d74ee9d51320ec0aa2694cd74aa8e"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+      },
+      {
+        "path": "comfy_extras/mediapipe/face_landmarker.py",
+        "sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802"
+      },
+      {
+        "path": "comfy_extras/nodes_model_patch.py",
+        "sha256": "dcfcaf1bea6213bdde670a46a29c5f6fd0ad0866bd9e42ee50908e25be7be170"
+      },
+      {
+        "path": "comfy_extras/nodes_photomaker.py",
+        "sha256": "c7e86d4684d2884eda20250bd7122e31a8aaf7bfa003245ad0e0431a9ef1957e"
+      },
+      {
+        "path": "comfy_extras/nodes_train.py",
+        "sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      },
+      {
+        "path": "tests-unit/comfy_quant/test_mixed_precision.py",
+        "sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.Module"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "neural_network_module_04",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-neural-network-module-comfy-tensor-op-d60003ac2b14",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 531,
+      "positional_arguments": [],
+      "scope": "EncoderBase.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:531:20 (EncoderBase.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 540,
+      "positional_arguments": [],
+      "scope": "EncoderBase.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:540:20 (EncoderBase.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 649,
+      "positional_arguments": [],
+      "scope": "DecoderBase.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:649:20 (DecoderBase.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 682,
+      "positional_arguments": [],
+      "scope": "DecoderBase.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:682:18 (DecoderBase.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 815,
+      "positional_arguments": [],
+      "scope": "EncoderFactorized.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:815:20 (EncoderFactorized.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 830,
+      "positional_arguments": [],
+      "scope": "EncoderFactorized.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:830:20 (EncoderFactorized.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 948,
+      "positional_arguments": [],
+      "scope": "DecoderFactorized.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:948:20 (DecoderFactorized.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 990,
+      "positional_arguments": [],
+      "scope": "DecoderFactorized.__init__",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py:990:18 (DecoderFactorized.__init__)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+      "source_sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 68,
+      "positional_arguments": [],
+      "scope": "Upsampler.__init__",
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:68:21 (Upsampler.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/upsampler.py",
+      "source_sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 101,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:101:20 (Decoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 110,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:110:21 (Decoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 50,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:50:21 (Encoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 63,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:63:20 (Encoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 161,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:161:21 (Encoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+      "source_sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 174,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:174:20 (Encoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+      "source_sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 252,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:252:20 (Decoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+      "source_sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 262,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:262:21 (Decoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+      "source_sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 490,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:490:20 (Encoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 499,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:499:20 (Encoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 636,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:636:20 (Decoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 678,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:678:18 (Decoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 211,
+      "positional_arguments": [],
+      "scope": "Encoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:211:20 (Encoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 219,
+      "positional_arguments": [],
+      "scope": "Encoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:219:20 (Encoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 292,
+      "positional_arguments": [],
+      "scope": "Decoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:292:20 (Decoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 308,
+      "positional_arguments": [],
+      "scope": "Decoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:308:18 (Decoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 402,
+      "positional_arguments": [],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:402:25 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 433,
+      "positional_arguments": [],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:433:20 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 442,
+      "positional_arguments": [],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:442:20 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 470,
+      "positional_arguments": [],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:470:18 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 592,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:592:20 (Encoder.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 610,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:610:20 (Encoder.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 732,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:732:20 (Decoder.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 760,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:760:18 (Decoder.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 260,
+      "positional_arguments": [],
+      "scope": "TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:260:17 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.Module"
+    }
+  ],
+  "static_definition": null
+}

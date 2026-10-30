@@ -1,0 +1,4285 @@
+{
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0582",
+      "class_type": "SamplerLMS",
+      "source": {
+        "catalog_line": 537,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 552,
+          "kind": "ClassDef",
+          "line": 537,
+          "sha256": "3d59fbbd5b9b0bfa2ee3b384aca08855988d0b7a2a94d805f978b9dd7caa0f39",
+          "status": "parsed_definition",
+          "symbol": "SamplerLMS"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "6ceec17d9d7a86c9c27eaac52dbce33279ac1996c997aee2616c46e47223780e",
+        "definition_sha256": "f9a80dfba72b0a38381232bf1ccb84270079a1524d27041d39ea8117edaab236",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 4
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 100
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "order",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "f9a80dfba72b0a38381232bf1ccb84270079a1524d27041d39ea8117edaab236",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0582",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0583",
+      "class_type": "SamplerSASolver",
+      "source": {
+        "catalog_line": 622,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 664,
+          "kind": "ClassDef",
+          "line": 622,
+          "sha256": "31da2d436665bf533c28b32248f632edab8f6d92372402904702ae954230f98d",
+          "status": "parsed_definition",
+          "symbol": "SamplerSASolver"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "45ad3a3bb8ebec4dbcc8ca79a713d3ce33440ae1f55f70497e091c74c75eec0a",
+        "definition_sha256": "89b16a365d53bbcd92b8bb56495102b082dd63f2d8c696b9eba7b7ca3955fbe7",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.2"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sde_start_percent",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.001"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.8"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sde_end_percent",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.001"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 3
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 6
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "predictor_order",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 4
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 6
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "corrector_order",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "use_pece",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "BOOLEAN"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "simple_order_2",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "BOOLEAN"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "89b16a365d53bbcd92b8bb56495102b082dd63f2d8c696b9eba7b7ca3955fbe7",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0583",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0584",
+      "class_type": "SamplerSEEDS2",
+      "source": {
+        "catalog_line": 667,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 699,
+          "kind": "ClassDef",
+          "line": 667,
+          "sha256": "f48744a706a49ef93d41845bf8c308af971853f6150afd00ded45f0317ffc4f9",
+          "status": "parsed_definition",
+          "symbol": "SamplerSEEDS2"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "a25898c21f74d528993898f344f5e019f852d0965c8510cbaf515e9ba3a0c380",
+        "definition_sha256": "d031de071aebb692c65ce2845cb9ca09f1b8b672f24dfff3037aa330e3fe920d",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "phi_1"
+              },
+              {
+                "kind": "string",
+                "value": "phi_2"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "solver_type",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "Stochastic strength",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "SDE noise multiplier",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.5"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "multiline": false,
+            "name": "r",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "Relative step size for the intermediate stage (c2 node)",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "d031de071aebb692c65ce2845cb9ca09f1b8b672f24dfff3037aa330e3fe920d",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0584",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": "This sampler node can represent multiple samplers:\n\nseeds_2\n- default setting\n\nexp_heun_2_x0\n- solver_type=phi_2, r=1.0, eta=0.0\n\nexp_heun_2_x0_sde\n- solver_type=phi_2, r=1.0, eta=1.0, s_noise=1.0",
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0585",
+      "class_type": "SamplingPercentToSigma",
+      "source": {
+        "catalog_line": 351,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 376,
+          "kind": "ClassDef",
+          "line": 351,
+          "sha256": "30decf1d4804accbdf2a70eba1a773b41ef0e09cfb74f2a9388044dadf0a1ac1",
+          "status": "parsed_definition",
+          "symbol": "SamplingPercentToSigma"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "4ff12ec66ebf2c3ff7b43bc9ff9a4f6e63e5711c32851e34ae660d9b6de773d4",
+        "definition_sha256": "b8edc9568ba659f6d3a15b74f3235c0aa6d5e746747b61855320691e5dc55345",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sampling_percent",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.0001"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "boolean",
+              "value": false
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "return_actual_sigma",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "BOOLEAN"
+            ],
+            "step": null,
+            "tooltip": "Return the actual sigma value instead of the value used for interval checks.\nThis only affects results at 0.0 and 1.0.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "b8edc9568ba659f6d3a15b74f3235c0aa6d5e746747b61855320691e5dc55345",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0585",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": "sigma_value",
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "FLOAT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0609",
+      "class_type": "SDTurboScheduler",
+      "source": {
+        "catalog_line": 136,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 158,
+          "kind": "ClassDef",
+          "line": 136,
+          "sha256": "1ec2c80c79caaed2f4166d0efd5dc04927677e21f6bc33025d962d09c2af028f",
+          "status": "parsed_definition",
+          "symbol": "SDTurboScheduler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "41e22ba2afd68a760ae499b69bee36e67a3cd9bca34249183b1aaca3f6fa5c40",
+        "definition_sha256": "73c5f0c04fd6ac69649c09daf0c72ddbc1fa06f0137d897a3f657288edb3fe47",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "denoise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "73c5f0c04fd6ac69649c09daf0c72ddbc1fa06f0137d897a3f657288edb3fe47",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0609",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0616",
+      "class_type": "SetFirstSigma",
+      "source": {
+        "catalog_line": 276,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 295,
+          "kind": "ClassDef",
+          "line": 276,
+          "sha256": "5302bc61a7ca094fee9ee2ad8c9dc32997ef0bbf27c9945acd7287e7df6b6db3",
+          "status": "parsed_definition",
+          "symbol": "SetFirstSigma"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "02100b4096c8469d36d6c4ddb01bed8086da8abacc6aec6b7a861d5c49532a30",
+        "definition_sha256": "4c4f3ddd5dcff4113bd794d645257a7455b09fb7dadd7640935465a6adba14d2",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sigmas",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SIGMAS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "136.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "20000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sigma",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.001"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "4c4f3ddd5dcff4113bd794d645257a7455b09fb7dadd7640935465a6adba14d2",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0616",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0633",
+      "class_type": "SplitSigmas",
+      "source": {
+        "catalog_line": 204,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 226,
+          "kind": "ClassDef",
+          "line": 204,
+          "sha256": "c9151e5304e71c727397f5ab47d5bab2afe423999e4e1b94587300691b0be34e",
+          "status": "parsed_definition",
+          "symbol": "SplitSigmas"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "ed7ee260257c981eab1a4d49d14e32614587ea1ee75da28dc533beea3cb4916a",
+        "definition_sha256": "34dc5af0dd40b29dad7a4c8cd5d4a9280dd8ac78a1bd4f8f106ef810f1ffb06c",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sigmas",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SIGMAS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "step",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "34dc5af0dd40b29dad7a4c8cd5d4a9280dd8ac78a1bd4f8f106ef810f1ffb06c",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0633",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": "high_sigmas",
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          },
+          {
+            "choices": [],
+            "display_name": "low_sigmas",
+            "extra": [],
+            "match_template": null,
+            "ordinal": 1,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0634",
+      "class_type": "SplitSigmasDenoise",
+      "source": {
+        "catalog_line": 228,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 252,
+          "kind": "ClassDef",
+          "line": 228,
+          "sha256": "6198cdbc07b5c9aacf1137a5d6350e090ffd14050abbcc37ff79ff5e975a8c20",
+          "status": "parsed_definition",
+          "symbol": "SplitSigmasDenoise"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "463cd080fdb06d3cdc4d0943d52f0bc359ca63b74f0347c70b151f467e829fbf",
+        "definition_sha256": "b7e4f1b36ff727aab02a4da74f8efdd2747f144323feaa47377f0174e62dc38c",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sigmas",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SIGMAS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "denoise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "b7e4f1b36ff727aab02a4da74f8efdd2747f144323feaa47377f0174e62dc38c",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0634",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": "high_sigmas",
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          },
+          {
+            "choices": [],
+            "display_name": "low_sigmas",
+            "extra": [],
+            "match_template": null,
+            "ordinal": 1,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0726",
+      "class_type": "VideoLinearCFGGuidance",
+      "source": {
+        "catalog_line": 59,
+        "path": "sim_extras/nodes_video_model.py",
+        "sha256": "b3d355bc0878fd5d3068ee54edb94fd08ac0f657dafe448654d530a289838947",
+        "symbol": {
+          "end_line": 81,
+          "kind": "ClassDef",
+          "line": 59,
+          "sha256": "179f06a33856bbf7008fefca5d4bbec82a4ebc028218cfa8cae8c62ec132f70a",
+          "status": "parsed_definition",
+          "symbol": "VideoLinearCFGGuidance"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "ea9c55f65be64622a530d49b2afbeaa215a02a678e1520117278dbcce9abc38c",
+        "definition_sha256": "eb5e9426802092e15fb8a0e7ac8e1d1287ff0d60d8d2387a48b2fca501aab794",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "finite_decimal",
+                  "value": "0.01"
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "min_cfg",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.5"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "eb5e9426802092e15fb8a0e7ac8e1d1287ff0d60d8d2387a48b2fca501aab794",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [
+            {
+              "name": "FUNCTION",
+              "value": {
+                "kind": "string",
+                "value": "patch"
+              }
+            },
+            {
+              "name": "CATEGORY",
+              "value": {
+                "kind": "string",
+                "value": "model/sampling/guiders"
+              }
+            }
+          ],
+          "feature_id": "COMFY-NODE-0726",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v1",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "MODEL",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v1",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0727",
+      "class_type": "VideoTriangleCFGGuidance",
+      "source": {
+        "catalog_line": 83,
+        "path": "sim_extras/nodes_video_model.py",
+        "sha256": "b3d355bc0878fd5d3068ee54edb94fd08ac0f657dafe448654d530a289838947",
+        "symbol": {
+          "end_line": 108,
+          "kind": "ClassDef",
+          "line": 83,
+          "sha256": "412d84d402f8c9a4852ee7b3f0ca0ab5650658fc26a37d10333a653e92e0294e",
+          "status": "parsed_definition",
+          "symbol": "VideoTriangleCFGGuidance"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "5f37f1fb5f08a663bc6c64666ec61b28d71a23bf039756d80f2cc4f41dbd4c7c",
+        "definition_sha256": "eb5e9426802092e15fb8a0e7ac8e1d1287ff0d60d8d2387a48b2fca501aab794",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "finite_decimal",
+                  "value": "0.01"
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "min_cfg",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.5"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "eb5e9426802092e15fb8a0e7ac8e1d1287ff0d60d8d2387a48b2fca501aab794",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [
+            {
+              "name": "FUNCTION",
+              "value": {
+                "kind": "string",
+                "value": "patch"
+              }
+            },
+            {
+              "name": "CATEGORY",
+              "value": {
+                "kind": "string",
+                "value": "model/sampling/guiders"
+              }
+            }
+          ],
+          "feature_id": "COMFY-NODE-0727",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v1",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "MODEL",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v1",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    }
+  ],
+  "source_reference": {
+    "reference_runtime": "NumPy 2.3.5 adapter; pinned node AST and Flow sigma/percent methods, not PyTorch runtime certification",
+    "source_sha256": {
+      "sim_extras/nodes_custom_sampler.py": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+      "sim_extras/nodes_video_model.py": "b3d355bc0878fd5d3068ee54edb94fd08ac0f657dafe448654d530a289838947",
+      "sim/model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
+      "sim/k_diffusion/sa_solver.py": "84f54b743f6491ea8e0a8ff21db88579016e374c9b7a05b3d84c3ac4454af461"
+    },
+    "cases": [
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [],
+          "step": 0
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [],
+          "step": 1
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [],
+          "step": 3
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [],
+          "step": 10000
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [],
+          "denoise": 0.0
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [],
+          "denoise": 0.125
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [],
+          "denoise": 0.5
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [],
+          "denoise": 0.625
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [],
+          "denoise": 1.0
+        },
+        "outputs": [
+          [],
+          []
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [],
+          "sigma": 0.0
+        },
+        "error": "empty sigma sequence"
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [],
+          "sigma": 136.0
+        },
+        "error": "empty sigma sequence"
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [],
+          "sigma": 20000.0
+        },
+        "error": "empty sigma sequence"
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "step": 0
+        },
+        "outputs": [
+          [
+            0.0
+          ],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "step": 1
+        },
+        "outputs": [
+          [
+            0.0
+          ],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "step": 3
+        },
+        "outputs": [
+          [
+            0.0
+          ],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "step": 10000
+        },
+        "outputs": [
+          [
+            0.0
+          ],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "denoise": 0.0
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "denoise": 0.125
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "denoise": 0.5
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "denoise": 0.625
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "denoise": 1.0
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "sigma": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "sigma": 136.0
+        },
+        "outputs": [
+          [
+            136.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            0.0
+          ],
+          "sigma": 20000.0
+        },
+        "outputs": [
+          [
+            20000.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "step": 0
+        },
+        "outputs": [
+          [
+            14.0
+          ],
+          [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "step": 1
+        },
+        "outputs": [
+          [
+            14.0,
+            4.0
+          ],
+          [
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "step": 3
+        },
+        "outputs": [
+          [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "step": 10000
+        },
+        "outputs": [
+          [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.0
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.125
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.5
+        },
+        "outputs": [
+          [
+            14.0,
+            4.0
+          ],
+          [
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.625
+        },
+        "outputs": [
+          [
+            14.0,
+            4.0
+          ],
+          [
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            14.0
+          ],
+          [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "sigma": 0.0
+        },
+        "outputs": [
+          [
+            0.0,
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "sigma": 136.0
+        },
+        "outputs": [
+          [
+            136.0,
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            14.0,
+            4.0,
+            1.0,
+            0.0
+          ],
+          "sigma": 20000.0
+        },
+        "outputs": [
+          [
+            20000.0,
+            4.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "step": 0
+        },
+        "outputs": [
+          [
+            10.0
+          ],
+          [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "step": 1
+        },
+        "outputs": [
+          [
+            10.0,
+            5.0
+          ],
+          [
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "step": 3
+        },
+        "outputs": [
+          [
+            10.0,
+            5.0,
+            3.0,
+            2.0
+          ],
+          [
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmas",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "step": 10000
+        },
+        "outputs": [
+          [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          []
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.0
+        },
+        "outputs": [
+          [],
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.125
+        },
+        "outputs": [
+          [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.5
+        },
+        "outputs": [
+          [
+            10.0,
+            5.0,
+            3.0,
+            2.0
+          ],
+          [
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 0.625
+        },
+        "outputs": [
+          [
+            10.0,
+            5.0,
+            3.0
+          ],
+          [
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SplitSigmasDenoise",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            10.0
+          ],
+          [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "sigma": 0.0
+        },
+        "outputs": [
+          [
+            0.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "sigma": 136.0
+        },
+        "outputs": [
+          [
+            136.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SetFirstSigma",
+        "inputs": {
+          "sigmas": [
+            10.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ],
+          "sigma": 20000.0
+        },
+        "outputs": [
+          [
+            20000.0,
+            5.0,
+            3.0,
+            2.0,
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 1,
+          "denoise": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 1,
+          "denoise": 0.05
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 1,
+          "denoise": 0.1
+        },
+        "outputs": [
+          [
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 1,
+          "denoise": 0.25
+        },
+        "outputs": [
+          [
+            0.199,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 1,
+          "denoise": 0.99
+        },
+        "outputs": [
+          [
+            0.899,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 1,
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            0.999,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 4,
+          "denoise": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 4,
+          "denoise": 0.05
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 4,
+          "denoise": 0.1
+        },
+        "outputs": [
+          [
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 4,
+          "denoise": 0.25
+        },
+        "outputs": [
+          [
+            0.199,
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 4,
+          "denoise": 0.99
+        },
+        "outputs": [
+          [
+            0.899,
+            0.799,
+            0.699,
+            0.599,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 4,
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            0.999,
+            0.899,
+            0.799,
+            0.699,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 10,
+          "denoise": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 10,
+          "denoise": 0.05
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 10,
+          "denoise": 0.1
+        },
+        "outputs": [
+          [
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 10,
+          "denoise": 0.25
+        },
+        "outputs": [
+          [
+            0.199,
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 10,
+          "denoise": 0.99
+        },
+        "outputs": [
+          [
+            0.899,
+            0.799,
+            0.699,
+            0.599,
+            0.499,
+            0.399,
+            0.299,
+            0.199,
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 1.0,
+          "steps": 10,
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            0.999,
+            0.899,
+            0.799,
+            0.699,
+            0.599,
+            0.499,
+            0.399,
+            0.299,
+            0.199,
+            0.099,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.0,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          1.0
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.0,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          1.0
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.001,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.999
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.001,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.999
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.2,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.8
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.2,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.8
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.5,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.5
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.5,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.5
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.8,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.19999999999999996
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 0.8,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.19999999999999996
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 1.0,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.0
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 1.0,
+          "sampling_percent": 1.0,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.0010000000474974513
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 1,
+          "denoise": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 1,
+          "denoise": 0.05
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 1,
+          "denoise": 0.1
+        },
+        "outputs": [
+          [
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 1,
+          "denoise": 0.25
+        },
+        "outputs": [
+          [
+            0.42703862660944203,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 1,
+          "denoise": 0.99
+        },
+        "outputs": [
+          [
+            0.963902787705504,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 1,
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            0.9996664442961973,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 4,
+          "denoise": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 4,
+          "denoise": 0.05
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 4,
+          "denoise": 0.1
+        },
+        "outputs": [
+          [
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 4,
+          "denoise": 0.25
+        },
+        "outputs": [
+          [
+            0.42703862660944203,
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 4,
+          "denoise": 0.99
+        },
+        "outputs": [
+          [
+            0.963902787705504,
+            0.922632794457275,
+            0.8744787322768975,
+            0.8175614194722475,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 4,
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            0.9996664442961973,
+            0.963902787705504,
+            0.922632794457275,
+            0.8744787322768975,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 10,
+          "denoise": 0.0
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 10,
+          "denoise": 0.05
+        },
+        "outputs": [
+          [
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 10,
+          "denoise": 0.1
+        },
+        "outputs": [
+          [
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 10,
+          "denoise": 0.25
+        },
+        "outputs": [
+          [
+            0.42703862660944203,
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 10,
+          "denoise": 0.99
+        },
+        "outputs": [
+          [
+            0.963902787705504,
+            0.922632794457275,
+            0.8744787322768975,
+            0.8175614194722475,
+            0.7492492492492492,
+            0.6657397107897665,
+            0.5613266583229037,
+            0.42703862660944203,
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SDTurboScheduler",
+        "inputs": {
+          "model_shift": 3.0,
+          "steps": 10,
+          "denoise": 1.0
+        },
+        "outputs": [
+          [
+            0.9996664442961973,
+            0.963902787705504,
+            0.922632794457275,
+            0.8744787322768975,
+            0.8175614194722475,
+            0.7492492492492492,
+            0.6657397107897665,
+            0.5613266583229037,
+            0.42703862660944203,
+            0.24791318864774628,
+            0.0
+          ]
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.0,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          1.0
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.0,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          1.0
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.001,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.9996664442961973
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.001,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.9996664442961973
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.2,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.9230769230769231
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.2,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.9230769230769231
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.5,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.75
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.5,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.75
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.8,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.4285714285714285
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 0.8,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.4285714285714285
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 1.0,
+          "return_actual_sigma": false
+        },
+        "outputs": [
+          0.0
+        ]
+      },
+      {
+        "class_type": "SamplingPercentToSigma",
+        "inputs": {
+          "model_shift": 3.0,
+          "sampling_percent": 1.0,
+          "return_actual_sigma": true
+        },
+        "outputs": [
+          0.002994012087583542
+        ]
+      },
+      {
+        "class_type": "SamplerLMS",
+        "inputs": {
+          "order": 1
+        },
+        "outputs": [
+          {
+            "algorithm": "lms",
+            "parameters": {
+              "order": 1
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerLMS",
+        "inputs": {
+          "order": 4
+        },
+        "outputs": [
+          {
+            "algorithm": "lms",
+            "parameters": {
+              "order": 4
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerLMS",
+        "inputs": {
+          "order": 100
+        },
+        "outputs": [
+          {
+            "algorithm": "lms",
+            "parameters": {
+              "order": 100
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_1",
+          "eta": 0.0,
+          "s_noise": 0.0,
+          "r": 0.01
+        },
+        "outputs": [
+          {
+            "algorithm": "seeds_2",
+            "parameters": {
+              "eta": 0.0,
+              "s_noise": 0.0,
+              "r": 0.01,
+              "solver_type": "phi_1"
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_1",
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "r": 0.5
+        },
+        "outputs": [
+          {
+            "algorithm": "seeds_2",
+            "parameters": {
+              "eta": 1.0,
+              "s_noise": 1.0,
+              "r": 0.5,
+              "solver_type": "phi_1"
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_1",
+          "eta": 100.0,
+          "s_noise": 100.0,
+          "r": 1.0
+        },
+        "outputs": [
+          {
+            "algorithm": "seeds_2",
+            "parameters": {
+              "eta": 100.0,
+              "s_noise": 100.0,
+              "r": 1.0,
+              "solver_type": "phi_1"
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_2",
+          "eta": 0.0,
+          "s_noise": 0.0,
+          "r": 0.01
+        },
+        "outputs": [
+          {
+            "algorithm": "seeds_2",
+            "parameters": {
+              "eta": 0.0,
+              "s_noise": 0.0,
+              "r": 0.01,
+              "solver_type": "phi_2"
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_2",
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "r": 0.5
+        },
+        "outputs": [
+          {
+            "algorithm": "seeds_2",
+            "parameters": {
+              "eta": 1.0,
+              "s_noise": 1.0,
+              "r": 0.5,
+              "solver_type": "phi_2"
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_2",
+          "eta": 100.0,
+          "s_noise": 100.0,
+          "r": 1.0
+        },
+        "outputs": [
+          {
+            "algorithm": "seeds_2",
+            "parameters": {
+              "eta": 100.0,
+              "s_noise": 100.0,
+              "r": 1.0,
+              "solver_type": "phi_2"
+            }
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSASolver",
+        "inputs": {
+          "model_shift": 3.0,
+          "eta": 1.5,
+          "sde_start_percent": 0.0,
+          "sde_end_percent": 1.0,
+          "s_noise": 2.0,
+          "predictor_order": 3,
+          "corrector_order": 4,
+          "use_pece": true,
+          "simple_order_2": false
+        },
+        "outputs": [
+          {
+            "algorithm": "sa_solver",
+            "parameters": {
+              "s_noise": 2.0,
+              "predictor_order": 3,
+              "corrector_order": 4,
+              "use_pece": true,
+              "simple_order_2": false
+            },
+            "tau_samples": [
+              [
+                0.0,
+                1.5
+              ],
+              [
+                0.001,
+                1.5
+              ],
+              [
+                0.1,
+                1.5
+              ],
+              [
+                0.5,
+                1.5
+              ],
+              [
+                0.9,
+                1.5
+              ],
+              [
+                1.0,
+                1.5
+              ],
+              [
+                10.0,
+                0.0
+              ]
+            ],
+            "start_sigma": 1.0,
+            "end_sigma": 0.0
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSASolver",
+        "inputs": {
+          "model_shift": 3.0,
+          "eta": 1.5,
+          "sde_start_percent": 0.2,
+          "sde_end_percent": 0.8,
+          "s_noise": 2.0,
+          "predictor_order": 3,
+          "corrector_order": 4,
+          "use_pece": true,
+          "simple_order_2": false
+        },
+        "outputs": [
+          {
+            "algorithm": "sa_solver",
+            "parameters": {
+              "s_noise": 2.0,
+              "predictor_order": 3,
+              "corrector_order": 4,
+              "use_pece": true,
+              "simple_order_2": false
+            },
+            "tau_samples": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.001,
+                0.0
+              ],
+              [
+                0.1,
+                0.0
+              ],
+              [
+                0.5,
+                1.5
+              ],
+              [
+                0.9,
+                1.5
+              ],
+              [
+                1.0,
+                0.0
+              ],
+              [
+                10.0,
+                0.0
+              ]
+            ],
+            "start_sigma": 0.9230769230769231,
+            "end_sigma": 0.4285714285714285
+          }
+        ]
+      },
+      {
+        "class_type": "SamplerSASolver",
+        "inputs": {
+          "model_shift": 3.0,
+          "eta": 1.5,
+          "sde_start_percent": 0.8,
+          "sde_end_percent": 0.2,
+          "s_noise": 2.0,
+          "predictor_order": 3,
+          "corrector_order": 4,
+          "use_pece": true,
+          "simple_order_2": false
+        },
+        "outputs": [
+          {
+            "algorithm": "sa_solver",
+            "parameters": {
+              "s_noise": 2.0,
+              "predictor_order": 3,
+              "corrector_order": 4,
+              "use_pece": true,
+              "simple_order_2": false
+            },
+            "tau_samples": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.001,
+                0.0
+              ],
+              [
+                0.1,
+                0.0
+              ],
+              [
+                0.5,
+                0.0
+              ],
+              [
+                0.9,
+                0.0
+              ],
+              [
+                1.0,
+                0.0
+              ],
+              [
+                10.0,
+                0.0
+              ]
+            ],
+            "start_sigma": 0.4285714285714285,
+            "end_sigma": 0.9230769230769231
+          }
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 0.0,
+          "batch": 1,
+          "conditional": [
+            2.0
+          ],
+          "unconditional": [
+            0.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          0.0
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 1.0,
+          "batch": 1,
+          "conditional": [
+            2.0
+          ],
+          "unconditional": [
+            0.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          2.0
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 9.0,
+          "batch": 1,
+          "conditional": [
+            2.0
+          ],
+          "unconditional": [
+            0.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          18.0
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 0.0,
+          "batch": 2,
+          "conditional": [
+            2.0,
+            3.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          0.0,
+          19.5
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 1.0,
+          "batch": 2,
+          "conditional": [
+            2.0,
+            3.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          2.0,
+          19.5
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 9.0,
+          "batch": 2,
+          "conditional": [
+            2.0,
+            3.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          18.0,
+          19.5
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 0.0,
+          "batch": 5,
+          "conditional": [
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          0.0,
+          5.0625,
+          12.75,
+          23.0625,
+          36.0
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 1.0,
+          "batch": 5,
+          "conditional": [
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          2.0,
+          7.125,
+          14.5,
+          24.125,
+          36.0
+        ]
+      },
+      {
+        "class_type": "VideoLinearCFGGuidance",
+        "inputs": {
+          "min_cfg": 9.0,
+          "batch": 5,
+          "conditional": [
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          18.0,
+          23.625,
+          28.5,
+          32.625,
+          36.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 0.0,
+          "batch": 1,
+          "conditional": [
+            2.0
+          ],
+          "unconditional": [
+            0.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          0.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 1.0,
+          "batch": 1,
+          "conditional": [
+            2.0
+          ],
+          "unconditional": [
+            0.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          2.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 9.0,
+          "batch": 1,
+          "conditional": [
+            2.0
+          ],
+          "unconditional": [
+            0.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          18.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 0.0,
+          "batch": 2,
+          "conditional": [
+            2.0,
+            3.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          0.0,
+          0.25
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 1.0,
+          "batch": 2,
+          "conditional": [
+            2.0,
+            3.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          2.0,
+          3.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 9.0,
+          "batch": 2,
+          "conditional": [
+            2.0,
+            3.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          18.0,
+          25.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 0.0,
+          "batch": 5,
+          "conditional": [
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          0.0,
+          9.875,
+          25.0,
+          15.625,
+          1.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 1.0,
+          "batch": 5,
+          "conditional": [
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          2.0,
+          11.25,
+          25.0,
+          17.75,
+          6.0
+        ]
+      },
+      {
+        "class_type": "VideoTriangleCFGGuidance",
+        "inputs": {
+          "min_cfg": 9.0,
+          "batch": 5,
+          "conditional": [
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "unconditional": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "scale": 7.0
+        },
+        "outputs": [
+          18.0,
+          22.25,
+          25.0,
+          34.75,
+          46.0
+        ]
+      }
+    ]
+  },
+  "sampler_consumption_reference": {
+    "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "runtime": "pinned AST, NumPy float32 adapter, deterministic VE profile",
+    "cases": [
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_1",
+          "eta": 0.0,
+          "s_noise": 0.0,
+          "r": 0.5
+        },
+        "initial": [
+          1.0
+        ],
+        "sigmas": [
+          2.0,
+          1.0
+        ],
+        "denoised": [
+          [
+            0.3
+          ],
+          [
+            0.25
+          ]
+        ],
+        "expected": [
+          0.625
+        ]
+      },
+      {
+        "class_type": "SamplerSEEDS2",
+        "inputs": {
+          "solver_type": "phi_2",
+          "eta": 0.0,
+          "s_noise": 0.0,
+          "r": 0.5
+        },
+        "initial": [
+          1.0
+        ],
+        "sigmas": [
+          2.0,
+          1.0
+        ],
+        "denoised": [
+          [
+            0.3
+          ],
+          [
+            0.25
+          ]
+        ],
+        "expected": [
+          0.6221347451210022
+        ]
+      }
+    ]
+  },
+  "discrete_percent_reference": {
+    "source_sha256": {
+      "sim/ldm/modules/diffusionmodules/util.py": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "sim/model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
+      "sim_extras/nodes_model_advanced.py": "ffa70c4bb3568537ba13b368092d2599b861db7c83b1bcfa41347058b40dcba7"
+    },
+    "runtime": "pinned discrete and distilled source classes with NumPy float32/float64 tensor adapter",
+    "cases": [
+      {
+        "profile": "sd15",
+        "percent": 0.0,
+        "return_actual_sigma": false,
+        "sigma": 999999999.9
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.0,
+        "return_actual_sigma": true,
+        "sigma": 14.614641189575195
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.001,
+        "return_actual_sigma": false,
+        "sigma": 14.526362419128418
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.001,
+        "return_actual_sigma": true,
+        "sigma": 14.526362419128418
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.2,
+        "return_actual_sigma": false,
+        "sigma": 5.092408180236816
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.2,
+        "return_actual_sigma": true,
+        "sigma": 5.092408180236816
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.5,
+        "return_actual_sigma": false,
+        "sigma": 1.6155803203582764
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.5,
+        "return_actual_sigma": true,
+        "sigma": 1.6155803203582764
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.8,
+        "return_actual_sigma": false,
+        "sigma": 0.5711888670921326
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.8,
+        "return_actual_sigma": true,
+        "sigma": 0.5711888670921326
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.99,
+        "return_actual_sigma": false,
+        "sigma": 0.09824269264936447
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.99,
+        "return_actual_sigma": true,
+        "sigma": 0.09824269264936447
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.999,
+        "return_actual_sigma": false,
+        "sigma": 0.041300032287836075
+      },
+      {
+        "profile": "sd15",
+        "percent": 0.999,
+        "return_actual_sigma": true,
+        "sigma": 0.041300032287836075
+      },
+      {
+        "profile": "sd15",
+        "percent": 1.0,
+        "return_actual_sigma": false,
+        "sigma": 0.0
+      },
+      {
+        "profile": "sd15",
+        "percent": 1.0,
+        "return_actual_sigma": true,
+        "sigma": 0.029167158529162407
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.0,
+        "return_actual_sigma": false,
+        "sigma": 999999999.9
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.0,
+        "return_actual_sigma": true,
+        "sigma": 14.614641189575195
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.001,
+        "return_actual_sigma": false,
+        "sigma": 14.527543067932129
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.001,
+        "return_actual_sigma": true,
+        "sigma": 14.527543067932129
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.2,
+        "return_actual_sigma": false,
+        "sigma": 5.092471599578857
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.2,
+        "return_actual_sigma": true,
+        "sigma": 5.092471599578857
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.5,
+        "return_actual_sigma": false,
+        "sigma": 1.6155933141708374
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.5,
+        "return_actual_sigma": true,
+        "sigma": 1.6155933141708374
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.8,
+        "return_actual_sigma": false,
+        "sigma": 0.5711427927017212
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.8,
+        "return_actual_sigma": true,
+        "sigma": 0.5711427927017212
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.99,
+        "return_actual_sigma": false,
+        "sigma": 0.13445065915584564
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.99,
+        "return_actual_sigma": true,
+        "sigma": 0.13445065915584564
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.999,
+        "return_actual_sigma": false,
+        "sigma": 0.13445065915584564
+      },
+      {
+        "profile": "lcm",
+        "percent": 0.999,
+        "return_actual_sigma": true,
+        "sigma": 0.13445065915584564
+      },
+      {
+        "profile": "lcm",
+        "percent": 1.0,
+        "return_actual_sigma": false,
+        "sigma": 0.0
+      },
+      {
+        "profile": "lcm",
+        "percent": 1.0,
+        "return_actual_sigma": true,
+        "sigma": 0.13445067405700684
+      }
+    ]
+  }
+}

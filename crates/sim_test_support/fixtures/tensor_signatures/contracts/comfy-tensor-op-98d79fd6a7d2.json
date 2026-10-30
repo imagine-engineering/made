@@ -1,0 +1,923 @@
+{
+  "canonical_target": "torch.matmul",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/attention.py:285:14 (CustomLiteLAProcessor2_0.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/attention.py:287:25 (CustomLiteLAProcessor2_0.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:272:13 (MultiHeadedAttention.forward_attention)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:327:18 (MultiHeadedAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:434:21 (RelPositionMultiHeadedAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:438:21 (RelPositionMultiHeadedAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:150:18 (SanaMultiscaleLinearAttention.apply_linear_attention)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:151:25 (SanaMultiscaleLinearAttention.apply_linear_attention)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:158:18 (SanaMultiscaleLinearAttention.apply_quadratic_attention)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:161:25 (SanaMultiscaleLinearAttention.apply_quadratic_attention)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:32:15 (select_reference_view)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:48:15 (select_reference_view)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:651:15 (MelSTFT.mel_spectrogram)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:87:16 (MelConverter.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/sam3/detector.py:384:18 (DotProductScoring.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/gaussian.py:121:36 (GaussianModel.render_tensors)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/llama.py:840:36 (Gemma3MultiModalProjector.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/sa3.py:53:16 (T5GemmaAttention.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "transpose",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/text_encoders/sa3.py:58:15 (T5GemmaAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_hunyuan3d.py:367:22 (voxel_to_mesh_surfnet)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/ace/attention.py:285:14 (CustomLiteLAProcessor2_0.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/attention.py:287:25 (CustomLiteLAProcessor2_0.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:272:13 (MultiHeadedAttention.forward_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:327:18 (MultiHeadedAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:434:21 (RelPositionMultiHeadedAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:438:21 (RelPositionMultiHeadedAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:150:18 (SanaMultiscaleLinearAttention.apply_linear_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:151:25 (SanaMultiscaleLinearAttention.apply_linear_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:158:18 (SanaMultiscaleLinearAttention.apply_quadratic_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:161:25 (SanaMultiscaleLinearAttention.apply_quadratic_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:32:15 (select_reference_view)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:48:15 (select_reference_view)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:651:15 (MelSTFT.mel_spectrogram)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:87:16 (MelConverter.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/detector.py:384:18 (DotProductScoring.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/gaussian.py:121:36 (GaussianModel.render_tensors)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/llama.py:840:36 (Gemma3MultiModalProjector.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/sa3.py:53:16 (T5GemmaAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/sa3.py:58:15 (T5GemmaAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_hunyuan3d.py:367:22 (voxel_to_mesh_surfnet)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-98d79fd6a7d2-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match batch broadcasting, contraction dimensions, transpose conventions, singular/degenerate cases, and result ranks.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-98D79FD6A7D2",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "1787d3d6d44b884d5268548a5fddb69e2d4d32fab4062b4d15842c7261d077d1",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/attention.py",
+        "sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f"
+      },
+      {
+        "path": "comfy/ldm/ace/lyric_encoder.py",
+        "sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+        "sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+        "sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/autoencoder.py",
+        "sha256": "4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5"
+      },
+      {
+        "path": "comfy/ldm/sam3/detector.py",
+        "sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8"
+      },
+      {
+        "path": "comfy/ldm/triposplat/gaussian.py",
+        "sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e"
+      },
+      {
+        "path": "comfy/text_encoders/llama.py",
+        "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a"
+      },
+      {
+        "path": "comfy/text_encoders/sa3.py",
+        "sha256": "e6603d11cf57923518b1393d0fe915d590f23b348072f61c11aa2e83a770f994"
+      },
+      {
+        "path": "comfy_extras/nodes_hunyuan3d.py",
+        "sha256": "2294d13e70e634e33be9fc91249260bc25a371df06e282bf00dedde4df7bb7d1"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.matmul"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "linear_algebra_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-linear-algebra-comfy-tensor-op-061170cbb6f7",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 285,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "value",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "key",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CustomLiteLAProcessor2_0.__call__",
+      "site": "comfy/ldm/ace/attention.py:285:14 (CustomLiteLAProcessor2_0.__call__)",
+      "source_path": "comfy/ldm/ace/attention.py",
+      "source_sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 287,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "vk",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "query",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CustomLiteLAProcessor2_0.__call__",
+      "site": "comfy/ldm/ace/attention.py:287:25 (CustomLiteLAProcessor2_0.__call__)",
+      "source_path": "comfy/ldm/ace/attention.py",
+      "source_sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 272,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "p_attn",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "value",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MultiHeadedAttention.forward_attention",
+      "site": "comfy/ldm/ace/lyric_encoder.py:272:13 (MultiHeadedAttention.forward_attention)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 327,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "q",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "k.transpose(-2, -1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "MultiHeadedAttention.forward",
+      "site": "comfy/ldm/ace/lyric_encoder.py:327:18 (MultiHeadedAttention.forward)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 434,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "q_with_bias_u",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "k.transpose(-2, -1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "RelPositionMultiHeadedAttention.forward",
+      "site": "comfy/ldm/ace/lyric_encoder.py:434:21 (RelPositionMultiHeadedAttention.forward)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 438,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "q_with_bias_v",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "p.transpose(-2, -1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "RelPositionMultiHeadedAttention.forward",
+      "site": "comfy/ldm/ace/lyric_encoder.py:438:21 (RelPositionMultiHeadedAttention.forward)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 150,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "value",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "key.transpose(-1, -2)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.apply_linear_attention",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:150:18 (SanaMultiscaleLinearAttention.apply_linear_attention)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 151,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "scores",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "query",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.apply_linear_attention",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:151:25 (SanaMultiscaleLinearAttention.apply_linear_attention)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 158,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "key.transpose(-1, -2)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "query",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.apply_quadratic_attention",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:158:18 (SanaMultiscaleLinearAttention.apply_quadratic_attention)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 161,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "value",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "scores.to(value.dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.apply_quadratic_attention",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:161:25 (SanaMultiscaleLinearAttention.apply_quadratic_attention)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 32,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "img_class_feat",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "img_class_feat.transpose(1, 2)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "select_reference_view",
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:32:15 (select_reference_view)",
+      "source_path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+      "source_sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "img_class_feat",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "img_class_feat.transpose(1, 2)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "select_reference_view",
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:48:15 (select_reference_view)",
+      "source_path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+      "source_sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 651,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to(self.mel_basis, dtype=magnitude.dtype, device=y.device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "magnitude",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MelSTFT.mel_spectrogram",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:651:15 (MelSTFT.mel_spectrogram)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 87,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.mel_basis",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "spec",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MelConverter.forward",
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:87:16 (MelConverter.forward)",
+      "source_path": "comfy/ldm/mmaudio/vae/autoencoder.py",
+      "source_sha256": "4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 384,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hs",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pp",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DotProductScoring.forward",
+      "site": "comfy/ldm/sam3/detector.py:384:18 (DotProductScoring.forward)",
+      "source_path": "comfy/ldm/sam3/detector.py",
+      "source_sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 121,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "T",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "_quat_to_matrix(rotation)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "GaussianModel.render_tensors",
+      "site": "comfy/ldm/triposplat/gaussian.py:121:36 (GaussianModel.render_tensors)",
+      "source_path": "comfy/ldm/triposplat/gaussian.py",
+      "source_sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 840,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "normed_vision_outputs",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(self.mm_input_projection_weight, device=normed_vision_outputs.device, dtype=normed_vision_outputs.dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "Gemma3MultiModalProjector.forward",
+      "site": "comfy/text_encoders/llama.py:840:36 (Gemma3MultiModalProjector.forward)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 53,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "xq * self.scale",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "xk.transpose(-2, -1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "T5GemmaAttention.forward",
+      "site": "comfy/text_encoders/sa3.py:53:16 (T5GemmaAttention.forward)",
+      "source_path": "comfy/text_encoders/sa3.py",
+      "source_sha256": "e6603d11cf57923518b1393d0fe915d590f23b348072f61c11aa2e83a770f994",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "attribute": "transpose",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 58,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "attn",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "xv",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "T5GemmaAttention.forward",
+      "site": "comfy/text_encoders/sa3.py:58:15 (T5GemmaAttention.forward)",
+      "source_path": "comfy/text_encoders/sa3.py",
+      "source_sha256": "e6603d11cf57923518b1393d0fe915d590f23b348072f61c11aa2e83a770f994",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 367,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "gradients",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "cross_product",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "voxel_to_mesh_surfnet",
+      "site": "comfy_extras/nodes_hunyuan3d.py:367:22 (voxel_to_mesh_surfnet)",
+      "source_path": "comfy_extras/nodes_hunyuan3d.py",
+      "source_sha256": "2294d13e70e634e33be9fc91249260bc25a371df06e282bf00dedde4df7bb7d1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.matmul"
+    }
+  ],
+  "static_definition": null
+}

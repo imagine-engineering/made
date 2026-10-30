@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "owner_task_id": "sim-parity-native-autograd-breadth",
+  "oracle": {
+    "simui_version": "0.27.1",
+    "simui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "source_files": {
+      "sim/ldm/cascade/stage_a.py": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "sim/ldm/modules/diffusionmodules/util.py": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "sim/weight_adapter/loha.py": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "sim/ldm/hunyuan3dv2_1/hunyuandit.py": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
+      "sim_extras/nodes_train.py": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+    },
+    "development_only": true
+  },
+  "catalog_cases": [
+    {"id":"COMFY-AUTOGRAD-0164A83D79F9","symbol":"torch.Tensor.requires_grad","execution_case":"tape_requires_grad","source_observations":[{"case":"state","expected":"checked_leaf_binding"}]},
+    {"id":"COMFY-AUTOGRAD-08DA3A226CB4","symbol":"vector_quantize","execution_case":"vector_quantize","source_observations":[{"case":"forward_vjp","expected":"nearest_code_and_two_gradient_slots"}]},
+    {"id":"COMFY-AUTOGRAD-0BDFE52B87F3","symbol":"torch.training.step","execution_case":"scaler_step","source_observations":[{"case":"finite_step","expected":"optimizer_runs"},{"case":"nonfinite_step","expected":"optimizer_skips"}]},
+    {"id":"COMFY-AUTOGRAD-0C5FA58D517B","symbol":"torch.optim.Adam","execution_case":"optimizer_adam","source_observations":[{"case":"state","expected":"transactional_step_counter"}]},
+    {"id":"COMFY-AUTOGRAD-104D91298DF9","symbol":"CheckpointFunction","execution_case":"checkpoint_function","source_observations":[{"case":"forward_backward","expected":"no_grad_then_enabled_autocast_replay"},{"case":"arity","expected":"two_metadata_none_slots"}]},
+    {"id":"COMFY-AUTOGRAD-1691472B873D","symbol":"torch.autograd.FunctionCtx.needs_input_grad","execution_case":"function_context_needs","source_observations":[{"case":"state","expected":"out_of_range_false"}]},
+    {"id":"COMFY-AUTOGRAD-2682346109CE","symbol":"torch.enable_grad","execution_case":"mode_enable","source_observations":[{"case":"nested_scope","expected":"recording_enabled_then_restored"}]},
+    {"id":"COMFY-AUTOGRAD-285F07173F3E","symbol":"torch.amp.GradScaler","execution_case":"grad_scaler","source_observations":[{"case":"finite_cycle","expected":"growth"},{"case":"nonfinite_cycle","expected":"backoff"}]},
+    {"id":"COMFY-AUTOGRAD-30043B9C2264","symbol":"QuantLinearFunc","execution_case":"quant_linear_model_adapter","source_observations":[{"case":"delegated_fixture","expected":".agents/specs/sim-parity/fixtures/quant-linear-source-oracle.json","sha256":"74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c"}]},
+    {"id":"COMFY-AUTOGRAD-304CC342AC2A","symbol":"HadaWeightTucker","execution_case":"hada_weight_tucker","source_observations":[{"case":"forward_vjp","expected":"seven_slots_scale_none"},{"case":"higher_order","expected":"analytical"}]},
+    {"id":"COMFY-AUTOGRAD-35DAFB8F8753","symbol":"torch.Tensor.backward","execution_case":"tape_backward","source_observations":[{"case":"reverse","expected":"leaf_accumulation_and_terminal_release"}]},
+    {"id":"COMFY-AUTOGRAD-3CBCCC7F6931","symbol":"torch.autograd.grad","execution_case":"tape_grad","source_observations":[{"case":"reverse","expected":"selected_leaf_return_without_publication"}]},
+    {"id":"COMFY-AUTOGRAD-4CF4D676FFBB","symbol":"torch.optim.RMSprop","execution_case":"optimizer_rmsprop","source_observations":[{"case":"state","expected":"transactional_square_average"}]},
+    {"id":"COMFY-AUTOGRAD-58A5B3D9CFE8","symbol":"torch.inference_mode","execution_case":"mode_inference","source_observations":[{"case":"nested_scope","expected":"recording_suppressed_then_restored"}]},
+    {"id":"COMFY-AUTOGRAD-617621E1EEBE","symbol":"torch.Tensor.requires_grad_","execution_case":"tape_requires_grad_mutation","source_observations":[{"case":"mutation","expected":"alias_and_checked_dtype"}]},
+    {"id":"COMFY-AUTOGRAD-619FFDF53F34","symbol":"torch.Tensor.detach","execution_case":"detach_alias","source_observations":[{"case":"alias","expected":"new_identity_shared_lineage_no_leaf"}]},
+    {"id":"COMFY-AUTOGRAD-640C4BF17167","symbol":"AddAuxLoss","execution_case":"add_aux_loss","source_observations":[{"case":"forward_vjp","expected":"input_alias_and_loss_dtype_one"}]},
+    {"id":"COMFY-AUTOGRAD-75400A23E6BE","symbol":"torch.training.scale","execution_case":"scaler_scale","source_observations":[{"case":"scale","expected":"loss_times_current_scale"}]},
+    {"id":"COMFY-AUTOGRAD-77E715FA8F5B","symbol":"torch.cuda.amp.autocast","execution_case":"autocast_cuda_alias","source_observations":[{"case":"policy","expected":"typed_legacy_namespace_projection"}]},
+    {"id":"COMFY-AUTOGRAD-885F94147CD4","symbol":"torch.Tensor.grad","execution_case":"gradient_store_lookup","source_observations":[{"case":"lookup","expected":"canonical_leaf_gradient"}]},
+    {"id":"COMFY-AUTOGRAD-97F154ABF757","symbol":"torch.optim._functional.adamw","execution_case":"optimizer_adamw_functional","source_observations":[{"case":"equation","expected":"canonical_adamw_step"}]},
+    {"id":"COMFY-AUTOGRAD-9A036C261AF5","symbol":"torch.autograd.FunctionCtx.save_for_backward","execution_case":"function_context_save","source_observations":[{"case":"mutation","expected":"saved_version_rejection"}]},
+    {"id":"COMFY-AUTOGRAD-A1ACCD3F23F9","symbol":"OffloadCheckpointFunction","execution_case":"offload_checkpoint","source_observations":[{"case":"forward_backward","expected":"callable_released_before_recompute_completion"},{"case":"arity","expected":"grad_x_and_forward_fn_none"}]},
+    {"id":"COMFY-AUTOGRAD-A1FE605E0A41","symbol":"torch.optim.SGD","execution_case":"optimizer_sgd","source_observations":[{"case":"state","expected":"transactional_step"}]},
+    {"id":"COMFY-AUTOGRAD-A50883A5EA1D","symbol":"HadaWeight","execution_case":"hada_weight","source_observations":[{"case":"forward_vjp","expected":"five_slots_scale_none"},{"case":"higher_order","expected":"analytical"}]},
+    {"id":"COMFY-AUTOGRAD-ABC8AAD8B0B5","symbol":"torch.training.zero_grad","execution_case":"gradient_store_zero","source_observations":[{"case":"zero","expected":"zero_or_set_to_none_transaction"}]},
+    {"id":"COMFY-AUTOGRAD-B16B6C3AAC27","symbol":"torch.training.update","execution_case":"scaler_update","source_observations":[{"case":"update","expected":"growth_or_backoff_then_ready"}]},
+    {"id":"COMFY-AUTOGRAD-B575430CB29A","symbol":"torch.Tensor.data","execution_case":"data_alias","source_observations":[{"case":"alias","expected":"new_identity_shared_mutation_lineage"}]},
+    {"id":"COMFY-AUTOGRAD-B6C63329EB83","symbol":"torch.autocast","execution_case":"autocast_policy","source_observations":[{"case":"policy","expected":"typed_dtype_enabled_cache_scope"}]},
+    {"id":"COMFY-AUTOGRAD-B93A2676328D","symbol":"torch.autograd.FunctionCtx.mark_non_differentiable","execution_case":"function_context_mark","source_observations":[{"case":"output","expected":"indices_gradient_slot_ignored"}]},
+    {"id":"COMFY-AUTOGRAD-BC03B0A46C6A","symbol":"torch.training.unscale_","execution_case":"scaler_unscale","source_observations":[{"case":"unscale","expected":"atomic_and_nonfinite_detection"}]},
+    {"id":"COMFY-AUTOGRAD-C235B5282FB7","symbol":"torch.autograd.FunctionCtx.saved_tensors","execution_case":"function_context_saved","source_observations":[{"case":"lifetime","expected":"validated_until_terminal_release"}]},
+    {"id":"COMFY-AUTOGRAD-CBC045CBB408","symbol":"torch.optim.AdamW","execution_case":"optimizer_adamw","source_observations":[{"case":"state","expected":"transactional_moments_and_step"}]},
+    {"id":"COMFY-AUTOGRAD-E31FB2A11AFF","symbol":"torch.no_grad","execution_case":"mode_no_grad","source_observations":[{"case":"nested_scope","expected":"recording_suppressed_then_restored"}]},
+    {"id":"COMFY-AUTOGRAD-E50C96639633","symbol":"torch.utils.checkpoint.checkpoint","execution_case":"checkpoint_api","source_observations":[{"case":"policy","expected":"single_checkpoint_execution_owner"}]},
+    {"id":"COMFY-AUTOGRAD-F5EB56FAE2E4","symbol":"torch.Tensor.requires_grad keyword","execution_case":"factory_requires_grad","source_observations":[{"case":"factory","expected":"checked_floating_or_complex_leaf_registration"}]}
+  ],
+  "custom_functions": {
+    "vector_quantize": {"forward_arity":2,"forward_outputs":2,"backward_inputs":2,"backward_outputs":2,"higher_order":"analytical","input":[[0.1,0.2],[2.8,3.2],[0.8,1.1]],"codebook":[[0.0,0.0],[1.0,1.0],[3.0,3.0]],"output":[[0.0,0.0],[3.0,3.0],[1.0,1.0]],"indices":[0,2,1]},
+    "checkpoint_function": {"forward_fixture_arity":3,"variadic_tensor_inputs":true,"backward_fixture_outputs":3,"backward_metadata_slots":[null,null],"higher_order":"first_order_only","forward_mode":"no_grad","recompute_mode":"enabled","autocast_replayed":true,"shallow_views":true},
+    "hada_weight": {"forward_arity":5,"backward_outputs":5,"terminal_gradient":null,"higher_order":"analytical","output":[3.0,8.0,3.0,8.0]},
+    "hada_weight_tucker": {"forward_arity":7,"backward_outputs":7,"terminal_gradient":null,"higher_order":"analytical","degenerate_output":[2520.0]},
+    "add_aux_loss": {"forward_arity":2,"backward_outputs":2,"higher_order":"analytical","forward_alias":true,"aux_gradient_value":[1.0],"aux_gradient_dtype":"loss_dtype"},
+    "offload_checkpoint": {"forward_arity":2,"backward_outputs":2,"higher_order":"first_order_only","terminal_gradient":null,"clear_callable_before_recompute":true}
+  }
+}

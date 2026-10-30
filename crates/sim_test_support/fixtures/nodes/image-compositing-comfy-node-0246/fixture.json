@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "stable_id": "sim-parity-native-nodes-image-compositing-sim-node-0246",
+  "source": {
+    "nodes_mask_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+    "nodes_compositing_sha256": "e001e2963baaa5ea9f031e6b7920e4d70dae248588a70ed31ab595706a29efae"
+  },
+  "join": {
+    "input_image": [0.1, 0.2, 0.3, 0.7, 0.8, 0.9],
+    "input_mask": [0.25, 1.0],
+    "output_rgba": [0.1, 0.2, 0.3, 0.75, 0.7, 0.8, 0.9, 0.0]
+  },
+  "composite": {
+    "destination": [
+      0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0
+    ],
+    "source": [
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0,
+      1.0, 1.0, 1.0
+    ],
+    "mask": [1.0, 0.5, 0.0, 0.25],
+    "output": [
+      0.0, 0.0, 0.0,
+      1.0, 0.0, 0.0,
+      0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0
+    ]
+  },
+  "porter": {
+    "source": [0.8],
+    "destination": [0.2],
+    "source_alpha": [0.6],
+    "destination_alpha": [0.5],
+    "outputs": {
+      "ADD": [0.58, 0.0],
+      "CLEAR": [0.0, 1.0],
+      "DARKEN": [0.475, 0.2],
+      "DST": [0.2, 0.5],
+      "DST_ATOP": [0.5, 0.4],
+      "DST_IN": [0.2, 0.7],
+      "DST_OUT": [0.2, 0.8],
+      "DST_OVER": [0.425, 0.2],
+      "LIGHTEN": [0.95, 0.2],
+      "MULTIPLY": [0.16, 0.7],
+      "OVERLAY": [0.12, 0.2],
+      "SCREEN": [0.665, 0.2],
+      "SRC": [0.8, 0.4],
+      "SRC_ATOP": [0.56, 0.5],
+      "SRC_IN": [0.8, 0.7],
+      "SRC_OUT": [0.8, 0.7],
+      "SRC_OVER": [0.65, 0.2],
+      "XOR": [0.56, 0.5]
+    }
+  }
+}

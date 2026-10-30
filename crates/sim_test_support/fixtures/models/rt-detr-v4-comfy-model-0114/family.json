@@ -1,0 +1,46 @@
+{
+  "fixture_id": "rt-detr-v4-sim-model-0114",
+  "feature_id": "COMFY-MODEL-0114",
+  "detector": {
+    "tensor_shapes": {
+      "encoder.pan_blocks.1.cv4.conv.weight": [2, 2, 1, 1],
+      "decoder.enc_score_head.weight": [2, 2],
+      "decoder.enc_score_head.bias": [2],
+      "decoder.query_pos_head.layers.0.weight": [2, 4],
+      "decoder.decoder.layers.0.self_attn.q_proj.weight": [2, 2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0114011401140114011401140114011401140114011401140114011401140114",
+  "source_weights": [
+    {"key": "encoder.pan_blocks.1.cv4.conv.weight", "shape": [2, 2, 1, 1], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "decoder.enc_score_head.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "decoder.enc_score_head.bias", "shape": [2], "values": [0.1, -0.2]},
+    {"key": "decoder.query_pos_head.layers.0.weight", "shape": [2, 4], "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]},
+    {"key": "decoder.decoder.layers.0.self_attn.q_proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]}
+  ],
+  "input": {"key": "detector_input", "shape": [1, 2], "values": [0.25, -0.5]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 48,
+  "expected_memory_bytes": 48,
+  "checkpoints": [
+    {"name": "decoder_class_logits", "values": [0.35, -0.7]},
+    {"name": "decoder_probabilities", "values": [0.33637553, -0.6043678]}
+  ],
+  "patches": [
+    {
+      "identifier": "rt-detr-score-bias",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {"key": "native.decoder.enc_score_head.bias", "expected_shape": [2], "values": [0.5, 0.5], "application": "add"}
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "decoder_class_logits", "values": [0.85, -0.2]},
+    {"name": "decoder_probabilities", "values": [0.6910695, -0.19737533]}
+  ]
+}

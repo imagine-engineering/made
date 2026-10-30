@@ -1,0 +1,336 @@
+package zed:sim-plugin@1.0.0;
+
+interface types {
+    record api-version {
+        major: u16,
+        minor: u16,
+        patch: u16,
+    }
+
+    record api-requirement {
+        major: u16,
+        minimum-minor: u16,
+        maximum-minor: u16,
+        required-features: list<string>,
+    }
+
+    enum value-family {
+        scalar,
+        tensor,
+        artifact,
+        model,
+    }
+
+    enum port-direction {
+        input,
+        output,
+    }
+
+    enum port-cardinality {
+        singular,
+        %list,
+    }
+
+    enum port-presence {
+        required,
+        optional,
+        hidden,
+    }
+
+    enum port-serialization {
+        inline,
+        %handle,
+        artifact-reference,
+        opaque-preserved,
+    }
+
+    record scalar-record-entry {
+        key: string,
+        value-node: u32,
+    }
+
+    variant scalar-node {
+        null-value,
+        boolean-value(bool),
+        integer-value(s64),
+        float-value(f64),
+        text-value(string),
+        bytes-value(list<u8>),
+        list-value(list<u32>),
+        record-value(list<scalar-record-entry>),
+    }
+
+    /// A bounded, index-addressed tree preserves nested scalar defaults without
+    /// an opaque encoding or a recursive component-model type.
+    record scalar-value {
+        root-node: u32,
+        nodes: list<scalar-node>,
+    }
+
+    record port {
+        id: string,
+        name: string,
+        direction: port-direction,
+        type-id: string,
+        cardinality: port-cardinality,
+        presence: port-presence,
+        hidden: bool,
+        lazy: bool,
+        default: option<scalar-value>,
+        serialization: port-serialization,
+        accepted-legacy-names: list<string>,
+    }
+
+    enum determinism-policy {
+        deterministic,
+        seeded,
+        external,
+    }
+
+    enum cache-policy {
+        input-identity,
+        never,
+        plugin-key,
+    }
+
+    enum effect-policy {
+        pure,
+        transactional,
+        provider,
+    }
+
+    record node {
+        id: string,
+        version: api-version,
+        display-name: string,
+        category: string,
+        ports: list<port>,
+        determinism: determinism-policy,
+        cache: cache-policy,
+        effects: effect-policy,
+    }
+
+    enum capability-kind {
+        filesystem,
+        network-provider,
+        secret,
+        clock,
+        randomness,
+        model,
+        transactional-output,
+        sanitized-log,
+        declarative-ui,
+        route,
+        provider-upload,
+        provider-cost,
+    }
+
+    enum cancel-reason {
+        user,
+        timeout,
+        host-shutdown,
+        capability-revoked,
+    }
+
+    record input-state {
+        present: bool,
+        length: u32,
+        type-id: string,
+        family: value-family,
+        cardinality: port-cardinality,
+        presence: port-presence,
+        serialization: port-serialization,
+        lazy: bool,
+    }
+
+    record value-handle {
+        invocation: u64,
+        slot: u32,
+        generation: u32,
+    }
+
+    /// The type ID and family are independently checked against the bounded
+    /// canonical ABI bytes before the host creates a value handle.
+    record encoded-value {
+        type-id: string,
+        family: value-family,
+        abi-bytes: list<u8>,
+    }
+
+    record provider-binding-claim {
+        feature-id: string,
+        node-id: string,
+        contract-sha256: string,
+        transport-schema: string,
+        materializer-schema: string,
+    }
+
+    record provider-binding-set {
+        schema-version: u16,
+        implementation-namespace: string,
+        bindings-sha256: string,
+        bindings: list<provider-binding-claim>,
+    }
+
+    record provider-materialized-output {
+        port-id: string,
+        value: encoded-value,
+    }
+
+    record provider-invocation-response {
+        outputs: list<provider-materialized-output>,
+        receipt: list<u8>,
+    }
+
+    record capability-quota {
+        maximum-operations: u64,
+        maximum-request-bytes: u64,
+        maximum-response-bytes: u64,
+        maximum-total-bytes: u64,
+        maximum-handles: u32,
+        timeout-milliseconds: u64,
+    }
+
+    record capability-request {
+        kind: capability-kind,
+        scope: string,
+        quota: capability-quota,
+    }
+
+    record ui-contribution {
+        id: string,
+        surface: string,
+        state-schema: string,
+    }
+
+    record route-declaration {
+        id: string,
+        method: string,
+        path: string,
+        maximum-request-bytes: u64,
+        maximum-response-bytes: u64,
+    }
+
+    record legacy-mapping {
+        legacy-identifier: string,
+        node-id: string,
+        node-version: api-version,
+    }
+
+    /// Signature, component digest, and provenance remain in the verified
+    /// sidecar to avoid a component self-digest cycle.
+    record manifest-projection {
+        component-world: string,
+        schema-version: u16,
+        identifier: string,
+        plugin-version: api-version,
+        api: api-requirement,
+        nodes: list<node>,
+        capabilities: list<capability-request>,
+        ui: list<ui-contribution>,
+        routes: list<route-declaration>,
+        legacy-mappings: list<legacy-mapping>,
+    }
+
+    record port-index-error {
+        port: string,
+        index: u32,
+    }
+
+    record value-family-error {
+        port: string,
+        expected: value-family,
+        actual: value-family,
+    }
+
+    record capability-error {
+        kind: capability-kind,
+        scope: string,
+    }
+
+    record quota-error {
+        kind: capability-kind,
+        limit: string,
+    }
+
+    variant invocation-error {
+        cancelled,
+        timed-out,
+        unknown-port(string),
+        wrong-direction(string),
+        missing-required-port(string),
+        invalid-cardinality(string),
+        index-out-of-bounds(port-index-error),
+        already-taken(port-index-error),
+        invalid-handle,
+        revoked-handle,
+        wrong-value-family(value-family-error),
+        output-already-finished(string),
+        unfinished-output(string),
+        capability-denied(capability-error),
+        quota-exceeded(quota-error),
+        invocation-quota-exceeded(string),
+        invalid-capability-request(string),
+        host-failure(string),
+        plugin-failure(string),
+    }
+}
+
+interface host {
+    use types.{encoded-value, input-state, invocation-error, value-handle};
+
+    get-input-state: func(port-id: string) -> result<input-state, invocation-error>;
+    read-scalar-input: func(port-id: string, index: u32) -> result<encoded-value, invocation-error>;
+    take-input: func(port-id: string, index: u32) -> result<value-handle, invocation-error>;
+    read-handle: func(handle: value-handle) -> result<encoded-value, invocation-error>;
+    create-output-value: func(value: encoded-value) -> result<value-handle, invocation-error>;
+    push-output: func(port-id: string, handle: value-handle) -> result<_, invocation-error>;
+    finish-output: func(port-id: string, present: bool) -> result<_, invocation-error>;
+    check-cancelled: func() -> result<_, invocation-error>;
+
+    filesystem-read: func(root: string, relative-path: string) -> result<list<u8>, invocation-error>;
+    provider-request: func(
+        provider: string,
+        endpoint: string,
+        body: list<u8>,
+        secret-id: option<string>,
+    ) -> result<list<u8>, invocation-error>;
+    secret-exists: func(identifier: string) -> result<bool, invocation-error>;
+    clock-now: func(clock: string) -> result<u64, invocation-error>;
+    random-bytes: func(%stream: string, length: u32) -> result<list<u8>, invocation-error>;
+    model-open: func(identifier: string) -> result<u64, invocation-error>;
+    output-begin: func(namespace: string, name: string) -> result<u64, invocation-error>;
+    output-write: func(transaction: u64, bytes: list<u8>) -> result<_, invocation-error>;
+    output-commit: func(transaction: u64) -> result<string, invocation-error>;
+    log: func(level: string, message: string) -> result<_, invocation-error>;
+    ui-set: func(contribution: string, state: list<u8>) -> result<_, invocation-error>;
+    route-respond: func(route: string, status: u16, body: list<u8>) -> result<_, invocation-error>;
+}
+
+interface plugin {
+    use types.{cancel-reason, invocation-error, manifest-projection};
+
+    manifest: func() -> manifest-projection;
+    create-node: func(node-id: string) -> result<u64, invocation-error>;
+    invoke: func(instance: u64) -> result<_, invocation-error>;
+    cancel: func(instance: u64, reason: cancel-reason) -> result<_, invocation-error>;
+    drop-node: func(instance: u64);
+}
+
+interface provider-binding {
+    use types.{invocation-error, provider-binding-set, provider-invocation-response};
+
+    binding-set: func() -> provider-binding-set;
+    invoke-provider: func(class-type: string, request: list<u8>) -> result<provider-invocation-response, invocation-error>;
+}
+
+world sim-plugin {
+    import host;
+    export plugin;
+}
+
+world sim-provider-plugin {
+    import host;
+    export plugin;
+    export provider-binding;
+}

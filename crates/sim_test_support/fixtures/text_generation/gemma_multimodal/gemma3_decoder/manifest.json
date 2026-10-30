@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-gemma3-decoder-exactness-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source": {
+    "path": "projects/comfy/ComfyUI/comfy/text_encoders/llama.py",
+    "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+    "symbols": [
+      "Gemma3_4B_Config",
+      "Gemma3_4B_Vision_Config",
+      "Gemma3_12B_Config",
+      "RMSNorm",
+      "precompute_freqs_cis",
+      "Attention",
+      "TransformerBlockGemma2",
+      "Llama2_",
+      "BaseGenerate"
+    ]
+  },
+  "profiles": {
+    "gemma3_4b_vision": {
+      "vocabulary_size": 262208,
+      "hidden_size": 2560,
+      "intermediate_size": 10240,
+      "layers": 34,
+      "query_heads": 8,
+      "key_value_heads": 4
+    },
+    "gemma3_12b": {
+      "vocabulary_size": 262208,
+      "hidden_size": 3840,
+      "intermediate_size": 15360,
+      "layers": 48,
+      "query_heads": 16,
+      "key_value_heads": 8
+    },
+    "shared": {
+      "head_dimension": 256,
+      "maximum_tokens": 131072,
+      "layer_pattern": ["sliding", "sliding", "sliding", "sliding", "sliding", "global"],
+      "sliding_window": 1024,
+      "global_rope_theta": 1000000.0,
+      "global_rope_scale": 8.0,
+      "local_rope_theta": 10000.0,
+      "local_rope_scale": 1.0,
+      "normalization_epsilon": 0.000001,
+      "normalization_weight_offset": 1.0,
+      "activation": "gelu-tanh",
+      "stop_tokens": [1, 106]
+    }
+  },
+  "reduced_fixture": {
+    "vocabulary_size": 8,
+    "hidden_size": 4,
+    "intermediate_size": 8,
+    "layers": 6,
+    "query_heads": 2,
+    "key_value_heads": 1,
+    "head_dimension": 2,
+    "prompt_tokens": [1, 2, 3],
+    "full_logits_sha256": "30447eeb298bdaa2edcf48e1b2407903f2da625da3e2bdf0313acc0bc1b046a8"
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "runtime_oracle_observed": false,
+    "accelerator_numeric_parity": false,
+    "external_server_required": false
+  }
+}

@@ -1,0 +1,313 @@
+schema	1
+# Reviewed ROCm 6.1.2 ABI evidence. Header records bind excerpts to exact upstream files.
+# All referenced upstream projects license these public C declarations under MIT.
+# Completion audit: bash crates/sim_backend_rocm/abi/verify-completion-evidence.sh <flat-header-directory> [artifact-path]
+@@HEADER	hip_runtime_api.h	https://raw.githubusercontent.com/ROCm/HIP/rocm-6.1.2/include/hip/hip_runtime_api.h	386498	7f36ffc64b62b0255ca76a561be64a8481be6154330e31b23ede30bc0e226b23	MIT
+@@HEADER	hip_common.h	https://raw.githubusercontent.com/ROCm/HIP/rocm-6.1.2/include/hip/hip_common.h	3450	ab968f846dc31d6d22509edac92e657ccfd99d940d6cc98b99f74794ec1b3dd0	MIT
+@@HEADER	driver_types.h	https://raw.githubusercontent.com/ROCm/HIP/rocm-6.1.2/include/hip/driver_types.h	18985	9b51c8f341c2f34aa44de728d89774ef0a0bfe34f2e3c973f49883095ffccec8	MIT
+@@HEADER	hiprtc.h	https://raw.githubusercontent.com/ROCm/HIP/rocm-6.1.2/include/hip/hiprtc.h	15631	9e92ba7f66646087b96e52481aea1fb931b43eb48c4b69a414152aadd3a9d00d	MIT
+@@HEADER	rocblas.h	https://raw.githubusercontent.com/ROCm/rocBLAS/rocm-6.1.2/library/include/rocblas.h	1748	312b39e9a670a780abe9a87414624b60d54cc52c019b34567e8a063348cca577	MIT
+@@HEADER	rocblas-auxiliary.h	https://raw.githubusercontent.com/ROCm/rocBLAS/rocm-6.1.2/library/include/internal/rocblas-auxiliary.h	18040	2d576576c044b6ce36a2e2ffeb8924b0004e622dca5d992802fdc130b7f7d217	MIT
+@@HEADER	rocblas-functions.h	https://raw.githubusercontent.com/ROCm/rocBLAS/rocm-6.1.2/library/include/internal/rocblas-functions.h	1087850	30dd7c36decde74904a89f77d42ed8d239b201ff5fbae45b2315347c4fc5f337	MIT
+@@HEADER	rocblas-types.h	https://raw.githubusercontent.com/ROCm/rocBLAS/rocm-6.1.2/library/include/internal/rocblas-types.h	14718	d7fa26470c43dabdf5786b6ece86db62b5f0ced1ded227e805ec4373879ab305	MIT
+@@HEADER	miopen.h	https://raw.githubusercontent.com/ROCm/MIOpen/rocm-6.1.2/include/miopen/miopen.h	292299	95f4ee132da9da5c53548331b445d7faf207bfbb13855de2eab57a9bae5438a9	MIT
+@@SYMBOL	libamdhip64	hipInit	HipInit	hip_runtime_api.h	1587	1587	dc39be997cfa6f1793113f41b7029e43cd3021b78e68fbb2e30fd3560ee309c2
+hipError_t hipInit(unsigned int flags);
+@@END
+@@SYMBOL	libamdhip64	hipRuntimeGetVersion	HipRuntimeGetVersion	hip_runtime_api.h	1618	1618	216aba8c7f9b7727b13f03a549979d76c8fdd39d3c635d468dc676a9311514ba
+hipError_t hipRuntimeGetVersion(int* runtimeVersion);
+@@END
+@@SYMBOL	libamdhip64	hipDriverGetVersion	HipDriverGetVersion	hip_runtime_api.h	1603	1603	7bd5b60f4cd59fb67d3f4762e81c1ed7918ee454aa87d272187b579d54177b43
+hipError_t hipDriverGetVersion(int* driverVersion);
+@@END
+@@SYMBOL	libamdhip64	hipGetDeviceCount	HipGetDeviceCount	hip_runtime_api.h	1784	1784	e9745b45fe3d45c58603d9d647a6701c8f53b3a763c120a390f5ece42c1c8a92
+hipError_t hipGetDeviceCount(int* count);
+@@END
+@@SYMBOL	libamdhip64	hipDeviceGetName	HipDeviceGetName	hip_runtime_api.h	1645	1645	90b99cb976578de1dd4e014724fdc217adfea61da7fec7ae71c0bf069dfc2224
+hipError_t hipDeviceGetName(char* name, int len, hipDevice_t device);
+@@END
+@@SYMBOL	libamdhip64	hipDeviceTotalMem	HipDeviceTotalMem	hip_runtime_api.h	1693	1693	fb96c91a6e86fa646137fdc3bc8e32458ef68b0a4f788c3958ae79c313bed93c
+hipError_t hipDeviceTotalMem(size_t* bytes, hipDevice_t device);
+@@END
+@@SYMBOL	libamdhip64	hipDeviceGetAttribute	HipDeviceGetAttribute	hip_runtime_api.h	1794	1794	86d84d4be1447987054b63427a71371f7712cbde16d9414e3d200769e69be489
+hipError_t hipDeviceGetAttribute(int* pi, hipDeviceAttribute_t attr, int deviceId);
+@@END
+@@SYMBOL	libamdhip64	hipSetDevice	HipSetDevice	hip_runtime_api.h	1757	1757	171c90dafff2063afd4b3696e243b8033ef8edb000e13c5a868c2122e1f6b078
+hipError_t hipSetDevice(int deviceId);
+@@END
+@@SYMBOL	libamdhip64	hipMalloc	HipMalloc	hip_runtime_api.h	3007	3007	36d54e4671d99ef0b4c249411e632e52e3c31a3c38f026f47a27cbaca27a9105
+hipError_t hipMalloc(void** ptr, size_t size);
+@@END
+@@SYMBOL	libamdhip64	hipFree	HipFree	hip_runtime_api.h	3791	3791	b7ca175cc7fab61922cc0bd9489cac82e911cd6b74848088155ea3f6fe6f29cc
+hipError_t hipFree(void* ptr);
+@@END
+@@SYMBOL	libamdhip64	hipMemcpyAsync	HipMemcpyAsync	hip_runtime_api.h	4117	4118	f6971c72848cc7806c564829bffbac13834f2419e215459bef5ca2bd5d39bbef
+hipError_t hipMemcpyAsync(void* dst, const void* src, size_t sizeBytes, hipMemcpyKind kind,
+                          hipStream_t stream __dparm(0));
+@@END
+@@SYMBOL	libamdhip64	hipMemsetAsync	HipMemsetAsync	hip_runtime_api.h	4206	4206	84af47bfd1b9225faf8944db007153ba04ad740fd697d0514b3911173b301c6a
+hipError_t hipMemsetAsync(void* dst, int value, size_t sizeBytes, hipStream_t stream __dparm(0));
+@@END
+@@SYMBOL	libamdhip64	hipStreamCreateWithFlags	HipStreamCreateWithFlags	hip_runtime_api.h	2302	2302	0dddd12b9f1bd424760ec4add41e473c441658296c1838bdbc0952906ec70cb5
+hipError_t hipStreamCreateWithFlags(hipStream_t* stream, unsigned int flags);
+@@END
+@@SYMBOL	libamdhip64	hipStreamDestroy	HipStreamDestroy	hip_runtime_api.h	2353	2353	e3c601dc2c266278b007f5f3b440e7399900ab11932b785d0558856bb5a9e10f
+hipError_t hipStreamDestroy(hipStream_t stream);
+@@END
+@@SYMBOL	libamdhip64	hipStreamSynchronize	HipStreamSynchronize	hip_runtime_api.h	2390	2390	71c2e49874b481db0eb0ec94c9e82533d2b2af21e9595c60213387efe47791de
+hipError_t hipStreamSynchronize(hipStream_t stream);
+@@END
+@@SYMBOL	libamdhip64	hipEventCreateWithFlags	HipEventCreateWithFlags	hip_runtime_api.h	2659	2659	183dd1ae44fcf7e111cf0b3d3f68fbe9d38a079e8c4b44c01f74cff1e639b63e
+hipError_t hipEventCreateWithFlags(hipEvent_t* event, unsigned flags);
+@@END
+@@SYMBOL	libamdhip64	hipEventRecord	HipEventRecord	hip_runtime_api.h	2703	2703	37d566c43b6960438540d6f18409f3d0d43527b8d0fe097573bb5224bea14332
+hipError_t hipEventRecord(hipEvent_t event, hipStream_t stream = NULL);
+@@END
+@@SYMBOL	libamdhip64	hipEventSynchronize	HipEventSynchronize	hip_runtime_api.h	2743	2743	2ef8e73b57955a1060ceca442fdeff2b0f3378275d7dec63ba6de0618e32ca50
+hipError_t hipEventSynchronize(hipEvent_t event);
+@@END
+@@SYMBOL	libamdhip64	hipEventDestroy	HipEventDestroy	hip_runtime_api.h	2723	2723	8ed0dcd0980743d3a3460fd048531d679f4267400fb548a16e7ffbad1b1f006f
+hipError_t hipEventDestroy(hipEvent_t event);
+@@END
+@@SYMBOL	libamdhip64	hipGetLastError	HipGetLastError	hip_runtime_api.h	2191	2191	134df739af15324ea2c9d955d56f4e390ecf6eff0c46824cc23d41fb46195bd3
+hipError_t hipGetLastError(void);
+@@END
+@@SYMBOL	libamdhip64	hipGetErrorString	HipGetErrorString	hip_runtime_api.h	2234	2234	54ed035cdec3aee5481d41df4539c135d01902e9af6358e9d5a04385d1749688
+const char* hipGetErrorString(hipError_t hipError);
+@@END
+@@SYMBOL	libamdhip64	hipModuleLoadData	HipModuleLoadData	hip_runtime_api.h	5247	5247	e09d930cf4239461e23b10fa90c1154a3b5c4623a3b06122056e324c25c210f3
+hipError_t hipModuleLoadData(hipModule_t* module, const void* image);
+@@END
+@@SYMBOL	libamdhip64	hipModuleGetFunction	HipModuleGetFunction	hip_runtime_api.h	5208	5208	92a71f03f66f803ff532a18bf52d3084e264e0f347411e0d93fa7fd094e486b0
+hipError_t hipModuleGetFunction(hipFunction_t* function, hipModule_t module, const char* kname);
+@@END
+@@SYMBOL	libamdhip64	hipModuleLaunchKernel	HipModuleLaunchKernel	hip_runtime_api.h	5290	5294	4deda76ecb1cf6e6d09ef75d26fda810452cc6039aed90046acd3f4abb7e37d7
+hipError_t hipModuleLaunchKernel(hipFunction_t f, unsigned int gridDimX, unsigned int gridDimY,
+                                 unsigned int gridDimZ, unsigned int blockDimX,
+                                 unsigned int blockDimY, unsigned int blockDimZ,
+                                 unsigned int sharedMemBytes, hipStream_t stream,
+                                 void** kernelParams, void** extra);
+@@END
+@@SYMBOL	libamdhip64	hipModuleUnload	HipModuleUnload	hip_runtime_api.h	5197	5197	2101bd1141033b360c483c709fb53e89d4abf9fc1838bc89de36edb56a7f344a
+hipError_t hipModuleUnload(hipModule_t module);
+@@END
+@@CONSTANT_SET	hipError	hip_runtime_api.h	286	398	393cfb2eaf79282c9024270b749bba4da3f9bf478f1b9caf7f03107ee7642c8e	0,2,201,700,709,719
+@@CONSTANT_SET	hipExecutionFlags	hip_runtime_api.h	657	675	174f2f6c72fe07d4dc46a73af15916967fb07d4025faf65027da573e839e53dc	1,2
+@@CONSTANT_SET	hipDeviceAttributeComputeCapability	hip_runtime_api.h	402	539	530debb30f3aeb2f2a47d0d2511c025e98fc858ae6b9e05ee4997aac9bdb721e	23,61
+@@CONSTANT_SET	hipInitFlags	hip_runtime_api.h	1577	1580	6b47b263b00e4f097829a909c5548cb584fc4043e0a4ddae857adcc2730d7d56	0
+@@CONSTANT_SET	hipMemcpyKind	driver_types.h	333	341	26e1b9196db645a222e0388098da64f40a671ae927cd340784529a72d8857e0b	1,2,3
+@@CONSTANT_SET	rocblasOperation	rocblas-types.h	122	128	2cad3e6d81d57ee777ca66b2c4ddf49a4ccda4e601450c4f965808355420186f	111
+@@CONSTANT_SET	rocblasStatus	rocblas-types.h	202	223	7afbb6e4c253a9935e4395d7143af5fe3691904bc0e2656055ac3154638fbb00	0,5
+@@CONSTANT_SET	hiprtcResult	hiprtc.h	49	63	29792b6f4f1cc38b1b6e102193a6a9dd0f1adaadeb44ae2c7a096502ce99fcbb	0
+@@CONSTANT_SET	miopenStatus	miopen.h	101	117	a37269d4ef5461b6abbef3b2425032fff7de723db833f206031ccfafd269961c	0
+@@SYMBOL	libhiprtc	hiprtcVersion	HipRtcVersion	hiprtc.h	153	153	f358205138924dffb21820d6d24c8230541eb4a5c500798c80d9dda4c5df2fb2
+hiprtcResult hiprtcVersion(int* major, int* minor);
+@@END
+@@SYMBOL	libhiprtc	hiprtcCreateProgram	HipRtcCreateProgram	hiprtc.h	214	219	f9e9de6260382377fe5f527823d94c6207fc11d678d63c5b93048083316e0491
+hiprtcResult hiprtcCreateProgram(hiprtcProgram* prog,
+                                 const char* src,
+                                 const char* name,
+                                 int numHeaders,
+                                 const char** headers,
+                                 const char** includeNames);
+@@END
+@@SYMBOL	libhiprtc	hiprtcCompileProgram	HipRtcCompileProgram	hiprtc.h	190	192	73e9a6c98db5e9b2c77ab93d62278e84b0f61a64fc5b084f6a5b39aa4bf80107
+hiprtcResult hiprtcCompileProgram(hiprtcProgram prog,
+                                  int numOptions,
+                                  const char** options);
+@@END
+@@SYMBOL	libhiprtc	hiprtcGetCodeSize	HipRtcGetCodeSize	hiprtc.h	297	297	e4e7802cd59e255f149f87671169a7c8c353e4ec704d203cd773345f83ec00ac
+hiprtcResult hiprtcGetCodeSize(hiprtcProgram prog, size_t* codeSizeRet);
+@@END
+@@SYMBOL	libhiprtc	hiprtcGetCode	HipRtcGetCode	hiprtc.h	286	286	79d692430168c0571d790f3d40708abb0ed88efc9676f37e4d223aa85c010fe4
+hiprtcResult hiprtcGetCode(hiprtcProgram prog, char* code);
+@@END
+@@SYMBOL	libhiprtc	hiprtcDestroyProgram	HipRtcDestroyProgram	hiprtc.h	231	231	02031486db595c89d3cec2e329be01d1157eb9170a3acffd87edb6fe6f5e8ad2
+hiprtcResult hiprtcDestroyProgram(hiprtcProgram* prog);
+@@END
+@@SYMBOL	libhiprtc	hiprtcGetProgramLogSize	HipRtcGetProgramLogSize	hiprtc.h	274	275	a9aea587d4fbfa39794fc327a0b0252b03cc8af84fd0398daf650269c1a9948c
+hiprtcResult hiprtcGetProgramLogSize(hiprtcProgram prog,
+                                     size_t* logSizeRet);
+@@END
+@@SYMBOL	libhiprtc	hiprtcGetProgramLog	HipRtcGetProgramLog	hiprtc.h	263	263	e9dff2ae595b6fcfbc09151947fe2aa934e6e06871b816bdf04dcb5fbcdb97d3
+hiprtcResult hiprtcGetProgramLog(hiprtcProgram prog, char* log);
+@@END
+@@SYMBOL	libhiprtc	hiprtcGetErrorString	HipRtcGetErrorString	hiprtc.h	141	141	3993bcfb2b1376e344feb37f56c515f453e31613a41bbd9fedd54092a8913bc0
+const char* hiprtcGetErrorString(hiprtcResult result);
+@@END
+@@SYMBOL	librocblas	rocblas_get_version_string_size	RocblasGetVersionStringSize	rocblas-functions.h	19756	19756	81d6ebda8d419b8899794fe928724502494903cf1892fcd7e13ca11ccca7e3a3
+ROCBLAS_EXPORT rocblas_status rocblas_get_version_string_size(size_t* len);
+@@END
+@@SYMBOL	librocblas	rocblas_get_version_string	RocblasGetVersionString	rocblas-functions.h	19746	19746	abdc2f58a7f6650e0a1a57ab084645fdd70707f20c4f47e653491d4b339f61d5
+ROCBLAS_EXPORT rocblas_status rocblas_get_version_string(char* buf, size_t len);
+@@END
+@@SYMBOL	librocblas	rocblas_create_handle	RocblasCreateHandle	rocblas-auxiliary.h	52	52	1630b7289d18524e7559ee64a530403a7d73426f62c4632d329c63941f24ac04
+ROCBLAS_EXPORT rocblas_status rocblas_create_handle(rocblas_handle* handle);
+@@END
+@@SYMBOL	librocblas	rocblas_destroy_handle	RocblasDestroyHandle	rocblas-auxiliary.h	56	56	5f0933295e2fb1ec311aa316e6c1bc1cac07cdd63079c8c8ea16047df4d378be
+ROCBLAS_EXPORT rocblas_status rocblas_destroy_handle(rocblas_handle handle);
+@@END
+@@SYMBOL	librocblas	rocblas_set_stream	RocblasSetStream	rocblas-auxiliary.h	60	60	c0c5d5f775a866da4cfc23c9c49efa0665794dfa7f17feeb7179b7149eb17e7e
+ROCBLAS_EXPORT rocblas_status rocblas_set_stream(rocblas_handle handle, hipStream_t stream);
+@@END
+@@SYMBOL	librocblas	rocblas_sgemm	RocblasSgemm	rocblas-functions.h	15604	15617	be1819a125b63a4d2cb4ecdbb629f20c3372fbe308cda5183536e37f983b4a4c
+ROCBLAS_EXPORT rocblas_status rocblas_sgemm(rocblas_handle    handle,
+                                            rocblas_operation transA,
+                                            rocblas_operation transB,
+                                            rocblas_int       m,
+                                            rocblas_int       n,
+                                            rocblas_int       k,
+                                            const float*      alpha,
+                                            const float*      A,
+                                            rocblas_int       lda,
+                                            const float*      B,
+                                            rocblas_int       ldb,
+                                            const float*      beta,
+                                            float*            C,
+                                            rocblas_int       ldc);
+@@END
+@@SYMBOL	libMIOpen	miopenGetVersion	MiopenGetVersion	miopen.h	169	169	7f3a848c798a12c036473b53982902ca8ae5f87e80807fd43b12525162cf1bf1
+MIOPEN_EXPORT miopenStatus_t miopenGetVersion(size_t* major, size_t* minor, size_t* patch);
+@@END
+@@SYMBOL	libMIOpen	miopenCreate	MiopenCreate	miopen.h	179	179	89c4c35268a956adc8d8b7ffab08444715946c3589f4b3829d6108f954b449d3
+MIOPEN_EXPORT miopenStatus_t miopenCreate(miopenHandle_t* handle);
+@@END
+@@SYMBOL	libMIOpen	miopenDestroy	MiopenDestroy	miopen.h	201	201	4aadfad9e4be053db837b7fb353228ddc9bd1b8a274e76ac4be78ab6c9b339c0
+MIOPEN_EXPORT miopenStatus_t miopenDestroy(miopenHandle_t handle);
+@@END
+@@SYMBOL	libMIOpen	miopenSetStream	MiopenSetStream	miopen.h	210	211	6444a13fd898f515d88718fcdf90793bdfef58b801d060ad36ea5d87a013b634
+MIOPEN_EXPORT miopenStatus_t miopenSetStream(miopenHandle_t handle,
+                                             miopenAcceleratorQueue_t streamID);
+@@END
+@@SYMBOL	libMIOpen	miopenCreateTensorDescriptor	MiopenCreateTensorDescriptor	miopen.h	636	636	61aa6629858d9b211448dcef6f7f16153af9134fb4efab939f542855e2ee0a5c
+MIOPEN_EXPORT miopenStatus_t miopenCreateTensorDescriptor(miopenTensorDescriptor_t* tensorDesc);
+@@END
+@@SYMBOL	libMIOpen	miopenDestroyTensorDescriptor	MiopenDestroyTensorDescriptor	miopen.h	785	785	33d9d93e100c005193eb7c2604aab87def95d9b857bc3b89fab783ef6c66b434
+MIOPEN_EXPORT miopenStatus_t miopenDestroyTensorDescriptor(miopenTensorDescriptor_t tensorDesc);
+@@END
+@@SYMBOL	libMIOpen	miopenSet4dTensorDescriptor	MiopenSet4dTensorDescriptor	miopen.h	650	651	3d3ce541e473f5b4e9e39b036606fb196b65e64ae3ebde20862983a137b9b59c
+MIOPEN_EXPORT miopenStatus_t miopenSet4dTensorDescriptor(
+    miopenTensorDescriptor_t tensorDesc, miopenDataType_t dataType, int n, int c, int h, int w);
+@@END
+@@SYMBOL	libMIOpen	miopenCreateConvolutionDescriptor	MiopenCreateConvolutionDescriptor	miopen.h	912	913	b6cac299216e04de6da3baf188317f99c47848e12835ea3bde6062569d3cdaa7
+MIOPEN_EXPORT miopenStatus_t
+miopenCreateConvolutionDescriptor(miopenConvolutionDescriptor_t* convDesc);
+@@END
+@@SYMBOL	libMIOpen	miopenDestroyConvolutionDescriptor	MiopenDestroyConvolutionDescriptor	miopen.h	1116	1117	80c6308ea75039bfaebc3bed93f0b6c0bf0f92ea685a9cc693a83ae4cc5235c8
+MIOPEN_EXPORT miopenStatus_t
+miopenDestroyConvolutionDescriptor(miopenConvolutionDescriptor_t convDesc);
+@@END
+@@SYMBOL	libMIOpen	miopenInitConvolutionDescriptor	MiopenInitConvolutionDescriptor	miopen.h	930	937	bcbf9ee1af37d361f415d5e5d7a27df6dfd9f1442ce31e72ee5aab4e0412f3e7
+MIOPEN_EXPORT miopenStatus_t miopenInitConvolutionDescriptor(miopenConvolutionDescriptor_t convDesc,
+                                                             miopenConvolutionMode_t c_mode,
+                                                             int pad_h,
+                                                             int pad_w,
+                                                             int stride_h,
+                                                             int stride_w,
+                                                             int dilation_h,
+                                                             int dilation_w);
+@@END
+@@SYMBOL	libMIOpen	miopenConvolutionForwardGetWorkSpaceSize	MiopenConvolutionForwardGetWorkSpaceSize	miopen.h	1668	1674	8512845d9ba0479530118c455ecf4e6b8cbace3d66617eb11b5109292642e3a8
+MIOPEN_EXPORT miopenStatus_t
+miopenConvolutionForwardGetWorkSpaceSize(miopenHandle_t handle,
+                                         const miopenTensorDescriptor_t wDesc,
+                                         const miopenTensorDescriptor_t xDesc,
+                                         const miopenConvolutionDescriptor_t convDesc,
+                                         const miopenTensorDescriptor_t yDesc,
+                                         size_t* workSpaceSize);
+@@END
+@@SYMBOL	libMIOpen	miopenConvolutionForward	MiopenConvolutionForward	miopen.h	1765	1777	16ab3a1687cb39e74e3ed596254e0986063c2f1afe0a5083d9551f275dd14d66
+MIOPEN_EXPORT miopenStatus_t miopenConvolutionForward(miopenHandle_t handle,
+                                                      const void* alpha,
+                                                      const miopenTensorDescriptor_t xDesc,
+                                                      const void* x,
+                                                      const miopenTensorDescriptor_t wDesc,
+                                                      const void* w,
+                                                      const miopenConvolutionDescriptor_t convDesc,
+                                                      miopenConvFwdAlgorithm_t algo,
+                                                      const void* beta,
+                                                      const miopenTensorDescriptor_t yDesc,
+                                                      void* y,
+                                                      void* workSpace,
+                                                      size_t workSpaceSize);
+@@END
+@@LAYOUT	hipUUID	HipUuid	hip_runtime_api.h	84	86	96899e81a8b3d8c7474e953274811397da9e75b9057110b488eb6a1b6b0b0d4d	16	1
+typedef struct hipUUID_t {
+    char bytes[16];
+} hipUUID;
+@@END
+@@LAYOUT	hipIpcMemHandle_t	HipIpcMemHandle	hip_runtime_api.h	610	613	2c9243509f745b362b8859342d13d9463f36d69f07913ad5bb18e935a6782887	64	1
+#define HIP_IPC_HANDLE_SIZE 64
+typedef struct hipIpcMemHandle_st {
+    char reserved[HIP_IPC_HANDLE_SIZE];
+} hipIpcMemHandle_t;
+@@END
+@@LAYOUT	miopenConvAlgoPerf_t	MiopenConvAlgoPerf	miopen.h	1143	1209	645eee765c15efdd64386bfe8d4cc0a9d1511cb1bb03a2729d771bb122f626a7	16	8
+typedef enum
+{
+    miopenConvolutionFwdAlgoGEMM         = 0, /*!< GEMM variant */
+    miopenConvolutionFwdAlgoDirect       = 1, /*!< Direct convolutions */
+    miopenConvolutionFwdAlgoFFT          = 2, /*!< Fast Fourier Transform indirect convolutions */
+    miopenConvolutionFwdAlgoWinograd     = 3, /*!< Winograd indirect convolutions */
+    miopenConvolutionFwdAlgoImplicitGEMM = 5, /*!< Implicit GEMM convolutions */
+} miopenConvFwdAlgorithm_t;
+
+/*! @enum miopenConvBwdWeightsAlgorithm_t
+ * Convolutional algorithm mode for back propagation on weights.
+ */
+typedef enum
+{
+    miopenConvolutionBwdWeightsAlgoGEMM         = 0, /*!< GEMM variant */
+    miopenConvolutionBwdWeightsAlgoDirect       = 1, /*!< Direct convolution algorithm */
+    miopenConvolutionBwdWeightsAlgoWinograd     = 3, /*!< Winograd convolutions */
+    miopenConvolutionBwdWeightsAlgoImplicitGEMM = 5, /*!< Implicit GEMM convolutions */
+} miopenConvBwdWeightsAlgorithm_t;
+
+/*! @enum miopenConvBwdDataAlgorithm_t
+ * Convolutional algorithm mode for back propagation on data.
+ */
+typedef enum
+{
+    miopenConvolutionBwdDataAlgoGEMM     = 0, /*!< GEMM variant */
+    miopenConvolutionBwdDataAlgoDirect   = 1, /*!< Direct convolutions */
+    miopenConvolutionBwdDataAlgoFFT      = 2, /*!< Fast Fourier Transform indirect convolutions */
+    miopenConvolutionBwdDataAlgoWinograd = 3, /*!< Winograd indirect convolutions */
+    miopenTransposeBwdDataAlgoGEMM =
+        4, /*!< Deprecated Transpose GEMM variant legacy, ToBe Removed */
+    miopenConvolutionBwdDataAlgoImplicitGEMM = 5, /*!< Implicit GEMM convolutions */
+} miopenConvBwdDataAlgorithm_t;
+
+/*! @enum miopenConvAlgorithm_t
+ * Top-level convolutional algorithm mode
+ */
+typedef enum
+{
+    miopenConvolutionAlgoGEMM         = 0, /*!< GEMM variant */
+    miopenConvolutionAlgoDirect       = 1, /*!< Direct convolutions */
+    miopenConvolutionAlgoFFT          = 2, /*!< Fast Fourier Transform indirect convolutions */
+    miopenConvolutionAlgoWinograd     = 3, /*!< Winograd indirect convolutions */
+    miopenConvolutionAlgoImplicitGEMM = 5, /*!< Implicit GEMM convolutions */
+} miopenConvAlgorithm_t;
+
+/*! @brief Perf struct for forward, backward filter, or backward data algorithms
+ *
+ * Contains the union to hold the selected convolution algorithm for forward, or backwards layers,
+ * and also contains the time it took to run the algorithm and the workspace required to run the
+ * algorithm. The workspace in this structure can be used when executing the convolution layer.
+ */
+typedef struct
+{
+    union
+    {
+        miopenConvFwdAlgorithm_t fwd_algo; /*!< Forward convolution algorithm enum selection */
+        miopenConvBwdWeightsAlgorithm_t bwd_weights_algo; /*!< Back propagation on weights
+                                                             convolution algorithm enum selection */
+        miopenConvBwdDataAlgorithm_t
+            bwd_data_algo; /*!< Back propagation on data convolution algorithm enum selection */
+    };
+
+    float time;    /*!< Time to exectued the selected algorithm represented in the union */
+    size_t memory; /*!< Workspace required to run the selected algorithm represented in the union */
+
+} miopenConvAlgoPerf_t;
+@@END

@@ -1,0 +1,406 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_xpu/abi/symbols-v1.json"
+execution_bindings="$workspace/crates/sim_backend_xpu/abi/reviewed-execution-bindings-v1.txt"
+execution_verifier="$workspace/crates/sim_backend_xpu/abi/verify-execution-bindings.c"
+licenses="$workspace/crates/sim_backend_xpu/LICENSES"
+policy="$workspace/nix/sim-backends/xpu/package-policy.json"
+contract_schema="$workspace/nix/sim-backends/xpu/ffi-contracts-v1.schema.json"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET SIGNER_ID ED25519_RECEIPT REVIEWED_FFI_CONTRACTS" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --verify-sdk LEVEL_ZERO_SOURCE_ROOT ONEDNN_SOURCE_ROOT" >&2
+    echo "       $0 --self-test" >&2
+}
+
+verify_sdk() {
+    python3 - "$1" "$2" "$abi_manifest" "$execution_bindings" "$execution_verifier" "$policy" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import stat
+import sys
+
+roots = {
+    "level_zero": pathlib.Path(sys.argv[1]),
+    "onednn": pathlib.Path(sys.argv[2]),
+}
+manifest = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
+reviewed_bindings = pathlib.Path(sys.argv[4]).read_text(encoding="utf-8")
+verifier = pathlib.Path(sys.argv[5]).read_bytes()
+policy = json.loads(pathlib.Path(sys.argv[6]).read_text(encoding="utf-8"))
+if hashlib.sha256(reviewed_bindings.encode("utf-8")).hexdigest() != policy["reviewed_execution_bindings_sha256"]:
+    raise SystemExit("reviewed XPU execution binding digest differs")
+if hashlib.sha256(verifier).hexdigest() != policy["execution_verifier_sha256"]:
+    raise SystemExit("reviewed XPU execution verifier digest differs")
+reviewed_symbols = [line.removeprefix("symbol=") for line in reviewed_bindings.splitlines() if line.startswith("symbol=")]
+manifest_symbols = [f"{symbol['name']} {symbol['signature']}" for library in manifest["libraries"] for symbol in library["symbols"]]
+if reviewed_symbols != manifest_symbols:
+    raise SystemExit("reviewed XPU execution symbol excerpt differs from the ABI manifest")
+for symbol in manifest_symbols:
+    if symbol.split(" ", 1)[0].encode("ascii") not in verifier:
+        raise SystemExit(f"reviewed XPU verifier omits symbol: {symbol.split(' ', 1)[0]}")
+for library in manifest["libraries"]:
+    root = roots[library["id"]]
+    if not root.is_dir() or root.is_symlink():
+        raise SystemExit(f"{library['id']} source root must be a directory and not a symbolic link")
+    for checked in library["headers"]:
+        header = root / checked["path"]
+        metadata = header.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 2 * 1024 * 1024:
+            raise SystemExit(f"reviewed header must be a bounded regular file: {checked['path']}")
+        contents = header.read_bytes()
+        if hashlib.sha256(contents).hexdigest() != checked["sha256"]:
+            raise SystemExit(f"reviewed header digest mismatch: {checked['path']}")
+    combined = "\n".join(
+        (root / checked["path"]).read_text(encoding="utf-8")
+        for checked in library["headers"]
+    )
+    for symbol in library["symbols"]:
+        if re.search(r"\b" + re.escape(symbol["name"]) + r"\s*\(", combined) is None:
+            raise SystemExit(f"reviewed headers omit symbol declaration: {symbol['name']}")
+level_zero = (roots["level_zero"] / "include/ze_api.h").read_text(encoding="utf-8")
+for declaration in [
+    "ZE_STRUCTURE_TYPE_COMMAND_QUEUE_GROUP_PROPERTIES = 0x6",
+    "ZE_STRUCTURE_TYPE_CONTEXT_DESC = 0xd",
+    "ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC = 0xe",
+    "ZE_API_VERSION_CURRENT = ZE_MAKE_VERSION( 1, 6 )",
+    "const ze_context_desc_t* desc",
+    "const ze_command_queue_desc_t* desc",
+]:
+    if declaration not in level_zero:
+        raise SystemExit(f"Level Zero reviewed declaration differs: {declaration}")
+common_types = (roots["onednn"] / "include/oneapi/dnnl/dnnl_common_types.h").read_text(encoding="utf-8")
+for declaration in [
+    "dnnl_gpu,",
+    "dnnl_stream_default_flags = dnnl_stream_in_order",
+    "unsigned cpu_runtime;",
+    "unsigned gpu_runtime;",
+]:
+    if declaration not in common_types:
+        raise SystemExit(f"oneDNN reviewed declaration differs: {declaration}")
+print("XPU reviewed SDK headers verified")
+PY
+}
+
+inspect() {
+    python3 - "$1" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected = [
+    "LICENSES",
+    "abi/reviewed-execution-bindings-v1.txt",
+    "abi/symbols-v1.json",
+    "abi/verify-execution-bindings.c",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json",
+]
+
+def strict_json(path):
+    def pairs(values):
+        result = {}
+        for key, value in values:
+            if key in result:
+                raise ValueError(f"duplicate key: {key}")
+            result[key] = value
+        return result
+    raw = path.read_bytes()
+    return json.loads(raw, object_pairs_hook=pairs), raw
+
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("XPU package root must be a directory and not a symbolic link")
+actual = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for directory_name in directory_names:
+        path = pathlib.Path(directory, directory_name)
+        if path.is_symlink():
+            raise SystemExit(f"XPU package directory is symbolic link: {path.relative_to(root)}")
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"XPU payload must be a bounded nonempty regular file: {relative}")
+        actual.append(relative)
+if sorted(actual) != expected:
+    raise SystemExit(f"XPU package payload differs: {sorted(actual)}")
+
+policy, _ = strict_json(root / "package-policy.json")
+if policy["allowed_payloads"] != expected or policy["required_payloads"] != expected:
+    raise SystemExit("XPU package policy payload set differs")
+if policy["redistributes_vendor_runtime"] or not policy["license_approval_required_for_vendor_runtime"]:
+    raise SystemExit("XPU vendor redistribution policy differs")
+if policy["certificate_owner"] != "sim_runtime::NativeFfiRegistry":
+    raise SystemExit("XPU certificate owner differs")
+if policy["structural_receipt_is_authorization"]:
+    raise SystemExit("XPU structural package receipt cannot authorize runtime binding")
+
+manifest, _ = strict_json(root / "adapter-manifest.json")
+required_manifest = {
+    "schema_version": 1,
+    "backend": "xpu",
+    "abi_floor": "level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0",
+    "redistributes_vendor_runtime": False,
+    "runtime_compilation_forbidden": True,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-xpu-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "structural_receipt_is_authorization": False,
+}
+for key, value in required_manifest.items():
+    if manifest.get(key) != value:
+        raise SystemExit(f"XPU adapter manifest field differs: {key}")
+if manifest.get("target") not in ("x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("XPU adapter manifest target differs")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", manifest.get("signer", "")) is None:
+    raise SystemExit("XPU adapter manifest signer differs")
+abi_raw = (root / "abi/symbols-v1.json").read_bytes()
+if manifest.get("abi_manifest_sha256") != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("XPU ABI manifest digest mismatch")
+policy_raw = (root / "package-policy.json").read_bytes()
+if manifest.get("package_policy_sha256") != hashlib.sha256(policy_raw).hexdigest():
+    raise SystemExit("XPU package policy digest mismatch")
+catalog, catalog_raw = strict_json(root / "ffi-contracts-v1.json")
+if manifest.get("ffi_contracts_sha256") != hashlib.sha256(catalog_raw).hexdigest():
+    raise SystemExit("XPU FFI contract catalog digest mismatch")
+if manifest.get("reviewed_execution_bindings_sha256") != policy["reviewed_execution_bindings_sha256"]:
+    raise SystemExit("XPU reviewed execution binding digest mismatch")
+if manifest.get("execution_verifier_sha256") != policy["execution_verifier_sha256"]:
+    raise SystemExit("XPU execution verifier digest mismatch")
+
+abi = json.loads(abi_raw)
+if set(catalog) != {"schema_version", "backend", "abi_floor", "target", "abi_manifest_sha256", "package_policy_sha256", "libraries"}:
+    raise SystemExit("XPU FFI catalog fields differ")
+if catalog["schema_version"] != 1 or catalog["backend"] != "xpu" or catalog["abi_floor"] != abi["abi_floor"]:
+    raise SystemExit("XPU FFI catalog envelope differs")
+if catalog["target"] != manifest["target"]:
+    raise SystemExit("XPU FFI catalog target differs")
+if catalog["abi_manifest_sha256"] != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("XPU FFI catalog ABI digest differs")
+if catalog["package_policy_sha256"] != hashlib.sha256(policy_raw).hexdigest():
+    raise SystemExit("XPU FFI catalog policy digest differs")
+if not isinstance(catalog["libraries"], list) or len(catalog["libraries"]) != len(abi["libraries"]):
+    raise SystemExit("XPU FFI catalog library coverage differs")
+platform = "windows" if "windows" in manifest["target"] else "linux"
+for row, reviewed in zip(catalog["libraries"], abi["libraries"], strict=True):
+    if set(row) != {"identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"}:
+        raise SystemExit("XPU FFI library fields differ")
+    expected_symbols = sorted(symbol["name"] for symbol in reviewed["symbols"])
+    if row["identity"] != reviewed["id"] or row["filename"] != reviewed["filenames"][platform]:
+        raise SystemExit("XPU FFI library identity or target filename differs")
+    if re.fullmatch(r"[0-9a-f]{64}", row["sha256"]) is None:
+        raise SystemExit("XPU FFI library digest differs")
+    if row["abi"] != abi["abi_floor"] or row["required_symbols"] != expected_symbols or not expected_symbols:
+        raise SystemExit("XPU FFI ABI or required symbols differ")
+    if len(expected_symbols) != len(set(expected_symbols)):
+        raise SystemExit("XPU reviewed ABI symbols are not sorted and unique")
+    if row["unsafe_owner"] != "sim_backend_xpu::loader":
+        raise SystemExit("XPU FFI unsafe owner differs")
+
+receipt, receipt_raw = strict_json(root / "adapter-manifest.sig")
+if list(receipt) != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("XPU signature receipt fields are not canonical")
+if receipt.get("schema_version") != 1 or receipt.get("algorithm") != "ed25519":
+    raise SystemExit("XPU signature receipt identity differs")
+if re.fullmatch(r"[0-9a-f]{128}", receipt.get("signature", "")) is None:
+    raise SystemExit("XPU signature must be 64-byte lowercase hexadecimal")
+canonical_receipt = json.dumps(receipt, separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+if receipt_raw != canonical_receipt:
+    raise SystemExit("XPU signature receipt is not canonical-json-v1")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+rows = []
+for relative in expected:
+    if relative in excluded:
+        continue
+    contents = (root / relative).read_bytes()
+    rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+expected_coverage = "".join(sorted(rows)).encode("ascii")
+if (root / "package-coverage.sha256").read_bytes() != expected_coverage:
+    raise SystemExit("XPU package signature coverage differs or payload was tampered")
+PY
+}
+
+build_package() {
+    output=$1
+    target=$2
+    signer=$3
+    receipt=$4
+    contracts=$5
+    python3 - "$output" "$target" "$signer" "$receipt" "$contracts" "$abi_manifest" "$execution_bindings" "$execution_verifier" "$licenses" "$policy" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import stat
+import sys
+
+output = pathlib.Path(sys.argv[1])
+target = sys.argv[2]
+signer = sys.argv[3]
+receipt = pathlib.Path(sys.argv[4])
+contracts_source = pathlib.Path(sys.argv[5])
+abi_source = pathlib.Path(sys.argv[6])
+bindings_source = pathlib.Path(sys.argv[7])
+verifier_source = pathlib.Path(sys.argv[8])
+licenses_source = pathlib.Path(sys.argv[9])
+policy_source = pathlib.Path(sys.argv[10])
+if target not in ("x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("XPU package target is unsupported")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None or len(signer) > 128:
+    raise SystemExit("XPU signer ID must use the canonical authority grammar")
+if output.exists():
+    raise SystemExit("XPU package output already exists")
+metadata = receipt.lstat()
+if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 1024:
+    raise SystemExit("XPU signature receipt must be a bounded regular file")
+contracts_metadata = contracts_source.lstat()
+if not stat.S_ISREG(contracts_metadata.st_mode) or contracts_metadata.st_size == 0 or contracts_metadata.st_size > 1024 * 1024:
+    raise SystemExit("separately reviewed XPU FFI contract catalog must be a bounded regular file")
+
+output.mkdir(parents=True)
+(output / "abi").mkdir()
+shutil.copyfile(abi_source, output / "abi/symbols-v1.json")
+shutil.copyfile(bindings_source, output / "abi/reviewed-execution-bindings-v1.txt")
+shutil.copyfile(verifier_source, output / "abi/verify-execution-bindings.c")
+shutil.copyfile(licenses_source, output / "LICENSES")
+shutil.copyfile(policy_source, output / "package-policy.json")
+shutil.copyfile(contracts_source, output / "ffi-contracts-v1.json")
+abi_digest = hashlib.sha256((output / "abi/symbols-v1.json").read_bytes()).hexdigest()
+manifest = {
+    "schema_version": 1,
+    "backend": "xpu",
+    "abi_floor": "level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0",
+    "target": target,
+    "libraries": ["level_zero", "onednn"],
+    "discovery_order": ["SIM_XPU_ROOT", "ONEAPI_ROOT", "signed_package_roots", "system_level_zero_loader"],
+    "abi_manifest_sha256": abi_digest,
+    "reviewed_execution_bindings_sha256": hashlib.sha256((output / "abi/reviewed-execution-bindings-v1.txt").read_bytes()).hexdigest(),
+    "execution_verifier_sha256": hashlib.sha256((output / "abi/verify-execution-bindings.c").read_bytes()).hexdigest(),
+    "ffi_contracts_sha256": hashlib.sha256((output / "ffi-contracts-v1.json").read_bytes()).hexdigest(),
+    "package_policy_sha256": hashlib.sha256((output / "package-policy.json").read_bytes()).hexdigest(),
+    "redistributes_vendor_runtime": False,
+    "license_approval_required_for_vendor_runtime": True,
+    "runtime_compilation_forbidden": True,
+    "signer": signer,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-xpu-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_backend_xpu::loader",
+    "structural_receipt_is_authorization": False,
+}
+(output / "adapter-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+shutil.copyfile(receipt, output / "adapter-manifest.sig")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+rows = []
+for path in sorted(path for path in output.rglob("*") if path.is_file()):
+    relative = path.relative_to(output).as_posix()
+    if relative in excluded:
+        continue
+    contents = path.read_bytes()
+    rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+(output / "package-coverage.sha256").write_text("".join(sorted(rows)), encoding="ascii")
+PY
+    inspect "$output"
+}
+
+self_test() {
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/sim-xpu-package.XXXXXX")
+    trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
+    receipt="$temporary/receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' > "$receipt"
+    contracts="$temporary/ffi-contracts-v1.json"
+    python3 - "$abi_manifest" "$policy" "$contracts" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+abi_path = pathlib.Path(sys.argv[1])
+policy_path = pathlib.Path(sys.argv[2])
+output = pathlib.Path(sys.argv[3])
+abi_raw = abi_path.read_bytes()
+policy_raw = policy_path.read_bytes()
+abi = json.loads(abi_raw)
+catalog = {
+    "schema_version": 1,
+    "backend": "xpu",
+    "abi_floor": abi["abi_floor"],
+    "target": "x86_64-unknown-linux-gnu",
+    "abi_manifest_sha256": hashlib.sha256(abi_raw).hexdigest(),
+    "package_policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
+    "libraries": [
+        {
+            "identity": library["id"],
+            "filename": library["filenames"]["linux"],
+            "sha256": hashlib.sha256((library["id"] + "-fixture").encode("ascii")).hexdigest(),
+            "abi": abi["abi_floor"],
+            "required_symbols": sorted(symbol["name"] for symbol in library["symbols"]),
+            "unsafe_owner": "sim_backend_xpu::loader",
+        }
+        for library in abi["libraries"]
+    ],
+}
+output.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+    build_package "$temporary/package" x86_64-unknown-linux-gnu zed.test "$receipt" "$contracts"
+    cp "$temporary/package/abi/symbols-v1.json" "$temporary/original.json"
+    printf '\n' >> "$temporary/package/abi/symbols-v1.json"
+    if inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "tampered XPU package was accepted" >&2
+        exit 1
+    fi
+    cp "$temporary/original.json" "$temporary/package/abi/symbols-v1.json"
+    if cp "$temporary/package/LICENSES" "$temporary/package/dnnl.dll" && inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "vendor runtime payload was accepted" >&2
+        exit 1
+    fi
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"AAAA"}' > "$temporary/bad-receipt.json"
+    if build_package "$temporary/bad-package" x86_64-pc-windows-msvc zed.test "$temporary/bad-receipt.json" "$contracts" >/dev/null 2>&1; then
+        echo "malformed XPU signature receipt was accepted" >&2
+        exit 1
+    fi
+    if build_package "$temporary/wrong-target" aarch64-apple-darwin zed.test "$receipt" "$contracts" >/dev/null 2>&1; then
+        echo "unsupported XPU package target was accepted" >&2
+        exit 1
+    fi
+    echo "XPU package self-test passed"
+}
+
+case ${1:-} in
+    --inspect-structure)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        inspect "$2"
+        ;;
+    --verify-sdk)
+        [ "$#" -eq 3 ] || { usage; exit 2; }
+        verify_sdk "$2" "$3"
+        ;;
+    --self-test)
+        [ "$#" -eq 1 ] || { usage; exit 2; }
+        self_test
+        ;;
+    *)
+        [ "$#" -eq 5 ] || { usage; exit 2; }
+        build_package "$1" "$2" "$3" "$4" "$5"
+        ;;
+esac

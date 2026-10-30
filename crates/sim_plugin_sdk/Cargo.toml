@@ -1,0 +1,27 @@
+[package]
+name = "sim_plugin_sdk"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_plugin_sdk.rs"
+[features]
+default = []
+signing-tooling = ["dep:ring", "dep:zeroize"]
+[dependencies]
+sim_nodes.workspace = true
+sim_tensor.workspace = true
+sim_types.workspace = true
+ring = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+zeroize = { workspace = true, optional = true }
+
+[dev-dependencies]
+jsonschema.workspace = true
+ring.workspace = true
+zeroize.workspace = true

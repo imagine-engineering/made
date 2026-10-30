@@ -1,0 +1,407 @@
+{
+  "canonical_target": "torch.isfinite",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "all",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/moge/geometry.py:153:14 (triangulate_grid_mesh)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/moge/model.py:313:20 (MoGeModel.infer)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:519:19 (DA3GeometryToMesh.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:525:16 (DA3GeometryToMesh.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:542:54 (DA3GeometryToMesh.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:607:16 (DA3GeometryToPointCloud.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:632:23 (DA3GeometryToPointCloud.execute)"
+    },
+    {
+      "expectation": {
+        "attribute": "all",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:94:12 (_da3_apply_extrinsic)"
+    },
+    {
+      "expectation": {
+        "attribute": "all",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_moge.py:33:14 (_normals_from_points)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_moge.py:50:17 (_normalize_disparity)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/moge/geometry.py:153:14 (triangulate_grid_mesh)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/model.py:313:20 (MoGeModel.infer)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:519:19 (DA3GeometryToMesh.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:525:16 (DA3GeometryToMesh.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:542:54 (DA3GeometryToMesh.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:607:16 (DA3GeometryToPointCloud.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:632:23 (DA3GeometryToPointCloud.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:94:12 (_da3_apply_extrinsic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_moge.py:33:14 (_normals_from_points)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_moge.py:50:17 (_normalize_disparity)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-2c5a78e85b7f-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-2C5A78E85B7F",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "ed47e9a5c84cee38d175fde1dd265df730f9e96f36f863bd96658edb06d96be2",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/moge/geometry.py",
+        "sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c"
+      },
+      {
+        "path": "comfy/ldm/moge/model.py",
+        "sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c"
+      },
+      {
+        "path": "comfy_extras/nodes_depth_anything_3.py",
+        "sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02"
+      },
+      {
+        "path": "comfy_extras/nodes_moge.py",
+        "sha256": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.isfinite"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_04",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-2881abe3d797",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "attribute": "all",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 153,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "points",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "triangulate_grid_mesh",
+      "site": "comfy/ldm/moge/geometry.py:153:14 (triangulate_grid_mesh)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 313,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "focal",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MoGeModel.infer",
+      "site": "comfy/ldm/moge/model.py:313:20 (MoGeModel.infer)",
+      "source_path": "comfy/ldm/moge/model.py",
+      "source_sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 519,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "depth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DA3GeometryToMesh.execute",
+      "site": "comfy_extras/nodes_depth_anything_3.py:519:19 (DA3GeometryToMesh.execute)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 525,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "depth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DA3GeometryToMesh.execute",
+      "site": "comfy_extras/nodes_depth_anything_3.py:525:16 (DA3GeometryToMesh.execute)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 542,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "depth_all[batch_index]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "DA3GeometryToMesh.execute",
+      "site": "comfy_extras/nodes_depth_anything_3.py:542:54 (DA3GeometryToMesh.execute)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 607,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "depth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DA3GeometryToPointCloud.execute",
+      "site": "comfy_extras/nodes_depth_anything_3.py:607:16 (DA3GeometryToPointCloud.execute)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 632,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "depth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DA3GeometryToPointCloud.execute",
+      "site": "comfy_extras/nodes_depth_anything_3.py:632:23 (DA3GeometryToPointCloud.execute)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "all",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 94,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "E",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_da3_apply_extrinsic",
+      "site": "comfy_extras/nodes_depth_anything_3.py:94:12 (_da3_apply_extrinsic)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "attribute": "all",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 33,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "points",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_normals_from_points",
+      "site": "comfy_extras/nodes_moge.py:33:14 (_normals_from_points)",
+      "source_path": "comfy_extras/nodes_moge.py",
+      "source_sha256": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 50,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_normalize_disparity",
+      "site": "comfy_extras/nodes_moge.py:50:17 (_normalize_disparity)",
+      "source_path": "comfy_extras/nodes_moge.py",
+      "source_sha256": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,38 @@
+{
+  "type": "llvm.coverage.json.export",
+  "version": "2.0.1",
+  "cargo_llvm_cov": {
+    "version": "0.9.0",
+    "manifest_path": "/workspace/Cargo.toml"
+  },
+  "data": [
+    {
+      "files": [
+        {
+          "filename": "/workspace/src/lib.rs",
+          "segments": [
+            [1, 1, 4, true, true, false],
+            [2, 1, 0, true, true, false],
+            [3, 1, 0, false, false, false]
+          ],
+          "summary": {
+            "lines": {
+              "count": 2,
+              "covered": 1
+            }
+          }
+        },
+        {
+          "filename": "/outside/private.rs",
+          "segments": [[1, 1, 1, true, true, false]],
+          "summary": {
+            "lines": {
+              "count": 1,
+              "covered": 1
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

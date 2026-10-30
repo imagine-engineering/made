@@ -1,0 +1,192 @@
+{
+  "canonical_target": "torch.nonzero",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:561:19 (IndexListContextHandler.set_step)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy_extras/nodes_hunyuan3d.py:281:24 (voxel_to_mesh_surfnet)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_triposplat.py:42:14 (_preprocess)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/context_windows.py:561:19 (IndexListContextHandler.set_step)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_hunyuan3d.py:281:24 (voxel_to_mesh_surfnet)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_triposplat.py:42:14 (_preprocess)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-3885d52be05c-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match index bounds, negative indices, mask broadcasting, repeated-index behavior, output shape, and invalid-index failures.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "as_tuple",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-3885D52BE05C",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "a0ef70f77d2394d8a47a03770edb0aa6abb705cf1cd8bff524f79fe37a26947d",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/context_windows.py",
+        "sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef"
+      },
+      {
+        "path": "comfy_extras/nodes_hunyuan3d.py",
+        "sha256": "2294d13e70e634e33be9fc91249260bc25a371df06e282bf00dedde4df7bb7d1"
+      },
+      {
+        "path": "comfy_extras/nodes_triposplat.py",
+        "sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nonzero"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "indexing_masking_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-indexing-masking-comfy-tensor-op-006e05c5daaf",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 561,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "mask",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IndexListContextHandler.set_step",
+      "site": "comfy/context_windows.py:561:19 (IndexListContextHandler.set_step)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nonzero"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "as_tuple",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 281,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "crossing",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "voxel_to_mesh_surfnet",
+      "site": "comfy_extras/nodes_hunyuan3d.py:281:24 (voxel_to_mesh_surfnet)",
+      "source_path": "comfy_extras/nodes_hunyuan3d.py",
+      "source_sha256": "2294d13e70e634e33be9fc91249260bc25a371df06e282bf00dedde4df7bb7d1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nonzero"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "as_tuple",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 42,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "a[0, 0] > 0",
+          "syntax_kind": "Compare"
+        }
+      ],
+      "scope": "_preprocess",
+      "site": "comfy_extras/nodes_triposplat.py:42:14 (_preprocess)",
+      "source_path": "comfy_extras/nodes_triposplat.py",
+      "source_sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nonzero"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,106 @@
+deployment:
+  enabled: false
+  production: false
+  replicaCount: 2
+
+image:
+  repository: ghcr.io/zed-industries/collaboration-push-gateway
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+runtimeSecret:
+  name: ""
+  databaseUrlKey: DATABASE_URL
+  grantKeysKey: ZED_PUSH_GRANT_KEYS
+  tokenKeysKey: ZED_PUSH_TOKEN_KEYS
+
+migration:
+  enabled: true
+  secretName: ""
+  databaseUrlKey: DATABASE_URL
+  runtimeDatabaseRole: collaboration_push_gateway_runtime
+  requiredSchemaVersion: "20260822000200"
+  resources:
+    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 16Mi }
+    limits: { cpu: 250m, memory: 128Mi, ephemeral-storage: 32Mi }
+
+rollback:
+  enabled: false
+  targetImageDigest: ""
+  maximumSchemaVersion: "0"
+
+publicDeliveryUrl: ""
+appAttest:
+  appIdentifier: ""
+  rootCertificateSecretName: ""
+  rootCertificateSecretKey: app-attest-root.pem
+
+profiles:
+  production:
+    enabled: true
+    identifier: buzz-ios-production
+    credentialSecretName: ""
+    credentialSecretKey: apns-production.p8
+    configurationSecretName: ""
+    keyIdSecretKey: APNS_KEY_ID
+    teamIdSecretKey: APNS_TEAM_ID
+    topicSecretKey: APNS_TOPIC
+  sandbox:
+    enabled: false
+    identifier: buzz-ios-sandbox
+    credentialSecretName: ""
+    credentialSecretKey: apns-sandbox.p8
+    configurationSecretName: ""
+    keyIdSecretKey: APNS_KEY_ID
+    teamIdSecretKey: APNS_TEAM_ID
+    topicSecretKey: APNS_TOPIC
+
+limits:
+  publicBodyBytes: 8192
+  publicConcurrency: 256
+  publicRequestTimeoutSeconds: 20
+  claimBatchSize: 16
+  claimTtlSeconds: 30
+  maximumAttempts: 8
+
+service:
+  port: 8080
+
+httpRoute:
+  enabled: false
+  parentRefs: []
+  hostnames: []
+
+resources:
+  requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 32Mi }
+  limits: { cpu: "1", memory: 512Mi, ephemeral-storage: 64Mi }
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  apnsEgressCidrs: [0.0.0.0/0]
+  postgresEgressCidrs: [10.0.0.0/8]
+  dns:
+    namespaceSelector:
+      kubernetes.io/metadata.name: kube-system
+    podSelector:
+      k8s-app: kube-dns
+  monitoring:
+    enabled: false
+    namespaceSelector: {}
+    podSelector: {}
+
+podMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 15s
+  labels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

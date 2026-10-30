@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "backend": "rocm",
+  "abi_floor": "6.1.0",
+  "target": "x86_64-unknown-linux-gnu",
+  "redistributes_amd_runtime": false,
+  "allowed_payloads": [
+    "abi/symbols-v1.json",
+    "ffi-contracts-v1.json",
+    "LICENSES",
+    "package-policy.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "package-coverage.sha256",
+    "kernels/manifest.json",
+    "kernels/*.hsaco"
+  ],
+  "required_payloads": [
+    "abi/symbols-v1.json",
+    "ffi-contracts-v1.json",
+    "LICENSES",
+    "package-policy.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "forbidden_payloads": [
+    "libamdhip64.so*",
+    "libhiprtc.so*",
+    "librocblas.so*",
+    "libMIOpen.so*"
+  ],
+  "signature_algorithm": "ed25519",
+  "signature_domain": "zed-sim-rocm-package-v1",
+  "signature_payload_format": "domain-nul-u64be-signer-u64be-coverage",
+  "signature_receipt_format": "canonical-json-v1",
+  "signature_coverage": "package-coverage-v1",
+  "signature_coverage_format": "sha256-decimal-size-two-space-path",
+  "signature_coverage_excludes": [
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "signature_verifier": "sim_runtime-native-rust-ed25519",
+  "runtime_root_policy": "absolute-existing-directory-outside-package-output",
+  "signature_required_before_install": true
+}

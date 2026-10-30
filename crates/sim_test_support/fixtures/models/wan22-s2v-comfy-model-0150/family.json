@@ -1,0 +1,18 @@
+{
+  "fixture_id":"wan22-s2v-sim-model-0150","feature_id":"COMFY-MODEL-0150",
+  "detector":{"tensor_shapes":{
+    "model.diffusion_model.blocks.0.ffn.0.weight":[256,128],"model.diffusion_model.blocks.0.ffn.2.weight":[2,2],
+    "model.diffusion_model.casual_audio_encoder.encoder.final_linear.weight":[128,64],"model.diffusion_model.head.head.weight":[64,128],
+    "model.diffusion_model.head.modulation":[1,2,128],"model.diffusion_model.patch_embedding.weight":[128,16,1,2,2],
+    "model.diffusion_model.time_embedding.0.weight":[2,2],"model.diffusion_model.time_projection.1.weight":[2,2],
+    "text_encoders.umt5xxl.transformer.block.weight":[1],"vae.decoder.weight":[1]},"metadata":{}},
+  "base_artifact_digest":"1501501501501501501501501501501501501501501501501501501501501501",
+  "source_weights":[
+    {"key":"model.diffusion_model.time_embedding.0.weight","shape":[2,2],"values":[1.0,0.0,0.0,1.0]},
+    {"key":"model.diffusion_model.blocks.0.ffn.2.weight","shape":[2,2],"values":[2.0,0.0,0.0,0.5]},
+    {"key":"model.diffusion_model.time_projection.1.weight","shape":[2,2],"values":[1.0,1.0,1.0,-1.0]}],
+  "input":{"key":"input","shape":[1,2],"values":[1.0,2.0]},"dtype":"f32","device":"cpu","activation_elements":2,"memory_budget_bytes":14,"expected_memory_bytes":14,
+  "checkpoints":[{"name":"s2v_timestep_embedding","values":[1.0,2.0]},{"name":"s2v_audio_reference_conditioning","values":[0.7310586,1.7615942]},{"name":"s2v_transformer_block","values":[1.4621172,0.8807971]},{"name":"s2v_block_normalization","values":[0.9999941,-0.9999941]},{"name":"s2v_head_projection","values":[0.0,1.9999882]},{"name":"s2v_video_output","values":[0.0,0.96402675]}],
+  "patches":[{"identifier":"wan22-s2v-block-delta","kind":"lora","scale":1.0,"targets":[{"key":"native.blocks.0.ffn.2.weight","expected_shape":[2,2],"values":[1.0,0.0,0.0,1.0],"application":"add"}]}],
+  "patched_checkpoints":[{"name":"s2v_timestep_embedding","values":[1.0,2.0]},{"name":"s2v_audio_reference_conditioning","values":[0.7310586,1.7615942]},{"name":"s2v_transformer_block","values":[2.1931758,2.6423912]},{"name":"s2v_block_normalization","values":[-0.9999901,0.9999901]},{"name":"s2v_head_projection","values":[0.0,-1.9999802]},{"name":"s2v_video_output","values":[0.0,-0.9640262]}]
+}

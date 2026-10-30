@@ -1,0 +1,77 @@
+{
+  "catalog_sha256": "dd46b24dbbb59f90d125e0f37394478a0087f646df3a1ada07677f32d57d032e",
+  "contract_id": "zed-sim-spandrel-image-model-contract-v1",
+  "optional_extra_outcomes": [
+    {
+      "diagnostic": "typed extra import unavailable",
+      "outcome": "absent-or-import-failure",
+      "registry": "MAIN only"
+    },
+    {
+      "diagnostic": "none",
+      "outcome": "successful-add",
+      "registry": "MAIN followed by EXTRA in source order"
+    },
+    {
+      "diagnostic": "typed extra registry add failure",
+      "outcome": "add-failure",
+      "registry": "MAIN only"
+    }
+  ],
+  "schema_version": 1,
+  "source_snapshots": {
+    "spandrel": {
+      "archive_verification": "official PyPI sdist SHA-256 matched before extraction",
+      "baseline_tree_sha256": "e1870c42b314fddb290f4d5322a03743076d98d0c6d288fc73691e3013994bbb",
+      "code_license_disposition": "development-oracle; each architecture requires an individually verifiable permissive license before native execution admission",
+      "commit": "724cca389f28c38e1050689d4862a452fd644484",
+      "file_count": 180,
+      "included_file_count": 180,
+      "model_use_disposition": "no model weights approved or bundled; every model license is evaluated independently; unknown or incompatible rights fail closed",
+      "package": "spandrel",
+      "path": "projects/sim/Spandrel",
+      "registry_entry_count": 42,
+      "registry_source": "projects/sim/Spandrel/spandrel/__helpers/main_registry.py",
+      "registry_source_sha256": "927b4d045a726e9ed24928ec5456546e1d3dd48335d87d2464bfb2fc34570e22",
+      "sdist": "spandrel-0.4.2.tar.gz",
+      "sdist_sha256": "fefa4ea966c6a5b7721dcf24f3e2062a5a96a395c8bedcb570fb55971fdcbccb",
+      "source_authority": "explicit user approval",
+      "tag": "v0.4.2",
+      "tree_sha256": "e1870c42b314fddb290f4d5322a03743076d98d0c6d288fc73691e3013994bbb",
+      "version": "0.4.2"
+    },
+    "spandrel_extra_arches": {
+      "archive_verification": "official PyPI sdist SHA-256 matched before extraction",
+      "baseline_tree_sha256": "7c0915d2e0df7db2131117087744fa5e73954dcad72aa785386d6bf8c1efb3aa",
+      "code_license_disposition": "reference-only by default; restrictive, copyleft-incompatible, non-commercial, ambiguous, and unverified architectures are rejected",
+      "commit": "a1db3f5debbeeacbe02fb4114c69feee56ba5e21",
+      "file_count": 52,
+      "included_file_count": 52,
+      "model_use_disposition": "no model weights approved or bundled; every model license is evaluated independently; unknown or incompatible rights fail closed",
+      "package": "spandrel-extra-arches",
+      "path": "projects/sim/spandrel-extra-arches",
+      "registry_entry_count": 10,
+      "registry_source": "projects/sim/spandrel-extra-arches/spandrel_extra_arches/__helper.py",
+      "registry_source_sha256": "a28daa554e42d8ccb755be91693f473b912477eebcd4fc86eda37e3fa2511624",
+      "sdist": "spandrel_extra_arches-0.2.0.tar.gz",
+      "sdist_sha256": "9216877ecabc9c97e001ad5d49c4f8d2b1f6c6f82d1e77c8e2b350c586b6e64a",
+      "source_authority": "explicit user approval",
+      "tag": "v0.4.0",
+      "tree_sha256": "7c0915d2e0df7db2131117087744fa5e73954dcad72aa785386d6bf8c1efb3aa",
+      "version": "0.2.0"
+    }
+  },
+  "summary": {
+    "admitted_count": 0,
+    "architecture_count": 52,
+    "extra_count": 10,
+    "individual_license_artifact_count": 0,
+    "main_count": 42,
+    "rejected_count": 52
+  },
+  "task_projection": {
+    "final_integration_task_id": "sim-parity-native-upscale-model-resource-foundation",
+    "implementation_leaves": [],
+    "shared_runtime_contract_task_id": "sim-parity-native-upscale-runtime-contract-foundation"
+  }
+}

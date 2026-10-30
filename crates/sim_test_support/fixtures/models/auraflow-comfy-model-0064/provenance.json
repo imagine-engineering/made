@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixture_id": "auraflow-sim-model-0064",
+  "feature_id": "COMFY-MODEL-0064",
+  "source_symbol": "AuraFlow",
+  "source_ordinal": 22,
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/aura/mmdit.py", "sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/aura_t5.py", "sha256": "d20edaa3fea38bb65359941882546c42ba1142ba70fe9933d766aeddac9c4ab3"}
+  ],
+  "source_projection": "source_symbol=AuraFlow\nsource_ordinal=22\nunet_config.cond_seq_dim=2048\nsampling_settings.multiplier=1.0\nsampling_settings.shift=1.73\nlatent_format=SDXL\nmemory_usage_factor=2.0\nsupported_inference_dtypes=f16,bf16,f32\narchitecture=model_base.AuraFlow\nclip_tokenizer=sim.text_encoders.aura_t5.AuraT5Tokenizer\nclip_model=sim.text_encoders.aura_t5.AuraT5Model\n",
+  "source_projection_sha256": "3320ccde4fcbb730f8cb7d71f69f38677b069dd0a76b739c1a5848ad9e7fa69e",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI AuraFlow sources; no production Python dependency"
+}

@@ -1,0 +1,395 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_npu/abi/symbols-v1.json"
+licenses="$workspace/crates/sim_backend_npu/LICENSES"
+policy="$workspace/nix/sim-backends/npu/package-policy.json"
+contract_schema="$workspace/nix/sim-backends/npu/ffi-contracts-v1.schema.json"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET SIGNER_ID ED25519_RECEIPT REVIEWED_FFI_CONTRACTS" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --verify-sdk CANN_ROOT" >&2
+    echo "       $0 --self-test" >&2
+}
+
+verify_sdk() {
+    python3 - "$abi_manifest" "$1" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import stat
+import sys
+
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+root = pathlib.Path(sys.argv[2])
+symbols = manifest["libraries"][0]["symbols"]
+by_name = {row["name"]: row["signature"] for row in symbols}
+header_symbols = {
+    "runtime/include/acl/acl.h": ["aclFinalize", "aclGetRecentErrMsg", "aclInit"],
+    "runtime/include/acl/acl_rt.h": [
+        "aclrtCreateContext", "aclrtCreateEvent", "aclrtCreateStream",
+        "aclrtDestroyContext", "aclrtDestroyEvent", "aclrtDestroyStream", "aclrtFree",
+        "aclrtGetDeviceCount", "aclrtGetMemInfo", "aclrtGetSocName", "aclrtGetVersion",
+        "aclrtMalloc", "aclrtMemcpy", "aclrtMemcpyAsync", "aclrtRecordEvent",
+        "aclrtResetDevice", "aclrtSetCurrentContext", "aclrtSetDevice",
+        "aclrtSynchronizeEvent", "aclrtSynchronizeStream",
+    ],
+    "runtime/include/acl/acl_base.h": [
+        "aclCreateDataBuffer", "aclCreateTensorDesc", "aclDestroyDataBuffer",
+        "aclDestroyTensorDesc",
+    ],
+    "runtime/include/acl/acl_op_compiler.h": ["aclopExecuteV2"],
+}
+if set(header_symbols) != {header["path"] for header in manifest["headers"]}:
+    raise SystemExit("reviewed CANN header ownership differs from the ABI manifest")
+
+def normalize_declarations(text):
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return re.sub(r"\s*([(),*;])\s*", r"\1", text)
+
+for header in manifest["headers"]:
+    relative = header["path"]
+    path = root / relative
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+        raise SystemExit(f"reviewed CANN header must be a bounded regular file: {relative}")
+    source = normalize_declarations(path.read_text(encoding="utf-8"))
+    reviewed = [by_name[name] for name in header_symbols[relative]]
+    for declaration in reviewed:
+        if normalize_declarations(declaration) not in source:
+            raise SystemExit(f"reviewed CANN declaration differs in {relative}: {declaration}")
+    digest = hashlib.sha256(("\n".join(sorted(reviewed)) + "\n").encode("utf-8")).hexdigest()
+    if digest != header["sha256"]:
+        raise SystemExit(f"reviewed normalized declaration digest differs: {relative}")
+print("NPU reviewed SDK headers verified")
+PY
+}
+
+inspect() {
+    python3 - "$1" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected = [
+    "LICENSES",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json",
+]
+
+def strict_json(path):
+    def pairs(values):
+        result = {}
+        for key, value in values:
+            if key in result:
+                raise ValueError(f"duplicate key: {key}")
+            result[key] = value
+        return result
+    raw = path.read_bytes()
+    return json.loads(raw, object_pairs_hook=pairs), raw
+
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("NPU package root must be a directory and not a symbolic link")
+actual = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for directory_name in directory_names:
+        path = pathlib.Path(directory, directory_name)
+        if path.is_symlink():
+            raise SystemExit(f"NPU package directory is symbolic link: {path.relative_to(root)}")
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"NPU payload must be a bounded nonempty regular file: {relative}")
+        actual.append(relative)
+if sorted(actual) != expected:
+    raise SystemExit(f"NPU package payload differs: {sorted(actual)}")
+
+policy, _ = strict_json(root / "package-policy.json")
+if policy["allowed_payloads"] != expected or policy["required_payloads"] != expected:
+    raise SystemExit("NPU package policy payload set differs")
+if policy["redistributes_vendor_runtime"] or not policy["license_approval_required_for_vendor_runtime"]:
+    raise SystemExit("NPU vendor redistribution policy differs")
+if policy["certificate_owner"] != "sim_runtime::NativeFfiRegistry":
+    raise SystemExit("NPU certificate owner differs")
+
+manifest, manifest_raw = strict_json(root / "adapter-manifest.json")
+required_manifest = {
+    "schema_version": 1,
+    "backend": "npu",
+    "abi_floor": "CANN-8.0.RC3-AscendCL",
+    "redistributes_vendor_runtime": False,
+    "runtime_compilation_forbidden": True,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-npu-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+}
+for key, value in required_manifest.items():
+    if manifest.get(key) != value:
+        raise SystemExit(f"NPU adapter manifest field differs: {key}")
+if manifest.get("target") not in ("aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("NPU adapter manifest target differs")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", manifest.get("signer", "")) is None:
+    raise SystemExit("NPU adapter manifest signer differs")
+abi_raw = (root / "abi/symbols-v1.json").read_bytes()
+if manifest.get("abi_manifest_sha256") != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("NPU ABI manifest digest mismatch")
+contracts, contracts_raw = strict_json(root / "ffi-contracts-v1.json")
+if manifest.get("ffi_contracts_sha256") != hashlib.sha256(contracts_raw).hexdigest():
+    raise SystemExit("NPU FFI contract catalog digest mismatch")
+policy_raw = (root / "package-policy.json").read_bytes()
+if manifest.get("package_policy_sha256") != hashlib.sha256(policy_raw).hexdigest():
+    raise SystemExit("NPU package policy digest mismatch")
+if list(contracts) != [
+    "abi_floor",
+    "abi_manifest_sha256",
+    "backend",
+    "libraries",
+    "package_policy_sha256",
+    "schema_version",
+    "target",
+]:
+    raise SystemExit("NPU FFI contract catalog fields are not canonical")
+if contracts.get("schema_version") != 1 or contracts.get("backend") != "npu":
+    raise SystemExit("NPU FFI contract catalog identity differs")
+if contracts.get("abi_floor") != required_manifest["abi_floor"]:
+    raise SystemExit("NPU FFI contract ABI floor differs")
+if contracts.get("target") != manifest.get("target"):
+    raise SystemExit("NPU FFI contract target differs")
+if contracts.get("abi_manifest_sha256") != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("NPU FFI contract ABI digest differs")
+if contracts.get("package_policy_sha256") != hashlib.sha256(policy_raw).hexdigest():
+    raise SystemExit("NPU FFI contract policy digest differs")
+libraries = contracts.get("libraries")
+if not isinstance(libraries, list) or len(libraries) != 2:
+    raise SystemExit("NPU FFI contract catalog must contain exactly two libraries")
+abi_by_id = {library["id"]: library for library in json.loads(abi_raw)["libraries"]}
+previous = None
+for row in libraries:
+    expected_fields = ["abi", "filename", "identity", "required_symbols", "sha256", "unsafe_owner"]
+    if row.get("identity") == "runtime":
+        expected_fields.insert(3, "required_by")
+    if list(row) != expected_fields:
+        raise SystemExit("NPU FFI contract row fields are not canonical")
+    identity = row.get("identity")
+    reviewed = abi_by_id.get(identity)
+    if reviewed is None or (previous is not None and previous >= identity):
+        raise SystemExit("NPU FFI contract identities must be reviewed, sorted, and unique")
+    previous = identity
+    expected_symbols = [symbol["name"] for symbol in reviewed["symbols"]]
+    if (
+        row.get("filename") != reviewed["filename"]
+        or re.fullmatch(r"[0-9a-f]{64}", row.get("sha256", "")) is None
+        or row.get("abi") != required_manifest["abi_floor"]
+        or row.get("required_symbols") != expected_symbols
+        or (identity != "runtime" and not expected_symbols)
+        or row.get("required_by") != ("ascendcl" if identity == "runtime" else None)
+        or row.get("unsafe_owner") != "sim_backend_npu::loader"
+    ):
+        raise SystemExit(f"NPU FFI contract differs for {identity}")
+
+receipt, receipt_raw = strict_json(root / "adapter-manifest.sig")
+if list(receipt) != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("NPU signature receipt fields are not canonical")
+if receipt.get("schema_version") != 1 or receipt.get("algorithm") != "ed25519":
+    raise SystemExit("NPU signature receipt identity differs")
+if re.fullmatch(r"[0-9a-f]{128}", receipt.get("signature", "")) is None:
+    raise SystemExit("NPU signature must be 64-byte lowercase hexadecimal")
+canonical_receipt = json.dumps(receipt, separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+if receipt_raw != canonical_receipt:
+    raise SystemExit("NPU signature receipt is not canonical-json-v1")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+coverage_rows = []
+for relative in expected:
+    if relative in excluded:
+        continue
+    contents = (root / relative).read_bytes()
+    coverage_rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+expected_coverage = "".join(sorted(coverage_rows)).encode("ascii")
+if (root / "package-coverage.sha256").read_bytes() != expected_coverage:
+    raise SystemExit("NPU package signature coverage differs or payload was tampered")
+PY
+}
+
+build_package() {
+    output=$1
+    target=$2
+    signer=$3
+    receipt=$4
+    contracts=$5
+    python3 - "$output" "$target" "$signer" "$receipt" "$contracts" "$abi_manifest" "$licenses" "$policy" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import stat
+import sys
+
+output = pathlib.Path(sys.argv[1])
+target = sys.argv[2]
+signer = sys.argv[3]
+receipt = pathlib.Path(sys.argv[4])
+contracts_source = pathlib.Path(sys.argv[5])
+abi_source = pathlib.Path(sys.argv[6])
+licenses_source = pathlib.Path(sys.argv[7])
+policy_source = pathlib.Path(sys.argv[8])
+if target not in ("aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("NPU package target is unsupported")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None or len(signer) > 128:
+    raise SystemExit("NPU signer ID must use the canonical authority grammar")
+if output.exists():
+    raise SystemExit("NPU package output already exists")
+metadata = receipt.lstat()
+if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 1024:
+    raise SystemExit("NPU signature receipt must be a bounded regular file")
+contracts_metadata = contracts_source.lstat()
+if not stat.S_ISREG(contracts_metadata.st_mode) or contracts_metadata.st_size == 0 or contracts_metadata.st_size > 1024 * 1024:
+    raise SystemExit("NPU FFI contract catalog must be a separately reviewed bounded regular file")
+
+output.mkdir(parents=True)
+(output / "abi").mkdir()
+shutil.copyfile(abi_source, output / "abi/symbols-v1.json")
+shutil.copyfile(licenses_source, output / "LICENSES")
+shutil.copyfile(policy_source, output / "package-policy.json")
+shutil.copyfile(contracts_source, output / "ffi-contracts-v1.json")
+abi_digest = hashlib.sha256((output / "abi/symbols-v1.json").read_bytes()).hexdigest()
+contracts_digest = hashlib.sha256((output / "ffi-contracts-v1.json").read_bytes()).hexdigest()
+policy_digest = hashlib.sha256((output / "package-policy.json").read_bytes()).hexdigest()
+manifest = {
+    "schema_version": 1,
+    "backend": "npu",
+    "abi_floor": "CANN-8.0.RC3-AscendCL",
+    "target": target,
+    "libraries": ["libascendcl.so", "libruntime.so"],
+    "discovery_order": ["SIM_ASCEND_ROOT", "ASCEND_HOME_PATH", "signed_package_roots"],
+    "abi_manifest_sha256": abi_digest,
+    "ffi_contracts_sha256": contracts_digest,
+    "package_policy_sha256": policy_digest,
+    "redistributes_vendor_runtime": False,
+    "license_approval_required_for_vendor_runtime": True,
+    "runtime_compilation_forbidden": True,
+    "signer": signer,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-npu-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_backend_npu::loader",
+}
+(output / "adapter-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+shutil.copyfile(receipt, output / "adapter-manifest.sig")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+rows = []
+for path in sorted(path for path in output.rglob("*") if path.is_file()):
+    relative = path.relative_to(output).as_posix()
+    if relative in excluded:
+        continue
+    contents = path.read_bytes()
+    rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+(output / "package-coverage.sha256").write_text("".join(sorted(rows)), encoding="ascii")
+PY
+    inspect "$output"
+}
+
+self_test() {
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/sim-npu-package.XXXXXX")
+    trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
+    receipt="$temporary/receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' > "$receipt"
+    contracts="$temporary/ffi-contracts-v1.json"
+    python3 - "$abi_manifest" "$policy" "$contracts" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+abi_path = pathlib.Path(sys.argv[1])
+policy_path = pathlib.Path(sys.argv[2])
+output = pathlib.Path(sys.argv[3])
+abi_raw = abi_path.read_bytes()
+policy_raw = policy_path.read_bytes()
+abi = json.loads(abi_raw)
+digest = "0123456789abcdef" * 4
+catalog = {
+    "schema_version": 1,
+    "backend": "npu",
+    "abi_floor": abi["abi_floor"],
+    "target": "x86_64-unknown-linux-gnu",
+    "abi_manifest_sha256": hashlib.sha256(abi_raw).hexdigest(),
+    "package_policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
+    "libraries": [
+        dict({
+            "identity": library["id"],
+            "filename": library["filename"],
+            "sha256": digest,
+            "abi": abi["abi_floor"],
+            "required_symbols": [symbol["name"] for symbol in library["symbols"]],
+            "unsafe_owner": "sim_backend_npu::loader",
+        }, **({"required_by": "ascendcl"} if library["id"] == "runtime" else {}))
+        for library in abi["libraries"]
+    ],
+}
+output.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+    build_package "$temporary/package" x86_64-unknown-linux-gnu zed.test "$receipt" "$contracts"
+    cp "$temporary/package/abi/symbols-v1.json" "$temporary/original.json"
+    printf '\n' >> "$temporary/package/abi/symbols-v1.json"
+    if inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "tampered NPU package was accepted" >&2
+        exit 1
+    fi
+    cp "$temporary/original.json" "$temporary/package/abi/symbols-v1.json"
+    if cp "$temporary/package/LICENSES" "$temporary/package/libascendcl.so" && inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "vendor runtime payload was accepted" >&2
+        exit 1
+    fi
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"AAAA"}' > "$temporary/bad-receipt.json"
+    if build_package "$temporary/bad-package" x86_64-unknown-linux-gnu zed.test "$temporary/bad-receipt.json" "$contracts" >/dev/null 2>&1; then
+        echo "malformed NPU signature receipt was accepted" >&2
+        exit 1
+    fi
+    if build_package "$temporary/wrong-target" x86_64-apple-darwin zed.test "$receipt" "$contracts" >/dev/null 2>&1; then
+        echo "unsupported NPU package target was accepted" >&2
+        exit 1
+    fi
+    echo "NPU package self-test passed"
+}
+
+case ${1:-} in
+    --inspect-structure)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        inspect "$2"
+        ;;
+    --verify-sdk)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        verify_sdk "$2"
+        ;;
+    --self-test)
+        [ "$#" -eq 1 ] || { usage; exit 2; }
+        self_test
+        ;;
+    *)
+        [ "$#" -eq 5 ] || { usage; exit 2; }
+        build_package "$1" "$2" "$3" "$4" "$5"
+        ;;
+esac

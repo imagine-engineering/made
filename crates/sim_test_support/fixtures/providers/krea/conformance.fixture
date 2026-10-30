@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.krea",
+  "source_sha256": "f67aa4c46d33b30c05525ab0f27ebf6e2cbf59e698c62ac5b226786be4153ea7",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0304",
+      "node_identifier": "Krea2ImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0305",
+      "node_identifier": "Krea2StyleReferenceNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0084",
+      "method": "POST",
+      "path": "/proxy/krea/assets",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0085",
+      "method": "POST",
+      "path": "/proxy/krea/generate/image/krea/krea-2/large",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0086",
+      "method": "POST",
+      "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0087",
+      "method": "POST",
+      "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0088",
+      "method": "GET",
+      "path": "/proxy/krea/jobs/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0089",
+      "method": "GET",
+      "path": "/proxy/krea/jobs/{initial.job_id}",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "bounded source request/transport; canonical owner and exact multipart wire gates remain explicit"
+}

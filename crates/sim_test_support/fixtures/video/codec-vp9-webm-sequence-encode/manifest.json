@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-vp9-webm-image-sequence-encode-v1",
+  "truth_mode": "synthetic-retained-vp9-webm-image-sequence-encode",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d",
+    "ffmpeg_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8"
+  },
+  "dependencies": {
+    "codec_vp9_webm_encode_manifest_sha256": "7aea02100ecf5c9bd9c24f4c004c40a449d223e9a0592cbfff3d1c0da5008dbf",
+    "image_ops_sha256": "9b6144cf2c7d162c27992d14c775bae73b532ca3a3487ec99d35a07c67bdea38"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_ffi::NativeVideoCodecSuite::encode_vp9_webm_batch",
+    "input": "one checked nonempty contiguous CPU F32 BHWC IMAGE batch with exactly three channels",
+    "source_quantization": "multiply each frame by 255, clamp to 0 through 255, then truncate to U8",
+    "container": "one WebM for the complete batch",
+    "encoder": "provider-proved retained libvpx-vp9",
+    "encoded_pixel_format": "yuv420p",
+    "frame_presentation_timestamps": "increasing integers from zero in source batch order",
+    "native_session_reused_across_frames": true,
+    "global_packet_iteration_bound": true,
+    "single_terminal_flush_and_trailer": true,
+    "one_frame_rgb8_staging_peak": true,
+    "output": "opaque attempt-local workspace-backed bounded memory AVIO",
+    "cancellation_checked_between_frames_and_around_native_calls": true,
+    "reverse_raii_cleanup": true
+  },
+  "synthetic_fixture": {
+    "native_functions": "exact-signature FFmpeg function projection with deterministic header, per-frame packet, and trailer markers",
+    "test_cases": [
+      "three distinct F32 frames clamp and truncate to exact RGB8 bytes in order",
+      "one format, stream, codec, YUV frame, packet, conversion context, and AVIO session",
+      "frame writability, conversion, send, drain, and PTS zero through two",
+      "one global packet bound and one terminal flush and trailer",
+      "empty, oversized, four-channel, CRF, and resource-limit rejection",
+      "second-frame native exhaustion and between-frame cancellation",
+      "reverse cleanup, zero scratch residue, and deterministic retry"
+    ]
+  },
+  "claims": {
+    "native_multi_frame_encode_call_choreography_executed": true,
+    "bounded_single_container_staged_output_produced": true,
+    "licensed_or_installed_ffmpeg_or_libvpx_package": false,
+    "production_codec_availability": false,
+    "synthetic_bytes_are_valid_playable_webm": false,
+    "numeric_vp9_swscale_or_byte_identity_oracle": false,
+    "prompt_or_extra_metadata_supported": false,
+    "alpha_or_av1_supported": false,
+    "aac_or_audio_supported": false,
+    "codec_thread_owned_byte_bridge_or_node_reachable": false,
+    "media_payload_or_handle_published": false,
+    "effect_cache_persistence_or_recovery_owned": false,
+    "all_native_heap_allocations_intercepted": false
+  }
+}

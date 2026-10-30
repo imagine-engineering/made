@@ -1,0 +1,107 @@
+{
+  "fixture_id": "lens-sim-model-0104",
+  "feature_id": "COMFY-MODEL-0104",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.img_in.weight": [2, 2],
+      "model.diffusion_model.proj_out.weight": [4, 2],
+      "model.diffusion_model.transformer_blocks.0.attn.norm_added_q.weight": [1],
+      "model.diffusion_model.transformer_blocks.0.img_mlp.w1.weight": [2, 2],
+      "model.diffusion_model.time_text_embed.timestep_embedder.linear_1.weight": [2, 2],
+      "model.diffusion_model.time_text_embed.timestep_embedder.linear_1.bias": [2],
+      "model.diffusion_model.transformer_blocks.0.img_mlp.w2.weight": [2, 2],
+      "model.diffusion_model.transformer_blocks.0.attn.to_out.0.weight": [2, 2],
+      "model.diffusion_model.txt_norm.0.weight": [2],
+      "model.diffusion_model.txt_norm.1.weight": [2],
+      "text_encoders.gpt_oss.transformer.layers.0.self_attn.sinks": [64]
+    },
+    "metadata": {
+      "image_model": "lens",
+      "model_layout": "native"
+    }
+  },
+  "base_artifact_digest": "0104010401040104010401040104010401040104010401040104010401040104",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.img_in.weight",
+      "shape": [2, 2],
+      "values": [0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.proj_out.weight",
+      "shape": [4, 2],
+      "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.attn.norm_added_q.weight",
+      "shape": [1],
+      "values": [0.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.img_mlp.w1.weight",
+      "shape": [2, 2],
+      "values": [0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.time_text_embed.timestep_embedder.linear_1.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.time_text_embed.timestep_embedder.linear_1.bias",
+      "shape": [2],
+      "values": [1.0, -1.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.img_mlp.w2.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.attn.to_out.0.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [0.0, 0.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 132,
+  "expected_memory_bytes": 132,
+  "checkpoints": [
+    {"name": "timestep_projection", "values": [1.0, -1.0]},
+    {"name": "timestep_activation", "values": [0.7310586, -0.26894143]},
+    {"name": "joint_stream_normalization", "values": [0.999998, -0.999998]},
+    {"name": "image_mlp_projection", "values": [0.999998, -0.999998]},
+    {"name": "image_stream_projection", "values": [0.999998, -0.999998]},
+    {"name": "image_output", "values": [0.7615938, -0.7615938]}
+  ],
+  "patches": [
+    {
+      "identifier": "lens-image-output-scale",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.transformer_blocks.0.attn.to_out.0.weight",
+          "expected_shape": [2, 2],
+          "values": [0.5, 0.0, 0.0, 0.5],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "timestep_projection", "values": [1.0, -1.0]},
+    {"name": "timestep_activation", "values": [0.7310586, -0.26894143]},
+    {"name": "joint_stream_normalization", "values": [0.999998, -0.999998]},
+    {"name": "image_mlp_projection", "values": [0.999998, -0.999998]},
+    {"name": "image_stream_projection", "values": [1.499997, -1.499997]},
+    {"name": "image_output", "values": [0.9051479, -0.9051479]}
+  ]
+}

@@ -1,0 +1,11 @@
+Aileron Regular 1.102
+Copyright: Sora Sagano
+Source: https://dotcolon.net/fonts/aileron/
+
+The font declares "No Rights Reserved" and is distributed under the
+Creative Commons CC0 1.0 Universal public-domain dedication:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+This file accompanies the reduced-character-set Aileron Regular font embedded
+by Pillow's ImageFont.load_default implementation. The embedded subset is
+included byte-for-byte so native preview text uses one pinned font identity.

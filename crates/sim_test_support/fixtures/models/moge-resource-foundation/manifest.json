@@ -1,0 +1,23 @@
+{
+  "dino_oracle_sha256": "a15373f41d84dd407399f4a943ef66b59045621305fea00231ee9d2cbf528519",
+  "format": "moge-resource-foundation-manifest-v1",
+  "generator_sha256": "ade866b84cc16c7b5ad8564fa295086ad5be102cbd7c76f4002abe5dbbcea58c",
+  "mutations": [
+    "v1_mask",
+    "v1_points",
+    "v1_projection",
+    "v2_mask",
+    "v2_neck",
+    "v2_normal",
+    "v2_points",
+    "v2_projection",
+    "v2_scale"
+  ],
+  "oracle_domain": "moge-resource-foundation-v2",
+  "oracle_sha256": "de86dcd7c37fc1d2aa742a272c5ad91ce1945e2d3492ac053e4adcae0e37e9a6",
+  "profiles": [
+    "v1",
+    "v2"
+  ],
+  "source_graph_sha256": "aee25a9fac0fe231fbeaa8228747c133adb2c6bb38677373029e078aa4c629f2"
+}

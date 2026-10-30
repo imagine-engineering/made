@@ -1,0 +1,585 @@
+{
+  "canonical_target": "torch.nn.LeakyReLU",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:47:16 (get_activation)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/controlnet.py:61:17 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/controlnet.py:67:17 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/controlnet.py:79:17 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:231:13 (Discriminator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:238:27 (Discriminator.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:495:29 (Vocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/taesd/taehv.py:143:24 (TAEHV.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:19:27 (FilmConv2d.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:25:21 (Head.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:39:21 (ResConv.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:49:102 (IFBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:50:94 (IFBlock.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:47:16 (get_activation)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/controlnet.py:61:17 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/controlnet.py:67:17 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/controlnet.py:79:17 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:231:13 (Discriminator.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:238:27 (Discriminator.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:495:29 (Vocoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:143:24 (TAEHV.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:19:27 (FilmConv2d.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:25:21 (Head.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:39:21 (ResConv.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:49:102 (IFBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:50:94 (IFBlock.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-853b6cad39a0-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "inplace",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-853B6CAD39A0",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "4a6b754d57004fe7d816283ead1ef1d052db0ddef68078fb5c854b4b690043ef",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/cascade/controlnet.py",
+        "sha256": "d3e73da50ea4abee4d25aec6b015b3390235fad507c336db336e16ce041047b6"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+        "sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d"
+      },
+      {
+        "path": "comfy/taesd/taehv.py",
+        "sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+      },
+      {
+        "path": "comfy_extras/nodes_hypernetwork.py",
+        "sha256": "d31c3a9f00a45abdb064cefcdd98753412ea46e44aea35258c1f607889ccfd6b"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.LeakyReLU"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "neural_network_module_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-neural-network-module-comfy-tensor-op-5b8ce1451811",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 47,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "get_activation",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:47:16 (get_activation)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 61,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/ldm/cascade/controlnet.py:61:17 (ControlNet.__init__)",
+      "source_path": "comfy/ldm/cascade/controlnet.py",
+      "source_sha256": "d3e73da50ea4abee4d25aec6b015b3390235fad507c336db336e16ce041047b6",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 67,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/ldm/cascade/controlnet.py:67:17 (ControlNet.__init__)",
+      "source_path": "comfy/ldm/cascade/controlnet.py",
+      "source_sha256": "d3e73da50ea4abee4d25aec6b015b3390235fad507c336db336e16ce041047b6",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 79,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/ldm/cascade/controlnet.py:79:17 (ControlNet.__init__)",
+      "source_path": "comfy/ldm/cascade/controlnet.py",
+      "source_sha256": "d3e73da50ea4abee4d25aec6b015b3390235fad507c336db336e16ce041047b6",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 231,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Discriminator.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:231:13 (Discriminator.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 238,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Discriminator.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:238:27 (Discriminator.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 495,
+      "positional_arguments": [],
+      "scope": "Vocoder.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:495:29 (Vocoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 143,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TAEHV.__init__",
+      "site": "comfy/taesd/taehv.py:143:24 (TAEHV.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 19,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "FilmConv2d.__init__",
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:19:27 (FilmConv2d.__init__)",
+      "source_path": "comfy_extras/frame_interpolation_models/film_net.py",
+      "source_sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 25,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Head.__init__",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:25:21 (Head.__init__)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 39,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResConv.__init__",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:39:21 (ResConv.__init__)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 102,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 49,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "IFBlock.__init__",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:49:102 (IFBlock.__init__)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 94,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 50,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "IFBlock.__init__",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:50:94 (IFBlock.__init__)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.LeakyReLU"
+    }
+  ],
+  "static_definition": null
+}

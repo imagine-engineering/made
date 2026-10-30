@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "javaBinarySha256": "f3f6042ed7f2d4aa4a9fde71414500a72ecb1ce49d21098356c7961b54e3f4b3",
+  "origin": "Actual retained producer JBR25.0.4.1 File.toURI/Path.toUri directory suffix probe on macOS ARM64. Test roots are constructed per host; file-mode suffix checks are derived codec checks. No platform/workflow qualification.",
+  "cases": [
+    {
+      "name": "application",
+      "nioSuffix": "application/",
+      "javaFileSuffix": "application/"
+    },
+    {
+      "name": "application space",
+      "nioSuffix": "application%20space/",
+      "javaFileSuffix": "application%20space/"
+    },
+    {
+      "name": "módulo",
+      "nioSuffix": "m%C3%B3dulo/",
+      "javaFileSuffix": "módulo/"
+    },
+    {
+      "name": "source[set]",
+      "nioSuffix": "source%5Bset%5D/",
+      "javaFileSuffix": "source%5Bset%5D/"
+    },
+    {
+      "name": "dollar$",
+      "nioSuffix": "dollar$/",
+      "javaFileSuffix": "dollar$/"
+    },
+    {
+      "name": "hash#question?",
+      "nioSuffix": "hash%23question%3F/",
+      "javaFileSuffix": "hash%23question%3F/"
+    },
+    {
+      "name": "dot%name",
+      "nioSuffix": "dot%25name/",
+      "javaFileSuffix": "dot%25name/"
+    },
+    {
+      "name": "ap'pl!()~",
+      "nioSuffix": "ap'pl!()~/",
+      "javaFileSuffix": "ap'pl!()~/"
+    },
+    {
+      "name": "caret^backtick`",
+      "nioSuffix": "caret%5Ebacktick%60/",
+      "javaFileSuffix": "caret%5Ebacktick%60/"
+    },
+    {
+      "name": "braces{}",
+      "nioSuffix": "braces%7B%7D/",
+      "javaFileSuffix": "braces%7B%7D/"
+    },
+    {
+      "name": "pipe|",
+      "nioSuffix": "pipe%7C/",
+      "javaFileSuffix": "pipe%7C/"
+    }
+  ]
+}

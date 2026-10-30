@@ -1,0 +1,702 @@
+#!/usr/bin/env python3
+
+import argparse
+import hashlib
+import io
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import stat
+import sys
+import tempfile
+import zipfile
+
+
+ABI_FLOOR = "1.13.1"
+SOURCE_PACKAGE_SHA256 = "a38cef0d59f314fbcc0cd6551c5a762db7cfdaf8a977f85df32a0b1e279d3ba7"
+TARGET_PAYLOADS = {
+    "aarch64-pc-windows-msvc": (
+        "bin/arm64-win/DirectML.dll",
+        13_947_936,
+        "96a5b8b75c4cd5e47fe9a4a87d0146276930fa58083b0538fd1b503e98b842f4",
+    ),
+    "x86_64-pc-windows-msvc": (
+        "bin/x64-win/DirectML.dll",
+        14_021_152,
+        "5ab77cc5db8e1544d386fd28586598317da8dcbef098fb86d8d8a60e739e0e5d",
+    ),
+}
+LICENSE_PAYLOADS = {
+    "LICENSE.txt": "a05138e3a085ff60a44881eedfa58dccb03ecc1d7b1f6ae888418e8c2fec4b8d",
+    "LICENSE-CODE.txt": "903df5512f7d02609fed0c780a9b704f5a3eeb6e4d84ebe42a29845c81899a3c",
+    "ThirdPartyNotices.txt": "2c95795c13ff48a58b6ed916f37901c23d964b5d9d601af422f17ad2172e7950",
+}
+REQUIRED_PAYLOADS = [
+    "DirectML.dll",
+    "LICENSE-CODE.txt",
+    "LICENSE.txt",
+    "LICENSES",
+    "ThirdPartyNotices.txt",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json",
+]
+SIGNATURE_DOMAIN = "zed-sim-directml-package-v1"
+UNSAFE_OWNER = "sim_backend_directml::loader"
+CERTIFICATE_OWNER = "sim_runtime::NativeFfiRegistry"
+MAXIMUM_CATALOG_BYTES = 1024 * 1024
+MAXIMUM_RECEIPT_BYTES = 1024
+MAXIMUM_SOURCE_PACKAGE_BYTES = 64 * 1024 * 1024
+MAXIMUM_SMALL_PAYLOAD_BYTES = 4 * 1024 * 1024
+MAXIMUM_DIRECTML_BYTES = 16 * 1024 * 1024
+
+
+class PackagingError(Exception):
+    pass
+
+
+def reject_duplicates(values):
+    result = {}
+    for key, value in values:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+
+def canonical_json(value):
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def canonical_receipt_json(value):
+    return (json.dumps(value, separators=(",", ":"), ensure_ascii=True) + "\n").encode("ascii")
+
+
+def digest_bytes(contents):
+    return hashlib.sha256(contents).hexdigest()
+
+
+def stable_regular_file(path, label, maximum_bytes):
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise PackagingError(f"cannot open {label} without following links: {error}") from error
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise PackagingError(f"{label} must be a regular file")
+        if before.st_size == 0 or before.st_size > maximum_bytes:
+            raise PackagingError(f"{label} must be nonempty and at most {maximum_bytes} bytes")
+        chunks = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                raise PackagingError(f"{label} changed while being read")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise PackagingError(f"{label} grew while being read")
+        after = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise PackagingError(f"{label} changed while being read")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def strict_json(contents, label):
+    try:
+        value = json.loads(contents, object_pairs_hook=reject_duplicates)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        raise PackagingError(f"{label} is not strict JSON: {error}") from error
+    return value
+
+
+def is_sha256(value):
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def validate_signer(signer):
+    if (
+        not isinstance(signer, str)
+        or len(signer) > 128
+        or re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None
+    ):
+        raise PackagingError("signer ID must use the canonical lowercase authority grammar")
+
+
+def validate_receipt(path):
+    raw = stable_regular_file(path, "Ed25519 receipt", MAXIMUM_RECEIPT_BYTES)
+    receipt = strict_json(raw, "Ed25519 receipt")
+    if not isinstance(receipt, dict) or list(receipt) != [
+        "schema_version",
+        "algorithm",
+        "signature",
+    ]:
+        raise PackagingError("Ed25519 receipt fields must be canonical with no unknown fields")
+    if type(receipt["schema_version"]) is not int or receipt["schema_version"] != 1:
+        raise PackagingError("Ed25519 receipt schema_version must be 1")
+    if receipt["algorithm"] != "ed25519":
+        raise PackagingError("Ed25519 receipt algorithm must be ed25519")
+    if not isinstance(receipt["signature"], str) or re.fullmatch(
+        r"[0-9a-f]{128}", receipt["signature"]
+    ) is None:
+        raise PackagingError("Ed25519 receipt signature must be 64-byte lowercase hexadecimal")
+    if raw != canonical_receipt_json(receipt):
+        raise PackagingError("Ed25519 receipt must use canonical-json-v1 encoding")
+    return raw
+
+
+def checked_relative_path(name):
+    path = PurePosixPath(name)
+    if path.is_absolute() or not path.parts or any(
+        part in ("", ".", "..") for part in path.parts
+    ):
+        raise PackagingError(f"unsafe archive or package path: {name}")
+    if "\\" in name or any(ord(character) < 32 for character in name):
+        raise PackagingError(f"non-portable archive or package path: {name}")
+    return path
+
+
+def load_repository_contracts(repository_root):
+    abi_path = repository_root / "crates/sim_backend_directml/abi/symbols-v1.json"
+    policy_path = repository_root / "nix/sim-backends/directml/package-policy.json"
+    schema_path = repository_root / "nix/sim-backends/directml/ffi-contracts-v1.schema.json"
+    abi_raw = stable_regular_file(abi_path, "reviewed DirectML ABI manifest", MAXIMUM_CATALOG_BYTES)
+    policy_raw = stable_regular_file(policy_path, "reviewed DirectML package policy", MAXIMUM_CATALOG_BYTES)
+    schema_raw = stable_regular_file(schema_path, "reviewed DirectML contract schema", MAXIMUM_CATALOG_BYTES)
+    abi = strict_json(abi_raw, "reviewed DirectML ABI manifest")
+    policy = strict_json(policy_raw, "reviewed DirectML package policy")
+    schema = strict_json(schema_raw, "reviewed DirectML contract schema")
+    if schema.get("$id") != "https://zed.dev/schemas/sim/directml/ffi-contracts-v1.schema.json":
+        raise PackagingError("reviewed DirectML contract schema identity differs")
+    if policy.get("schema_version") != 2 or policy.get("backend") != "directml":
+        raise PackagingError("reviewed DirectML package policy identity differs")
+    if policy.get("allowed_payloads") != REQUIRED_PAYLOADS or policy.get("required_payloads") != REQUIRED_PAYLOADS:
+        raise PackagingError("reviewed DirectML package policy payload order or membership differs")
+    if (
+        policy.get("signature_domain") != SIGNATURE_DOMAIN
+        or policy.get("signature_authority") != "sim_runtime::DirectMlPackageVerificationKey"
+        or policy.get("certificate_owner") != CERTIFICATE_OWNER
+        or policy.get("authenticode_is_authorization") is not False
+        or policy.get("runtime_authorization_from_structure") is not False
+        or policy.get("runtime_compilation_forbidden") is not True
+    ):
+        raise PackagingError("reviewed DirectML package policy trust boundary differs")
+    return abi, abi_raw, policy_raw
+
+
+def validate_contract_catalog(repository_root, source, expected_target):
+    if expected_target not in TARGET_PAYLOADS:
+        raise PackagingError(f"unsupported target: {expected_target}")
+    abi, abi_raw, policy_raw = load_repository_contracts(repository_root)
+    raw = stable_regular_file(source, "separately reviewed FFI contract catalog", MAXIMUM_CATALOG_BYTES)
+    catalog = strict_json(raw, "separately reviewed FFI contract catalog")
+    if raw != canonical_json(catalog):
+        raise PackagingError("FFI contract catalog must use canonical sorted JSON")
+    expected_top_level = [
+        "abi_floor",
+        "abi_manifest_sha256",
+        "backend",
+        "libraries",
+        "package_policy_sha256",
+        "schema_version",
+        "target",
+    ]
+    if not isinstance(catalog, dict) or list(catalog) != expected_top_level:
+        raise PackagingError("FFI contract catalog has missing, unknown, or unsorted fields")
+    if type(catalog["schema_version"]) is not int or catalog["schema_version"] != 1:
+        raise PackagingError("FFI contract catalog schema_version must be 1")
+    if catalog["backend"] != "directml" or catalog["abi_floor"] != ABI_FLOOR:
+        raise PackagingError("FFI contract catalog backend or ABI floor differs")
+    if catalog["target"] != expected_target:
+        raise PackagingError("FFI contract catalog target differs from package target")
+    if catalog["abi_manifest_sha256"] != digest_bytes(abi_raw):
+        raise PackagingError("FFI contract catalog ABI manifest digest differs")
+    if catalog["package_policy_sha256"] != digest_bytes(policy_raw):
+        raise PackagingError("FFI contract catalog package policy digest differs")
+
+    abi_libraries = abi.get("libraries")
+    if not isinstance(abi_libraries, list):
+        raise PackagingError("reviewed DirectML ABI library list is malformed")
+    reviewed = {library.get("name"): library for library in abi_libraries}
+    expected_identities = ["D3D12.dll", "DXGI.dll", "DirectML.dll"]
+    libraries = catalog["libraries"]
+    if not isinstance(libraries, list) or len(libraries) != len(expected_identities):
+        raise PackagingError("FFI contract catalog must contain exactly three libraries")
+    identities = [row.get("identity") if isinstance(row, dict) else None for row in libraries]
+    if identities != expected_identities:
+        raise PackagingError("FFI contract library identities must be complete, sorted, and unique")
+    row_fields = ["abi", "filename", "identity", "required_symbols", "sha256", "unsafe_owner"]
+    for index, row in enumerate(libraries):
+        if not isinstance(row, dict) or list(row) != row_fields:
+            raise PackagingError(f"FFI contract row {index} has missing, unknown, or unsorted fields")
+        identity = row["identity"]
+        abi_library = reviewed.get(identity)
+        if abi_library is None:
+            raise PackagingError(f"FFI contract row {index} is not a reviewed library")
+        symbols = row["required_symbols"]
+        expected_symbols = [symbol.get("name") for symbol in abi_library.get("symbols", [])]
+        if (
+            row["filename"] != identity
+            or row["abi"] != abi_library.get("abi_version")
+            or not is_sha256(row["sha256"])
+            or not isinstance(symbols, list)
+            or not symbols
+            or symbols != sorted(symbols)
+            or len(symbols) != len(set(symbols))
+            or symbols != expected_symbols
+            or row["unsafe_owner"] != UNSAFE_OWNER
+        ):
+            raise PackagingError(f"FFI contract row differs from reviewed ABI: {identity}")
+    directml_digest = next(
+        row["sha256"] for row in libraries if row["identity"] == "DirectML.dll"
+    )
+    if directml_digest != TARGET_PAYLOADS[expected_target][2]:
+        raise PackagingError("FFI contract DirectML.dll digest differs from pinned target payload")
+    return catalog, raw, abi_raw, policy_raw
+
+
+def read_source_package(source_package, requested_paths):
+    raw = stable_regular_file(
+        source_package, "Microsoft.AI.DirectML source package", MAXIMUM_SOURCE_PACKAGE_BYTES
+    )
+    if digest_bytes(raw) != SOURCE_PACKAGE_SHA256:
+        raise PackagingError("source package digest does not match Microsoft.AI.DirectML 1.13.1")
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            members = {}
+            for member in archive.infolist():
+                checked_relative_path(member.filename)
+                if member.filename in members:
+                    raise PackagingError(f"duplicate source package member: {member.filename}")
+                mode = member.external_attr >> 16
+                if stat.S_ISLNK(mode):
+                    raise PackagingError(f"symbolic link is forbidden in source package: {member.filename}")
+                members[member.filename] = member
+            missing = set(requested_paths).difference(members)
+            if missing:
+                raise PackagingError(f"source package is missing: {', '.join(sorted(missing))}")
+            return {name: archive.read(members[name]) for name in requested_paths}
+    except zipfile.BadZipFile as error:
+        raise PackagingError(f"source package is not a ZIP archive: {error}") from error
+
+
+def coverage_contents(package_directory):
+    excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+    rows = []
+    for relative_path in REQUIRED_PAYLOADS:
+        if relative_path in excluded:
+            continue
+        contents = stable_regular_file(
+            package_directory / relative_path,
+            f"package payload {relative_path}",
+            MAXIMUM_DIRECTML_BYTES if relative_path == "DirectML.dll" else MAXIMUM_SMALL_PAYLOAD_BYTES,
+        )
+        rows.append(f"{digest_bytes(contents)} {len(contents)}  {relative_path}\n")
+    return "".join(rows).encode("ascii")
+
+
+def manifest_for(target, signer, contract_raw, abi_raw, policy_raw):
+    _, expected_size, expected_digest = TARGET_PAYLOADS[target]
+    return {
+        "abi_floor": ABI_FLOOR,
+        "abi_manifest_sha256": digest_bytes(abi_raw),
+        "backend": "directml",
+        "certificate_owner": CERTIFICATE_OWNER,
+        "directml_dll_byte_length": expected_size,
+        "directml_dll_file_version": "1.13.1.0",
+        "directml_dll_sha256": expected_digest,
+        "ffi_contracts_sha256": digest_bytes(contract_raw),
+        "package_policy_sha256": digest_bytes(policy_raw),
+        "registry_authorization_required": True,
+        "runtime_compilation_forbidden": True,
+        "schema_version": 2,
+        "signature_algorithm": "ed25519",
+        "signature_coverage": "package-coverage-v1",
+        "signature_domain": SIGNATURE_DOMAIN,
+        "signer": signer,
+        "source_package": "Microsoft.AI.DirectML/1.13.1",
+        "source_package_sha256": SOURCE_PACKAGE_SHA256,
+        "target": target,
+        "unsafe_owner": UNSAFE_OWNER,
+    }
+
+
+def package_files(package_directory):
+    actual = []
+    for directory, directory_names, file_names in os.walk(package_directory, followlinks=False):
+        directory_names.sort()
+        file_names.sort()
+        for directory_name in directory_names:
+            directory_path = Path(directory, directory_name)
+            if directory_path.is_symlink():
+                raise PackagingError(
+                    f"package directory is a symbolic link: {directory_path.relative_to(package_directory)}"
+                )
+        for file_name in file_names:
+            path = Path(directory, file_name)
+            relative = path.relative_to(package_directory).as_posix()
+            checked_relative_path(relative)
+            maximum = MAXIMUM_DIRECTML_BYTES if relative == "DirectML.dll" else MAXIMUM_SMALL_PAYLOAD_BYTES
+            stable_regular_file(path, f"package payload {relative}", maximum)
+            actual.append(relative)
+    return sorted(actual)
+
+
+def inspect_package(repository_root, package_directory):
+    if not package_directory.is_dir() or package_directory.is_symlink():
+        raise PackagingError("package root must be a directory and not a symbolic link")
+    actual = package_files(package_directory)
+    if actual != REQUIRED_PAYLOADS:
+        missing = sorted(set(REQUIRED_PAYLOADS).difference(actual))
+        extra = sorted(set(actual).difference(REQUIRED_PAYLOADS))
+        raise PackagingError(f"package payload set differs; missing={missing}, extra={extra}")
+
+    manifest_raw = stable_regular_file(
+        package_directory / "adapter-manifest.json",
+        "adapter manifest",
+        MAXIMUM_SMALL_PAYLOAD_BYTES,
+    )
+    manifest = strict_json(manifest_raw, "adapter manifest")
+    if manifest_raw != canonical_json(manifest):
+        raise PackagingError("adapter manifest must use canonical sorted JSON")
+    _, abi_raw, policy_raw = load_repository_contracts(repository_root)
+    expected_manifest_fields = sorted(
+        manifest_for(
+            "x86_64-pc-windows-msvc", "valid", b"x", abi_raw, policy_raw
+        ).keys()
+    )
+    if not isinstance(manifest, dict) or list(manifest) != expected_manifest_fields:
+        raise PackagingError("adapter manifest has missing, unknown, or unsorted fields")
+    target = manifest.get("target")
+    signer = manifest.get("signer")
+    if target not in TARGET_PAYLOADS:
+        raise PackagingError("adapter manifest target is unsupported")
+    validate_signer(signer)
+
+    _, contract_raw, abi_raw, policy_raw = validate_contract_catalog(
+        repository_root, package_directory / "ffi-contracts-v1.json", target
+    )
+    expected_manifest = manifest_for(target, signer, contract_raw, abi_raw, policy_raw)
+    if manifest != expected_manifest:
+        raise PackagingError("adapter manifest differs from reviewed package inputs")
+
+    directml_raw = stable_regular_file(
+        package_directory / "DirectML.dll", "DirectML.dll", MAXIMUM_DIRECTML_BYTES
+    )
+    _, expected_size, expected_digest = TARGET_PAYLOADS[target]
+    if len(directml_raw) != expected_size or digest_bytes(directml_raw) != expected_digest:
+        raise PackagingError("DirectML.dll does not match the pinned target payload")
+    for relative_path, expected_digest in LICENSE_PAYLOADS.items():
+        contents = stable_regular_file(
+            package_directory / relative_path,
+            f"license payload {relative_path}",
+            MAXIMUM_SMALL_PAYLOAD_BYTES,
+        )
+        if digest_bytes(contents) != expected_digest:
+            raise PackagingError(f"license payload digest differs: {relative_path}")
+    validate_receipt(package_directory / "adapter-manifest.sig")
+    expected_coverage = coverage_contents(package_directory)
+    actual_coverage = stable_regular_file(
+        package_directory / "package-coverage.sha256",
+        "package coverage",
+        MAXIMUM_SMALL_PAYLOAD_BYTES,
+    )
+    if actual_coverage != expected_coverage:
+        raise PackagingError("package coverage is incomplete, unsorted, or non-canonical")
+
+
+def build_package(repository_root, output_directory, target, signer, receipt, contracts, source_package):
+    if output_directory.exists():
+        raise PackagingError(f"refusing to replace existing output: {output_directory}")
+    if target not in TARGET_PAYLOADS:
+        raise PackagingError(f"unsupported target: {target}")
+    validate_signer(signer)
+    receipt_raw = validate_receipt(receipt)
+    _, contract_raw, abi_raw, policy_raw = validate_contract_catalog(
+        repository_root, contracts, target
+    )
+    source_path, expected_size, expected_digest = TARGET_PAYLOADS[target]
+    payloads = read_source_package(source_package, [source_path, *LICENSE_PAYLOADS])
+    directml_contents = payloads[source_path]
+    if len(directml_contents) != expected_size or digest_bytes(directml_contents) != expected_digest:
+        raise PackagingError("DirectML.dll size or digest differs from the reviewed target payload")
+    for relative_path, expected_license_digest in LICENSE_PAYLOADS.items():
+        if digest_bytes(payloads[relative_path]) != expected_license_digest:
+            raise PackagingError(f"license digest differs: {relative_path}")
+
+    parent = output_directory.parent.resolve()
+    parent.mkdir(parents=True, exist_ok=True)
+    temporary_directory = Path(tempfile.mkdtemp(prefix=f".{output_directory.name}.", dir=parent))
+    try:
+        (temporary_directory / "abi").mkdir()
+        (temporary_directory / "DirectML.dll").write_bytes(directml_contents)
+        for relative_path in LICENSE_PAYLOADS:
+            (temporary_directory / relative_path).write_bytes(payloads[relative_path])
+        licenses_raw = stable_regular_file(
+            repository_root / "crates/sim_backend_directml/LICENSES",
+            "reviewed DirectML license notice",
+            MAXIMUM_SMALL_PAYLOAD_BYTES,
+        )
+        (temporary_directory / "LICENSES").write_bytes(licenses_raw)
+        (temporary_directory / "abi/symbols-v1.json").write_bytes(abi_raw)
+        (temporary_directory / "package-policy.json").write_bytes(policy_raw)
+        (temporary_directory / "ffi-contracts-v1.json").write_bytes(contract_raw)
+        manifest = manifest_for(target, signer, contract_raw, abi_raw, policy_raw)
+        (temporary_directory / "adapter-manifest.json").write_bytes(canonical_json(manifest))
+        (temporary_directory / "adapter-manifest.sig").write_bytes(receipt_raw)
+        (temporary_directory / "package-coverage.sha256").write_bytes(
+            coverage_contents(temporary_directory)
+        )
+        inspect_package(repository_root, temporary_directory)
+        os.rename(temporary_directory, output_directory)
+    except BaseException:
+        shutil.rmtree(temporary_directory, ignore_errors=True)
+        raise
+
+
+def self_test_catalog(repository_root, path, target):
+    abi, abi_raw, policy_raw = load_repository_contracts(repository_root)
+    system_digests = {
+        "D3D12.dll": digest_bytes(b"reviewed-system32-d3d12"),
+        "DXGI.dll": digest_bytes(b"reviewed-system32-dxgi"),
+    }
+    libraries = []
+    for library in sorted(abi["libraries"], key=lambda row: row["name"]):
+        identity = library["name"]
+        libraries.append(
+            {
+                "abi": library["abi_version"],
+                "filename": identity,
+                "identity": identity,
+                "required_symbols": sorted(symbol["name"] for symbol in library["symbols"]),
+                "sha256": TARGET_PAYLOADS[target][2]
+                if identity == "DirectML.dll"
+                else system_digests[identity],
+                "unsafe_owner": UNSAFE_OWNER,
+            }
+        )
+    catalog = {
+        "abi_floor": ABI_FLOOR,
+        "abi_manifest_sha256": digest_bytes(abi_raw),
+        "backend": "directml",
+        "libraries": libraries,
+        "package_policy_sha256": digest_bytes(policy_raw),
+        "schema_version": 1,
+        "target": target,
+    }
+    path.write_bytes(canonical_json(catalog))
+    return catalog
+
+
+def run_self_test(repository_root):
+    with tempfile.TemporaryDirectory(prefix="sim-directml-package-") as temporary:
+        root = Path(temporary)
+        receipt = root / "receipt.json"
+        receipt.write_bytes(
+            canonical_receipt_json(
+                {
+                    "schema_version": 1,
+                    "algorithm": "ed25519",
+                    "signature": "ab" * 64,
+                }
+            )
+        )
+        validate_receipt(receipt)
+        catalog_a = root / "catalog-a.json"
+        catalog_b = root / "catalog-b.json"
+        catalog = self_test_catalog(
+            repository_root, catalog_a, "x86_64-pc-windows-msvc"
+        )
+        self_test_catalog(repository_root, catalog_b, "x86_64-pc-windows-msvc")
+        validate_contract_catalog(
+            repository_root, catalog_a, "x86_64-pc-windows-msvc"
+        )
+        if catalog_a.read_bytes() != catalog_b.read_bytes():
+            raise PackagingError("self-test contract catalogs are not deterministic")
+
+        coverage_root = root / "coverage"
+        (coverage_root / "abi").mkdir(parents=True)
+        for relative_path in REQUIRED_PAYLOADS:
+            path = coverage_root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(f"self-test:{relative_path}\n".encode("ascii"))
+        coverage_before = coverage_contents(coverage_root)
+        coverage_paths = [
+            line.split("  ", 1)[1]
+            for line in coverage_before.decode("ascii").splitlines()
+        ]
+        expected_coverage_paths = [
+            path
+            for path in REQUIRED_PAYLOADS
+            if path not in {"adapter-manifest.sig", "package-coverage.sha256"}
+        ]
+        if coverage_paths != expected_coverage_paths or "ffi-contracts-v1.json" not in coverage_paths:
+            raise PackagingError("self-test coverage omits or misorders the reviewed catalog")
+        (coverage_root / "ffi-contracts-v1.json").write_bytes(b"tampered-catalog\n")
+        if coverage_contents(coverage_root) == coverage_before:
+            raise PackagingError("self-test coverage does not bind the reviewed catalog")
+
+        bad = dict(catalog)
+        bad["unknown"] = False
+        (root / "unknown.json").write_bytes(canonical_json(bad))
+        try:
+            validate_contract_catalog(
+                repository_root, root / "unknown.json", "x86_64-pc-windows-msvc"
+            )
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted an unknown catalog field")
+
+        bad = dict(catalog)
+        bad["libraries"] = list(reversed(catalog["libraries"]))
+        (root / "unsorted.json").write_bytes(canonical_json(bad))
+        try:
+            validate_contract_catalog(
+                repository_root, root / "unsorted.json", "x86_64-pc-windows-msvc"
+            )
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted unsorted contract rows")
+
+        bad = json.loads(json.dumps(catalog))
+        directml = next(
+            row for row in bad["libraries"] if row["identity"] == "DirectML.dll"
+        )
+        directml["required_symbols"] = []
+        (root / "zero-symbol.json").write_bytes(canonical_json(bad))
+        try:
+            validate_contract_catalog(
+                repository_root, root / "zero-symbol.json", "x86_64-pc-windows-msvc"
+            )
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted a zero-symbol contract")
+
+        bad = dict(catalog)
+        bad["package_policy_sha256"] = "00" * 32
+        (root / "wrong-policy.json").write_bytes(canonical_json(bad))
+        try:
+            validate_contract_catalog(
+                repository_root, root / "wrong-policy.json", "x86_64-pc-windows-msvc"
+            )
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted a mismatched package-policy digest")
+
+        try:
+            validate_contract_catalog(
+                repository_root, catalog_a, "aarch64-pc-windows-msvc"
+            )
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted a target-mismatched catalog")
+
+        duplicate = catalog_a.read_text(encoding="utf-8").replace(
+            '  "backend": "directml",',
+            '  "backend": "directml",\n  "backend": "directml",',
+        )
+        (root / "duplicate.json").write_text(duplicate, encoding="utf-8")
+        try:
+            validate_contract_catalog(
+                repository_root, root / "duplicate.json", "x86_64-pc-windows-msvc"
+            )
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted a duplicate catalog field")
+
+        receipt.write_bytes(b'{"schema_version":1,"algorithm":"ed25519","signature":"AA"}\n')
+        try:
+            validate_receipt(receipt)
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted a malformed signature receipt")
+
+        try:
+            checked_relative_path("../DirectML.dll")
+        except PackagingError:
+            pass
+        else:
+            raise PackagingError("self-test accepted path traversal")
+    print("DirectML package self-test passed")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Build the reviewed offline Zed DirectML adapter package"
+    )
+    parser.add_argument("--inspect-structure", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("output_directory", nargs="?", type=Path)
+    parser.add_argument("target", nargs="?")
+    parser.add_argument("signer_id", nargs="?")
+    parser.add_argument("signature_receipt", nargs="?", type=Path)
+    parser.add_argument("reviewed_ffi_contracts", nargs="?", type=Path)
+    parser.add_argument("source_package", nargs="?", type=Path)
+    arguments = parser.parse_args()
+    repository_root = Path(__file__).resolve().parent.parent
+
+    selected_modes = sum(
+        [
+            arguments.inspect_structure is not None,
+            arguments.self_test,
+            arguments.output_directory is not None,
+        ]
+    )
+    if selected_modes != 1:
+        parser.error("select exactly one of packaging, --inspect-structure, or --self-test")
+    if arguments.inspect_structure is not None:
+        inspect_package(repository_root, arguments.inspect_structure.resolve())
+    elif arguments.self_test:
+        run_self_test(repository_root)
+    else:
+        required = [
+            arguments.target,
+            arguments.signer_id,
+            arguments.signature_receipt,
+            arguments.reviewed_ffi_contracts,
+            arguments.source_package,
+        ]
+        if any(value is None for value in required):
+            parser.error(
+                "packaging requires OUTPUT TARGET SIGNER_ID ED25519_RECEIPT REVIEWED_FFI_CONTRACTS NUPKG"
+            )
+        build_package(
+            repository_root,
+            arguments.output_directory,
+            arguments.target,
+            arguments.signer_id,
+            arguments.signature_receipt.resolve(),
+            arguments.reviewed_ffi_contracts.resolve(),
+            arguments.source_package.resolve(),
+        )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (PackagingError, OSError) as error:
+        print(f"package-sim-backend-directml: {error}", file=sys.stderr)
+        raise SystemExit(1) from error

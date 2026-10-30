@@ -1,0 +1,384 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_cuda/abi/symbols-v1.json"
+kernel_manifest="$workspace/crates/sim_backend_cuda/kernels/manifest-v1.json"
+kernel_ptx="$workspace/crates/sim_backend_cuda/kernels/core-v1.ptx"
+licenses="$workspace/crates/sim_backend_cuda/LICENSES"
+policy="$workspace/nix/sim-backends/cuda/package-policy.json"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET SIGNER_ID ED25519_RECEIPT REVIEWED_FFI_CONTRACTS" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --verify-sdk CUDA_ROOT" >&2
+    echo "       $0 --self-test" >&2
+}
+
+verify_sdk() {
+    python3 - "$1" "$abi_manifest" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+manifest = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("CUDA SDK root must be a directory and not a symbolic link")
+for library in manifest["libraries"]:
+    reviewed_text = []
+    for header_contract in library["headers"]:
+        relative = header_contract["path"]
+        header = root / relative
+        metadata = header.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 16 * 1024 * 1024:
+            raise SystemExit(f"reviewed header must be a bounded regular file: {relative}")
+        contents = header.read_bytes()
+        if hashlib.sha256(contents).hexdigest() != header_contract["sha256"]:
+            raise SystemExit(f"reviewed raw header digest mismatch: {relative}")
+        reviewed_text.append(contents.decode("utf-8"))
+    text = "\n".join(reviewed_text)
+    for symbol in library["symbols"]:
+        symbol_name = symbol["name"]
+        declaration_name = {
+            "cuCtxCreate_v2": "cuCtxCreate",
+            "cuCtxDestroy_v2": "cuCtxDestroy",
+            "cuEventDestroy_v2": "cuEventDestroy",
+            "cuMemAlloc_v2": "cuMemAlloc",
+            "cuMemFree_v2": "cuMemFree",
+            "cuMemGetInfo_v2": "cuMemGetInfo",
+            "cuMemcpyDtoHAsync_v2": "cuMemcpyDtoHAsync",
+            "cuMemcpyHtoDAsync_v2": "cuMemcpyHtoDAsync",
+            "cuStreamDestroy_v2": "cuStreamDestroy",
+        }.get(symbol_name, symbol_name)
+        if re.search(r"\b" + re.escape(declaration_name) + r"\s*\(", text) is None:
+            raise SystemExit(f"reviewed header omits symbol declaration: {symbol_name}")
+        if declaration_name != symbol_name and re.search(
+            r"#define\s+" + re.escape(declaration_name) + r"\s+.*\b" + re.escape(symbol_name) + r"\b",
+            text,
+        ) is None:
+            raise SystemExit(f"reviewed header omits versioned symbol mapping: {symbol_name}")
+if "#define CUDA_VERSION 12020" not in (root / "include/cuda.h").read_text(encoding="utf-8"):
+    raise SystemExit("cuda.h is not the reviewed CUDA 12.2 header")
+version_text = (root / "include/cudnn_version_v9.h").read_text(encoding="utf-8")
+if not re.search(r"#define CUDNN_MAJOR\s+9\s+.*#define CUDNN_MINOR\s+0\s+.*#define CUDNN_PATCHLEVEL\s+0", version_text, re.S):
+    raise SystemExit("cuDNN headers are not the reviewed 9.0.0 ABI")
+print("CUDA reviewed SDK declarations and every pinned raw header digest verified")
+PY
+}
+
+inspect() {
+    python3 - "$1" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected = [
+    "LICENSES",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "kernels/core-v1.ptx",
+    "kernels/manifest-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json",
+]
+
+def strict_json(path):
+    def pairs(values):
+        result = {}
+        for key, value in values:
+            if key in result:
+                raise ValueError(f"duplicate key: {key}")
+            result[key] = value
+        return result
+    raw = path.read_bytes()
+    return json.loads(raw, object_pairs_hook=pairs), raw
+
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("CUDA package root must be a directory and not a symbolic link")
+actual = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for directory_name in directory_names:
+        if pathlib.Path(directory, directory_name).is_symlink():
+            raise SystemExit("CUDA package contains a symbolic-link directory")
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"CUDA payload must be a bounded nonempty regular file: {relative}")
+        actual.append(relative)
+if sorted(actual) != expected:
+    raise SystemExit(f"CUDA package payload differs: {sorted(actual)}")
+
+policy, _ = strict_json(root / "package-policy.json")
+if policy["allowed_payloads"] != expected or policy["required_payloads"] != expected:
+    raise SystemExit("CUDA package policy payload set differs")
+if policy["redistributes_driver"] or policy["approved_vendor_redistributables"]:
+    raise SystemExit("CUDA package must not contain the driver or unapproved vendor redistributables")
+if policy["certificate_owner"] != "sim_runtime::NativeFfiRegistry":
+    raise SystemExit("CUDA certificate owner differs")
+if policy["structural_receipt_is_authorization"]:
+    raise SystemExit("CUDA structural package receipt cannot authorize runtime binding")
+
+manifest, _ = strict_json(root / "adapter-manifest.json")
+required = {
+    "schema_version": 1,
+    "backend": "cuda",
+    "abi_floor": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312",
+    "redistributes_driver": False,
+    "approved_vendor_redistributables": [],
+    "runtime_compilation_for_core_kernels": False,
+    "license_approval_required_for_vendor_runtime": True,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-cuda-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_backend_cuda::loader",
+    "structural_receipt_is_authorization": False,
+}
+for key, value in required.items():
+    if manifest.get(key) != value:
+        raise SystemExit(f"CUDA adapter manifest field differs: {key}")
+if manifest.get("target") not in ("aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("CUDA adapter manifest target differs")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", manifest.get("signer", "")) is None:
+    raise SystemExit("CUDA adapter manifest signer differs")
+for relative, key in [
+    ("abi/symbols-v1.json", "abi_manifest_sha256"),
+    ("ffi-contracts-v1.json", "ffi_contracts_sha256"),
+    ("kernels/manifest-v1.json", "kernel_manifest_sha256"),
+    ("kernels/core-v1.ptx", "core_ptx_sha256"),
+]:
+    if manifest.get(key) != hashlib.sha256((root / relative).read_bytes()).hexdigest():
+        raise SystemExit(f"CUDA adapter digest mismatch: {relative}")
+
+kernel_manifest, _ = strict_json(root / "kernels/manifest-v1.json")
+if kernel_manifest.get("runtime_compilation_for_core_kernels") is not False or len(kernel_manifest.get("kernels", [])) != 1:
+    raise SystemExit("CUDA kernel manifest differs")
+kernel = kernel_manifest["kernels"][0]
+if kernel.get("path") != "kernels/core-v1.ptx" or kernel.get("entry") != "zed_cuda_add_f32":
+    raise SystemExit("CUDA kernel identity differs")
+if kernel.get("sha256") != hashlib.sha256((root / kernel["path"]).read_bytes()).hexdigest():
+    raise SystemExit("CUDA PTX digest differs")
+
+abi, abi_raw = strict_json(root / "abi/symbols-v1.json")
+catalog, catalog_raw = strict_json(root / "ffi-contracts-v1.json")
+if set(catalog) != {"schema_version", "backend", "abi_floor", "target", "abi_manifest_sha256", "package_policy_sha256", "libraries"}:
+    raise SystemExit("CUDA FFI catalog fields differ")
+if catalog["schema_version"] != 1 or catalog["backend"] != "cuda" or catalog["abi_floor"] != abi["abi_floor"]:
+    raise SystemExit("CUDA FFI catalog envelope differs")
+if catalog["target"] != manifest["target"]:
+    raise SystemExit("CUDA FFI catalog target differs")
+if catalog["abi_manifest_sha256"] != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("CUDA FFI catalog ABI digest differs")
+if catalog["package_policy_sha256"] != hashlib.sha256((root / "package-policy.json").read_bytes()).hexdigest():
+    raise SystemExit("CUDA FFI catalog policy digest differs")
+if not isinstance(catalog["libraries"], list) or len(catalog["libraries"]) != len(abi["libraries"]):
+    raise SystemExit("CUDA FFI catalog library coverage differs")
+windows = "windows" in manifest["target"]
+for row, reviewed in zip(catalog["libraries"], abi["libraries"], strict=True):
+    if set(row) != {"identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"}:
+        raise SystemExit("CUDA FFI library fields differ")
+    filename = reviewed["windows_filename"] if windows else reviewed["linux_filename"]
+    expected_symbols = sorted(symbol["name"] for symbol in reviewed["symbols"])
+    if row["identity"] != reviewed["id"] or row["filename"] != filename:
+        raise SystemExit("CUDA FFI library identity or target filename differs")
+    if re.fullmatch(r"[0-9a-f]{64}", row["sha256"]) is None:
+        raise SystemExit("CUDA FFI library digest differs")
+    if row["abi"] != abi["abi_floor"] or row["required_symbols"] != expected_symbols or not expected_symbols:
+        raise SystemExit("CUDA FFI ABI or required symbols differ")
+    if len(expected_symbols) != len(set(expected_symbols)):
+        raise SystemExit("CUDA reviewed ABI symbols are not unique")
+    if row["unsafe_owner"] != "sim_backend_cuda::loader":
+        raise SystemExit("CUDA FFI unsafe owner differs")
+
+receipt, receipt_raw = strict_json(root / "adapter-manifest.sig")
+if list(receipt) != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("CUDA signature receipt fields are not canonical")
+if receipt.get("schema_version") != 1 or receipt.get("algorithm") != "ed25519" or re.fullmatch(r"[0-9a-f]{128}", receipt.get("signature", "")) is None:
+    raise SystemExit("CUDA signature receipt differs")
+if receipt_raw != (json.dumps(receipt, separators=(",", ":"), ensure_ascii=True) + "\n").encode("ascii"):
+    raise SystemExit("CUDA signature receipt is not canonical-json-v1")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+rows = []
+for relative in expected:
+    if relative not in excluded:
+        contents = (root / relative).read_bytes()
+        rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+if (root / "package-coverage.sha256").read_bytes() != "".join(sorted(rows)).encode("ascii"):
+    raise SystemExit("CUDA package signature coverage differs or payload was tampered")
+PY
+}
+
+build_package() {
+    output=$1
+    target=$2
+    signer=$3
+    receipt=$4
+    contracts=$5
+    python3 - "$output" "$target" "$signer" "$receipt" "$contracts" "$abi_manifest" "$kernel_manifest" "$kernel_ptx" "$licenses" "$policy" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import stat
+import sys
+
+output = pathlib.Path(sys.argv[1])
+target, signer = sys.argv[2], sys.argv[3]
+receipt = pathlib.Path(sys.argv[4])
+contracts_source = pathlib.Path(sys.argv[5])
+sources = [pathlib.Path(value) for value in sys.argv[6:]]
+if target not in ("aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("CUDA package target is unsupported")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None or len(signer) > 128:
+    raise SystemExit("CUDA signer ID must use the canonical authority grammar")
+if output.exists():
+    raise SystemExit("CUDA package output already exists")
+metadata = receipt.lstat()
+if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 1024:
+    raise SystemExit("CUDA signature receipt must be a bounded regular file")
+contracts_metadata = contracts_source.lstat()
+if not stat.S_ISREG(contracts_metadata.st_mode) or contracts_metadata.st_size == 0 or contracts_metadata.st_size > 1024 * 1024:
+    raise SystemExit("separately reviewed CUDA FFI contract catalog must be a bounded regular file")
+output.mkdir(parents=True)
+(output / "abi").mkdir()
+(output / "kernels").mkdir()
+destinations = [
+    output / "abi/symbols-v1.json",
+    output / "kernels/manifest-v1.json",
+    output / "kernels/core-v1.ptx",
+    output / "LICENSES",
+    output / "package-policy.json",
+]
+for source, destination in zip(sources, destinations):
+    shutil.copyfile(source, destination)
+shutil.copyfile(contracts_source, output / "ffi-contracts-v1.json")
+digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+manifest = {
+    "schema_version": 1,
+    "backend": "cuda",
+    "abi_floor": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312",
+    "target": target,
+    "libraries": ["cublaslt", "cudnn", "driver", "nvrtc"],
+    "discovery_order": ["SIM_CUDA_ROOT", "CUDA_PATH", "signed_package_roots", "installed_driver_library"],
+    "abi_manifest_sha256": digest(output / "abi/symbols-v1.json"),
+    "ffi_contracts_sha256": digest(output / "ffi-contracts-v1.json"),
+    "kernel_manifest_sha256": digest(output / "kernels/manifest-v1.json"),
+    "core_ptx_sha256": digest(output / "kernels/core-v1.ptx"),
+    "redistributes_driver": False,
+    "approved_vendor_redistributables": [],
+    "runtime_compilation_for_core_kernels": False,
+    "license_approval_required_for_vendor_runtime": True,
+    "signer": signer,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-cuda-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_backend_cuda::loader",
+    "structural_receipt_is_authorization": False,
+}
+(output / "adapter-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+shutil.copyfile(receipt, output / "adapter-manifest.sig")
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+rows = []
+for path in sorted(path for path in output.rglob("*") if path.is_file()):
+    relative = path.relative_to(output).as_posix()
+    if relative not in excluded:
+        contents = path.read_bytes()
+        rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+(output / "package-coverage.sha256").write_text("".join(sorted(rows)), encoding="ascii")
+PY
+    inspect "$output"
+}
+
+self_test() {
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/sim-cuda-package.XXXXXX")
+    trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
+    receipt="$temporary/receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' > "$receipt"
+    contracts="$temporary/ffi-contracts-v1.json"
+    python3 - "$abi_manifest" "$policy" "$contracts" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+abi_path = pathlib.Path(sys.argv[1])
+policy_path = pathlib.Path(sys.argv[2])
+output = pathlib.Path(sys.argv[3])
+abi_raw = abi_path.read_bytes()
+policy_raw = policy_path.read_bytes()
+abi = json.loads(abi_raw)
+catalog = {
+    "schema_version": 1,
+    "backend": "cuda",
+    "abi_floor": abi["abi_floor"],
+    "target": "x86_64-unknown-linux-gnu",
+    "abi_manifest_sha256": hashlib.sha256(abi_raw).hexdigest(),
+    "package_policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
+    "libraries": [
+        {
+            "identity": library["id"],
+            "filename": library["linux_filename"],
+            "sha256": hashlib.sha256((library["id"] + "-fixture").encode("ascii")).hexdigest(),
+            "abi": abi["abi_floor"],
+            "required_symbols": sorted(symbol["name"] for symbol in library["symbols"]),
+            "unsafe_owner": "sim_backend_cuda::loader",
+        }
+        for library in abi["libraries"]
+    ],
+}
+output.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+    build_package "$temporary/package" x86_64-unknown-linux-gnu zed.test "$receipt" "$contracts"
+    cp "$temporary/package/kernels/core-v1.ptx" "$temporary/original.ptx"
+    printf '\n' >> "$temporary/package/kernels/core-v1.ptx"
+    if inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "tampered CUDA PTX was accepted" >&2
+        exit 1
+    fi
+    cp "$temporary/original.ptx" "$temporary/package/kernels/core-v1.ptx"
+    if cp "$temporary/package/LICENSES" "$temporary/package/libcuda.so.1" && inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "CUDA driver payload was accepted" >&2
+        exit 1
+    fi
+    if build_package "$temporary/wrong-target" aarch64-apple-darwin zed.test "$receipt" "$contracts" >/dev/null 2>&1; then
+        echo "unsupported CUDA package target was accepted" >&2
+        exit 1
+    fi
+    echo "CUDA package self-test passed"
+}
+
+case ${1:-} in
+    --inspect-structure)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        inspect "$2"
+        ;;
+    --verify-sdk)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        verify_sdk "$2"
+        ;;
+    --self-test)
+        [ "$#" -eq 1 ] || { usage; exit 2; }
+        self_test
+        ;;
+    *)
+        [ "$#" -eq 5 ] || { usage; exit 2; }
+        build_package "$1" "$2" "$3" "$4" "$5"
+        ;;
+esac

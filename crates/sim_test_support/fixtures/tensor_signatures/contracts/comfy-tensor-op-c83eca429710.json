@@ -1,0 +1,776 @@
+{
+  "canonical_target": "torch.Tensor.element_size",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:289:55 (Encoder.forward_orig)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:570:40 (Decoder.run_up)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/attention.py:329:24 (attention_split)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:240:58 (slice_attention)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:241:21 (slice_attention)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/memory_management.py:135:29 (vram_aligned_size)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/memory_management.py:143:31 (interpret_gathered_like)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/memory_management.py:160:39 (interpret_gathered_like)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/memory_management.py:47:104 (read_tensor_file_slice_into)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/memory_management.py:48:107 (read_tensor_file_slice_into)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/memory_management.py:49:33 (read_tensor_file_slice_into)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_patcher.py:1860:83 (ModelPatcherDynamic.load.force_load_param)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_patcher.py:1904:90 (ModelPatcherDynamic.load)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_patcher.py:1915:79 (ModelPatcherDynamic.load)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_patcher.py:1963:46 (ModelPatcherDynamic.unregister_inactive_pins)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_patcher.py:1983:46 (ModelPatcherDynamic.partially_unload_ram)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_patcher.py:228:43 (MemoryCounter.use)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/loha.py:140:36 (LohaDiff.passive_memory_usage)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/lokr.py:167:36 (LokrDiff.passive_memory_usage)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/lora.py:124:36 (LoraDiff.passive_memory_usage)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/oft.py:134:36 (OFTDiff.passive_memory_usage)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_execution/cache_provider.py:128:36 (_estimate_value_size.estimate)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_execution/caching.py:547:55 (RAMPressureCache.ram_release.scan_list_for_ram_usage)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_train.py:395:39 (BiasDiff.passive_memory_usage)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_upscale_model.py:72:46 (ImageUpscaleWithModel.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_upscale_model.py:73:47 (ImageUpscaleWithModel.execute)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:289:55 (Encoder.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:570:40 (Decoder.run_up)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:329:24 (attention_split)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:240:58 (slice_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:241:21 (slice_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/memory_management.py:135:29 (vram_aligned_size)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/memory_management.py:143:31 (interpret_gathered_like)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/memory_management.py:160:39 (interpret_gathered_like)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/memory_management.py:47:104 (read_tensor_file_slice_into)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/memory_management.py:48:107 (read_tensor_file_slice_into)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/memory_management.py:49:33 (read_tensor_file_slice_into)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_patcher.py:1860:83 (ModelPatcherDynamic.load.force_load_param)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_patcher.py:1904:90 (ModelPatcherDynamic.load)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_patcher.py:1915:79 (ModelPatcherDynamic.load)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_patcher.py:1963:46 (ModelPatcherDynamic.unregister_inactive_pins)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_patcher.py:1983:46 (ModelPatcherDynamic.partially_unload_ram)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_patcher.py:228:43 (MemoryCounter.use)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:140:36 (LohaDiff.passive_memory_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lokr.py:167:36 (LokrDiff.passive_memory_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lora.py:124:36 (LoraDiff.passive_memory_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/oft.py:134:36 (OFTDiff.passive_memory_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_execution/cache_provider.py:128:36 (_estimate_value_size.estimate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_execution/caching.py:547:55 (RAMPressureCache.ram_release.scan_list_for_ram_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:395:39 (BiasDiff.passive_memory_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_upscale_model.py:72:46 (ImageUpscaleWithModel.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_upscale_model.py:73:47 (ImageUpscaleWithModel.execute)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-c83eca429710-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-C83ECA429710",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "eb59243c0b31a42b7a91021f23768e441b8a792a22b42c820d043097343a4685",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+        "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"
+      },
+      {
+        "path": "comfy/ldm/modules/attention.py",
+        "sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/memory_management.py",
+        "sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5"
+      },
+      {
+        "path": "comfy/model_patcher.py",
+        "sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0"
+      },
+      {
+        "path": "comfy/weight_adapter/loha.py",
+        "sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5"
+      },
+      {
+        "path": "comfy/weight_adapter/lokr.py",
+        "sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4"
+      },
+      {
+        "path": "comfy/weight_adapter/lora.py",
+        "sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5"
+      },
+      {
+        "path": "comfy/weight_adapter/oft.py",
+        "sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89"
+      },
+      {
+        "path": "comfy_execution/cache_provider.py",
+        "sha256": "3261e204d3153b19f0e6b65b638acbd4a1fb40dd935d56c48d3f6fecda65f4c8"
+      },
+      {
+        "path": "comfy_execution/caching.py",
+        "sha256": "fc44cbb1a4bc615997affc2d9cdcf39d7ebf4433d9c4531f648d69669a184271"
+      },
+      {
+        "path": "comfy_extras/nodes_train.py",
+        "sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      },
+      {
+        "path": "comfy_extras/nodes_upscale_model.py",
+        "sha256": "da11e6f46a473fad3fdfdf068ae07a022802cf122240e4b99e639a380e9772f4"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.element_size"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_18",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-c05fe0730305",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 55,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 289,
+      "positional_arguments": [],
+      "scope": "Encoder.forward_orig",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:289:55 (Encoder.forward_orig)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "sample.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 570,
+      "positional_arguments": [],
+      "scope": "Decoder.run_up",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:570:40 (Decoder.run_up)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "sample.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 329,
+      "positional_arguments": [],
+      "scope": "attention_split",
+      "site": "comfy/ldm/modules/attention.py:329:24 (attention_split)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "q.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 58,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 240,
+      "positional_arguments": [],
+      "scope": "slice_attention",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:240:58 (slice_attention)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "q.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 241,
+      "positional_arguments": [],
+      "scope": "slice_attention",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:241:21 (slice_attention)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "q.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 135,
+      "positional_arguments": [],
+      "scope": "vram_aligned_size",
+      "site": "comfy/memory_management.py:135:29 (vram_aligned_size)",
+      "source_path": "comfy/memory_management.py",
+      "source_sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "status": "static-call-observed",
+      "target_syntax": "tensor.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 143,
+      "positional_arguments": [],
+      "scope": "interpret_gathered_like",
+      "site": "comfy/memory_management.py:143:31 (interpret_gathered_like)",
+      "source_path": "comfy/memory_management.py",
+      "source_sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "status": "static-call-observed",
+      "target_syntax": "gathered.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 39,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 160,
+      "positional_arguments": [],
+      "scope": "interpret_gathered_like",
+      "site": "comfy/memory_management.py:160:39 (interpret_gathered_like)",
+      "source_path": "comfy/memory_management.py",
+      "source_sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "status": "static-call-observed",
+      "target_syntax": "template.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 104,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 47,
+      "positional_arguments": [],
+      "scope": "read_tensor_file_slice_into",
+      "site": "comfy/memory_management.py:47:104 (read_tensor_file_slice_into)",
+      "source_path": "comfy/memory_management.py",
+      "source_sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "status": "static-call-observed",
+      "target_syntax": "destination.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 107,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [],
+      "scope": "read_tensor_file_slice_into",
+      "site": "comfy/memory_management.py:48:107 (read_tensor_file_slice_into)",
+      "source_path": "comfy/memory_management.py",
+      "source_sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "status": "static-call-observed",
+      "target_syntax": "destination2.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 49,
+      "positional_arguments": [],
+      "scope": "read_tensor_file_slice_into",
+      "site": "comfy/memory_management.py:49:33 (read_tensor_file_slice_into)",
+      "source_path": "comfy/memory_management.py",
+      "source_sha256": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "status": "static-call-observed",
+      "target_syntax": "tensor.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 83,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1860,
+      "positional_arguments": [],
+      "scope": "ModelPatcherDynamic.load.force_load_param",
+      "site": "comfy/model_patcher.py:1860:83 (ModelPatcherDynamic.load.force_load_param)",
+      "source_path": "comfy/model_patcher.py",
+      "source_sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "status": "static-call-observed",
+      "target_syntax": "weight.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 90,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1904,
+      "positional_arguments": [],
+      "scope": "ModelPatcherDynamic.load",
+      "site": "comfy/model_patcher.py:1904:90 (ModelPatcherDynamic.load)",
+      "source_path": "comfy/model_patcher.py",
+      "source_sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "status": "static-call-observed",
+      "target_syntax": "casted_weight.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 79,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1915,
+      "positional_arguments": [],
+      "scope": "ModelPatcherDynamic.load",
+      "site": "comfy/model_patcher.py:1915:79 (ModelPatcherDynamic.load)",
+      "source_path": "comfy/model_patcher.py",
+      "source_sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "status": "static-call-observed",
+      "target_syntax": "casted_buf.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1963,
+      "positional_arguments": [],
+      "scope": "ModelPatcherDynamic.unregister_inactive_pins",
+      "site": "comfy/model_patcher.py:1963:46 (ModelPatcherDynamic.unregister_inactive_pins)",
+      "source_path": "comfy/model_patcher.py",
+      "source_sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "status": "static-call-observed",
+      "target_syntax": "module._pin.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1983,
+      "positional_arguments": [],
+      "scope": "ModelPatcherDynamic.partially_unload_ram",
+      "site": "comfy/model_patcher.py:1983:46 (ModelPatcherDynamic.partially_unload_ram)",
+      "source_path": "comfy/model_patcher.py",
+      "source_sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "status": "static-call-observed",
+      "target_syntax": "module._pin.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 43,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 228,
+      "positional_arguments": [],
+      "scope": "MemoryCounter.use",
+      "site": "comfy/model_patcher.py:228:43 (MemoryCounter.use)",
+      "source_path": "comfy/model_patcher.py",
+      "source_sha256": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "status": "static-call-observed",
+      "target_syntax": "weight.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 140,
+      "positional_arguments": [],
+      "scope": "LohaDiff.passive_memory_usage",
+      "site": "comfy/weight_adapter/loha.py:140:36 (LohaDiff.passive_memory_usage)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "param.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 167,
+      "positional_arguments": [],
+      "scope": "LokrDiff.passive_memory_usage",
+      "site": "comfy/weight_adapter/lokr.py:167:36 (LokrDiff.passive_memory_usage)",
+      "source_path": "comfy/weight_adapter/lokr.py",
+      "source_sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4",
+      "status": "static-call-observed",
+      "target_syntax": "param.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 124,
+      "positional_arguments": [],
+      "scope": "LoraDiff.passive_memory_usage",
+      "site": "comfy/weight_adapter/lora.py:124:36 (LoraDiff.passive_memory_usage)",
+      "source_path": "comfy/weight_adapter/lora.py",
+      "source_sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+      "status": "static-call-observed",
+      "target_syntax": "param.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 134,
+      "positional_arguments": [],
+      "scope": "OFTDiff.passive_memory_usage",
+      "site": "comfy/weight_adapter/oft.py:134:36 (OFTDiff.passive_memory_usage)",
+      "source_path": "comfy/weight_adapter/oft.py",
+      "source_sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89",
+      "status": "static-call-observed",
+      "target_syntax": "param.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 128,
+      "positional_arguments": [],
+      "scope": "_estimate_value_size.estimate",
+      "site": "comfy_execution/cache_provider.py:128:36 (_estimate_value_size.estimate)",
+      "source_path": "comfy_execution/cache_provider.py",
+      "source_sha256": "3261e204d3153b19f0e6b65b638acbd4a1fb40dd935d56c48d3f6fecda65f4c8",
+      "status": "static-call-observed",
+      "target_syntax": "obj.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 55,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 547,
+      "positional_arguments": [],
+      "scope": "RAMPressureCache.ram_release.scan_list_for_ram_usage",
+      "site": "comfy_execution/caching.py:547:55 (RAMPressureCache.ram_release.scan_list_for_ram_usage)",
+      "source_path": "comfy_execution/caching.py",
+      "source_sha256": "fc44cbb1a4bc615997affc2d9cdcf39d7ebf4433d9c4531f648d69669a184271",
+      "status": "static-call-observed",
+      "target_syntax": "output.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 39,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 395,
+      "positional_arguments": [],
+      "scope": "BiasDiff.passive_memory_usage",
+      "site": "comfy_extras/nodes_train.py:395:39 (BiasDiff.passive_memory_usage)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "self.bias.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 72,
+      "positional_arguments": [],
+      "scope": "ImageUpscaleWithModel.execute",
+      "site": "comfy_extras/nodes_upscale_model.py:72:46 (ImageUpscaleWithModel.execute)",
+      "source_path": "comfy_extras/nodes_upscale_model.py",
+      "source_sha256": "da11e6f46a473fad3fdfdf068ae07a022802cf122240e4b99e639a380e9772f4",
+      "status": "static-call-observed",
+      "target_syntax": "image.element_size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 73,
+      "positional_arguments": [],
+      "scope": "ImageUpscaleWithModel.execute",
+      "site": "comfy_extras/nodes_upscale_model.py:73:47 (ImageUpscaleWithModel.execute)",
+      "source_path": "comfy_extras/nodes_upscale_model.py",
+      "source_sha256": "da11e6f46a473fad3fdfdf068ae07a022802cf122240e4b99e639a380e9772f4",
+      "status": "static-call-observed",
+      "target_syntax": "image.element_size"
+    }
+  ],
+  "static_definition": null
+}

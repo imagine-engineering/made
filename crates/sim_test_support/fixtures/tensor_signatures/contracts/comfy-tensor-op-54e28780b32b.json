@@ -1,0 +1,166 @@
+{
+  "canonical_target": "torch.rsqrt",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:57:50 (MultiHeadLayerNorm.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/lt.py:108:18 (DualLinearProjection.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/t5.py:14:17 (T5LayerNorm.forward)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/aura/mmdit.py:57:50 (MultiHeadLayerNorm.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/lt.py:108:18 (DualLinearProjection.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/t5.py:14:17 (T5LayerNorm.forward)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-54e28780b32b-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-54E28780B32B",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "184cc69447ad8c110a7efc0c342528d9d4d137cccc32c1cfe2a571122ad82573",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/aura/mmdit.py",
+        "sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1"
+      },
+      {
+        "path": "comfy/text_encoders/lt.py",
+        "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2"
+      },
+      {
+        "path": "comfy/text_encoders/t5.py",
+        "sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.rsqrt"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_07",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-54e28780b32b",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 50,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 57,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "variance + self.variance_epsilon",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "MultiHeadLayerNorm.forward",
+      "site": "comfy/ldm/aura/mmdit.py:57:50 (MultiHeadLayerNorm.forward)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.rsqrt"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 108,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.mean(x ** 2, dim=2, keepdim=True) + 1e-06",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DualLinearProjection.forward",
+      "site": "comfy/text_encoders/lt.py:108:18 (DualLinearProjection.forward)",
+      "source_path": "comfy/text_encoders/lt.py",
+      "source_sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.rsqrt"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 14,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "variance + self.variance_epsilon",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "T5LayerNorm.forward",
+      "site": "comfy/text_encoders/t5.py:14:17 (T5LayerNorm.forward)",
+      "source_path": "comfy/text_encoders/t5.py",
+      "source_sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.rsqrt"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,68 @@
+{
+  "artifact": "zed-native-film-sequence-v1",
+  "evidence_kind": "source-fingerprinted reduced exact sequence finalization plus production adjacent-endpoint cache orchestration",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "files": [
+      {
+        "file": "sim_extras/nodes_frame_interpolation.py",
+        "sha256": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369",
+        "symbols": ["FrameInterpolate.execute"]
+      },
+      {
+        "file": "sim_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+        "symbols": ["FILMNet.extract_features", "FILMNet.forward_multi_timestep"]
+      }
+    ]
+  },
+  "dependency": {
+    "fixture": "../film-multi-timestep/manifest.json",
+    "sha256": "2782dd2f7f4d3a259c5ff6d6585c424dbad51d7f350bbfa0dfdf456fc83d0381"
+  },
+  "production_schedule": {
+    "input_layout": "BHWC RGB",
+    "model_layout": "NCHW RGB",
+    "frame_count": "bounded by the canonical invocation plan",
+    "multiplier": "2 through 16, with lower values bypassed",
+    "output_frame_count": "(frame_count - 1) * multiplier + 1",
+    "pair_order": "endpoint i, all increasing intermediate timesteps, endpoint i+1",
+    "adjacent_reuse": "second endpoint image and feature pyramids move into the next pair's first endpoint",
+    "pair_execution": "retained FILM multi-timestep synthesis",
+    "output_operations": ["batch concatenate", "NCHW to BHWC permute", "fresh contiguous clone", "clamp to zero through one"]
+  },
+  "reduced_graph": {
+    "frame_count": 3,
+    "multiplier": 3,
+    "output_frame_count": 7,
+    "nchw_tensor_batch_sizes": [1, 2, 1, 2, 1],
+    "expected_rgb_frames": [
+      [0.0, 0.01, 0.02],
+      [0.1, 0.11, 0.12],
+      [0.2, 0.21, 0.22],
+      [0.3, 0.31, 0.32],
+      [0.4, 0.41, 0.42],
+      [0.5, 0.51, 0.52],
+      [0.6, 0.61, 0.62]
+    ],
+    "output_shape": [7, 1, 1, 3],
+    "fresh_output_storage": true,
+    "source_tensors_are_immutable": true,
+    "mismatched_output_frame_count_rejected": true,
+    "pre_cancelled_scratch_in_use_bytes": 0
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "production_dense_weight_numeric_parity": false,
+    "multi_to_single_oom_downgrade": false,
+    "native_cache_or_persistent_feature_state": false,
+    "codec_or_container_execution": false,
+    "handle_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

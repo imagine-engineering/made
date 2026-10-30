@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-transform-sim-node-0541",
+  "feature_ids": ["COMFY-NODE-0541", "COMFY-NODE-0542", "COMFY-NODE-0543"],
+  "sources": [
+    {
+      "path": "sim_extras/nodes_post_processing.py",
+      "sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "symbols": ["ResizeImageMaskNode", "scale_by", "scale_dimensions", "scale_longer_dimension", "scale_shorter_dimension", "scale_total_pixels", "scale_match_size", "scale_to_multiple_cover"]
+    },
+    {
+      "path": "sim_extras/nodes_dataset.py",
+      "sha256": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+      "symbols": ["ImageProcessingNode", "ResizeImagesByLongerEdgeNode", "ResizeImagesByShorterEdgeNode"]
+    }
+  ],
+  "resize_image_mask": {
+    "input_types": ["IMAGE", "MASK"],
+    "scale_methods": ["nearest-exact", "bilinear", "area", "bicubic", "lanczos"],
+    "crop_methods": ["disabled", "center"],
+    "resize_types": [
+      "scale by multiplier",
+      "scale dimensions",
+      "scale longer dimension",
+      "scale shorter dimension",
+      "scale width",
+      "scale height",
+      "scale total pixels",
+      "match size",
+      "scale to multiple"
+    ],
+    "dimension_cases": [
+      {"input": [1, 3, 5, 1], "type": "scale by multiplier", "multiplier": 1.5, "output": [1, 4, 8, 1]},
+      {"input": [1, 3, 5, 1], "type": "scale dimensions", "width": 10, "height": 0, "output": [1, 6, 10, 1]},
+      {"input": [1, 3, 5, 1], "type": "scale longer dimension", "longer_size": 7, "output": [1, 4, 7, 1]},
+      {"input": [1, 3, 5, 1], "type": "scale shorter dimension", "shorter_size": 7, "output": [1, 7, 12, 1]},
+      {"input": [1, 3, 5, 1], "type": "scale to multiple", "multiple": 2, "output": [1, 2, 4, 1]}
+    ],
+    "identity_cases": ["dimensions_zero_zero", "multiple_one", "multiple_larger_than_spatial", "already_multiple"],
+    "match_size": "recursively resolved schema-guided IMAGE or MASK handle"
+  },
+  "deprecated_edges": {
+    "presentation": {
+      "longer": "Resize Images by Longer Edge (DEPRECATED)",
+      "shorter": "Resize Images by Shorter Edge (DEPRECATED)",
+      "is_deprecated": true,
+      "is_experimental": true
+    },
+    "mode": "Pillow LANCZOS over uint8-quantized source values",
+    "longer": {"input": [1, 2, 4, 1], "edge": 6, "output": [1, 3, 6, 1]},
+    "shorter": {"input": [1, 2, 4, 1], "edge": 3, "output": [1, 3, 6, 1]}
+  },
+  "failure_contract": {
+    "invalid_input": "invalid_node_inputs",
+    "stale_or_foreign_handle": "invalid_image_transform_handle",
+    "cancellation": "execution_interrupted with no output publication",
+    "effects": [],
+    "cache": "input identity including recursively nested match handle",
+    "recovery": "a fresh handle in the current worker generation succeeds"
+  },
+  "persistence": {
+    "workflow": {
+      "class_type": "ResizeImageMaskNode",
+      "inputs": {
+        "input": ["source", 0],
+        "resize_type": {
+          "resize_type": "match size",
+          "match": ["reference", 0],
+          "crop": "center"
+        },
+        "scale_method": "bilinear"
+      },
+      "unknown_data": {
+        "future_resize_metadata": {"version": 2},
+        "preserve": true
+      }
+    }
+  }
+}

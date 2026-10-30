@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "simui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+  "task376_oracle_generator_sha256": "a3f204112a0b5847f0265c98421ed72c3c3f8b6f2487081e52bfe5dcc1ba104f",
+  "auraflow_source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+  "auraflow_raw_sha256": "d4b51dc633cbc296d70d5eba222ccac3a6e4a29133e8caca50ae886e2a6208bc",
+  "qwen_image_source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+  "qwen_image_raw_sha256": "1fd6d5c61affabe7e2dd7ce573eb9d60eb77037d194586eb433ac916fe69609b",
+  "projection_profiles": [
+    {
+      "feature_id": "COMFY-MODEL-0064",
+      "identifier": "auraflow-reduced-denoiser-v1",
+      "source_ordinal": 22,
+      "source_architecture": "model_base.AuraFlow"
+    },
+    {
+      "feature_id": "COMFY-MODEL-0113",
+      "identifier": "qwen-image-reduced-denoiser-v1",
+      "source_ordinal": 77,
+      "source_architecture": "model_base.QwenImage"
+    }
+  ]
+}

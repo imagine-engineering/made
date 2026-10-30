@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sim-native-audio-vae-source-checkpoints-v1",
+  "oracle_kind": "immutable-source-derived-checkpoints",
+  "production_dependency": false,
+  "provenance_sha256": "a92a5eacc984369f57f73eac2c000d7832c0bdfd307c625ccfd45fb9ce255323",
+  "cases": [
+    {
+      "id": "oobleck-44k",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-audiooobleckvae-6c64e9cf"
+      ],
+      "profile": "AudioOobleck44KhzV1",
+      "input_sample_rate": 44100,
+      "output_sample_rate": 44100,
+      "sample_ratio_numerator": 2048,
+      "sample_ratio_denominator": 1,
+      "latent_dimensions": 1,
+      "latent_layout": "bct",
+      "equation_checkpoints": [
+        "weight_normalized_conv1d_residual_stack",
+        "snake_beta_alias_free_activation",
+        "diagonal_gaussian_reparameterized_sample",
+        "replicate_channel_padding"
+      ]
+    },
+    {
+      "id": "oobleck-48k",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-audiooobleckvae-6c64e9cf"
+      ],
+      "profile": "AudioOobleck48KhzV1",
+      "input_sample_rate": 48000,
+      "output_sample_rate": 48000,
+      "sample_ratio_numerator": 1920,
+      "sample_ratio_denominator": 1,
+      "latent_dimensions": 1,
+      "latent_layout": "bct",
+      "equation_checkpoints": [
+        "weight_normalized_conv1d_residual_stack",
+        "snake_beta_alias_free_activation",
+        "diagonal_gaussian_reparameterized_sample",
+        "replicate_channel_padding"
+      ]
+    },
+    {
+      "id": "music-dcae",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-ace-vae-music-dcae-pipeline-musicdcae-adb8d824"
+      ],
+      "profile": "MusicDcaeV1",
+      "input_sample_rate": 44100,
+      "output_sample_rate": 44100,
+      "sample_ratio_numerator": 4096,
+      "sample_ratio_denominator": 1,
+      "latent_dimensions": 2,
+      "latent_layout": "bctf-16",
+      "equation_checkpoints": [
+        "waveform_resample_to_44100",
+        "checkpoint_hann_window_and_mel_filter_bank",
+        "log_mel_normalize_minus_11_to_3",
+        "dcae_latent_affine_shift_minus_1_9091_scale_0_1786",
+        "extra_1d_channel_reshape_16",
+        "audio_chunk_multiple_4096"
+      ]
+    },
+    {
+      "id": "mmaudio-16k",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-mmaudio-vae-autoencoder-audioautoencoder-929e9c62"
+      ],
+      "profile": "MmAudio16KhzV1",
+      "input_sample_rate": 44100,
+      "output_sample_rate": 44100,
+      "sample_ratio_numerator": 141120,
+      "sample_ratio_denominator": 100,
+      "latent_dimensions": 1,
+      "latent_layout": "bct",
+      "equation_checkpoints": [
+        "stereo_mean_then_resample_44100_to_16000",
+        "checkpoint_hann_window_and_mel_filter_bank",
+        "stft_1024_hop_256_mel_80",
+        "per_band_mean_std_normalization",
+        "diagonal_gaussian_mode",
+        "vocoder_then_resample_16000_to_44100"
+      ]
+    },
+    {
+      "id": "ltx-audio",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-audio-vae-audiovae-1024d260"
+      ],
+      "profile": "LtxAudioV1",
+      "input_sample_rate": 44100,
+      "output_sample_rate": 16000,
+      "sample_ratio_numerator": 1764,
+      "sample_ratio_denominator": 1,
+      "latent_dimensions": 2,
+      "latent_layout": "bctf-16",
+      "equation_checkpoints": [
+        "source_rate_to_configured_sample_rate",
+        "stft_configured_hop_and_mel_bins",
+        "causal_latent_length_ceil",
+        "per_channel_latent_statistics",
+        "extra_1d_channel_reshape_16",
+        "configured_vocoder_output_rate"
+      ]
+    },
+    {
+      "id": "stable-audio-3-deep",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-audio-vae-sa3-sa3audiovae-637f1b5c"
+      ],
+      "profile": "StableAudio3DeepV1",
+      "input_sample_rate": 44100,
+      "output_sample_rate": 44100,
+      "sample_ratio_numerator": 4096,
+      "sample_ratio_denominator": 1,
+      "latent_dimensions": 1,
+      "latent_layout": "bct",
+      "equation_checkpoints": [
+        "zero_pad_to_patch_256",
+        "patch_channels_2_times_256",
+        "variable_stride_16",
+        "softnorm_bottleneck",
+        "bounded_transformer_chunks"
+      ]
+    },
+    {
+      "id": "stable-audio-3-shallow",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-audio-vae-sa3-sa3audiovae-637f1b5c"
+      ],
+      "profile": "StableAudio3ShallowV1",
+      "input_sample_rate": 44100,
+      "output_sample_rate": 44100,
+      "sample_ratio_numerator": 4096,
+      "sample_ratio_denominator": 1,
+      "latent_dimensions": 1,
+      "latent_layout": "bct",
+      "equation_checkpoints": [
+        "zero_pad_to_patch_256",
+        "patch_channels_2_times_256",
+        "variable_stride_16",
+        "softnorm_bottleneck",
+        "bounded_transformer_chunks"
+      ]
+    }
+  ]
+}

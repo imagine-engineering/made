@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-utilities-logic-sim-node-0082",
+  "feature_ids": [
+    "COMFY-NODE-0082",
+    "COMFY-NODE-0084",
+    "COMFY-NODE-0086",
+    "COMFY-NODE-0087"
+  ],
+  "source": {
+    "path": "sim_extras/nodes_logic.py",
+    "sha256": "2cb1ce149ce616c0b12a67962ed7b799eb398fbcdeb20dcec4c5210eb6af6df1",
+    "byte_length": 12488,
+    "classes": [
+      { "class_type": "ComfyNotNode", "class_line": 10, "execute_line": 28 },
+      { "class_type": "ComfyAndNode", "class_line": 32, "execute_line": 55 },
+      { "class_type": "ComfyOrNode", "class_line": 59, "execute_line": 82 },
+      { "class_type": "ComfySwitchNode", "class_line": 86, "lazy_line": 107, "execute_line": 114 }
+    ]
+  },
+  "truthiness": {
+    "falsy": [null, false, 0, 0.0, "", [], {}],
+    "truthy": [true, 1, -1, 0.5, "text", [null], { "value": null }]
+  },
+  "cases": [
+    { "node": "ComfyAndNode", "values": [true, 1, "x"], "expected": true },
+    { "node": "ComfyAndNode", "values": [true, "", 1], "expected": false },
+    { "node": "ComfyNotNode", "value": [], "expected": true },
+    { "node": "ComfyNotNode", "value": [0], "expected": false },
+    { "node": "ComfyOrNode", "values": [0, "", false], "expected": false },
+    { "node": "ComfyOrNode", "values": [0, "ready", false], "expected": true }
+  ],
+  "switch": {
+    "false_value": "false branch",
+    "true_value": "true branch",
+    "false_selected": "false branch",
+    "true_selected": "true branch",
+    "lazy_false_demand": ["on_false"],
+    "lazy_true_demand": ["on_true"]
+  },
+  "behavior": {
+    "cache": "input_identity",
+    "effect": "pure",
+    "switch_unselected_branch": "not_demanded",
+    "cancellation": "interrupted_without_output",
+    "recovery": "fresh_attempt_recomputes_without_external_state"
+  }
+}

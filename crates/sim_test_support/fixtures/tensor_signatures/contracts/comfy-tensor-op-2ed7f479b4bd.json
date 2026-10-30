@@ -1,0 +1,298 @@
+{
+  "canonical_target": "torch.deg2rad",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/moge/model.py:308:52 (MoGeModel.infer.focal_from_fov_deg)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_base.py:593:38 (SV3D_p.encode_adm)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/model_base.py:594:38 (SV3D_p.encode_adm)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_stable3d.py:12:17 (camera_embeddings)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_stable3d.py:15:27 (camera_embeddings)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_stable3d.py:16:27 (camera_embeddings)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_stable3d.py:17:17 (camera_embeddings)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/moge/model.py:308:52 (MoGeModel.infer.focal_from_fov_deg)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:593:38 (SV3D_p.encode_adm)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:594:38 (SV3D_p.encode_adm)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_stable3d.py:12:17 (camera_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_stable3d.py:15:27 (camera_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_stable3d.py:16:27 (camera_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_stable3d.py:17:17 (camera_embeddings)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-2ed7f479b4bd-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-2ED7F479B4BD",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "3c97196515b69f0e8ec8edc6d96628a6e034078f8315e3eedb7149aa13fb0c06",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/moge/model.py",
+        "sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy_extras/nodes_stable3d.py",
+        "sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.deg2rad"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_04",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-2881abe3d797",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 52,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 308,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "fov / 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "MoGeModel.infer.focal_from_fov_deg",
+      "site": "comfy/ldm/moge/model.py:308:52 (MoGeModel.infer.focal_from_fov_deg)",
+      "source_path": "comfy/ldm/moge/model.py",
+      "source_sha256": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 593,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.fmod(torch.flatten(90 - torch.Tensor([elevation])), 360.0)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "SV3D_p.encode_adm",
+      "site": "comfy/model_base.py:593:38 (SV3D_p.encode_adm)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 594,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.fmod(torch.flatten(torch.Tensor([azimuth])), 360.0)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "SV3D_p.encode_adm",
+      "site": "comfy/model_base.py:594:38 (SV3D_p.encode_adm)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 12,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "90 - elevation - 90",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "camera_embeddings",
+      "site": "comfy_extras/nodes_stable3d.py:12:17 (camera_embeddings)",
+      "source_path": "comfy_extras/nodes_stable3d.py",
+      "source_sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 15,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "azimuth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "camera_embeddings",
+      "site": "comfy_extras/nodes_stable3d.py:15:27 (camera_embeddings)",
+      "source_path": "comfy_extras/nodes_stable3d.py",
+      "source_sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 16,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "azimuth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "camera_embeddings",
+      "site": "comfy_extras/nodes_stable3d.py:16:27 (camera_embeddings)",
+      "source_path": "comfy_extras/nodes_stable3d.py",
+      "source_sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 17,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "90 - torch.full_like(elevation, 0)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "camera_embeddings",
+      "site": "comfy_extras/nodes_stable3d.py:17:17 (camera_embeddings)",
+      "source_path": "comfy_extras/nodes_stable3d.py",
+      "source_sha256": "a96f5e52bcbe0a7f08729f640b0a33216d80dbb28964e1a2ac5a97cefe028b54",
+      "status": "static-call-observed",
+      "target_syntax": "torch.deg2rad"
+    }
+  ],
+  "static_definition": null
+}

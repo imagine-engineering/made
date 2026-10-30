@@ -1,0 +1,119 @@
+{
+  "fixture_id": "hidream-sim-model-0082",
+  "feature_id": "COMFY-MODEL-0082",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.caption_projection.0.linear.weight": [2, 2],
+      "model.diffusion_model.x_embedder.proj.weight": [2, 2],
+      "model.diffusion_model.t_embedder.timestep_embedder.linear_1.weight": [2, 2],
+      "model.diffusion_model.t_embedder.timestep_embedder.linear_1.bias": [2],
+      "model.diffusion_model.t_embedder.timestep_embedder.linear_2.weight": [2, 2],
+      "model.diffusion_model.t_embedder.timestep_embedder.linear_2.bias": [2],
+      "model.diffusion_model.double_stream_blocks.0.block.attn1.to_out.weight": [2, 2],
+      "model.diffusion_model.single_stream_blocks.0.block.attn1.to_out.weight": [2, 2],
+      "model.diffusion_model.final_layer.linear.weight": [2, 2],
+      "model.diffusion_model.final_layer.linear.bias": [2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0082008200820082008200820082008200820082008200820082008200820082",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.x_embedder.proj.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.t_embedder.timestep_embedder.linear_1.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.t_embedder.timestep_embedder.linear_1.bias",
+      "shape": [2],
+      "values": [1, -1]
+    },
+    {
+      "key": "model.diffusion_model.t_embedder.timestep_embedder.linear_2.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.t_embedder.timestep_embedder.linear_2.bias",
+      "shape": [2],
+      "values": [0.25, -0.25]
+    },
+    {
+      "key": "model.diffusion_model.caption_projection.0.linear.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.double_stream_blocks.0.block.attn1.to_out.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.single_stream_blocks.0.block.attn1.to_out.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.weight",
+      "shape": [2, 2],
+      "values": [1, 0, 0, 1]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.bias",
+      "shape": [2],
+      "values": [0.1, -0.1]
+    }
+  ],
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "expected_memory_bytes": 72,
+  "memory_budget_bytes": 72,
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [0, 0]
+  },
+  "checkpoints": [
+    {"name": "timestep_projection", "values": [1, -1]},
+    {"name": "timestep_activation", "values": [0.7310586, -0.26894143]},
+    {"name": "timestep_embedding", "values": [0.9810586, -0.5189414]},
+    {"name": "caption_projection", "values": [0.9810586, -0.5189414]},
+    {"name": "double_stream_projection", "values": [0.9810586, -0.5189414]},
+    {"name": "single_stream_projection", "values": [0.9810586, -0.5189414]},
+    {"name": "transformer_normalization", "values": [0.9999991, -0.9999991]},
+    {"name": "image_projection", "values": [1.0999991, -1.0999991]},
+    {"name": "image_output", "values": [0.8004987, -0.8004987]}
+  ],
+  "patches": [
+    {
+      "identifier": "hidream-image-output-bias",
+      "kind": "lora",
+      "scale": 1,
+      "targets": [
+        {
+          "key": "native.final_layer.linear.bias",
+          "expected_shape": [2],
+          "values": [0.5, 0.5],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "timestep_projection", "values": [1, -1]},
+    {"name": "timestep_activation", "values": [0.7310586, -0.26894143]},
+    {"name": "timestep_embedding", "values": [0.9810586, -0.5189414]},
+    {"name": "caption_projection", "values": [0.9810586, -0.5189414]},
+    {"name": "double_stream_projection", "values": [0.9810586, -0.5189414]},
+    {"name": "single_stream_projection", "values": [0.9810586, -0.5189414]},
+    {"name": "transformer_normalization", "values": [0.9999991, -0.9999991]},
+    {"name": "image_projection", "values": [1.5999991, -0.5999991]},
+    {"name": "image_output", "values": [0.9216684, -0.53704894]}
+  ]
+}

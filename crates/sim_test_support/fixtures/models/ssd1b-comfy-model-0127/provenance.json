@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fixture_id": "ssd1b-sim-model-0127",
+  "feature_id": "COMFY-MODEL-0127",
+  "source_symbol": "SSD1B",
+  "source_ordinal": 10,
+  "source_architecture": "model_base.SDXL",
+  "latent_feature_id": "COMFY-MODEL-0047",
+  "latent_identifier": "SDXL",
+  "catalog_projection_sha256": "5d3310a746a43def771e390b2564de3582666bd72797444412c472e8aa43a387",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/sdxl_clip.py", "sha256": "dd3c01e1c302876612897c0051baa6e108751e36abcba7327490b25a571f97fd"},
+    {"path": "crates/sim_model/src/sdxl_family.rs", "sha256": "0a891f6ee1e08403089116571512ffe860753fc3b81fd8ba2d1e2a84db8727d9"},
+    {"path": "crates/sim_model/src/latent_formats/sdxl_sim_model_0047.rs", "sha256": "b43c21bbd0b2d2ffe921d02a3a5c552afac5a9e517df275005b1635948d0b787"}
+  ],
+  "source_projection": "source_symbol=SSD1B\nsource_ordinal=10\ninheritance=SSD1B,SDXL,supported_models_base.BASE\nunet_config.model_channels=320\nunet_config.in_channels=4\nunet_config.context_dim=2048\nunet_config.adm_in_channels=2816\nunet_config.transformer_depth=0,0,2,2,4,4\nunet_config.transformer_depth_output=0,0,0,1,1,2,10,4,4\nunet_config.transformer_depth_middle=-1\nunet_config.use_linear_in_transformer=true\nunet_config.use_temporal_attention=false\nlatent_format=sim.latent_formats.SDXL\nmemory_usage_factor=0.8\narchitecture=model_base.SDXL\nclip_tokenizer=sim.sdxl_clip.SDXLTokenizer\nclip_model=sim.sdxl_clip.SDXLClipModel\nnative_detection=input_channels:4,deep_transformer_depth:4\ndiffusers_detection=SSD_1B,input_channels:4,deep_transformer_depth:4\nstate_owner=sim_model::sdxl_family\n",
+  "source_projection_sha256": "75063cae8021cd1654fb1e804a4fd0e6376a913f2611a0d2e3df49b190e1e85e",
+  "alternate_layout": "Pinned ComfyUI native, standalone-native, and SSD_1B Diffusers layouts share one checked Rust state-plan owner.",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned SSD1B sources; no production Python dependency"
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-ltxv-h264-mp4-encode-v1",
+  "truth_mode": "synthetic-retained-ltxv-h264-mp4-encode",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "ffmpeg_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8"
+  },
+  "dependencies": {
+    "codec_symbol_binding_manifest_sha256": "76ec18127e54deff5b581046786ebd62aafa3e92a34aec45aaad114fcb0a5bd6",
+    "codec_data_plane_abi_manifest_sha256": "9fdd0cff1392ae8eb399a0b3fa36a2a2cef074df52d6315b629c25c6f7dd34ca",
+    "codec_bounded_memory_avio_manifest_sha256": "6d60aaf8e7524bdef8511fcd6036d7f17a9a2f1938ba21b69f30747fc48c0323",
+    "codec_ltxv_h264_admission_manifest_sha256": "2e2ce96b886978cc05876e9b4fc02153685548e9b6d92f07f4f2d5e2855cad88"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_ffi::NativeLtxvH264Codec::encode_rgb8_frame",
+    "input": "checked contiguous CPU U8 HWC RGB with nonzero even dimensions",
+    "container": "mp4",
+    "encoder": "admitted libx264",
+    "source_pixel_format": "rgb24",
+    "encoded_pixel_format": "yuv420p",
+    "frame_rate": "1/1",
+    "frame_presentation_timestamp": 0,
+    "preset": "veryfast",
+    "codec_threads": 1,
+    "global_header": true,
+    "output": "opaque attempt-local workspace-backed bounded memory AVIO",
+    "packet_receive_and_flush_iterations_bounded": true,
+    "native_session_workspace_authorized": true,
+    "cancellation_checked_around_native_calls": true,
+    "reverse_raii_cleanup": true
+  },
+  "synthetic_fixture": {
+    "native_functions": "exact-signature FFmpeg function projection with deterministic MP4 header, packet, and trailer markers",
+    "test_cases": [
+      "source-exact option and dictionary values",
+      "RGB24 to YUV420P conversion and one-frame timestamp",
+      "packet receive, timestamp rescale, mux, flush, and trailer order",
+      "native ENOMEM and callback output-limit mapping",
+      "packet iteration bound",
+      "cancellation at every checked boundary",
+      "reverse cleanup, zero scratch residue, and clean retry"
+    ]
+  },
+  "claims": {
+    "native_encode_call_choreography_executed": true,
+    "bounded_staged_output_produced": true,
+    "licensed_or_installed_ffmpeg_package": false,
+    "production_ffmpeg_or_libx264_availability": false,
+    "synthetic_bytes_are_valid_mp4": false,
+    "decoded_rgb_result_produced": false,
+    "numeric_h264_or_pixel_oracle": false,
+    "media_payload_or_handle_published": false,
+    "effect_cache_persistence_or_recovery_owned": false
+  }
+}

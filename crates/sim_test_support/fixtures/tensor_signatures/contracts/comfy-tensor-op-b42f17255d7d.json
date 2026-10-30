@@ -1,0 +1,264 @@
+{
+  "canonical_target": "torch.linalg.svd",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:56:16 (_find_homography_weighted_lsq)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:75:16 (_find_homography_weighted_lsq_batched)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_lora_extract.py:28:16 (extract_lora)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_tcfg.py:19:20 (score_tangential_damping)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_tcfg.py:22:20 (score_tangential_damping)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:56:16 (_find_homography_weighted_lsq)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:75:16 (_find_homography_weighted_lsq_batched)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_lora_extract.py:28:16 (extract_lora)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_tcfg.py:19:20 (score_tangential_damping)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_tcfg.py:22:20 (score_tangential_damping)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-b42f17255d7d-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match batch broadcasting, contraction dimensions, transpose conventions, singular/degenerate cases, and result ranks.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "full_matrices",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-B42F17255D7D",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "54b231e4d9a53e633e472c27afe378eecbf5264727752ef8e7b73e8068f4b4c5",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/depth_anything_3/ray_pose.py",
+        "sha256": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694"
+      },
+      {
+        "path": "comfy_extras/nodes_lora_extract.py",
+        "sha256": "24a26ddb59678e345e0b21ea7db18db587801939f56aac68f6616988967fda08"
+      },
+      {
+        "path": "comfy_extras/nodes_tcfg.py",
+        "sha256": "d5ff403cc129654eaeef0c7f90e5128e423b370323ad739b3f1f0d7f54242c12"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.linalg.svd"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "linear_algebra_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-linear-algebra-comfy-tensor-op-a5d623c79a18",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [],
+      "line": 56,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "A.float()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_find_homography_weighted_lsq",
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:56:16 (_find_homography_weighted_lsq)",
+      "source_path": "comfy/ldm/depth_anything_3/ray_pose.py",
+      "source_sha256": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.svd"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [],
+      "line": 75,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "A.float()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_find_homography_weighted_lsq_batched",
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:75:16 (_find_homography_weighted_lsq_batched)",
+      "source_path": "comfy/ldm/depth_anything_3/ray_pose.py",
+      "source_sha256": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.svd"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [],
+      "line": 28,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "diff.float()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "extract_lora",
+      "site": "comfy_extras/nodes_lora_extract.py:28:16 (extract_lora)",
+      "source_path": "comfy_extras/nodes_lora_extract.py",
+      "source_sha256": "24a26ddb59678e345e0b21ea7db18db587801939f56aac68f6616988967fda08",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.svd"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "full_matrices",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 19,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "score_matrix",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "score_tangential_damping",
+      "site": "comfy_extras/nodes_tcfg.py:19:20 (score_tangential_damping)",
+      "source_path": "comfy_extras/nodes_tcfg.py",
+      "source_sha256": "d5ff403cc129654eaeef0c7f90e5128e423b370323ad739b3f1f0d7f54242c12",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.svd"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "full_matrices",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 22,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "score_matrix.cpu()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "score_tangential_damping",
+      "site": "comfy_extras/nodes_tcfg.py:22:20 (score_tangential_damping)",
+      "source_path": "comfy_extras/nodes_tcfg.py",
+      "source_sha256": "d5ff403cc129654eaeef0c7f90e5128e423b370323ad739b3f1f0d7f54242c12",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.svd"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,885 @@
+{
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0057",
+      "class_type": "CLIPAttentionMultiply",
+      "source": {
+        "catalog_line": 69,
+        "path": "sim_extras/nodes_attention_multiply.py",
+        "sha256": "40b6aefb001bfef1a1f3ce4a256be0209fd538750a32f792cf522106c302e52b",
+        "symbol": {
+          "end_line": 101,
+          "kind": "ClassDef",
+          "line": 69,
+          "sha256": "1f5c437cb4a372dfd69ad3c10e2b8cfc68821e0fe82dcf37df5e6fd64aa0b436",
+          "status": "parsed_definition",
+          "symbol": "CLIPAttentionMultiply"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "0fb77b50fc4d003e77eafcb083218ccedc25392b9f3cdd6ead11e6422a35e54b",
+        "definition_sha256": "07739a32d3aff8bea76fd44fe309501376bbcc5352f582037d36ade422c764f4",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "clip",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "CLIP"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "q",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "k",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "v",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "out",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "07739a32d3aff8bea76fd44fe309501376bbcc5352f582037d36ade422c764f4",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0057",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "CLIP",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": true
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0704",
+      "class_type": "UNetCrossAttentionMultiply",
+      "source": {
+        "catalog_line": 46,
+        "path": "sim_extras/nodes_attention_multiply.py",
+        "sha256": "40b6aefb001bfef1a1f3ce4a256be0209fd538750a32f792cf522106c302e52b",
+        "symbol": {
+          "end_line": 66,
+          "kind": "ClassDef",
+          "line": 46,
+          "sha256": "f55a6809be88bfb32fa2c70fabd0e5bb7360be78670c9473d4a79517b811454e",
+          "status": "parsed_definition",
+          "symbol": "UNetCrossAttentionMultiply"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "a2379fb837e8cb652f1f74fb3da8081a14a47a48c79f8b6f43dfef37d301385d",
+        "definition_sha256": "f195c64690e1500eb3d1bec58bb7bdde3f50f69fdadce67b9e457a3a615a9458",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "q",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "k",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "v",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "out",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "f195c64690e1500eb3d1bec58bb7bdde3f50f69fdadce67b9e457a3a615a9458",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0704",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "MODEL",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": true
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0706",
+      "class_type": "UNetSelfAttentionMultiply",
+      "source": {
+        "catalog_line": 23,
+        "path": "sim_extras/nodes_attention_multiply.py",
+        "sha256": "40b6aefb001bfef1a1f3ce4a256be0209fd538750a32f792cf522106c302e52b",
+        "symbol": {
+          "end_line": 43,
+          "kind": "ClassDef",
+          "line": 23,
+          "sha256": "7a6039eb2faae56437a5eb6fe01be6d38e53c0632175a3405a1e24a476d4da82",
+          "status": "parsed_definition",
+          "symbol": "UNetSelfAttentionMultiply"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "0dabb33e340a0370ceb6b363dfd4cdfed3f02e772eeddfa45be8892239cda14c",
+        "definition_sha256": "1178271170f0287ac435f14ffd2da7d7ac6b67f329d894228f2ab6e0cbdec0ad",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "q",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "k",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "v",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "out",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "1178271170f0287ac435f14ffd2da7d7ac6b67f329d894228f2ab6e0cbdec0ad",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0706",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "MODEL",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": true
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0707",
+      "class_type": "UNetTemporalAttentionMultiply",
+      "source": {
+        "catalog_line": 104,
+        "path": "sim_extras/nodes_attention_multiply.py",
+        "sha256": "40b6aefb001bfef1a1f3ce4a256be0209fd538750a32f792cf522106c302e52b",
+        "symbol": {
+          "end_line": 137,
+          "kind": "ClassDef",
+          "line": 104,
+          "sha256": "b43c7c51cbc71349dd267c4abe1704899a394e205a60a13b45869f690d83a0f0",
+          "status": "parsed_definition",
+          "symbol": "UNetTemporalAttentionMultiply"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "9051c623de8bd088a45d352e8decda482e3ae539ec39a792b146529d84ec0370",
+        "definition_sha256": "a0863cfb5114137b91f2137dac34e9815b69fddcc15ca52bfc3ab8316d3bab99",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "self_structural",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "self_temporal",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "cross_structural",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "cross_temporal",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "a0863cfb5114137b91f2137dac34e9815b69fddcc15ca52bfc3ab8316d3bab99",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0707",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "MODEL",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": true
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    }
+  ],
+  "oracle": "Pinned source suffix matching, scale-only patch ordering, and immutable native weight fixtures; no generated-image quality claim."
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "source_sha256": {
+    "sim_api_nodes/nodes_sonilo.py": "0fedcb4659918bc385f511e1b04b202d1f50f578b95f7e5df93d2700836be727",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+  },
+  "audio": {
+    "bytes": 60,
+    "sha256": "da2cc8785fc00bc6c81cbfe0e97b0b39246ef605b86e559523061a362e4c7da9",
+    "producer": "stdlib wave PCM source fixture inherited from validated ElevenLabs; actual PyAV decode unavailable"
+  },
+  "video": {
+    "bytes": 6163,
+    "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",
+    "producer": "pinned frontend plain_video.mp4; source save_to stub; no parse/codec proof"
+  },
+  "audio_validation": {
+    "method": "Python stdlib wave",
+    "channels": 1,
+    "sample_width_bytes": 2,
+    "sample_rate": 8000,
+    "frames": 8,
+    "compression": "NONE",
+    "native_audio_decode": "not run: PyAV and Torch absent; trusted callback rejects; zero native publication"
+  },
+  "video_validation": "Encoded frontend provenance only; actual container parse/codec/native video preparation not tested",
+  "source_owner_injection": "Actual source execute/upload helper AST and aiohttp3.11.8 are run; video save_to writes pinned input bytes; audio conversion only records boundary, not native success"
+}

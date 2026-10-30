@@ -1,0 +1,250 @@
+{
+  "canonical_target": "torch.linalg.norm",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:602:21 (DPMSolver.dpm_solver_adaptive)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/gaussian.py:122:31 (GaussianModel.render_tensors)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/gaussian.py:132:13 (_quat_to_matrix)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/gaussian.py:169:16 (_matrix_to_quat)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/sampling.py:602:21 (DPMSolver.dpm_solver_adaptive)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/gaussian.py:122:31 (GaussianModel.render_tensors)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/gaussian.py:132:13 (_quat_to_matrix)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/gaussian.py:169:16 (_matrix_to_quat)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-a5d623c79a18-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match batch broadcasting, contraction dimensions, transpose conventions, singular/degenerate cases, and result ranks.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-A5D623C79A18",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "1e04f0d6fbe3b2959b5bb0c35277c4ace3a2813001a5f5c4d7d3b3657c044441",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/triposplat/gaussian.py",
+        "sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.linalg.norm"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "linear_algebra_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-linear-algebra-comfy-tensor-op-a5d623c79a18",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 602,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(x_low - x_high) / delta",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DPMSolver.dpm_solver_adaptive",
+      "site": "comfy/k_diffusion/sampling.py:602:21 (DPMSolver.dpm_solver_adaptive)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 122,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "rotation",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GaussianModel.render_tensors",
+      "site": "comfy/ldm/triposplat/gaussian.py:122:31 (GaussianModel.render_tensors)",
+      "source_path": "comfy/ldm/triposplat/gaussian.py",
+      "source_sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 132,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "q",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_quat_to_matrix",
+      "site": "comfy/ldm/triposplat/gaussian.py:132:13 (_quat_to_matrix)",
+      "source_path": "comfy/ldm/triposplat/gaussian.py",
+      "source_sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 169,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "q",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_matrix_to_quat",
+      "site": "comfy/ldm/triposplat/gaussian.py:169:16 (_matrix_to_quat)",
+      "source_path": "comfy/ldm/triposplat/gaussian.py",
+      "source_sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linalg.norm"
+    }
+  ],
+  "static_definition": null
+}

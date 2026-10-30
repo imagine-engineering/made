@@ -1,0 +1,56 @@
+{
+  "artifact": "zed-native-frame-interpolation-resource-exhaustion-v1",
+  "evidence_kind": "source-fingerprinted typed resource-exhaustion classification",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "files": [
+      {
+        "file": "sim_extras/nodes_frame_interpolation.py",
+        "sha256": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369",
+        "symbols": ["FrameInterpolate.execute"]
+      },
+      {
+        "file": "sim/model_management.py",
+        "sha256": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+        "symbols": ["OOM_EXCEPTION"]
+      }
+    ]
+  },
+  "dependency": {
+    "fixture": "../film-sequence/manifest.json",
+    "sha256": "a65cc4bdb08b33c4e69abacca0bf1926c2fead6d127a49efcced93038c0c0e56"
+  },
+  "classification": {
+    "typed_resource_exhaustion": [
+      "TensorError::AllocationFailed",
+      "TensorError::ResourceLimitExceeded",
+      "TensorError::WorkspaceAuthorizationExceeded"
+    ],
+    "ordinary_execution": ["TensorError::ShapeOverflow"],
+    "priority": ["cancellation", "typed resource exhaustion", "ordinary execution"],
+    "source_chain_traversal": true,
+    "typed_adapters": [
+      "SpatialFunctionalKernelError::Tensor",
+      "ShapeLayoutTransformPartTwoError::Tensor",
+      "ShapeLayoutTransformPartThreeError::Tensor",
+      "NativeOpsError::Workspace"
+    ],
+    "error_message_matching": false
+  },
+  "reduced_oracle": {
+    "direct_typed_variants": 4,
+    "existing_constrained_graph_cases": 6,
+    "cancelled_exhaustion_maps_to_cancelled": true,
+    "scratch_in_use_bytes_after_each_failure": 0
+  },
+  "claims": {
+    "retry_or_fallback_execution": false,
+    "allocator_or_workspace_owner": false,
+    "codec_or_container_execution": false,
+    "handle_or_native_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

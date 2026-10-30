@@ -1,0 +1,620 @@
+{
+  "canonical_target": "comfy.ops.manual_cast.Linear",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/gligen.py:163:13 (PositionNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/gligen.py:165:13 (PositionNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/gligen.py:167:13 (PositionNet.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/gligen.py:48:23 (GatedSelfAttentionDense.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/gligen.py:88:23 (GatedSelfAttentionDense2.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/embedders.py:30:9 (TimePositionalEmbedding)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/embedders.py:64:74 (NumberEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/redux.py:20:25 (ReduxImageEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/redux.py:21:27 (ReduxImageEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_base.py:603:30 (Stable_Zero123.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_photomaker.py:101:36 (PhotoMakerIDEncoder.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/gligen.py:163:13 (PositionNet.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/gligen.py:165:13 (PositionNet.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/gligen.py:167:13 (PositionNet.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/gligen.py:48:23 (GatedSelfAttentionDense.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/gligen.py:88:23 (GatedSelfAttentionDense2.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/audio/embedders.py:30:9 (TimePositionalEmbedding)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/audio/embedders.py:64:74 (NumberEmbedder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/flux/redux.py:20:25 (ReduxImageEncoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/flux/redux.py:21:27 (ReduxImageEncoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/model_base.py:603:30 (Stable_Zero123.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy_extras/nodes_photomaker.py:101:36 (PhotoMakerIDEncoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-dac4074bc3b2-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "bias",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "in_features",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "out_features",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-DAC4074BC3B2",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "cad94b14a8c3b2710a0d316aeb88ce2fddb346e06bcec6b5a4db6eced524a0eb",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/gligen.py",
+        "sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c"
+      },
+      {
+        "path": "comfy/ldm/audio/embedders.py",
+        "sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd"
+      },
+      {
+        "path": "comfy/ldm/flux/redux.py",
+        "sha256": "3b7abf43e15fc7b9613a64e701635f943351fa47f5036d87427ea672f93c7952"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy_extras/nodes_photomaker.py",
+        "sha256": "c7e86d4684d2884eda20250bd7122e31a8aaf7bfa003245ad0e0431a9ef1957e"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.manual_cast.Linear"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-a0bd98dda517",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 163,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.in_dim + self.position_dim",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "512",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "PositionNet.__init__",
+      "site": "comfy/gligen.py:163:13 (PositionNet.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 165,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "512",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "512",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "PositionNet.__init__",
+      "site": "comfy/gligen.py:165:13 (PositionNet.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 167,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "512",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "PositionNet.__init__",
+      "site": "comfy/gligen.py:167:13 (PositionNet.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "context_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "query_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GatedSelfAttentionDense.__init__",
+      "site": "comfy/gligen.py:48:23 (GatedSelfAttentionDense.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 88,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "context_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "query_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GatedSelfAttentionDense2.__init__",
+      "site": "comfy/gligen.py:88:23 (GatedSelfAttentionDense2.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "in_features",
+          "syntax": "dim + 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "out_features",
+          "syntax": "out_features",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 30,
+      "positional_arguments": [],
+      "scope": "TimePositionalEmbedding",
+      "site": "comfy/ldm/audio/embedders.py:30:9 (TimePositionalEmbedding)",
+      "source_path": "comfy/ldm/audio/embedders.py",
+      "source_sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.manual_cast.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 74,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "in_features",
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "out_features",
+          "syntax": "features",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 64,
+      "positional_arguments": [],
+      "scope": "NumberEmbedder.__init__",
+      "site": "comfy/ldm/audio/embedders.py:64:74 (NumberEmbedder.__init__)",
+      "source_path": "comfy/ldm/audio/embedders.py",
+      "source_sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.manual_cast.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 20,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "redux_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "txt_in_features * 3",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ReduxImageEncoder.__init__",
+      "site": "comfy/ldm/flux/redux.py:20:25 (ReduxImageEncoder.__init__)",
+      "source_path": "comfy/ldm/flux/redux.py",
+      "source_sha256": "3b7abf43e15fc7b9613a64e701635f943351fa47f5036d87427ea672f93c7952",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 21,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "txt_in_features * 3",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "txt_in_features",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ReduxImageEncoder.__init__",
+      "site": "comfy/ldm/flux/redux.py:21:27 (ReduxImageEncoder.__init__)",
+      "source_path": "comfy/ldm/flux/redux.py",
+      "source_sha256": "3b7abf43e15fc7b9613a64e701635f943351fa47f5036d87427ea672f93c7952",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "self.get_dtype()",
+          "syntax_kind": "Call"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 603,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "cc_projection_weight.shape[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "cc_projection_weight.shape[0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "Stable_Zero123.__init__",
+      "site": "comfy/model_base.py:603:30 (Stable_Zero123.__init__)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.manual_cast.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 101,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1024",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1280",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "PhotoMakerIDEncoder.__init__",
+      "site": "comfy_extras/nodes_photomaker.py:101:36 (PhotoMakerIDEncoder.__init__)",
+      "source_path": "comfy_extras/nodes_photomaker.py",
+      "source_sha256": "c7e86d4684d2884eda20250bd7122e31a8aaf7bfa003245ad0e0431a9ef1957e",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.manual_cast.Linear"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "ClassDef",
+    "definition_line": 778,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "inherited-or-dynamic-constructor",
+    "parameters": [],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        {
+          "kind": "class-instance",
+          "name": "Linear"
+        }
+      ]
+    }
+  }
+}

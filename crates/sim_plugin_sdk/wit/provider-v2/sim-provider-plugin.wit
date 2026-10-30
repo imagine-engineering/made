@@ -1,0 +1,246 @@
+package zed:sim-provider-plugin@2.0.0;
+
+interface types {
+    use zed:sim-plugin/types@1.0.0.{manifest-projection, provider-binding-set, value-family};
+
+    enum http-method {
+        delete,
+        get,
+        head,
+        options,
+        patch,
+        post,
+        put,
+    }
+
+    record header {
+        name: string,
+        value: string,
+    }
+
+    record invocation-context {
+        invocation: u64,
+        generation: u32,
+    }
+
+    record stream-handle {
+        invocation: u64,
+        slot: u32,
+        generation: u32,
+    }
+
+    record streaming-contract {
+        methods: list<http-method>,
+        maximum-headers: u16,
+        maximum-header-bytes: u32,
+        maximum-request-body-bytes: u64,
+        maximum-response-body-bytes: u64,
+        maximum-chunk-bytes: u32,
+        maximum-ndjson-line-bytes: u32,
+        maximum-wait-milliseconds: u64,
+        maximum-uploads: u32,
+        maximum-upload-body-bytes: u64,
+        maximum-cost-requests: u32,
+        maximum-progress-total: u64,
+        uploads: bool,
+        cost-requests: bool,
+    }
+
+    record request-head {
+        endpoint: string,
+        secret-id: option<string>,
+        method: http-method,
+        headers: list<header>,
+        declared-body-bytes: option<u64>,
+    }
+
+    record request-chunk {
+        handle: stream-handle,
+        sequence: u64,
+        bytes: list<u8>,
+        end: bool,
+    }
+
+    record response-head {
+        status: u16,
+        headers: list<header>,
+    }
+
+    variant response-chunk-value {
+        binary(list<u8>),
+        text(string),
+        ndjson-line(string),
+    }
+
+    variant terminal {
+        completed(list<u8>),
+        failed(tuple<string, string>),
+        cancelled,
+    }
+
+    variant response-frame-event {
+        head(response-head),
+        chunk(response-chunk-value),
+        terminal(terminal),
+    }
+
+    record response-frame {
+        handle: stream-handle,
+        sequence: u64,
+        event: response-frame-event,
+    }
+
+    record wait-request {
+        handle: stream-handle,
+        after-sequence: option<u64>,
+        timeout-milliseconds: u64,
+    }
+
+    variant wait-outcome {
+        frame(response-frame),
+        timed-out,
+        cancelled,
+    }
+
+    record upload-request {
+        handle: stream-handle,
+        port-id: string,
+        media-type: string,
+        byte-length: u64,
+        content-sha256: string,
+    }
+
+    record upload-completion-request {
+        handle: stream-handle,
+    }
+
+    record upload-completion {
+        download-url: string,
+    }
+
+    record retry-request-options {
+        handle: stream-handle,
+        delay-milliseconds: u64,
+    }
+
+    record cost-request {
+        handle: stream-handle,
+        operation: string,
+        currency: string,
+        maximum-microunits: u64,
+    }
+
+    record cost-response {
+        accepted: bool,
+        approved-microunits: u64,
+        receipt: list<u8>,
+    }
+
+    record progress {
+        handle: stream-handle,
+        sequence: u64,
+        completed: u64,
+        total: u64,
+        message: option<string>,
+    }
+
+    record encoded-value {
+        type-id: string,
+        family: value-family,
+        abi-bytes: list<u8>,
+    }
+
+    record media-content {
+        media-type: string,
+        source-value-sha256: string,
+        content-sha256: string,
+        bytes: list<u8>,
+    }
+
+    record materialized-output {
+        port-id: string,
+        value: encoded-value,
+    }
+
+    record invocation-result {
+        outputs: list<materialized-output>,
+        receipt: list<u8>,
+    }
+
+    enum stream-error {
+        cancelled,
+        timed-out,
+        host-failure,
+        invalid-contract,
+        invalid-handle,
+        foreign-handle,
+        revoked-handle,
+        invalid-method,
+        invalid-headers,
+        body-limit,
+        chunk-limit,
+        invalid-ndjson-line,
+        invalid-sequence,
+        invalid-order,
+        wait-limit,
+        invalid-upload,
+        invalid-cost-request,
+        invalid-progress,
+        invalid-terminal,
+        invalid-invocation-result,
+        invalid-request-authority,
+    }
+
+    record manifest-v2 {
+        schema-version: u16,
+        component-world: string,
+        manifest: manifest-projection,
+        provider-binding: provider-binding-set,
+        streaming: streaming-contract,
+    }
+}
+
+interface provider-streaming-host {
+    use types.{cost-request, cost-response, invocation-context, progress, request-chunk,
+        request-head, stream-error, stream-handle, upload-completion, upload-completion-request,
+        upload-request, wait-outcome, wait-request, retry-request-options};
+
+    start-request: func(context: invocation-context, request: request-head) -> result<stream-handle, stream-error>;
+    write-request-chunk: func(chunk: request-chunk) -> result<_, stream-error>;
+    wait-response: func(request: wait-request) -> result<wait-outcome, stream-error>;
+    start-upload: func(request: upload-request) -> result<stream-handle, stream-error>;
+    write-upload-chunk: func(chunk: request-chunk) -> result<_, stream-error>;
+    complete-upload: func(request: upload-completion-request) -> result<upload-completion, stream-error>;
+    request-cost: func(request: cost-request) -> result<cost-response, stream-error>;
+    report-progress: func(progress: progress) -> result<_, stream-error>;
+    check-cancelled: func(handle: stream-handle) -> result<_, stream-error>;
+    retry-request: func(request: retry-request-options) -> result<stream-handle, stream-error>;
+}
+
+interface invocation-input-host {
+    use zed:sim-plugin/types@1.0.0.{encoded-value, input-state, invocation-error, value-handle};
+    use types.{media-content};
+
+    get-input-state: func(port-id: string) -> result<input-state, invocation-error>;
+    read-scalar-input: func(port-id: string, index: u32) -> result<encoded-value, invocation-error>;
+    take-input: func(port-id: string, index: u32) -> result<value-handle, invocation-error>;
+    read-handle: func(handle: value-handle) -> result<encoded-value, invocation-error>;
+    read-media-input: func(handle: value-handle) -> result<media-content, invocation-error>;
+    media-input-count: func(handle: value-handle) -> result<u32, invocation-error>;
+    read-media-input-at: func(handle: value-handle, batch-index: u32) -> result<media-content, invocation-error>;
+    secret-exists: func(identifier: string) -> result<bool, invocation-error>;
+    check-cancelled: func() -> result<_, invocation-error>;
+}
+
+interface provider-node {
+    use types.{invocation-context, invocation-result, manifest-v2, stream-error};
+
+    manifest: func() -> manifest-v2;
+    invoke: func(context: invocation-context, node-id: string) -> result<invocation-result, stream-error>;
+}
+
+world sim-provider-plugin {
+    import invocation-input-host;
+    import provider-streaming-host;
+    export provider-node;
+}

@@ -1,0 +1,641 @@
+{
+  "canonical_target": "torch.pow",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:626:22 (UniPC.multistep_uni_pc_bh_update)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/genmo/vae/model.py:390:9 (add_fourier_features)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/activations.py:118:56 (SnakeBeta.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/activations.py:57:57 (Snake.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:44:40 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:49:21 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:58:38 (DiagonalGaussianDistribution.nll)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/distributions/distributions.py:44:40 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/distributions/distributions.py:49:21 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/distributions/distributions.py:58:38 (DiagonalGaussianDistribution.nll)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/model.py:87:20 (PcdAbsolutePositionEmbedder._freqs)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/triposplat/model.py:89:16 (PcdAbsolutePositionEmbedder._freqs)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/model.py:25:19 (sinusoidal_embedding_1d)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wanmove.py:20:41 (get_pos_emb)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:626:22 (UniPC.multistep_uni_pc_bh_update)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/vae/model.py:390:9 (add_fourier_features)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/activations.py:118:56 (SnakeBeta.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/activations.py:57:57 (Snake.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:44:40 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:49:21 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:58:38 (DiagonalGaussianDistribution.nll)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/distributions/distributions.py:44:40 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/distributions/distributions.py:49:21 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/distributions/distributions.py:58:38 (DiagonalGaussianDistribution.nll)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:87:20 (PcdAbsolutePositionEmbedder._freqs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:89:16 (PcdAbsolutePositionEmbedder._freqs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:25:19 (sinusoidal_embedding_1d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wanmove.py:20:41 (get_pos_emb)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-67f181b603a1-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-67F181B603A1",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "6bedd9c8a70fa21cf9f5e39f54b99dcb1ffcb30e2e4c3879bf50d9393c0b1a82",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/extra_samplers/uni_pc.py",
+        "sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c"
+      },
+      {
+        "path": "comfy/ldm/genmo/vae/model.py",
+        "sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/activations.py",
+        "sha256": "59994f9372c5dd2996a9617d648c7684a89075aedd1d093c0281538e40e38faf"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/distributions.py",
+        "sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772"
+      },
+      {
+        "path": "comfy/ldm/modules/distributions/distributions.py",
+        "sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772"
+      },
+      {
+        "path": "comfy/ldm/triposplat/model.py",
+        "sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy_extras/nodes_wanmove.py",
+        "sha256": "b0a7bdaa04d0aa2e4eac1d9d666d05ad93ee95e406a630ee9a7907c4a81c7dff"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.pow"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_09",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-615251b481b7",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 626,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "rks",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "i - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "UniPC.multistep_uni_pc_bh_update",
+      "site": "comfy/extra_samplers/uni_pc.py:626:22 (UniPC.multistep_uni_pc_bh_update)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 390,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "2.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "freqs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "add_fourier_features",
+      "site": "comfy/ldm/genmo/vae/model.py:390:9 (add_fourier_features)",
+      "source_path": "comfy/ldm/genmo/vae/model.py",
+      "source_sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 56,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 118,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sin(x * alpha)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "SnakeBeta.forward",
+      "site": "comfy/ldm/mmaudio/vae/activations.py:118:56 (SnakeBeta.forward)",
+      "source_path": "comfy/ldm/mmaudio/vae/activations.py",
+      "source_sha256": "59994f9372c5dd2996a9617d648c7684a89075aedd1d093c0281538e40e38faf",
+      "status": "static-call-observed",
+      "target_syntax": "pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 57,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 57,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sin(x * alpha)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Snake.forward",
+      "site": "comfy/ldm/mmaudio/vae/activations.py:57:57 (Snake.forward)",
+      "source_path": "comfy/ldm/mmaudio/vae/activations.py",
+      "source_sha256": "59994f9372c5dd2996a9617d648c7684a89075aedd1d093c0281538e40e38faf",
+      "status": "static-call-observed",
+      "target_syntax": "pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 44,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.mean",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:44:40 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/mmaudio/vae/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 49,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.mean - other.mean",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:49:21 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/mmaudio/vae/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 58,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sample - self.mean",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.nll",
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:58:38 (DiagonalGaussianDistribution.nll)",
+      "source_path": "comfy/ldm/mmaudio/vae/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 44,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.mean",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/modules/distributions/distributions.py:44:40 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/modules/distributions/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 49,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.mean - other.mean",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/modules/distributions/distributions.py:49:21 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/modules/distributions/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 58,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sample - self.mean",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.nll",
+      "site": "comfy/ldm/modules/distributions/distributions.py:58:38 (DiagonalGaussianDistribution.nll)",
+      "source_path": "comfy/ldm/modules/distributions/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 87,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "2.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "freqs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "PcdAbsolutePositionEmbedder._freqs",
+      "site": "comfy/ldm/triposplat/model.py:87:20 (PcdAbsolutePositionEmbedder._freqs)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 89,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "2.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "logs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "PcdAbsolutePositionEmbedder._freqs",
+      "site": "comfy/ldm/triposplat/model.py:89:16 (PcdAbsolutePositionEmbedder._freqs)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 25,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "10000",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-torch.arange(half).to(position).div(half)",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "sinusoidal_embedding_1d",
+      "site": "comfy/ldm/wan/model.py:25:19 (sinusoidal_embedding_1d)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 20,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "10000",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.mul(2, torch.div(i.to(torch.float32), d))",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "get_pos_emb",
+      "site": "comfy_extras/nodes_wanmove.py:20:41 (get_pos_emb)",
+      "source_path": "comfy_extras/nodes_wanmove.py",
+      "source_sha256": "b0a7bdaa04d0aa2e4eac1d9d666d05ad93ee95e406a630ee9a7907c4a81c7dff",
+      "status": "static-call-observed",
+      "target_syntax": "torch.pow"
+    }
+  ],
+  "static_definition": null
+}

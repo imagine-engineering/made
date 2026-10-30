@@ -1,0 +1,77 @@
+{
+  "fixture_id": "anima-sim-model-0063",
+  "feature_id": "COMFY-MODEL-0063",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.llm_adapter.in_proj.weight": [2, 2],
+      "model.diffusion_model.blocks.0.mlp.layer1.weight": [1],
+      "model.diffusion_model.llm_adapter.blocks.0.cross_attn.q_proj.weight": [1],
+      "model.diffusion_model.x_embedder.proj.1.weight": [2048, 68]
+    },
+    "metadata": {
+      "image_model": "not-anima",
+      "model_layout": "diffusers"
+    }
+  },
+  "base_artifact_digest": "0630630630630630630630630630630630630630630630630630630630630630",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.llm_adapter.in_proj.weight",
+      "shape": [2, 2],
+      "values": [1.0, 2.0, 3.0, 4.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [1.0, 2.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 24,
+  "expected_memory_bytes": 24,
+  "checkpoints": [
+    {
+      "name": "llm_adapter.in_proj",
+      "values": [5.0, 11.0]
+    },
+    {
+      "name": "llm_adapter.activation",
+      "values": [4.9665356, 10.999816]
+    },
+    {
+      "name": "llm_adapter.normalized",
+      "values": [-0.99999994, 0.99999994]
+    }
+  ],
+  "patches": [
+    {
+      "identifier": "anima-llm-adapter-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.llm_adapter.in_proj.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {
+      "name": "llm_adapter.in_proj",
+      "values": [6.0, 13.0]
+    },
+    {
+      "name": "llm_adapter.activation",
+      "values": [5.9851646, 12.99997]
+    },
+    {
+      "name": "llm_adapter.normalized",
+      "values": [-0.99999994, 0.99999994]
+    }
+  ]
+}

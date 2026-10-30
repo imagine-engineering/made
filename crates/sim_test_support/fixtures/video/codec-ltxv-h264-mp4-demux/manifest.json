@@ -1,0 +1,40 @@
+{
+  "fixture_schema": "zed.sim.video-codec-ltxv-h264-mp4-demux.v1",
+  "truth_mode": "synthetic-retained-ltxv-h264-mp4-demux",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "ffmpeg_source_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_release_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_release_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8"
+  },
+  "prerequisites": {
+    "codec_symbol_binding_manifest_sha256": "76ec18127e54deff5b581046786ebd62aafa3e92a34aec45aaad114fcb0a5bd6",
+    "codec_data_plane_abi_manifest_sha256": "9fdd0cff1392ae8eb399a0b3fa36a2a2cef074df52d6315b629c25c6f7dd34ca",
+    "codec_bounded_memory_avio_manifest_sha256": "6d60aaf8e7524bdef8511fcd6036d7f17a9a2f1938ba21b69f30747fc48c0323",
+    "codec_ltxv_h264_admission_manifest_sha256": "2e2ce96b886978cc05876e9b4fc02153685548e9b6d92f07f4f2d5e2855cad88",
+    "codec_ltxv_h264_mp4_encode_manifest_sha256": "7d01cd5960a7ad08df8f9fe331d17fa732252f7f8eeef944e6140d2c90f7a4d9"
+  },
+  "contract": {
+    "input_owner": "opaque Task447 staged MP4 only",
+    "whole_input_copy": false,
+    "format": "auto-probed MP4 through borrowed bounded AVIO",
+    "stream_contract": "exactly one retained stream",
+    "decoder_contract": "av_find_best_stream returns the already admitted H.264 decoder",
+    "native_demux_call_choreography_executed": true,
+    "format_closes_before_input_avio": true,
+    "cancellation_and_workspace_are_attempt_local": true
+  },
+  "claims": {
+    "licensed_or_installed_ffmpeg_package": false,
+    "synthetic_bytes_are_valid_production_mp4": false,
+    "production_ffmpeg_or_libx264_availability": false,
+    "packet_decode_executed": false,
+    "decoded_rgb_result_produced": false,
+    "numerical_h264_or_rgb_oracle": false,
+    "media_payload_or_handle_published": false,
+    "effect_cache_persistence_recovery_or_publication": false
+  }
+}

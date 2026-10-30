@@ -1,0 +1,379 @@
+[
+  {
+    "schema_version": 1,
+    "class_type": "CheckpointLoaderSimple",
+    "display_name": "Load Checkpoint",
+    "category": "model/loaders",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["load checkpoint", "checkpoint loader"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-diffusion-v1",
+    "inputs": [{"name":"ckpt_name","type_name":"STRING","required":true,"choices_from_input_assets":true}],
+    "outputs": [
+      {"name":"model","type_name":"MODEL","required":true},
+      {"name":"clip","type_name":"CLIP","required":true},
+      {"name":"vae","type_name":"VAE","required":true}
+    ],
+    "output_node": false,
+    "effect": "reads_artifact",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'ckpt_name': (folder_paths.get_filename_list('checkpoints'), {'tooltip': 'The name of the checkpoint (model) to load.'})}}",
+      "outputs": "('MODEL', 'CLIP', 'VAE')",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "CLIPTextEncode",
+    "display_name": "CLIP Text Encode (Prompt)",
+    "category": "model/conditioning",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["prompt", "text encode"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-diffusion-v1",
+    "inputs": [
+      {"name":"text","type_name":"STRING","required":true,"options":{"multiline":true,"dynamicPrompts":true}},
+      {"name":"clip","type_name":"CLIP","required":true}
+    ],
+    "outputs": [{"name":"conditioning","type_name":"CONDITIONING","required":true}],
+    "output_node": false,
+    "effect": "pure",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s) -> InputTypeDict: return {'required': {'text': (IO.STRING, {'multiline': True, 'dynamicPrompts': True, 'tooltip': 'The text to be encoded.'}), 'clip': (IO.CLIP, {'tooltip': 'The CLIP model used for encoding the text.'})}}",
+      "outputs": "(IO.CONDITIONING,)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "EmptyLatentImage",
+    "display_name": "Empty Latent Image",
+    "category": "model/latent",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["empty latent"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-diffusion-v1",
+    "inputs": [
+      {"name":"width","type_name":"INT","required":true,"options":{"default":512,"min":16,"max":16384,"step":8}},
+      {"name":"height","type_name":"INT","required":true,"options":{"default":512,"min":16,"max":16384,"step":8}},
+      {"name":"batch_size","type_name":"INT","required":true,"options":{"default":1,"min":1,"max":4096}}
+    ],
+    "outputs": [{"name":"latent","type_name":"LATENT","required":true}],
+    "output_node": false,
+    "effect": "pure",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'width': ('INT', {'default': 512, 'min': 16, 'max': MAX_RESOLUTION, 'step': 8, 'tooltip': 'The width of the latent images in pixels.'}), 'height': ('INT', {'default': 512, 'min': 16, 'max': MAX_RESOLUTION, 'step': 8, 'tooltip': 'The height of the latent images in pixels.'}), 'batch_size': ('INT', {'default': 1, 'min': 1, 'max': 4096, 'tooltip': 'The number of latent images in the batch.'})}}",
+      "outputs": "('LATENT',)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "KSampler",
+    "display_name": "KSampler",
+    "category": "model/sampling",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["sampler", "sample"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-diffusion-sampling-v2",
+    "inputs": [
+      {"name":"model","type_name":"MODEL","required":true},
+      {"name":"seed","type_name":"INT","required":true,"options":{"default":0,"min":0}},
+      {"name":"steps","type_name":"INT","required":true,"options":{"default":20,"min":1,"max":10000}},
+      {"name":"cfg","type_name":"FLOAT","required":true,"options":{"default":8.0,"min":0.0,"max":100.0}},
+      {"name":"sampler_name","type_name":"STRING","required":true,"choices":["ddim","ddpm","deis","dpm_2","dpm_2_ancestral","dpm_adaptive","dpm_fast","dpmpp_2m","dpmpp_2m_cfg_pp","dpmpp_2m_sde","dpmpp_2m_sde_gpu","dpmpp_2m_sde_heun","dpmpp_2m_sde_heun_gpu","dpmpp_2s_ancestral","dpmpp_2s_ancestral_cfg_pp","dpmpp_3m_sde","dpmpp_3m_sde_gpu","dpmpp_sde","dpmpp_sde_gpu","er_sde","euler","euler_ancestral","euler_ancestral_cfg_pp","euler_cfg_pp","exp_heun_2_x0","exp_heun_2_x0_sde","gradient_estimation","gradient_estimation_cfg_pp","heun","heunpp2","ipndm","ipndm_v","lcm","lms","res_multistep","res_multistep_ancestral","res_multistep_ancestral_cfg_pp","res_multistep_cfg_pp","sa_solver","sa_solver_pece","seeds_2","seeds_3","uni_pc","uni_pc_bh2","void_ddim","lcm_upscale"]},
+      {"name":"scheduler","type_name":"STRING","required":true,"choices":["simple","sgm_uniform","karras","exponential","ddim_uniform","beta","normal","linear_quadratic","kl_optimal"]},
+      {"name":"positive","type_name":"CONDITIONING","required":true},
+      {"name":"negative","type_name":"CONDITIONING","required":true},
+      {"name":"latent_image","type_name":"LATENT","required":true},
+      {"name":"denoise","type_name":"FLOAT","required":true,"options":{"default":1.0,"min":0.0,"max":1.0}}
+    ],
+    "outputs": [{"name":"latent","type_name":"LATENT","required":true}],
+    "output_node": false,
+    "effect": "pure",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL', {'tooltip': 'The model used for denoising the input latent.'}), 'seed': ('INT', {'default': 0, 'min': 0, 'max': 18446744073709551615, 'control_after_generate': True, 'tooltip': 'The random seed used for creating the noise.'}), 'steps': ('INT', {'default': 20, 'min': 1, 'max': 10000, 'tooltip': 'The number of steps used in the denoising process.'}), 'cfg': ('FLOAT', {'default': 8.0, 'min': 0.0, 'max': 100.0, 'step': 0.1, 'round': 0.01, 'tooltip': 'The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality.'}), 'sampler_name': (sim.samplers.KSampler.SAMPLERS, {'tooltip': 'The algorithm used when sampling, this can affect the quality, speed, and style of the generated output.'}), 'scheduler': (sim.samplers.KSampler.SCHEDULERS, {'tooltip': 'The scheduler controls how noise is gradually removed to form the image.'}), 'positive': ('CONDITIONING', {'tooltip': 'The conditioning describing the attributes you want to include in the image.'}), 'negative': ('CONDITIONING', {'tooltip': 'The conditioning describing the attributes you want to exclude from the image.'}), 'latent_image': ('LATENT', {'tooltip': 'The latent image to denoise.'}), 'denoise': ('FLOAT', {'default': 1.0, 'min': 0.0, 'max': 1.0, 'step': 0.01, 'tooltip': 'The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling.'})}}",
+      "outputs": "('LATENT',)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version":1,"class_type":"TorchCompileModel","display_name":"TorchCompileModel","category":"experimental","description":"","python_module":"sim_extras.nodes_torch_compile","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"backend","type_name":"STRING","required":true,"choices":["inductor","cudagraphs"]}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Model.Input:model | io.Combo.Input:backend(options=['inductor', 'cudagraphs'];advanced=True)","outputs":"io.Model.Output:","input_is_list":"False","output_is_list":"[false]","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingDiscrete","display_name":"ModelSamplingDiscrete","category":"model/patch","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"sampling","type_name":"STRING","required":true,"choices":["eps","v_prediction","lcm","x0","img_to_img","img_to_img_flow"]},{"name":"zsnr","type_name":"BOOLEAN","required":true,"options":{"default":false}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'sampling': (['eps', 'v_prediction', 'lcm', 'x0', 'img_to_img', 'img_to_img_flow'],), 'zsnr': ('BOOLEAN', {'default': False, 'advanced': True})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingStableCascade","display_name":"ModelSamplingStableCascade","category":"model/patch/stable cascade","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"shift","type_name":"FLOAT","required":true,"options":{"default":2.0,"min":0.01,"max":100.0}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'shift': ('FLOAT', {'default': 2.0, 'min': 0.0, 'max': 100.0, 'step': 0.01})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingSD3","display_name":"ModelSamplingSD3","category":"model/patch/stable diffusion","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"shift","type_name":"FLOAT","required":true,"options":{"default":3.0,"min":0.01,"max":100.0}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'shift': ('FLOAT', {'default': 3.0, 'min': 0.0, 'max': 100.0, 'step': 0.01})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingAuraFlow","display_name":"ModelSamplingAuraFlow","category":"model/patch","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"shift","type_name":"FLOAT","required":true,"options":{"default":1.73,"min":0.01,"max":100.0}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'shift': ('FLOAT', {'default': 1.73, 'min': 0.0, 'max': 100.0, 'step': 0.01})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingFlux","display_name":"ModelSamplingFlux","category":"model/patch/flux","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"max_shift","type_name":"FLOAT","required":true,"options":{"default":1.15}},{"name":"base_shift","type_name":"FLOAT","required":true,"options":{"default":0.5}},{"name":"width","type_name":"INT","required":true,"options":{"default":1024,"min":16}},{"name":"height","type_name":"INT","required":true,"options":{"default":1024,"min":16}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'max_shift': ('FLOAT', {'default': 1.15, 'min': 0.0, 'max': 100.0, 'step': 0.01, 'advanced': True}), 'base_shift': ('FLOAT', {'default': 0.5, 'min': 0.0, 'max': 100.0, 'step': 0.01, 'advanced': True}), 'width': ('INT', {'default': 1024, 'min': 16, 'max': nodes.MAX_RESOLUTION, 'step': 8}), 'height': ('INT', {'default': 1024, 'min': 16, 'max': nodes.MAX_RESOLUTION, 'step': 8})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingContinuousEDM","display_name":"ModelSamplingContinuousEDM","category":"model/patch","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"sampling","type_name":"STRING","required":true,"choices":["v_prediction","edm","edm_playground_v2.5","eps","cosmos_rflow"]},{"name":"sigma_max","type_name":"FLOAT","required":true,"options":{"default":120.0,"min":0.001}},{"name":"sigma_min","type_name":"FLOAT","required":true,"options":{"default":0.002,"min":0.001}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'sampling': (['v_prediction', 'edm', 'edm_playground_v2.5', 'eps', 'cosmos_rflow'],), 'sigma_max': ('FLOAT', {'default': 120.0, 'min': 0.0, 'max': 1000.0, 'step': 0.001, 'round': False, 'advanced': True}), 'sigma_min': ('FLOAT', {'default': 0.002, 'min': 0.0, 'max': 1000.0, 'step': 0.001, 'round': False, 'advanced': True})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"ModelSamplingContinuousV","display_name":"ModelSamplingContinuousV","category":"model/patch","description":"","python_module":"sim_extras.nodes_model_advanced","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"sampling","type_name":"STRING","required":true,"choices":["v_prediction"]},{"name":"sigma_max","type_name":"FLOAT","required":true,"options":{"default":500.0,"min":0.001}},{"name":"sigma_min","type_name":"FLOAT","required":true,"options":{"default":0.03,"min":0.001}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'sampling': (['v_prediction'],), 'sigma_max': ('FLOAT', {'default': 500.0, 'min': 0.0, 'max': 1000.0, 'step': 0.001, 'round': False, 'advanced': True}), 'sigma_min': ('FLOAT', {'default': 0.03, 'min': 0.0, 'max': 1000.0, 'step': 0.001, 'round': False, 'advanced': True})}}","outputs":"('MODEL',)","input_is_list":"False","output_is_list":"False","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"APG","display_name":"Adaptive Projected Guidance","category":"model/sampling/custom","description":"","python_module":"sim_extras.nodes_apg","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"eta","type_name":"FLOAT","required":true,"options":{"default":1.0,"min":-10.0,"max":10.0}},{"name":"norm_threshold","type_name":"FLOAT","required":true,"options":{"default":5.0,"min":0.0,"max":50.0}},{"name":"momentum","type_name":"FLOAT","required":true,"options":{"default":0.0,"min":-5.0,"max":1.0}}],"outputs":[{"name":"model","type_name":"MODEL","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Model.Input:model | io.Float.Input:eta(default=1.0;min=-10.0;max=10.0;step=0.01;advanced=True) | io.Float.Input:norm_threshold(default=5.0;min=0.0;max=50.0;step=0.1;advanced=True) | io.Float.Input:momentum(default=0.0;min=-5.0;max=1.0;step=0.01;advanced=True)","outputs":"io.Model.Output:","input_is_list":"False","output_is_list":"[false]","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"BasicGuider","display_name":"Basic Guider","category":"model/sampling/guiders","description":"","python_module":"sim_extras.nodes_custom_sampler","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"conditioning","type_name":"CONDITIONING","required":true}],"outputs":[{"name":"guider","type_name":"GUIDER","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Model.Input:model | io.Conditioning.Input:conditioning","outputs":"io.Guider.Output:","input_is_list":"False","output_is_list":"[false]","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"CFGGuider","display_name":"CFG Guider","category":"model/sampling/guiders","description":"","python_module":"sim_extras.nodes_custom_sampler","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"positive","type_name":"CONDITIONING","required":true},{"name":"negative","type_name":"CONDITIONING","required":true},{"name":"cfg","type_name":"FLOAT","required":true,"options":{"default":8.0,"min":0.0,"max":100.0}}],"outputs":[{"name":"guider","type_name":"GUIDER","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Model.Input:model | io.Conditioning.Input:positive | io.Conditioning.Input:negative | io.Float.Input:cfg(default=8.0;min=0.0;max=100.0;step=0.1)","outputs":"io.Guider.Output:","input_is_list":"False","output_is_list":"[false]","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"DualCFGGuider","display_name":"Dual CFG Guider","category":"model/sampling/guiders","description":"","python_module":"sim_extras.nodes_custom_sampler","search_aliases":["dual prompt guidance"],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"cond1","type_name":"CONDITIONING","required":true},{"name":"cond2","type_name":"CONDITIONING","required":true},{"name":"negative","type_name":"CONDITIONING","required":true},{"name":"cfg_conds","type_name":"FLOAT","required":true,"options":{"default":8.0,"min":0.0,"max":100.0}},{"name":"cfg_cond2_negative","type_name":"FLOAT","required":true,"options":{"default":8.0,"min":0.0,"max":100.0}},{"name":"style","type_name":"STRING","required":true,"choices":["regular","nested"]}],"outputs":[{"name":"guider","type_name":"GUIDER","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Model.Input:model | io.Conditioning.Input:cond1 | io.Conditioning.Input:cond2 | io.Conditioning.Input:negative | io.Float.Input:cfg_conds(default=8.0;min=0.0;max=100.0;step=0.1) | io.Float.Input:cfg_cond2_negative(default=8.0;min=0.0;max=100.0;step=0.1) | io.Combo.Input:style(options=['regular', 'nested'])","outputs":"io.Guider.Output:","input_is_list":"False","output_is_list":"[false]","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"DualModelGuider","display_name":"Dual Model CFG Guider","category":"model/sampling/guiders","description":"","python_module":"sim_extras.nodes_custom_sampler","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"model","type_name":"MODEL","required":true},{"name":"model_negative","type_name":"MODEL","required":false},{"name":"positive","type_name":"CONDITIONING","required":true},{"name":"cfg","type_name":"FLOAT","required":true,"options":{"default":4.0,"min":0.0,"max":100.0}},{"name":"negative","type_name":"CONDITIONING","required":false}],"outputs":[{"name":"guider","type_name":"GUIDER","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Model.Input:model | io.Model.Input:model_negative(optional=True) | io.Conditioning.Input:positive | io.Float.Input:cfg(default=4.0;min=0.0;max=100.0;step=0.1) | io.Conditioning.Input:negative(optional=True)","outputs":"io.Guider.Output:","input_is_list":"False","output_is_list":"[false]","lazy_inputs":"False"}
+  },
+  {
+    "schema_version":1,"class_type":"SamplerCustomAdvanced","display_name":"SamplerCustomAdvanced","category":"model/sampling/custom","description":"","python_module":"sim_extras.nodes_custom_sampler","search_aliases":[],"essentials_category":null,"has_intermediate_output":false,"implementation_version":"native-diffusion-v1",
+    "inputs":[{"name":"noise","type_name":"NOISE","required":true},{"name":"guider","type_name":"GUIDER","required":true},{"name":"sampler","type_name":"SAMPLER","required":true},{"name":"sigmas","type_name":"SIGMAS","required":true},{"name":"latent_image","type_name":"LATENT","required":true}],"outputs":[{"name":"output","type_name":"LATENT","required":true},{"name":"denoised_output","type_name":"LATENT","required":true}],"output_node":false,"effect":"pure","cache_by_input_identity":true,
+    "catalog_contract":{"inputs":"io.Noise.Input:noise | io.Guider.Input:guider | io.Sampler.Input:sampler | io.Sigmas.Input:sigmas | io.Latent.Input:latent_image","outputs":"io.Latent.Output:(display_name='output') | io.Latent.Output:(display_name='denoised_output')","input_is_list":"False","output_is_list":"[false, false]","lazy_inputs":"False"}
+  },
+{
+  "schema_version": 1,
+  "class_type": "KSamplerAdvanced",
+  "display_name": "KSampler (Advanced)",
+  "category": "model/sampling",
+  "description": "",
+  "python_module": "nodes",
+  "search_aliases": [],
+  "essentials_category": null,
+  "has_intermediate_output": false,
+  "implementation_version": "native-diffusion-sampling-v2",
+  "inputs": [
+    {
+      "name": "model",
+      "type_name": "MODEL",
+      "required": true
+    },
+    {
+      "name": "add_noise",
+      "type_name": "STRING",
+      "required": true,
+      "choices": [
+        "enable",
+        "disable"
+      ],
+      "options": {
+        "advanced": true
+      }
+    },
+    {
+      "name": "noise_seed",
+      "type_name": "INT",
+      "required": true,
+      "options": {
+        "default": 0,
+        "min": 0,
+        "max": 18446744073709551615,
+        "control_after_generate": true
+      }
+    },
+    {
+      "name": "steps",
+      "type_name": "INT",
+      "required": true,
+      "options": {
+        "default": 20,
+        "min": 1,
+        "max": 10000
+      }
+    },
+    {
+      "name": "cfg",
+      "type_name": "FLOAT",
+      "required": true,
+      "options": {
+        "default": "8.0",
+        "min": "0.0",
+        "max": "100.0",
+        "step": "0.1",
+        "round": "0.01"
+      }
+    },
+    {
+      "name": "sampler_name",
+      "type_name": "STRING",
+      "required": true,
+      "choices": [
+        "ddim",
+        "ddpm",
+        "deis",
+        "dpm_2",
+        "dpm_2_ancestral",
+        "dpm_adaptive",
+        "dpm_fast",
+        "dpmpp_2m",
+        "dpmpp_2m_cfg_pp",
+        "dpmpp_2m_sde",
+        "dpmpp_2m_sde_gpu",
+        "dpmpp_2m_sde_heun",
+        "dpmpp_2m_sde_heun_gpu",
+        "dpmpp_2s_ancestral",
+        "dpmpp_2s_ancestral_cfg_pp",
+        "dpmpp_3m_sde",
+        "dpmpp_3m_sde_gpu",
+        "dpmpp_sde",
+        "dpmpp_sde_gpu",
+        "er_sde",
+        "euler",
+        "euler_ancestral",
+        "euler_ancestral_cfg_pp",
+        "euler_cfg_pp",
+        "exp_heun_2_x0",
+        "exp_heun_2_x0_sde",
+        "gradient_estimation",
+        "gradient_estimation_cfg_pp",
+        "heun",
+        "heunpp2",
+        "ipndm",
+        "ipndm_v",
+        "lcm",
+        "lms",
+        "res_multistep",
+        "res_multistep_ancestral",
+        "res_multistep_ancestral_cfg_pp",
+        "res_multistep_cfg_pp",
+        "sa_solver",
+        "sa_solver_pece",
+        "seeds_2",
+        "seeds_3",
+        "uni_pc",
+        "uni_pc_bh2",
+        "void_ddim",
+        "lcm_upscale"
+      ]
+    },
+    {
+      "name": "scheduler",
+      "type_name": "STRING",
+      "required": true,
+      "choices": ["simple", "sgm_uniform", "karras", "exponential", "ddim_uniform", "beta", "normal", "linear_quadratic", "kl_optimal"]
+    },
+    {
+      "name": "positive",
+      "type_name": "CONDITIONING",
+      "required": true
+    },
+    {
+      "name": "negative",
+      "type_name": "CONDITIONING",
+      "required": true
+    },
+    {
+      "name": "latent_image",
+      "type_name": "LATENT",
+      "required": true
+    },
+    {
+      "name": "start_at_step",
+      "type_name": "INT",
+      "required": true,
+      "options": {
+        "default": 0,
+        "min": 0,
+        "max": 10000,
+        "advanced": true
+      }
+    },
+    {
+      "name": "end_at_step",
+      "type_name": "INT",
+      "required": true,
+      "options": {
+        "default": 10000,
+        "min": 0,
+        "max": 10000,
+        "advanced": true
+      }
+    },
+    {
+      "name": "return_with_leftover_noise",
+      "type_name": "STRING",
+      "required": true,
+      "choices": [
+        "disable",
+        "enable"
+      ],
+      "options": {
+        "advanced": true
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "latent",
+      "type_name": "LATENT",
+      "required": true
+    }
+  ],
+  "output_node": false,
+  "effect": "pure",
+  "cache_by_input_identity": true,
+  "catalog_contract": {
+    "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'model': ('MODEL',), 'add_noise': (['enable', 'disable'], {'advanced': True}), 'noise_seed': ('INT', {'default': 0, 'min': 0, 'max': 18446744073709551615, 'control_after_generate': True}), 'steps': ('INT', {'default': 20, 'min': 1, 'max': 10000}), 'cfg': ('FLOAT', {'default': 8.0, 'min': 0.0, 'max': 100.0, 'step': 0.1, 'round': 0.01}), 'sampler_name': (sim.samplers.KSampler.SAMPLERS,), 'scheduler': (sim.samplers.KSampler.SCHEDULERS,), 'positive': ('CONDITIONING',), 'negative': ('CONDITIONING',), 'latent_image': ('LATENT',), 'start_at_step': ('INT', {'default': 0, 'min': 0, 'max': 10000, 'advanced': True}), 'end_at_step': ('INT', {'default': 10000, 'min': 0, 'max': 10000, 'advanced': True}), 'return_with_leftover_noise': (['disable', 'enable'], {'advanced': True})}}",
+    "outputs": "('LATENT',)",
+    "input_is_list": "False",
+    "output_is_list": "False",
+    "lazy_inputs": "False"
+  }
+}
+]

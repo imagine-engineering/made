@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "truth_classification": "reviewed-abi-and-signed-catalog-contract",
+  "source_snapshot": {
+    "project": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source_files": {
+    "comfy_extras/nodes_video.py": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "comfy_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+  },
+  "dependency_fixtures": {
+    "video/codec-plan/manifest.json": "9ff5dde7b0d4fdde599fc377031e88c455e00afcf428e190069569b0c548704f"
+  },
+  "reviewed_ffi_profile": {
+    "release_family": "FFmpeg 7.1",
+    "official_release_url": "https://ffmpeg.org/download.html#release_7.1",
+    "abi_compatible_with": "FFmpeg 7.0",
+    "libraries": {
+      "avcodec": 61,
+      "avformat": 61,
+      "avutil": 59,
+      "swresample": 5,
+      "swscale": 8
+    },
+    "targets": [
+      "aarch64-apple-darwin",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-pc-windows-msvc",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ],
+    "required_encoder_names": ["aac", "libsvtav1", "libvpx-vp9", "libx264"]
+  },
+  "contract": {
+    "catalog_encoding": "canonical-json-with-trailing-newline",
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-video-codec-package-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_runtime::native_video_codec_ffi",
+    "runtime_compilation_forbidden": true,
+    "redistributes_codec_libraries": false,
+    "exact_library_count": 5
+  },
+  "claims": {
+    "signed_catalog_verification": true,
+    "registry_certificate_projection": true,
+    "native_library_captured": false,
+    "native_library_loaded": false,
+    "encoder_availability_probed": false,
+    "codec_execution": false,
+    "installed_ffmpeg_package": false,
+    "licensed_codec_binary": false,
+    "upstream_runtime_numeric_oracle": false,
+    "accelerator_numeric_oracle": false
+  }
+}

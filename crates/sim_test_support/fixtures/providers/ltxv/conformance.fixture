@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.ltxv",
+  "source_sha256": "f31e70cd810520baf844badfac39ac5b923ddc8de35dcad9a2159189c5ea0c58",
+  "aliases": [
+    "ltx"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0359",
+      "node_identifier": "LtxvApiImageToVideo"
+    },
+    {
+      "feature_id": "COMFY-NODE-0360",
+      "node_identifier": "LtxvApiTextToVideo"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0090",
+      "method": "POST",
+      "path": "/proxy/ltx/v1/image-to-video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0091",
+      "method": "POST",
+      "path": "/proxy/ltx/v1/text-to-video",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending"
+}

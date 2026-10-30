@@ -1,0 +1,667 @@
+# Generated from xtask::workflows::run_tests
+# Rebuild with `cargo xtask workflows`.
+name: run_tests
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+  CARGO_INCREMENTAL: '0'
+on:
+  pull_request:
+    branches:
+    - '**'
+  push:
+    branches:
+    - main
+    - release
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  shared_clippy:
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: steps::cargo_fmt
+      run: cargo fmt --all -- --check
+    - name: run_tests::shared_clippy
+      run: ./script/clippy
+    - name: run_tests::setup_inventory_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: run_tests::shared_clippy
+      run: |
+        if git cat-file -e HEAD:projects/buzz/Cargo.toml 2>/dev/null; then
+          ./script/check-collaborative-workspace-inventory --catalog all
+        else
+          echo '::notice::Collaborative workspace source is absent; full inventory audit deferred'
+        fi
+    - name: run_tests::shared_clippy
+      run: python3 .agents/specs/collaborative-workspace/scripts/test-inventory.py
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 60
+  copper_tests:
+    runs-on: ubuntu-22.04
+    env:
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      SCCACHE_GHA_ENABLED: on
+      SCCACHE_IDLE_TIMEOUT: '0'
+      RUSTC_WRAPPER: sccache
+      ZED_PRODUCT_ID: rust
+      ZED_PRODUCT_UPDATE_BASE_URL: http://test.example
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: steps::download_wasi_sdk
+      run: ./script/download-wasi-sdk
+    - name: steps::setup_release_sccache
+      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+      with:
+        version: v0.16.0
+        disable_annotations: 'true'
+    - name: Configure Copper compiler cache
+      run: |
+        TOOLCHAIN_HASH="$(git hash-object rust-toolchain.toml)"
+        echo "SCCACHE_GHA_VERSION=copper-tests-v1-${RUNNER_OS}-${RUNNER_ARCH}-${TOOLCHAIN_HASH}" >> "$GITHUB_ENV"
+      shell: bash -euxo pipefail {0}
+    - name: steps::setup_node
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+      with:
+        node-version: '24'
+        check-latest: true
+        package-manager-cache: false
+    - name: steps::cargo_install_nextest
+      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+      with:
+        tool: nextest
+    - name: run_tests::copper_tests
+      run: cargo nextest run --no-fail-fast --no-tests=warn --no-default-features --features zed/agentic-tools,zed/rust-tools,remote_server/rust-tools -p agent -p agent_ui -p auto_update -p call -p cargo_ui -p channel -p client -p collab_ui -p editor -p extension_host -p git -p git_ui -p language_model -p language_models -p languages -p project -p remote_server -p settings -p settings_content -p task -p tasks_ui -p terminal -p terminal_view -p worktree -p workspace -p zed -E 'not (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget))'
+    - name: Measure Cargo dashboard foreground budgets
+      run: cargo nextest run --no-fail-fast --no-tests=fail --no-default-features --features zed/agentic-tools,zed/rust-tools,remote_server/rust-tools -p agent -p agent_ui -p auto_update -p call -p cargo_ui -p channel -p client -p collab_ui -p editor -p extension_host -p git -p git_ui -p language_model -p language_models -p languages -p project -p remote_server -p settings -p settings_content -p task -p tasks_ui -p terminal -p terminal_view -p worktree -p workspace -p zed -E '(test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget))' --test-threads 1 --success-output immediate
+    - name: steps::finalize_release_sccache
+      if: always()
+      run: |
+        STATS="$(sccache --show-stats)"
+        printf '%s\n' "$STATS"
+        {
+            printf '### sccache: %s / %s\n\n```text\n' "$RUNNER_OS" "$SCCACHE_GHA_VERSION"
+            printf '%s\n' "$STATS"
+            printf '```\n'
+        } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 90
+  graphics_feature_validation:
+    runs-on: ubuntu-22.04
+    env:
+      ZED_PRODUCT_ID: rust
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: steps::download_wasi_sdk
+      run: ./script/download-wasi-sdk
+    - name: run_tests::graphics_feature_validation
+      run: |
+        cargo test --locked -p graphics_core -p graphics_ui --lib
+        cargo test --locked -p graphics_core --test native_worker
+        cargo test --locked -p gpui --lib tab_stop::tests::
+        cargo test --locked -p zed --no-default-features --features agentic-tools,sim --bin zed graphics_surface_respects_sim_feature
+        cargo test --locked -p zed --no-default-features --features agentic-tools,sim --bin zed native_sim_
+        ZED_PRODUCT_ID=jvm ZED_PRODUCT_DEV_PREVIEW=1 ZED_RELEASE_CHANNEL=dev cargo test --locked -p zed --no-default-features --features agentic-tools,jvm-tools --bin zed graphics_surface_respects_sim_feature
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 120
+  project_benchmarks:
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+    strategy:
+      matrix:
+        include:
+        - benchmark: cargo_workspace
+        - benchmark: structured_execution
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: run_tests::project_benchmarks
+      if: matrix.benchmark == 'cargo_workspace'
+      run: cargo bench -p project --features cargo-workspace --bench cargo_workspace -- --noplot
+    - name: run_tests::project_benchmarks
+      if: matrix.benchmark == 'structured_execution'
+      run: cargo bench -p project --features structured-execution --bench structured_execution -- --noplot
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 75
+  rust_tools_validation:
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: run_tests::rust_tools_validation
+      run: python3 script/test-rust-tools-environments-failures.py
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: run_tests::rust_tools_validation
+      run: cargo fetch --locked
+    - name: run_tests::rust_tools_validation
+      run: cargo test --locked --offline -p native_task_helper --lib
+    - name: run_tests::rust_tools_validation
+      run: ./script/test-rust-tools-environments --matrix --offline
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 45
+  release_automation_validation:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: run_tests::release_automation_validation
+      run: |
+        python3 -m unittest discover -s script -p 'test_refresh_website.py'
+        cargo test -p xtask
+        cargo xtask workflows
+        git diff --exit-code
+        cargo xtask check-workflows
+        cargo xtask products --check
+        cargo xtask bundle --product rust \
+          --platform linux \
+          --target x86_64-unknown-linux-gnu \
+          --dry-run
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 30
+  multiplayer_tools_standard:
+    runs-on: ubuntu-22.04
+    env:
+      ZED_PRODUCT_ID: rust
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_RELEASE_DEBUG: '0'
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: run_tests::setup_inventory_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: run_tests::multiplayer_tools_profile
+      run: ./script/check-multiplayer-tools --full --profile standard
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 120
+  multiplayer_tools_multiplayer:
+    runs-on: ubuntu-22.04
+    env:
+      ZED_PRODUCT_ID: rust
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_RELEASE_DEBUG: '0'
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: run_tests::setup_inventory_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: run_tests::multiplayer_tools_profile
+      run: ./script/check-multiplayer-tools --full --profile multiplayer
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 120
+  shared_validation:
+    needs:
+    - shared_clippy
+    - copper_tests
+    - graphics_feature_validation
+    - project_benchmarks
+    - rust_tools_validation
+    - release_automation_validation
+    - windows_updater_tests
+    - windows_jvm_validation
+    - multiplayer_tools_standard
+    - multiplayer_tools_multiplayer
+    if: ${{ always() }}
+    runs-on: ubuntu-22.04
+    steps:
+    - name: run_tests::shared_validation
+      run: |
+        exit_code=0
+        if [[ "${SHARED_CLIPPY_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${COPPER_TESTS_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${GRAPHICS_FEATURE_VALIDATION_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${PROJECT_BENCHMARKS_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${RUST_TOOLS_VALIDATION_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${RELEASE_AUTOMATION_VALIDATION_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${WINDOWS_UPDATER_TESTS_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${WINDOWS_JVM_VALIDATION_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${MULTIPLAYER_TOOLS_STANDARD_RESULT}" != "success" ]]; then exit_code=1; fi
+        if [[ "${MULTIPLAYER_TOOLS_MULTIPLAYER_RESULT}" != "success" ]]; then exit_code=1; fi
+        exit "$exit_code"
+      env:
+        SHARED_CLIPPY_RESULT: ${{ needs.shared_clippy.result }}
+        COPPER_TESTS_RESULT: ${{ needs.copper_tests.result }}
+        GRAPHICS_FEATURE_VALIDATION_RESULT: ${{ needs.graphics_feature_validation.result }}
+        PROJECT_BENCHMARKS_RESULT: ${{ needs.project_benchmarks.result }}
+        RUST_TOOLS_VALIDATION_RESULT: ${{ needs.rust_tools_validation.result }}
+        RELEASE_AUTOMATION_VALIDATION_RESULT: ${{ needs.release_automation_validation.result }}
+        WINDOWS_UPDATER_TESTS_RESULT: ${{ needs.windows_updater_tests.result }}
+        WINDOWS_JVM_VALIDATION_RESULT: ${{ needs.windows_jvm_validation.result }}
+        MULTIPLAYER_TOOLS_STANDARD_RESULT: ${{ needs.multiplayer_tools_standard.result }}
+        MULTIPLAYER_TOOLS_MULTIPLAYER_RESULT: ${{ needs.multiplayer_tools_multiplayer.result }}
+    timeout-minutes: 5
+  windows_updater_tests:
+    runs-on: windows-2022
+    env:
+      RELEASE_VERSION: 1.2.3
+      ZED_PRODUCT_DISPLAY_NAME: Copper
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/assets/product_flavors/rust
+    steps:
+    - name: steps::enable_windows_long_paths
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: run_tests::windows_updater_tests
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $PSNativeCommandUseErrorActionPreference = $true
+        cargo test --locked -p auto_update_helper -p xtask
+        cargo build --locked -p auto_update_helper
+        $metadata = (Get-Item target/debug/auto_update_helper.exe).VersionInfo
+        if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $env:RELEASE_VERSION) {
+            throw "Updater product metadata does not match the resolved release environment"
+        }
+
+        $innoSetupPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+        $installerResourceLines = @(
+            Get-Content crates/zed/resources/windows/zed.iss |
+                Where-Object { $_ -match '^(AppId|SetupIconFile)=' }
+        )
+        if ($installerResourceLines.Count -ne 2) {
+            throw "Expected the AppId and SetupIconFile directives in the Windows installer template"
+        }
+        $fixtureDirectory = Join-Path $env:RUNNER_TEMP 'inno-installer-resource-validation'
+        New-Item -ItemType Directory -Path $fixtureDirectory -Force | Out-Null
+        $fixturePath = Join-Path $fixtureDirectory 'installer-resources.iss'
+        $productIconPath = Join-Path $env:ZED_PRODUCT_ICON_SET 'app-icon.ico'
+        @(
+            '[Setup]'
+            $installerResourceLines
+            'AppName=Installer Identity Validation'
+            'AppVersion=1.0.0'
+            'DefaultDirName={tmp}\InstallerIdentityValidation'
+            'Uninstallable=no'
+        ) | Set-Content -Path $fixturePath -Encoding utf8
+        & $innoSetupPath '/O-' "/DAppId=$env:ZED_PRODUCT_WINDOWS_INSTALLER_ID" "/DProductIconFile=$productIconPath" $fixturePath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup rejected the catalog-derived installer identity or icon"
+        }
+      shell: pwsh
+    timeout-minutes: 45
+  windows_jvm_validation:
+    runs-on: windows-2022
+    env:
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+    - name: steps::enable_windows_long_paths
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: run_tests::windows_jvm_validation
+      run: cargo test --locked -p fs --features test-support --test integration real_fs_confined_file_rejects_replaced_paths
+      shell: pwsh
+    - name: run_tests::windows_jvm_validation
+      run: cargo test --locked -p project --features jvm-tools,test-support --test integration collects_windows_maven_report_and_rejects_parent_junction
+      shell: pwsh
+    - name: run_tests::windows_jvm_validation
+      run: cargo test --locked -p onboarding --lib windows_path_jdk_probe_keeps_java_and_javac_in_one_installation
+      shell: pwsh
+    - name: run_tests::windows_jvm_validation
+      run: cargo test --locked -p terminal_view --features jvm-tools,test-support --lib groovy_build_uses_existing_terminal_panel
+      shell: pwsh
+    - name: run_tests::windows_jvm_validation
+      run: cargo test --locked -p tasks_ui --features jvm-test-actions --lib selected_java_windows_maven_case_uses_tests_panel_and_task_terminal
+      shell: pwsh
+    timeout-minutes: 90
+  sim_backend_validation:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+        - platform: linux
+          runner: ubuntu-22.04
+        - platform: macos
+          runner: macos-15
+        - platform: windows
+          runner: windows-2022
+      fail-fast: false
+    steps:
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::setup_cargo_config
+      if: matrix.platform == 'linux'
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_cargo_config
+      if: matrix.platform == 'macos'
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_cargo_config
+      if: matrix.platform == 'windows'
+      run: |
+        New-Item -ItemType Directory -Path "./../.cargo" -Force
+        Copy-Item -Path "./.cargo/ci-config.toml" -Destination "./../.cargo/config.toml"
+      shell: pwsh
+    - name: run_tests::sim_backend_validation
+      if: matrix.platform == 'linux'
+      run: cargo clippy --release --all-targets --all-features -p sim_backend_corex -p sim_backend_cuda -p sim_backend_directml -p sim_backend_metal -p sim_backend_mlu -p sim_backend_npu -p sim_backend_rocm -p sim_backend_xpu -- --deny warnings
+    - name: run_tests::sim_backend_validation
+      if: matrix.platform == 'macos'
+      run: cargo clippy --release --all-targets --all-features -p sim_backend_metal -- --deny warnings
+    - name: run_tests::sim_backend_validation
+      if: matrix.platform == 'windows'
+      run: cargo clippy --release --all-targets --all-features -p sim_backend_cuda -p sim_backend_directml -- --deny warnings
+      shell: pwsh
+    - name: steps::cleanup_cargo_config
+      if: always() && matrix.platform == 'linux'
+      run: |
+        rm -rf ./../.cargo
+    - name: steps::cleanup_cargo_config
+      if: always() && matrix.platform == 'macos'
+      run: |
+        rm -rf ./../.cargo
+    - name: steps::cleanup_cargo_config
+      if: always() && matrix.platform == 'windows'
+      run: |
+        Remove-Item -Recurse -Path "./../.cargo" -Force -ErrorAction SilentlyContinue
+      shell: pwsh
+    timeout-minutes: 60
+  product_smoke:
+    needs:
+    - shared_validation
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+    strategy:
+      matrix:
+        include:
+        - product: rust
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: steps::download_wasi_sdk
+      run: ./script/download-wasi-sdk
+    - name: run_tests::product_smoke
+      run: cargo xtask bundle --product "$PRODUCT_ID" --platform linux --target x86_64-unknown-linux-gnu --dry-run
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+    - name: run_tests::product_smoke
+      run: cargo check --release --package zed --no-default-features --features "$APPLICATION_FEATURES"
+      env:
+        ZED_PRODUCT_ID: ${{ matrix.product }}
+        APPLICATION_FEATURES: ${{ matrix.application_features }}
+    - name: run_tests::product_smoke
+      run: cargo check --release --package remote_server --no-default-features --features "$REMOTE_FEATURES"
+      env:
+        ZED_PRODUCT_ID: ${{ matrix.product }}
+        REMOTE_FEATURES: ${{ matrix.remote_features }}
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 45
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.ref_name == 'main' && github.sha || 'anysha' }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}

@@ -1,0 +1,688 @@
+{
+  "component": "crates/sim_test_support/fixtures/providers/openrouter/provider_v2_component",
+  "malformed_component": "crates/sim_test_support/fixtures/providers/openrouter/provider_v2_malformed_result_component",
+  "oversized_component": "crates/sim_test_support/fixtures/providers/openrouter/provider_v2_oversized_result_component",
+  "namespace": "zed.sim.provider.openrouter",
+  "provenance_source": "fixture://sim_api_nodes/nodes_openrouter.py",
+  "provenance_publisher": "Zed OpenRouter provider fixture",
+  "bindings_sha256": "8b941f79f9560c7ec53819291d84e42d8c68ae2a7a70722143e55e6ea411f741",
+  "present_secrets": [
+    "sim_org.auth_token",
+    "sim_org.api_key"
+  ],
+  "credential_scenarios": [
+    {
+      "present_secrets": [
+        "sim_org.auth_token",
+        "sim_org.api_key"
+      ],
+      "expected_secret_id": "sim_org.auth_token",
+      "expected_header": {
+        "name": "Authorization",
+        "value": "host-capability:auth_token_sim_org"
+      }
+    },
+    {
+      "present_secrets": [
+        "sim_org.api_key"
+      ],
+      "expected_secret_id": "sim_org.api_key",
+      "expected_header": {
+        "name": "X-API-KEY",
+        "value": "host-capability:api_key_sim_org"
+      }
+    },
+    {
+      "present_secrets": [],
+      "expected_secret_id": null,
+      "expected_header": null
+    }
+  ],
+  "exercise_resilience": true,
+  "malformed_trailing_chunk_hex": "78",
+  "nodes": [
+    {
+      "id": "OpenRouterLLMNode",
+      "display_name": "OpenRouter LLM",
+      "category": "partner/text/OpenRouter",
+      "ports": [
+        {
+          "id": "prompt",
+          "source_type": "String",
+          "direction": "input",
+          "presence": "required",
+          "cardinality": "singular"
+        },
+        {
+          "id": "model",
+          "source_type": "COMFY_DYNAMICCOMBO_V3",
+          "direction": "input",
+          "presence": "required",
+          "cardinality": "singular"
+        },
+        {
+          "id": "seed",
+          "source_type": "Int",
+          "direction": "input",
+          "presence": "required",
+          "cardinality": "singular"
+        },
+        {
+          "id": "system_prompt",
+          "source_type": "String",
+          "direction": "input",
+          "presence": "optional",
+          "cardinality": "singular"
+        },
+        {
+          "id": "output_0",
+          "source_type": "String",
+          "direction": "output",
+          "presence": "required",
+          "cardinality": "singular"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "feature_id": "COMFY-NODE-0466",
+      "node_id": "OpenRouterLLMNode",
+      "contract_sha256": "2c6dbff1b7f89da063de276e6737f58e1dc98a85ad736f620bea96cab9e0a3d5",
+      "transport_schema": "zed:sim-provider-transport@1",
+      "materializer_schema": "zed:sim-provider-materializer@1"
+    }
+  ],
+  "capabilities": [
+    {
+      "kind": "network_provider",
+      "scope": "zed.sim.provider.openrouter|https://api.comfy.org/proxy/openrouter/api/v1/chat/completions",
+      "maximum_operations": 20,
+      "maximum_request_bytes": 1048576,
+      "maximum_response_bytes": 16777216,
+      "maximum_total_bytes": 17825792,
+      "maximum_handles": 8,
+      "timeout_milliseconds": 60000
+    },
+    {
+      "kind": "secret",
+      "scope": "sim_org.auth_token",
+      "maximum_operations": 1,
+      "maximum_request_bytes": 1048576,
+      "maximum_response_bytes": 16777216,
+      "maximum_total_bytes": 17825792,
+      "maximum_handles": 8,
+      "timeout_milliseconds": 60000
+    },
+    {
+      "kind": "secret",
+      "scope": "sim_org.api_key",
+      "maximum_operations": 1,
+      "maximum_request_bytes": 1048576,
+      "maximum_response_bytes": 16777216,
+      "maximum_total_bytes": 17825792,
+      "maximum_handles": 8,
+      "timeout_milliseconds": 60000
+    },
+    {
+      "kind": "provider_cost",
+      "scope": "zed.sim.provider.openrouter|https://api.comfy.org/proxy/openrouter/api/v1/chat/completions",
+      "maximum_operations": 1,
+      "maximum_request_bytes": 1048576,
+      "maximum_response_bytes": 16777216,
+      "maximum_total_bytes": 17825792,
+      "maximum_handles": 8,
+      "timeout_milliseconds": 60000
+    }
+  ],
+  "routes": [
+    {
+      "id": "COMFY-API-EXT-0127",
+      "method": "POST",
+      "path": "/proxy/openrouter/api/v1/chat/completions",
+      "maximum_request_bytes": 1048576,
+      "maximum_response_bytes": 16777216
+    }
+  ],
+  "streaming": {
+    "methods": [
+      "POST"
+    ],
+    "maximum_headers": 8,
+    "maximum_header_bytes": 16384,
+    "maximum_request_body_bytes": 1048576,
+    "maximum_response_body_bytes": 16777216,
+    "maximum_chunk_bytes": 65536,
+    "maximum_ndjson_line_bytes": 65536,
+    "maximum_wait_milliseconds": 1000,
+    "maximum_uploads": 0,
+    "maximum_upload_body_bytes": 0,
+    "maximum_cost_requests": 1,
+    "maximum_progress_total": 100,
+    "uploads": false,
+    "cost_requests": true
+  },
+  "invocations": [
+    {
+      "node_id": "OpenRouterLLMNode",
+      "inputs": [
+        {
+          "port_id": "prompt",
+          "source_type": "String",
+          "values": [
+            {
+              "kind": "string",
+              "value": "Hello"
+            }
+          ]
+        },
+        {
+          "port_id": "model",
+          "source_type": "COMFY_DYNAMICCOMBO_V3",
+          "values": [
+            {
+              "kind": "string",
+              "value": "deepseek/deepseek-v4-flash"
+            }
+          ]
+        },
+        {
+          "port_id": "seed",
+          "source_type": "Int",
+          "values": [
+            {
+              "kind": "integer",
+              "value": 7
+            }
+          ]
+        }
+      ],
+      "script": [
+        {
+          "operation": "start",
+          "endpoint": "https://api.comfy.org/proxy/openrouter/api/v1/chat/completions",
+          "secret_id": "sim_org.auth_token",
+          "method": "POST",
+          "headers": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "host-capability:auth_token_sim_org"
+            },
+            {
+              "name": "Comfy-Env",
+              "value": "host"
+            },
+            {
+              "name": "Comfy-Usage-Source",
+              "value": "comfyui-api"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "declared_body_bytes": null,
+          "response_slot": 1
+        },
+        {
+          "operation": "request_chunk",
+          "slot": 1,
+          "sequence": 0,
+          "input_abi": null,
+          "bytes_hex": "7b226d61785f636f6d706c6574696f6e5f746f6b656e73223a343039362c226d65737361676573223a5b7b22636f6e74656e74223a2248656c6c6f222c22726f6c65223a2275736572227d5d2c226d6f64656c223a22646565707365656b2f646565707365656b2d76342d666c617368222c2273656564223a372c2273747265616d223a66616c73657d",
+          "end": true
+        },
+        {
+          "operation": "cost",
+          "slot": 1,
+          "operation_id": "openrouter.chat.completions.estimated",
+          "currency": "USD",
+          "maximum_microunits": 18660,
+          "accepted": true,
+          "approved_microunits": 18660,
+          "receipt_hex": "6f70656e726f757465722d636f7374"
+        },
+        {
+          "operation": "progress",
+          "slot": 1,
+          "sequence": 0,
+          "completed": 0,
+          "total": 100,
+          "message": "Waiting for server"
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_head",
+          "slot": 1,
+          "after_sequence": null,
+          "timeout_milliseconds": 1000,
+          "sequence": 0,
+          "status": 200,
+          "headers": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_chunk",
+          "slot": 1,
+          "after_sequence": 0,
+          "timeout_milliseconds": 1000,
+          "sequence": 1,
+          "bytes_hex": "7b2263686f69636573223a5b7b226d657373616765223a7b22636f6e74656e74223a2248656c6c6f2066726f6d204f70656e526f75746572227d7d5d2c227573616765223a7b22636f7374223a302e30327d7d"
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_terminal",
+          "slot": 1,
+          "after_sequence": 1,
+          "timeout_milliseconds": 1000,
+          "sequence": 2,
+          "receipt_hex": "6f70656e726f757465722d7465726d696e616c"
+        },
+        {
+          "operation": "progress",
+          "slot": 1,
+          "sequence": 1,
+          "completed": 100,
+          "total": 100,
+          "message": "Completed"
+        }
+      ],
+      "outputs": [
+        {
+          "port_id": "output_0",
+          "source_type": "String",
+          "value": {
+            "kind": "string",
+            "value": "Hello from OpenRouter"
+          }
+        }
+      ],
+      "receipt_hex": "6f70656e726f757465722d7465726d696e616c"
+    },
+    {
+      "node_id": "OpenRouterLLMNode",
+      "inputs": [
+        {
+          "port_id": "prompt",
+          "source_type": "String",
+          "values": [
+            {
+              "kind": "string",
+              "value": "Reason carefully"
+            }
+          ]
+        },
+        {
+          "port_id": "model",
+          "source_type": "COMFY_DYNAMICCOMBO_V3",
+          "values": [
+            {
+              "kind": "record",
+              "value": {
+                "model": {
+                  "kind": "string",
+                  "value": "x-ai/grok-4.20"
+                },
+                "reasoning_effort": {
+                  "kind": "string",
+                  "value": "high"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "port_id": "seed",
+          "source_type": "Int",
+          "values": [
+            {
+              "kind": "integer",
+              "value": 0
+            }
+          ]
+        },
+        {
+          "port_id": "system_prompt",
+          "source_type": "String",
+          "values": [
+            {
+              "kind": "string",
+              "value": "Be concise"
+            }
+          ]
+        }
+      ],
+      "script": [
+        {
+          "operation": "start",
+          "endpoint": "https://api.comfy.org/proxy/openrouter/api/v1/chat/completions",
+          "secret_id": "sim_org.auth_token",
+          "method": "POST",
+          "headers": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "host-capability:auth_token_sim_org"
+            },
+            {
+              "name": "Comfy-Env",
+              "value": "host"
+            },
+            {
+              "name": "Comfy-Usage-Source",
+              "value": "comfyui-api"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "declared_body_bytes": null,
+          "response_slot": 1
+        },
+        {
+          "operation": "request_chunk",
+          "slot": 1,
+          "sequence": 0,
+          "input_abi": null,
+          "bytes_hex": "7b226d61785f636f6d706c6574696f6e5f746f6b656e73223a343039362c226d65737361676573223a5b7b22636f6e74656e74223a22426520636f6e63697365222c22726f6c65223a2273797374656d227d2c7b22636f6e74656e74223a22526561736f6e206361726566756c6c79222c22726f6c65223a2275736572227d5d2c226d6f64656c223a22782d61692f67726f6b2d342e3230222c22726561736f6e696e67223a7b226566666f7274223a2268696768222c226578636c756465223a747275657d2c2273747265616d223a66616c73657d",
+          "end": true
+        },
+        {
+          "operation": "cost",
+          "slot": 1,
+          "operation_id": "openrouter.chat.completions.estimated",
+          "currency": "USD",
+          "maximum_microunits": 210160,
+          "accepted": true,
+          "approved_microunits": 210160,
+          "receipt_hex": "6f70656e726f757465722d636f7374"
+        },
+        {
+          "operation": "progress",
+          "slot": 1,
+          "sequence": 0,
+          "completed": 0,
+          "total": 100,
+          "message": "Waiting for server"
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_head",
+          "slot": 1,
+          "after_sequence": null,
+          "timeout_milliseconds": 1000,
+          "sequence": 0,
+          "status": 200,
+          "headers": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_chunk",
+          "slot": 1,
+          "after_sequence": 0,
+          "timeout_milliseconds": 1000,
+          "sequence": 1,
+          "bytes_hex": "7b2263686f69636573223a5b7b226d657373616765223a7b22636f6e74656e74223a22526561736f6e6564207265706c79227d7d5d2c227573616765223a7b22636f7374223a302e327d7d"
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_terminal",
+          "slot": 1,
+          "after_sequence": 1,
+          "timeout_milliseconds": 1000,
+          "sequence": 2,
+          "receipt_hex": "6f70656e726f757465722d7465726d696e616c"
+        },
+        {
+          "operation": "progress",
+          "slot": 1,
+          "sequence": 1,
+          "completed": 100,
+          "total": 100,
+          "message": "Completed"
+        }
+      ],
+      "outputs": [
+        {
+          "port_id": "output_0",
+          "source_type": "String",
+          "value": {
+            "kind": "string",
+            "value": "Reasoned reply"
+          }
+        }
+      ],
+      "receipt_hex": "6f70656e726f757465722d7465726d696e616c"
+    },
+    {
+      "node_id": "OpenRouterLLMNode",
+      "inputs": [
+        {
+          "port_id": "prompt",
+          "source_type": "String",
+          "values": [
+            {
+              "kind": "string",
+              "value": "Hello"
+            }
+          ]
+        },
+        {
+          "port_id": "model",
+          "source_type": "COMFY_DYNAMICCOMBO_V3",
+          "values": [
+            {
+              "kind": "string",
+              "value": "deepseek/deepseek-v4-flash"
+            }
+          ]
+        },
+        {
+          "port_id": "seed",
+          "source_type": "Int",
+          "values": [
+            {
+              "kind": "integer",
+              "value": 7
+            }
+          ]
+        }
+      ],
+      "script": [
+        {
+          "operation": "start",
+          "endpoint": "https://api.comfy.org/proxy/openrouter/api/v1/chat/completions",
+          "secret_id": "sim_org.auth_token",
+          "method": "POST",
+          "headers": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "host-capability:auth_token_sim_org"
+            },
+            {
+              "name": "Comfy-Env",
+              "value": "host"
+            },
+            {
+              "name": "Comfy-Usage-Source",
+              "value": "comfyui-api"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "declared_body_bytes": null,
+          "response_slot": 1
+        },
+        {
+          "operation": "request_chunk",
+          "slot": 1,
+          "sequence": 0,
+          "input_abi": null,
+          "bytes_hex": "7b226d61785f636f6d706c6574696f6e5f746f6b656e73223a343039362c226d65737361676573223a5b7b22636f6e74656e74223a2248656c6c6f222c22726f6c65223a2275736572227d5d2c226d6f64656c223a22646565707365656b2f646565707365656b2d76342d666c617368222c2273656564223a372c2273747265616d223a66616c73657d",
+          "end": true
+        },
+        {
+          "operation": "cost",
+          "slot": 1,
+          "operation_id": "openrouter.chat.completions.estimated",
+          "currency": "USD",
+          "maximum_microunits": 18660,
+          "accepted": true,
+          "approved_microunits": 18660,
+          "receipt_hex": "6f70656e726f757465722d636f7374"
+        },
+        {
+          "operation": "progress",
+          "slot": 1,
+          "sequence": 0,
+          "completed": 0,
+          "total": 100,
+          "message": "Waiting for server"
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 1
+        },
+        {
+          "operation": "wait_head",
+          "slot": 1,
+          "after_sequence": null,
+          "timeout_milliseconds": 1000,
+          "sequence": 0,
+          "status": 429,
+          "headers": [
+            {
+              "name": "retry-after",
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "operation": "progress",
+          "slot": 1,
+          "sequence": 1,
+          "completed": 0,
+          "total": 100,
+          "message": "Retrying request"
+        },
+        {
+          "operation": "retry",
+          "slot": 1,
+          "delay_milliseconds": 1000,
+          "response_slot": 2
+        },
+        {
+          "operation": "request_chunk",
+          "slot": 2,
+          "sequence": 0,
+          "input_abi": null,
+          "bytes_hex": "7b226d61785f636f6d706c6574696f6e5f746f6b656e73223a343039362c226d65737361676573223a5b7b22636f6e74656e74223a2248656c6c6f222c22726f6c65223a2275736572227d5d2c226d6f64656c223a22646565707365656b2f646565707365656b2d76342d666c617368222c2273656564223a372c2273747265616d223a66616c73657d",
+          "end": true
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 2
+        },
+        {
+          "operation": "wait_head",
+          "slot": 2,
+          "after_sequence": null,
+          "timeout_milliseconds": 1000,
+          "sequence": 0,
+          "status": 200,
+          "headers": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 2
+        },
+        {
+          "operation": "wait_chunk",
+          "slot": 2,
+          "after_sequence": 0,
+          "timeout_milliseconds": 1000,
+          "sequence": 1,
+          "bytes_hex": "7b2263686f69636573223a5b7b226d657373616765223a7b22636f6e74656e74223a2248656c6c6f2066726f6d204f70656e526f75746572227d7d5d2c227573616765223a7b22636f7374223a302e30327d7d"
+        },
+        {
+          "operation": "check_cancelled",
+          "slot": 2
+        },
+        {
+          "operation": "wait_terminal",
+          "slot": 2,
+          "after_sequence": 1,
+          "timeout_milliseconds": 1000,
+          "sequence": 2,
+          "receipt_hex": "6f70656e726f757465722d7465726d696e616c"
+        },
+        {
+          "operation": "progress",
+          "slot": 2,
+          "sequence": 2,
+          "completed": 100,
+          "total": 100,
+          "message": "Completed"
+        }
+      ],
+      "outputs": [
+        {
+          "port_id": "output_0",
+          "source_type": "String",
+          "value": {
+            "kind": "string",
+            "value": "Hello from OpenRouter"
+          }
+        }
+      ],
+      "receipt_hex": "6f70656e726f757465722d7465726d696e616c"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "component": "crates/sim_test_support/fixtures/providers/common/provider_v2_component",
+  "malformed_component": "crates/sim_test_support/fixtures/providers/common/provider_v2_malformed_result_component",
+  "oversized_component": "crates/sim_test_support/fixtures/providers/common/provider_v2_oversized_result_component",
+  "namespace": "zed.sim.provider.openrouter",
+  "provenance_source": "fixture://test.provider-streaming-plugin",
+  "provenance_publisher": "Zed provider streaming fixture",
+  "bindings_sha256": "8b941f79f9560c7ec53819291d84e42d8c68ae2a7a70722143e55e6ea411f741",
+  "nodes": [{
+    "id": "OpenRouterLLMNode", "display_name": "OpenRouter LLM", "category": "partner/text/OpenRouter",
+    "ports": [
+      { "id": "prompt", "source_type": "String", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "seed", "source_type": "Int", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "system_prompt", "source_type": "String", "direction": "input", "presence": "optional", "cardinality": "singular" },
+      { "id": "output_0", "source_type": "String", "direction": "output", "presence": "required", "cardinality": "singular" }
+    ]
+  }],
+  "bindings": [{
+    "feature_id": "COMFY-NODE-0466", "node_id": "OpenRouterLLMNode",
+    "contract_sha256": "2c6dbff1b7f89da063de276e6737f58e1dc98a85ad736f620bea96cab9e0a3d5",
+    "transport_schema": "zed:sim-provider-transport@1", "materializer_schema": "zed:sim-provider-materializer@1"
+  }],
+  "capabilities": [
+    { "kind": "network_provider", "scope": "zed.sim.provider.openrouter|https://fixture.invalid/v2/stream", "maximum_operations": 1, "maximum_request_bytes": 16384, "maximum_response_bytes": 65536, "maximum_total_bytes": 81920, "maximum_handles": 1, "timeout_milliseconds": 1000 },
+    { "kind": "secret", "scope": "fixture-secret", "maximum_operations": 1, "maximum_request_bytes": 64, "maximum_response_bytes": 1, "maximum_total_bytes": 65, "maximum_handles": 1, "timeout_milliseconds": 1000 },
+    { "kind": "provider_upload", "scope": "zed.sim.provider.openrouter|https://fixture.invalid/v2/stream", "maximum_operations": 1, "maximum_request_bytes": 4096, "maximum_response_bytes": 1, "maximum_total_bytes": 4096, "maximum_handles": 1, "timeout_milliseconds": 1000 },
+    { "kind": "provider_cost", "scope": "zed.sim.provider.openrouter|https://fixture.invalid/v2/stream", "maximum_operations": 1, "maximum_request_bytes": 512, "maximum_response_bytes": 32781, "maximum_total_bytes": 33293, "maximum_handles": 1, "timeout_milliseconds": 1000 }
+  ],
+  "streaming": {
+    "methods": ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
+    "maximum_headers": 8, "maximum_header_bytes": 4096,
+    "maximum_request_body_bytes": 16384, "maximum_response_body_bytes": 65536,
+    "maximum_chunk_bytes": 4096, "maximum_ndjson_line_bytes": 4096,
+    "maximum_wait_milliseconds": 1000, "maximum_uploads": 1,
+    "maximum_upload_body_bytes": 4096, "maximum_cost_requests": 1,
+    "maximum_progress_total": 100, "uploads": true, "cost_requests": true
+  },
+  "invocations": [{
+    "node_id": "OpenRouterLLMNode",
+    "inputs": [
+      { "port_id": "prompt", "source_type": "String", "values": [{ "kind": "string", "value": "fixture prompt" }] },
+      { "port_id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "values": [{ "kind": "string", "value": "deepseek/deepseek-v3.2" }] },
+      { "port_id": "seed", "source_type": "Int", "values": [{ "kind": "integer", "value": 434 }] }
+    ],
+    "script": [
+      { "operation": "start", "endpoint": "https://fixture.invalid/v2/stream", "secret_id": "fixture-secret", "method": "POST", "headers": [{ "name": "x-first", "value": "1" }, { "name": "x-second", "value": "2" }], "declared_body_bytes": null, "response_slot": 1 },
+      { "operation": "request_chunk", "slot": 1, "sequence": 0, "input_abi": "prompt", "input_index": 0, "bytes_hex": null, "end": true },
+      { "operation": "check_cancelled", "slot": 1 },
+      { "operation": "start_upload", "slot": 1, "port_id": "reference", "media_type": "application/octet-stream", "byte_length": 3, "content_sha256": "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81", "response_slot": 2 },
+      { "operation": "upload_chunk", "slot": 2, "sequence": 0, "bytes_hex": "010203", "end": true },
+      { "operation": "complete_upload", "slot": 2, "download_url": "https://fixture.invalid/storage/reference.bin" },
+      { "operation": "cost", "slot": 1, "operation_id": "fixture", "currency": "USD", "maximum_microunits": 1000, "accepted": true, "approved_microunits": 10, "receipt_hex": "7461736b3433342d636f73742d72656365697074" },
+      { "operation": "progress", "slot": 1, "sequence": 0, "completed": 1, "total": 1, "message": "fixture" },
+      { "operation": "wait_head", "slot": 1, "after_sequence": null, "timeout_milliseconds": 100, "sequence": 0, "status": 200, "headers": [{ "name": "content-type", "value": "application/json" }] },
+      { "operation": "wait_terminal", "slot": 1, "after_sequence": 0, "timeout_milliseconds": 100, "sequence": 1, "receipt_hex": "7461736b3433342d7465726d696e616c2d72656365697074" }
+    ],
+    "outputs": [{ "port_id": "output_0", "source_type": "String", "value": { "kind": "string", "value": "fixture prompt" } }],
+    "receipt_hex": "7461736b3433342d7465726d696e616c2d72656365697074"
+  }]
+}

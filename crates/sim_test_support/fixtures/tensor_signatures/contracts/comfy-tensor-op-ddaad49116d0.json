@@ -1,0 +1,261 @@
+{
+  "canonical_target": "alias_free_torch.Activation1d",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:122:17 (AMPBlock2.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:128:17 (AMPBlock2.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:185:36 (BigVGANVocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:188:36 (BigVGANVocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:70:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:76:17 (AMPBlock1.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:122:17 (AMPBlock2.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:128:17 (AMPBlock2.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:185:36 (BigVGANVocoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:188:36 (BigVGANVocoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:70:17 (AMPBlock1.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:76:17 (AMPBlock1.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-ddaad49116d0-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "activation",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-DDAAD49116D0",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "3638bd3576647a63e9806c3fb6933bc336b89f95b0aebc00dbe20d2f1f255f42",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+        "sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "alias_free_torch.Activation1d"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_20",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-d54af27b4d70",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "activation",
+          "syntax": "activations.Snake(channels, alpha_logscale=h.snake_logscale)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 122,
+      "positional_arguments": [],
+      "scope": "AMPBlock2.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:122:17 (AMPBlock2.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "Activation1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "activation",
+          "syntax": "activations.SnakeBeta(channels, alpha_logscale=h.snake_logscale)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 128,
+      "positional_arguments": [],
+      "scope": "AMPBlock2.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:128:17 (AMPBlock2.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "Activation1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "activation",
+          "syntax": "activation_post",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 185,
+      "positional_arguments": [],
+      "scope": "BigVGANVocoder.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:185:36 (BigVGANVocoder.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "Activation1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "activation",
+          "syntax": "activation_post",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 188,
+      "positional_arguments": [],
+      "scope": "BigVGANVocoder.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:188:36 (BigVGANVocoder.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "Activation1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "activation",
+          "syntax": "activations.Snake(channels, alpha_logscale=h.snake_logscale)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 70,
+      "positional_arguments": [],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:70:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "Activation1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "activation",
+          "syntax": "activations.SnakeBeta(channels, alpha_logscale=h.snake_logscale)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 76,
+      "positional_arguments": [],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:76:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "Activation1d"
+    }
+  ],
+  "static_definition": null
+}

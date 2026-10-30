@@ -1,0 +1,67 @@
+[package]
+name = "sim_runtime"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_runtime.rs"
+[features]
+default = []
+signing-tooling = []
+test-support = ["sim_model/test-support", "db/test-support"]
+corex = ["dep:sim_backend_corex"]
+cuda = ["dep:sim_backend_cuda"]
+directml = ["dep:sim_backend_directml"]
+metal = ["dep:sim_backend_metal"]
+mlu = ["dep:sim_backend_mlu"]
+npu = ["dep:sim_backend_npu"]
+rocm = ["dep:sim_backend_rocm"]
+xpu = ["dep:sim_backend_xpu"]
+[dependencies]
+anyhow.workspace = true
+async-channel.workspace = true
+base64.workspace = true
+chrono.workspace = true
+clock.workspace = true
+sim_backend_corex = { workspace = true, optional = true }
+sim_backend_cuda = { workspace = true, optional = true }
+sim_backend_directml = { workspace = true, optional = true }
+sim_backend_metal = { workspace = true, optional = true }
+sim_backend_mlu = { workspace = true, optional = true }
+sim_backend_npu = { workspace = true, optional = true }
+sim_backend_rocm = { workspace = true, optional = true }
+sim_backend_xpu = { workspace = true, optional = true }
+sim_media.workspace = true
+sim_model.workspace = true
+sim_nodes.workspace = true
+sim_plugin_sdk.workspace = true
+sim_sampler.workspace = true
+sim_tensor.workspace = true
+sim_types.workspace = true
+db.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+postcard.workspace = true
+ring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+sha2.workspace = true
+settings_content.workspace = true
+smol.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+url.workspace = true
+util.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+sim_plugin_sdk = { workspace = true, features = ["signing-tooling"] }
+db = { workspace = true, features = ["test-support"] }

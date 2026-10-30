@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "fixture_id": "zimage-sim-model-0153",
+  "feature_id": "COMFY-MODEL-0153",
+  "source_symbol": "ZImage",
+  "source_ordinal": 46,
+  "source_architecture": "model_base.Lumina2",
+  "latent_feature_id": "COMFY-MODEL-0029",
+  "latent_identifier": "Flux",
+  "catalog_projection_sha256": "3cbd0174c3da63727b52aa2f40e85edf6173da0323041672d978bce26a8d78db",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lumina/model.py", "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lumina/controlnet.py", "sha256": "8330e0f92d70b23b4f6d4fa0661e240fac2cf211ff70d897f99ffebfd9f1d541"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/lumina2.py", "sha256": "f6af934b3d5014c6df37bb527167d1f94e44b1309079f57d4cb2f9460729da84"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/z_image.py", "sha256": "c6d1d15054ec8f6b1b5cddb759f5e637aa64dd9ffeaa937e266f03e035550aed"}
+  ],
+  "source_projection": "source_symbol=ZImage\nsource_ordinal=46\ninheritance=ZImage,Lumina2,supported_models_base.BASE\nunet_config.image_model=lumina2\nunet_config.dim=3840\nsampling_settings.multiplier=1.0\nsampling_settings.shift=3.0\nlatent_format=sim.latent_formats.Flux\nmemory_usage_factor=2.8\nsupported_inference_dtypes=bf16,f32; f16 only when the canonical late-layer population deviation and platform extended-fp16 gates both pass\narchitecture=model_base.Lumina2\nconditioning=attention_mask,cross_attention,pooled_text,siglip,reference_latents,reference_contexts\ndetector=cap projection dimension 3840 plus native qk norm; pixel decoder marker has higher-precedence sibling ownership\nlayouts=prefixed-native,standalone-native,pinned z_image_to_diffusers conversion\nclip=sim.text_encoders.z_image.ZImageTokenizer+z_image.te with qwen3_4b llama_detect\n",
+  "source_projection_sha256": "ca99c333759ca4fb21182b3d8e3848df2bd988cb20be46b9e8acd5514642ffcf",
+  "alternate_layout": "The pinned ZImage Diffusers conversion is admitted only with its complete split-attention and all_x/all_final layout; partial, mixed, Lumina2, and pixel-space probes fail closed.",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI ZImage sources; no production scripting dependency"
+}

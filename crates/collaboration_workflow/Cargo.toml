@@ -1,0 +1,27 @@
+[package]
+name = "collaboration_workflow"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[package.metadata.collaboration-boundary]
+layer = "domain"
+allowed-normal-dependencies = ["cron", "serde", "serde_yaml_ng", "thiserror", "yaml-rust2"]
+forbidden-capabilities = ["gpui", "storage", "transport"]
+
+[lib]
+path = "src/collaboration_workflow.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+cron.workspace = true
+serde.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+yaml-rust2.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

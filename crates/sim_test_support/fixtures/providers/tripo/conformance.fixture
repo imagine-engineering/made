@@ -1,0 +1,81 @@
+{
+  "namespace": "zed.sim.provider.tripo",
+  "source_sha256": "d380b5bb5a9b07427dc2bf40dd06c745341e08f50ed83338f0c45d05c127a10e",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0686",
+      "node_identifier": "TripoConversionNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0687",
+      "node_identifier": "TripoImageToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0688",
+      "node_identifier": "TripoImportModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0689",
+      "node_identifier": "TripoMultiviewToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0690",
+      "node_identifier": "TripoP1ImageToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0691",
+      "node_identifier": "TripoP1MultiviewToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0692",
+      "node_identifier": "TripoP1TextToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0693",
+      "node_identifier": "TripoRefineNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0694",
+      "node_identifier": "TripoRetargetNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0695",
+      "node_identifier": "TripoRigNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0699",
+      "node_identifier": "TripoTextToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0700",
+      "node_identifier": "TripoTextureNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0183",
+      "method": "POST",
+      "path": "/proxy/tripo/v2/openapi/import",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0184",
+      "method": "POST",
+      "path": "/proxy/tripo/v2/openapi/task",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0185",
+      "method": "GET",
+      "path": "/proxy/tripo/v2/openapi/task/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0186",
+      "method": "GET",
+      "path": "/proxy/tripo/v2/openapi/task/{task_id}",
+      "disposition": "executable"
+    }
+  ],
+  "aliases": []
+}

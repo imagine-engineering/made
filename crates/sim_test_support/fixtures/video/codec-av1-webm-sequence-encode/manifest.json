@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-av1-webm-sequence-encode-v1",
+  "truth_mode": "synthetic-source-compatible-av1-webm-sequence-execution",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d",
+    "observable": "SaveWEBM selects libsvtav1, stages the first three IMAGE channels as RGB24, converts to yuv420p10le, applies source CRF text and preset 6, and discards alpha"
+  },
+  "ffmpeg_7_1": {
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "signing_key": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "pixfmt_header_sha256": "ace2ebcf84a382269c21ad7a050d69ab293b0dbceab350ac7f728a1b37dc0336",
+    "libsvtav1_encoder_sha256": "201fcbeccb2646b973277a02be1881ecf1a859ebaa0acc5c06d55ed4b0e47d61",
+    "option_parser_sha256": "67510d73f2d0b069bd956b3fd6f950b0b550caf96b8153c530183cd960151bca",
+    "matroska_muxer_sha256": "e3e089b27e9a8b49c4243306147764741eb66ef442128b114eee1e0efb974557",
+    "rgb24_pixel_format": 2,
+    "yuv420p10le_pixel_format": 62,
+    "reviewed_symbol_count": 54,
+    "new_symbols": 0
+  },
+  "dependencies": {
+    "av1_pixel_format_overlay_manifest_sha256": "c467a7efa46dd2291bbe9a5fc1a0ddaa1a8685fa74de377f1b6b366ba464e6ca",
+    "av1_pixel_format_verifier_sha256": "98ad26c93ab60d2f239861b39a9e7dc85f213e3a7de46eddbf61f6c5cafcfab9",
+    "codec_plan_manifest_sha256": "9ff5dde7b0d4fdde599fc377031e88c455e00afcf428e190069569b0c548704f",
+    "codec_suite_admission_manifest_sha256": "fa7e0f02c2e977518205b6025d28e47eeaa9eb10401a250e5cf7fb8f7c83bcc3",
+    "codec_vp9_webm_container_metadata_manifest_sha256": "736cd651a9c901e2ef9627509ba07f3283fd4b0708c0f4918a4e85a20d876af8",
+    "codec_vp9_webm_alpha_manifest_sha256": "0d8b7d5f72af18a7ce7172eeb37d5a7d1355d39384f7058dfa5b3718d855943b"
+  },
+  "contract": {
+    "profile": "WebM with provider-proved libsvtav1, RGB24 source, YUV420P10LE destination, zero bit rate, global header, source CRF text, and preset 6",
+    "quantization": "multiply the first three source channels by 255, clamp to [0,255], and truncate to packed U8 RGB while ignoring a fourth alpha channel",
+    "batch_lifecycle": "one bounded retained session, increasing frame PTS, per-frame packet draining, one terminal flush, one trailer, and final-only attempt-local bytes",
+    "metadata": "ordered duplicate-preserving metadata is attached before stream and header creation",
+    "fractional_crf": "the exact checked source float text reaches FFmpeg; integer option conversion remains FFmpeg and libsvtav1 behavior"
+  },
+  "vectors": [
+    {
+      "input_rgba": [-1.0, 0.0, 0.5, 0.0],
+      "expected_rgb8": [0, 0, 127]
+    },
+    {
+      "input_rgba": [1.0, 0.25, 0.75, 1.0],
+      "expected_rgb8": [255, 63, 191]
+    }
+  ],
+  "claims": {
+    "compiler_verified_yuv420p10le_pixel_format": true,
+    "historical_abi_prefixes_and_symbol_set_unchanged": true,
+    "provider_proved_libsvtav1_reaches_retained_session": true,
+    "source_rgb_quantization_and_rgba_alpha_discard_are_exact_signature_tested": true,
+    "ordered_metadata_float_crf_preset_global_header_pts_flush_and_cleanup_are_tested": true,
+    "bounded_staging_cancellation_zero_scratch_and_retry_are_tested": true,
+    "licensed_or_installed_ffmpeg_or_libsvtav1_package": false,
+    "production_codec_availability": false,
+    "playable_webm_or_decoded_numeric_av1_color_or_ten_bit_oracle": false,
+    "python_or_pyav_byte_identity": false,
+    "codec_actor_or_portable_output_tensor_reachable": false,
+    "vp9_alpha_av1_alpha_aac_audio_or_general_video_owned": false,
+    "json_serialization_node_effect_path_ui_or_output_committer_reachable": false,
+    "media_payload_handle_cache_persistence_recovery_or_publication_owned": false,
+    "complete_native_heap_interception_or_measurement": false
+  }
+}

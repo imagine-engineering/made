@@ -1,0 +1,577 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_rocm/abi/symbols-v1.json"
+licenses="$workspace/crates/sim_backend_rocm/LICENSES"
+policy="$workspace/nix/sim-backends/rocm/package-policy.json"
+contract_schema="$workspace/nix/sim-backends/rocm/ffi-contracts-v1.schema.json"
+signature_algorithm="ed25519"
+signature_domain="zed-sim-rocm-package-v1"
+coverage_file_name="package-coverage.sha256"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY ED25519_RECEIPT SIGNER_ID RUNTIME_ROOT FFI_CONTRACTS_CATALOG" >&2
+    echo "       $0 --self-test" >&2
+}
+
+generate_adapter_manifest() {
+    destination=$1
+    signer=$2
+    runtime_root=$3
+    abi_digest=$4
+    contract_digest=$5
+    python3 - "$destination" "$signer" "$runtime_root" "$abi_digest" "$contract_digest" "$signature_algorithm" "$signature_domain" <<'PY'
+import json
+import pathlib
+import sys
+
+(
+    destination,
+    signer,
+    runtime_root,
+    abi_digest,
+    contract_digest,
+    signature_algorithm,
+    signature_domain,
+) = sys.argv[1:]
+manifest = {
+    "schema_version": 2,
+    "backend": "rocm",
+    "abi_floor": "6.1.0",
+    "abi_manifest_sha256": abi_digest,
+    "ffi_contracts_sha256": contract_digest,
+    "redistributes_amd_runtime": False,
+    "runtime_root": runtime_root,
+    "signer": signer,
+    "signature_algorithm": signature_algorithm,
+    "signature_coverage": "package-coverage-v1",
+    "signature_domain": signature_domain,
+}
+pathlib.Path(destination).write_text(
+    json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+validate_receipt() {
+    receipt=$1
+    python3 - "$receipt" <<'PY'
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1])
+metadata = path.lstat()
+if not stat.S_ISREG(metadata.st_mode):
+    raise SystemExit("Ed25519 receipt must be a regular file, not a symbolic link")
+if metadata.st_size == 0 or metadata.st_size > 1024:
+    raise SystemExit("Ed25519 receipt must be nonempty and at most 1 KiB")
+raw = path.read_bytes()
+try:
+    pairs = json.loads(raw, object_pairs_hook=lambda values: values)
+except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Ed25519 receipt is not valid JSON: {error}")
+if not isinstance(pairs, list) or any(not isinstance(pair, tuple) for pair in pairs):
+    raise SystemExit("Ed25519 receipt must be a JSON object")
+keys = [key for key, _value in pairs]
+if keys != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("Ed25519 receipt fields must be canonical and contain no duplicates or unknown fields")
+receipt = dict(pairs)
+signature = receipt["signature"]
+if type(receipt["schema_version"]) is not int or receipt["schema_version"] != 1:
+    raise SystemExit("Ed25519 receipt schema_version must be 1")
+if receipt["algorithm"] != "ed25519":
+    raise SystemExit("Ed25519 receipt algorithm must be ed25519")
+if not isinstance(signature, str) or re.fullmatch(r"[0-9a-f]{128}", signature) is None:
+    raise SystemExit("Ed25519 receipt signature must be exactly 128 lowercase hexadecimal characters")
+canonical = json.dumps(receipt, separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+if raw != canonical:
+    raise SystemExit("Ed25519 receipt must use canonical-json-v1 encoding")
+PY
+}
+
+validate_and_copy_contract_catalog() {
+    source=$1
+    destination=$2
+    python3 - "$source" "$destination" "$contract_schema" <<'PY'
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+source = pathlib.Path(sys.argv[1])
+destination = pathlib.Path(sys.argv[2])
+schema = pathlib.Path(sys.argv[3])
+schema_metadata = schema.lstat()
+if not stat.S_ISREG(schema_metadata.st_mode) or schema_metadata.st_size == 0:
+    raise SystemExit("reviewed FFI contract schema is missing or not a regular file")
+
+flags = os.O_RDONLY
+if hasattr(os, "O_NOFOLLOW"):
+    flags |= os.O_NOFOLLOW
+try:
+    descriptor = os.open(source, flags)
+except OSError as error:
+    raise SystemExit(f"cannot open reviewed FFI contract catalog without following links: {error}")
+try:
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise SystemExit("reviewed FFI contract catalog must be a regular file")
+    if before.st_size == 0 or before.st_size > 1024 * 1024:
+        raise SystemExit("reviewed FFI contract catalog must be nonempty and at most 1 MiB")
+    chunks = []
+    remaining = before.st_size
+    while remaining:
+        chunk = os.read(descriptor, min(remaining, 64 * 1024))
+        if not chunk:
+            raise SystemExit("reviewed FFI contract catalog changed while being read")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    if os.read(descriptor, 1):
+        raise SystemExit("reviewed FFI contract catalog grew while being read")
+    after = os.fstat(descriptor)
+    if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise SystemExit("reviewed FFI contract catalog changed while being read")
+finally:
+    os.close(descriptor)
+raw = b"".join(chunks)
+
+def reject_duplicates(values):
+    result = {}
+    for key, value in values:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+try:
+    catalog = json.loads(raw, object_pairs_hook=reject_duplicates)
+except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit(f"reviewed FFI contract catalog is not strict JSON: {error}")
+if not isinstance(catalog, dict) or set(catalog) != {"schema_version", "backend", "abi_floor", "libraries"}:
+    raise SystemExit("FFI contract catalog has missing or unknown top-level fields")
+if type(catalog["schema_version"]) is not int or catalog["schema_version"] != 1:
+    raise SystemExit("FFI contract catalog schema_version must be 1")
+if catalog["backend"] != "rocm" or catalog["abi_floor"] != "6.1.0":
+    raise SystemExit("FFI contract catalog backend and ABI floor must be rocm 6.1.0")
+libraries = catalog["libraries"]
+if not isinstance(libraries, list) or not 1 <= len(libraries) <= 256:
+    raise SystemExit("FFI contract catalog must contain between 1 and 256 libraries")
+
+row_keys = {
+    "identity",
+    "role",
+    "filename",
+    "soname",
+    "sha256",
+    "abi",
+    "required_symbols",
+    "unsafe_owner",
+}
+file_name = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,254}")
+symbol_name = re.compile(r"[A-Za-z0-9_.]{1,256}")
+digest = re.compile(r"[0-9a-f]{64}")
+identities = []
+filenames = []
+sonames = []
+expected_primary_files = {
+    "libMIOpen": "libMIOpen.so",
+    "libamdhip64": "libamdhip64.so",
+    "libhiprtc": "libhiprtc.so",
+    "librocblas": "librocblas.so",
+}
+observed_primary_files = {}
+for index, row in enumerate(libraries):
+    if not isinstance(row, dict) or set(row) != row_keys:
+        raise SystemExit(f"FFI contract row {index} has missing or unknown fields")
+    identity = row["identity"]
+    filename = row["filename"]
+    soname = row["soname"]
+    if not isinstance(identity, str) or not identity or len(identity) > 272:
+        raise SystemExit(f"FFI contract row {index} has an invalid identity")
+    if row["role"] not in ("primary", "recursive_dependency"):
+        raise SystemExit(f"FFI contract row {index} has an invalid role")
+    if not isinstance(filename, str) or file_name.fullmatch(filename) is None:
+        raise SystemExit(f"FFI contract row {index} has an invalid exact filename")
+    if not isinstance(soname, str) or file_name.fullmatch(soname) is None:
+        raise SystemExit(f"FFI contract row {index} has an invalid exact SONAME")
+    if filename != soname:
+        raise SystemExit(f"FFI contract row {index} filename and SONAME must be exact and equal")
+    if not isinstance(row["sha256"], str) or digest.fullmatch(row["sha256"]) is None:
+        raise SystemExit(f"FFI contract row {index} has an invalid SHA-256")
+    if row["abi"] != "6.1.0":
+        raise SystemExit(f"FFI contract row {index} has an invalid ABI")
+    symbols = row["required_symbols"]
+    if not isinstance(symbols, list) or not 1 <= len(symbols) <= 4096:
+        raise SystemExit(f"FFI contract row {index} must contain required symbols")
+    if any(not isinstance(symbol, str) or symbol_name.fullmatch(symbol) is None for symbol in symbols):
+        raise SystemExit(f"FFI contract row {index} has an invalid required symbol")
+    if symbols != sorted(symbols) or len(symbols) != len(set(symbols)):
+        raise SystemExit(f"FFI contract row {index} required symbols must be sorted and unique")
+    if row["unsafe_owner"] != "sim_backend_rocm::loader":
+        raise SystemExit(f"FFI contract row {index} has an invalid unsafe owner")
+    if row["role"] == "primary":
+        expected_filename = expected_primary_files.get(identity)
+        if expected_filename is None or filename != expected_filename or soname != expected_filename:
+            raise SystemExit(f"FFI contract row {index} is not an exact reviewed primary library")
+        observed_primary_files[identity] = filename
+    elif identity != f"rocm-dependency:{soname}":
+        raise SystemExit(f"FFI contract row {index} does not use the canonical recursive dependency identity")
+    identities.append(identity)
+    filenames.append(filename)
+    sonames.append(soname)
+if identities != sorted(identities) or len(identities) != len(set(identities)):
+    raise SystemExit("FFI contract library identities must be sorted and unique")
+if len(filenames) != len(set(filenames)) or len(sonames) != len(set(sonames)):
+    raise SystemExit("FFI contract filenames and SONAMEs must be unique")
+if observed_primary_files != expected_primary_files:
+    raise SystemExit("FFI contract catalog must contain each exact reviewed primary library once")
+
+destination_descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+try:
+    written = 0
+    while written < len(raw):
+        written += os.write(destination_descriptor, raw[written:])
+finally:
+    os.close(destination_descriptor)
+PY
+}
+
+generate_coverage() {
+    package_root=$1
+    python3 - "$package_root" "$coverage_file_name" <<'PY'
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+coverage_name = sys.argv[2]
+excluded = {"adapter-manifest.sig", coverage_name}
+payloads = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        if relative in excluded:
+            continue
+        mode = path.lstat().st_mode
+        if not stat.S_ISREG(mode):
+            raise SystemExit(f"coverage input is not a regular file: {relative}")
+        payloads.append((relative, path))
+lines = []
+for relative, path in sorted(payloads):
+    contents = path.read_bytes()
+    digest = hashlib.sha256(contents).hexdigest()
+    lines.append(f"{digest} {len(contents)}  {relative}\n")
+(root / coverage_name).write_text("".join(lines), encoding="utf-8")
+PY
+}
+
+validate_final_tree() {
+    package_root=$1
+    python3 - "$policy" "$package_root" <<'PY'
+import fnmatch
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+policy_path = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+policy = json.loads(policy_path.read_text(encoding="utf-8"))
+allowed = policy.get("allowed_payloads")
+required = policy.get("required_payloads")
+forbidden = policy.get("forbidden_payloads")
+excluded = set(policy.get("signature_coverage_excludes", []))
+if not all(isinstance(value, list) for value in (allowed, required, forbidden)):
+    raise SystemExit("package policy payload fields must be arrays")
+if not all(isinstance(item, str) and item for items in (allowed, required, forbidden) for item in items):
+    raise SystemExit("package policy payload entries must be non-empty strings")
+
+def payload_matches(path, pattern):
+    expression = "".join("[^/]*" if character == "*" else "[^/]" if character == "?" else re.escape(character) for character in pattern)
+    return re.fullmatch(expression, path) is not None
+
+def directory_is_declared(path):
+    return any(pattern.startswith(path + "/") for pattern in allowed)
+
+observed = set()
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for entry_name in directory_names + file_names:
+        entry = pathlib.Path(directory, entry_name)
+        relative = entry.relative_to(root).as_posix()
+        mode = entry.lstat().st_mode
+        if stat.S_ISLNK(mode):
+            raise SystemExit(f"symbolic links are forbidden in ROCm packages: {relative}")
+        if stat.S_ISDIR(mode):
+            if not directory_is_declared(relative):
+                raise SystemExit(f"package directory is not declared by the allowlist: {relative}")
+            continue
+        if not stat.S_ISREG(mode):
+            raise SystemExit(f"non-regular package entry is forbidden: {relative}")
+        for pattern in forbidden:
+            if fnmatch.fnmatchcase(entry.name, pattern) or payload_matches(relative, pattern):
+                raise SystemExit(f"AMD runtime redistribution is forbidden: {relative}")
+        if not any(payload_matches(relative, pattern) for pattern in allowed):
+            raise SystemExit(f"package payload is not declared by the allowlist: {relative}")
+        observed.add(relative)
+
+missing = sorted(path for path in required if path not in observed)
+if missing:
+    raise SystemExit("required package payloads are missing: " + ", ".join(missing))
+
+coverage_path = root / "package-coverage.sha256"
+lines = []
+for relative in sorted(observed - excluded):
+    contents = (root / relative).read_bytes()
+    digest = hashlib.sha256(contents).hexdigest()
+    lines.append(f"{digest} {len(contents)}  {relative}\n")
+expected_coverage = "".join(lines).encode("utf-8")
+if coverage_path.read_bytes() != expected_coverage:
+    raise SystemExit("package coverage no longer matches the final signed payload tree")
+PY
+}
+
+run_self_test() {
+    temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/sim-rocm-package-test.XXXXXX")
+    trap 'rm -rf -- "$temporary_directory"' 0 HUP INT TERM
+    runtime_root="$temporary_directory/rocm-sdk"
+    receipt="$temporary_directory/receipt.json"
+    catalog="$temporary_directory/ffi-contracts-v1.json"
+    mkdir -p "$runtime_root"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}' > "$receipt"
+    printf '%s\n' '{"schema_version":1,"backend":"rocm","abi_floor":"6.1.0","libraries":[{"identity":"libMIOpen","role":"primary","filename":"libMIOpen.so","soname":"libMIOpen.so","sha256":"0000000000000000000000000000000000000000000000000000000000000000","abi":"6.1.0","required_symbols":["miopenCreate","miopenDestroy"],"unsafe_owner":"sim_backend_rocm::loader"},{"identity":"libamdhip64","role":"primary","filename":"libamdhip64.so","soname":"libamdhip64.so","sha256":"1111111111111111111111111111111111111111111111111111111111111111","abi":"6.1.0","required_symbols":["hipGetDeviceCount","hipInit"],"unsafe_owner":"sim_backend_rocm::loader"},{"identity":"libhiprtc","role":"primary","filename":"libhiprtc.so","soname":"libhiprtc.so","sha256":"2222222222222222222222222222222222222222222222222222222222222222","abi":"6.1.0","required_symbols":["hiprtcVersion"],"unsafe_owner":"sim_backend_rocm::loader"},{"identity":"librocblas","role":"primary","filename":"librocblas.so","soname":"librocblas.so","sha256":"3333333333333333333333333333333333333333333333333333333333333333","abi":"6.1.0","required_symbols":["rocblas_create_handle"],"unsafe_owner":"sim_backend_rocm::loader"},{"identity":"rocm-dependency:libhsa-runtime64.so.1","role":"recursive_dependency","filename":"libhsa-runtime64.so.1","soname":"libhsa-runtime64.so.1","sha256":"4444444444444444444444444444444444444444444444444444444444444444","abi":"6.1.0","required_symbols":["hsa_init"],"unsafe_owner":"sim_backend_rocm::loader"}]}' > "$catalog"
+
+    "$0" "$temporary_directory/package" "$receipt" self-test.signer "$runtime_root" "$catalog" >/dev/null
+    python3 - "$temporary_directory/package" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+package = pathlib.Path(sys.argv[1])
+policy = json.loads((package / "package-policy.json").read_text(encoding="utf-8"))
+manifest = json.loads((package / "adapter-manifest.json").read_text(encoding="utf-8"))
+catalog = (package / "ffi-contracts-v1.json").read_bytes()
+if policy.get("schema_version") != 2 or manifest.get("schema_version") != 2:
+    raise SystemExit("self-test package did not use the breaking package/manifest schema v2")
+if policy.get("signature_algorithm") != "ed25519":
+    raise SystemExit("self-test package did not use the native Ed25519 signature contract")
+if policy.get("signature_domain") != "zed-sim-rocm-package-v1":
+    raise SystemExit("self-test package did not retain the ROCm package signature domain")
+if policy.get("signature_payload_format") != "domain-nul-u64be-signer-u64be-coverage":
+    raise SystemExit("self-test package did not retain the signature payload framing")
+if manifest.get("ffi_contracts_sha256") != hashlib.sha256(catalog).hexdigest():
+    raise SystemExit("self-test adapter manifest did not bind the copied FFI contract catalog")
+PY
+    if [ ! -f "$temporary_directory/package/ffi-contracts-v1.json" ] || \
+        ! cmp -s "$catalog" "$temporary_directory/package/ffi-contracts-v1.json"; then
+        echo "self-test package did not preserve the reviewed FFI contract catalog" >&2
+        exit 1
+    fi
+    if ! grep -q '  ffi-contracts-v1.json$' "$temporary_directory/package/package-coverage.sha256"; then
+        echo "self-test signature coverage omitted the reviewed FFI contract catalog" >&2
+        exit 1
+    fi
+    if [ ! -f "$temporary_directory/package/adapter-manifest.sig" ] || \
+        ! cmp -s "$receipt" "$temporary_directory/package/adapter-manifest.sig"; then
+        echo "self-test package did not preserve the Ed25519 receipt" >&2
+        exit 1
+    fi
+    if "$0" "$temporary_directory/package" "$receipt" self-test.signer "$runtime_root" "$catalog" >/dev/null 2>&1; then
+        echo "self-test accepted an existing output directory" >&2
+        exit 1
+    fi
+    if "$0" "$temporary_directory/missing-catalog-package" "$receipt" self-test.signer "$runtime_root" >/dev/null 2>&1; then
+        echo "self-test accepted packaging without a separately reviewed FFI contract catalog" >&2
+        exit 1
+    fi
+
+    invalid_receipt="$temporary_directory/invalid-receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"ABC"}' > "$invalid_receipt"
+    if "$0" "$temporary_directory/invalid-receipt-package" "$invalid_receipt" self-test.signer "$runtime_root" "$catalog" >/dev/null 2>&1; then
+        echo "self-test accepted a malformed Ed25519 receipt" >&2
+        exit 1
+    fi
+    unsorted_catalog="$temporary_directory/unsorted-contracts.json"
+    python3 - "$catalog" "$unsorted_catalog" <<'PY'
+import json
+import pathlib
+import sys
+
+catalog = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+catalog["libraries"][0], catalog["libraries"][1] = catalog["libraries"][1], catalog["libraries"][0]
+pathlib.Path(sys.argv[2]).write_text(
+    json.dumps(catalog, separators=(",", ":")) + "\n",
+    encoding="utf-8",
+)
+PY
+    if "$0" "$temporary_directory/unsorted-package" "$receipt" self-test.signer "$runtime_root" "$unsorted_catalog" >/dev/null 2>&1; then
+        echo "self-test accepted an unsorted reviewed FFI contract catalog" >&2
+        exit 1
+    fi
+
+    cp -R "$temporary_directory/package" "$temporary_directory/symlink-package"
+    ln -s /tmp "$temporary_directory/symlink-package/unexpected-link"
+    if validate_final_tree "$temporary_directory/symlink-package" >/dev/null 2>&1; then
+        echo "self-test accepted a symbolic link in the final package" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package" "$temporary_directory/extra-package"
+    : > "$temporary_directory/extra-package/unexpected.txt"
+    if validate_final_tree "$temporary_directory/extra-package" >/dev/null 2>&1; then
+        echo "self-test accepted an undeclared final package payload" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package" "$temporary_directory/runtime-package"
+    mkdir -p "$temporary_directory/runtime-package/kernels"
+    : > "$temporary_directory/runtime-package/kernels/libamdhip64.so.6"
+    if validate_final_tree "$temporary_directory/runtime-package" >/dev/null 2>&1; then
+        echo "self-test accepted a redistributed AMD runtime library" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package" "$temporary_directory/covered-package"
+    printf '%s\n' tampered >> "$temporary_directory/covered-package/LICENSES"
+    if validate_final_tree "$temporary_directory/covered-package" >/dev/null 2>&1; then
+        echo "self-test accepted a mutation of signature-covered content" >&2
+        exit 1
+    fi
+    echo "ROCm package self-tests passed"
+}
+
+if [ "$#" -eq 1 ] && [ "$1" = "--self-test" ]; then
+    run_self_test
+    exit 0
+fi
+
+if [ "$#" -ne 5 ]; then
+    usage
+    exit 2
+fi
+
+output_directory=$1
+signature_receipt=$2
+signer_id=$3
+runtime_root=$4
+contract_catalog=$5
+
+if [ -z "$signer_id" ] || [ "${#signer_id}" -gt 256 ]; then
+    echo "signer ID must use canonical lowercase authority syntax" >&2
+    exit 2
+fi
+case "$signer_id" in
+    [a-z0-9]|[a-z0-9]*[a-z0-9]) ;;
+    *)
+        echo "signer ID must use canonical lowercase authority syntax" >&2
+        exit 2
+        ;;
+esac
+case "$signer_id" in
+    *[!a-z0-9._-]*)
+        echo "signer ID must use canonical lowercase authority syntax" >&2
+        exit 2
+        ;;
+esac
+if printf '%s' "$signer_id" | grep -q '[._-][._-]'; then
+    echo "signer ID must use canonical lowercase authority syntax" >&2
+    exit 2
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 is required to validate the ROCm package inputs" >&2
+    exit 1
+fi
+for required_file in "$abi_manifest" "$licenses" "$policy" "$contract_schema"; do
+    if [ ! -f "$required_file" ]; then
+        echo "missing reviewed package input: $required_file" >&2
+        exit 1
+    fi
+done
+validate_receipt "$signature_receipt"
+
+case "$runtime_root" in
+    /*) ;;
+    *)
+        echo "ROCm runtime root must be an absolute directory outside the package" >&2
+        exit 2
+        ;;
+esac
+if [ ! -d "$runtime_root" ]; then
+    echo "ROCm runtime root must be an existing directory" >&2
+    exit 2
+fi
+runtime_root=$(CDPATH= cd -- "$runtime_root" && pwd -P)
+
+output_parent=$(dirname -- "$output_directory")
+output_name=$(basename -- "$output_directory")
+case "$output_name" in
+    ''|.|..|/)
+        echo "output directory must name a new package directory" >&2
+        exit 2
+        ;;
+esac
+mkdir -p "$output_parent"
+output_parent=$(CDPATH= cd -- "$output_parent" && pwd -P)
+output_directory="$output_parent/$output_name"
+if [ -e "$output_directory" ] || [ -L "$output_directory" ]; then
+    echo "output directory must not already exist: $output_directory" >&2
+    exit 2
+fi
+case "$runtime_root/" in
+    "$output_directory/"*)
+        echo "ROCm runtime root must not be inside the package output" >&2
+        exit 2
+        ;;
+esac
+
+staging_directory=$(mktemp -d "$output_parent/.sim-rocm-package.XXXXXX")
+cleanup() {
+    if [ -n "${staging_directory:-}" ] && [ -d "$staging_directory" ]; then
+        rm -rf -- "$staging_directory"
+    fi
+}
+trap cleanup 0 HUP INT TERM
+
+mkdir -p "$staging_directory/abi"
+cp "$abi_manifest" "$staging_directory/abi/symbols-v1.json"
+cp "$licenses" "$staging_directory/LICENSES"
+cp "$policy" "$staging_directory/package-policy.json"
+validate_and_copy_contract_catalog "$contract_catalog" "$staging_directory/ffi-contracts-v1.json"
+
+abi_digest=$(shasum -a 256 "$abi_manifest" | awk '{print $1}')
+contract_digest=$(shasum -a 256 "$staging_directory/ffi-contracts-v1.json" | awk '{print $1}')
+generate_adapter_manifest "$staging_directory/adapter-manifest.json" "$signer_id" "$runtime_root" "$abi_digest" "$contract_digest"
+cp "$signature_receipt" "$staging_directory/adapter-manifest.sig"
+generate_coverage "$staging_directory"
+validate_final_tree "$staging_directory"
+
+if [ -e "$output_directory" ] || [ -L "$output_directory" ]; then
+    echo "output directory appeared while packaging: $output_directory" >&2
+    exit 1
+fi
+mv "$staging_directory" "$output_directory"
+staging_directory=
+trap - 0 HUP INT TERM
+
+find "$output_directory" -type f -print | LC_ALL=C sort

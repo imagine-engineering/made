@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "oracle_kind": "standard-library-only scalar translation of the pinned reduced BiRefNet source equations",
+  "generator_path": "crates/sim_test_support/fixtures/models/background-removal-resource-foundation/generate_oracle.py",
+  "generator_command": "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/background-removal-resource-foundation/generate_oracle.py",
+  "generator_sha256": "097a5411d3c79e8b996fc058c113cc16ce27696839c006d66b4f75d260794921",
+  "oracle_path": "crates/sim_test_support/fixtures/models/background-removal-resource-foundation/oracle.json",
+  "oracle_sha256": "b9ff30d7192635c63f963ec133520d002448cecd4d64afcc4c60eb5e9ab12310",
+  "raw_f32_sha256": "10a250f2cab0a9b19470113e4bfc00f7c73a0669a3272ed960e4c3b8ada53653",
+  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.5",
+  "pinned_sources": {
+    "projects/sim/ComfyUI/sim_extras/nodes_bg_removal.py": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce",
+    "projects/sim/ComfyUI/sim/bg_removal_model.py": "c4f6f7beea512c759849efa07f03f09044ea76fe5c71fb7afff31e4886e4daa7",
+    "projects/sim/ComfyUI/sim/background_removal/birefnet.py": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+    "projects/sim/ComfyUI/sim/background_removal/birefnet.json": "50dd9639fa207a823437370b46d32a56b3f00eb1bef3bd225fe87eeeb8f255d2",
+    "projects/sim/ComfyUI/sim/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa"
+  },
+  "fixture_profile": "test-support-only reduced BiRefNet",
+  "fixture_routing": "Test-only deterministic state uses 0.1-scale weights in the unshifted stage-0 attention block and final decoder block, plus a positive final decoder ASPP projection bias, so each required source phase reaches the final mask without changing the production profile.",
+  "shifted_window_discriminator": "The active shifted-block output-projection bias proves the alternating shifted block executes; the ordered-additive attention foundation independently pins query, relative-bias, and shift-mask association.",
+  "production_profile": "1024/embed192/depths[2,2,18,2]/heads[6,12,24,48]/window12"
+}

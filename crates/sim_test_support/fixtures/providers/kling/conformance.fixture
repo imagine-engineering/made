@@ -1,0 +1,315 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.kling",
+  "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0279",
+      "node_identifier": "KlingAvatarNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0280",
+      "node_identifier": "KlingCameraControlI2VNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0281",
+      "node_identifier": "KlingCameraControls"
+    },
+    {
+      "feature_id": "COMFY-NODE-0282",
+      "node_identifier": "KlingCameraControlT2VNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0283",
+      "node_identifier": "KlingDualCharacterVideoEffectNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0284",
+      "node_identifier": "KlingFirstLastFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0285",
+      "node_identifier": "KlingImage2VideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0286",
+      "node_identifier": "KlingImageGenerationNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0287",
+      "node_identifier": "KlingImageToVideoWithAudio"
+    },
+    {
+      "feature_id": "COMFY-NODE-0288",
+      "node_identifier": "KlingLipSyncAudioToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0289",
+      "node_identifier": "KlingLipSyncTextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0290",
+      "node_identifier": "KlingMotionControl"
+    },
+    {
+      "feature_id": "COMFY-NODE-0291",
+      "node_identifier": "KlingOmniProEditVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0292",
+      "node_identifier": "KlingOmniProFirstLastFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0293",
+      "node_identifier": "KlingOmniProImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0294",
+      "node_identifier": "KlingOmniProImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0295",
+      "node_identifier": "KlingOmniProTextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0296",
+      "node_identifier": "KlingOmniProVideoToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0297",
+      "node_identifier": "KlingSingleImageVideoEffectNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0298",
+      "node_identifier": "KlingStartEndFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0299",
+      "node_identifier": "KlingTextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0300",
+      "node_identifier": "KlingTextToVideoWithAudio"
+    },
+    {
+      "feature_id": "COMFY-NODE-0301",
+      "node_identifier": "KlingVideoExtendNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0302",
+      "node_identifier": "KlingVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0303",
+      "node_identifier": "KlingVirtualTryOnNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0055",
+      "method": "POST",
+      "path": "/proxy/kling/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0056",
+      "method": "POST",
+      "path": "/proxy/kling/image-to-video/kling-3.0-turbo",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0057",
+      "method": "GET",
+      "path": "/proxy/kling/tasks",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0058",
+      "method": "POST",
+      "path": "/proxy/kling/text-to-video/kling-3.0-turbo",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0059",
+      "method": "POST",
+      "path": "/proxy/kling/v1/images/omni-image",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0060",
+      "method": "GET",
+      "path": "/proxy/kling/v1/images/omni-image/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0061",
+      "method": "GET",
+      "path": "/proxy/kling/v1/images/omni-image/{response.data.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0062",
+      "method": "POST",
+      "path": "/proxy/kling/v1/videos/avatar/image2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0063",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/avatar/image2video/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0064",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/avatar/image2video/{response.data.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0065",
+      "method": "POST",
+      "path": "/proxy/kling/v1/videos/image2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0066",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/image2video/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0067",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/image2video/{response.data.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0068",
+      "method": "POST",
+      "path": "/proxy/kling/v1/videos/motion-control",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0069",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/motion-control/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0070",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/motion-control/{response.data.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0071",
+      "method": "POST",
+      "path": "/proxy/kling/v1/videos/omni-video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0072",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/omni-video/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0073",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/omni-video/{response.data.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0074",
+      "method": "POST",
+      "path": "/proxy/kling/v1/videos/text2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0075",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/text2video/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0076",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/text2video/{response.data.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0077",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/images/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0078",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/images/kolors-virtual-try-on",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0079",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/videos/effects",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0080",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/videos/image2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0081",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/videos/lip-sync",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0082",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/videos/text2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0083",
+      "method": "POST",
+      "path": "/proxy/kling/{KLING_API_VERSION}/videos/video-extend",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0221",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/effects/{task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0222",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/lip-sync/{task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0223",
+      "method": "GET",
+      "path": "/proxy/kling/v1/videos/video-extend/{task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0224",
+      "method": "GET",
+      "path": "/proxy/kling/v1/images/kolors-virtual-try-on/{task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0225",
+      "method": "GET",
+      "path": "/proxy/kling/v1/images/generations/{task_id}",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; Python prompt whitespace, raw positive-prompt500 API boundary and lip-sync source preparation order; canonical native media and guest integration pending"
+}

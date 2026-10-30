@@ -1,0 +1,492 @@
+{
+  "canonical_target": "comfy.ops.pick_operations",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/controlnet.py:507:22 (controlnet_config)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/controlnet.py:591:22 (load_controlnet_sd35)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/controlnet.py:689:22 (load_controlnet_qwen_fun)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/controlnet.py:844:22 (load_controlnet_state_dict)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_base.py:165:30 (BaseModel.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "weight_dtype"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        },
+        {
+          "argument": "keyword:disable_fast_fp8",
+          "parameter": "disable_fast_fp8"
+        }
+      ],
+      "site": "comfy/controlnet.py:507:22 (controlnet_config)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "weight_dtype"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        },
+        {
+          "argument": "keyword:disable_fast_fp8",
+          "parameter": "disable_fast_fp8"
+        }
+      ],
+      "site": "comfy/controlnet.py:591:22 (load_controlnet_sd35)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "weight_dtype"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        },
+        {
+          "argument": "keyword:disable_fast_fp8",
+          "parameter": "disable_fast_fp8"
+        }
+      ],
+      "site": "comfy/controlnet.py:689:22 (load_controlnet_qwen_fun)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "weight_dtype"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        }
+      ],
+      "site": "comfy/controlnet.py:844:22 (load_controlnet_state_dict)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "weight_dtype"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        },
+        {
+          "argument": "keyword:fp8_optimizations",
+          "parameter": "fp8_optimizations"
+        },
+        {
+          "argument": "keyword:model_config",
+          "parameter": "model_config"
+        }
+      ],
+      "site": "comfy/model_base.py:165:30 (BaseModel.__init__)",
+      "status": "static-compatible"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-d63c669fcd27-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "weight_dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "compute_dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "load_device",
+      "type": "dynamic"
+    },
+    {
+      "default": "False",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "disable_fast_fp8",
+      "type": "dynamic"
+    },
+    {
+      "default": "False",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "fp8_optimizations",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "model_config",
+      "type": "dynamic"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-D63C669FCD27",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "e509427cfdd848b7446eb8b69f5f20676e020073b06b8a44745036525fcebc46",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/controlnet.py",
+        "sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.pick_operations"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-a0bd98dda517",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "disable_fast_fp8",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 507,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "unet_dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "manual_cast_dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "controlnet_config",
+      "site": "comfy/controlnet.py:507:22 (controlnet_config)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.pick_operations"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "disable_fast_fp8",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 591,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "unet_dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "manual_cast_dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "load_controlnet_sd35",
+      "site": "comfy/controlnet.py:591:22 (load_controlnet_sd35)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.pick_operations"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "disable_fast_fp8",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 689,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "unet_dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "manual_cast_dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "load_controlnet_qwen_fun",
+      "site": "comfy/controlnet.py:689:22 (load_controlnet_qwen_fun)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.pick_operations"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 844,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "unet_dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "manual_cast_dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "load_controlnet_state_dict",
+      "site": "comfy/controlnet.py:844:22 (load_controlnet_state_dict)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.pick_operations"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "fp8_optimizations",
+          "syntax": "fp8",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "model_config",
+          "syntax": "model_config",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 165,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "unet_config.get('dtype', None)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.manual_cast_dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "BaseModel.__init__",
+      "site": "comfy/model_base.py:165:30 (BaseModel.__init__)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.pick_operations"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "FunctionDef",
+    "definition_line": 1512,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "declared-function",
+    "parameters": [
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "weight_dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "compute_dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "load_device",
+        "type": "dynamic"
+      },
+      {
+        "default": "False",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "disable_fast_fp8",
+        "type": "dynamic"
+      },
+      {
+        "default": "False",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "fp8_optimizations",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "model_config",
+        "type": "dynamic"
+      }
+    ],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        [
+          {
+            "syntax_kind": "Name"
+          }
+        ],
+        [
+          {
+            "syntax_kind": "Call"
+          }
+        ],
+        [
+          {
+            "syntax_kind": "Name"
+          }
+        ],
+        [
+          {
+            "syntax_kind": "Name"
+          }
+        ],
+        [
+          {
+            "syntax_kind": "Name"
+          }
+        ]
+      ]
+    }
+  }
+}

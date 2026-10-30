@@ -1,0 +1,665 @@
+{
+  "canonical_target": "torchaudio.functional.resample",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/audio_encoders/audio_encoders.py:40:17 (AudioEncoderModel.encode_audio)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/music_dcae_pipeline.py:56:22 (MusicDCAE.encode)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/music_dcae_pipeline.py:86:23 (MusicDCAE.decode)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lightricks/vae/audio_vae.py:77:16 (AudioPreprocessor.resample)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:148:17 (AudioAutoencoder.decode)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:154:17 (AudioAutoencoder.encode)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_api/latest/_ui.py:311:32 (AudioSaveHelper.save_audio)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_audio.py:576:26 (match_audio_sample_rates)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_audio.py:580:26 (match_audio_sample_rates)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_audio.py:88:24 (VAEEncodeAudio.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_lt.py:842:24 (LTXVReferenceAudio.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:745:20 (WanDancerEncodeAudio.execute)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/audio_encoders/audio_encoders.py:40:17 (AudioEncoderModel.encode_audio)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_dcae_pipeline.py:56:22 (MusicDCAE.encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_dcae_pipeline.py:86:23 (MusicDCAE.decode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/audio_vae.py:77:16 (AudioPreprocessor.resample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:148:17 (AudioAutoencoder.decode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:154:17 (AudioAutoencoder.encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_api/latest/_ui.py:311:32 (AudioSaveHelper.save_audio)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_audio.py:576:26 (match_audio_sample_rates)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_audio.py:580:26 (match_audio_sample_rates)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_audio.py:88:24 (VAEEncodeAudio.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_lt.py:842:24 (LTXVReferenceAudio.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:745:20 (WanDancerEncodeAudio.execute)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-0a14ab1c4005-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-0A14AB1C4005",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "7bf386db42aeb5a39d4cb2900911c91163ebe1fac1c6783945a500a6aac18206",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/audio_encoders/audio_encoders.py",
+        "sha256": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_dcae_pipeline.py",
+        "sha256": "21c2740c2c06544a7cb91ce526e248a2b4d9a85068612dee80a12f79b66ea608"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/audio_vae.py",
+        "sha256": "fafef1fd6709d6f58bfdf0c49029bf2f45d3c83f438839d2c95a7455b0575449"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/autoencoder.py",
+        "sha256": "4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5"
+      },
+      {
+        "path": "comfy_api/latest/_ui.py",
+        "sha256": "842ac7eeb8484fbd1746436daf4368b002e2268ff4aafd4d4682a5b24c6ba794"
+      },
+      {
+        "path": "comfy_extras/nodes_audio.py",
+        "sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4"
+      },
+      {
+        "path": "comfy_extras/nodes_lt.py",
+        "sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d"
+      },
+      {
+        "path": "comfy_extras/nodes_wandancer.py",
+        "sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torchaudio.functional.resample"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "external_tensor_kernel_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-external-tensor-kernel-comfy-tensor-op-0607daa06439",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 40,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "audio",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sample_rate",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "self.model_sample_rate",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "AudioEncoderModel.encode_audio",
+      "site": "comfy/audio_encoders/audio_encoders.py:40:17 (AudioEncoderModel.encode_audio)",
+      "source_path": "comfy/audio_encoders/audio_encoders.py",
+      "source_sha256": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 56,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "audios",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sr",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "44100",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "MusicDCAE.encode",
+      "site": "comfy/ldm/ace/vae/music_dcae_pipeline.py:56:22 (MusicDCAE.encode)",
+      "source_path": "comfy/ldm/ace/vae/music_dcae_pipeline.py",
+      "source_sha256": "21c2740c2c06544a7cb91ce526e248a2b4d9a85068612dee80a12f79b66ea608",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 86,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "wav",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "44100",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sr",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MusicDCAE.decode",
+      "site": "comfy/ldm/ace/vae/music_dcae_pipeline.py:86:23 (MusicDCAE.decode)",
+      "source_path": "comfy/ldm/ace/vae/music_dcae_pipeline.py",
+      "source_sha256": "21c2740c2c06544a7cb91ce526e248a2b4d9a85068612dee80a12f79b66ea608",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 77,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "waveform",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "source_rate",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "self.target_sample_rate",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "AudioPreprocessor.resample",
+      "site": "comfy/ldm/lightricks/vae/audio_vae.py:77:16 (AudioPreprocessor.resample)",
+      "source_path": "comfy/ldm/lightricks/vae/audio_vae.py",
+      "source_sha256": "fafef1fd6709d6f58bfdf0c49029bf2f45d3c83f438839d2c95a7455b0575449",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 148,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "audio",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "16000",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "44100",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AudioAutoencoder.decode",
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:148:17 (AudioAutoencoder.decode)",
+      "source_path": "comfy/ldm/mmaudio/vae/autoencoder.py",
+      "source_sha256": "4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 154,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "audio",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "44100",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "16000",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AudioAutoencoder.encode",
+      "site": "comfy/ldm/mmaudio/vae/autoencoder.py:154:17 (AudioAutoencoder.encode)",
+      "source_path": "comfy/ldm/mmaudio/vae/autoencoder.py",
+      "source_sha256": "4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 311,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "waveform",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "audio['sample_rate']",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sample_rate",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AudioSaveHelper.save_audio",
+      "site": "comfy_api/latest/_ui.py:311:32 (AudioSaveHelper.save_audio)",
+      "source_path": "comfy_api/latest/_ui.py",
+      "source_sha256": "842ac7eeb8484fbd1746436daf4368b002e2268ff4aafd4d4682a5b24c6ba794",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 576,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "waveform_2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sample_rate_2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sample_rate_1",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "match_audio_sample_rates",
+      "site": "comfy_extras/nodes_audio.py:576:26 (match_audio_sample_rates)",
+      "source_path": "comfy_extras/nodes_audio.py",
+      "source_sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 580,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "waveform_1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sample_rate_1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sample_rate_2",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "match_audio_sample_rates",
+      "site": "comfy_extras/nodes_audio.py:580:26 (match_audio_sample_rates)",
+      "source_path": "comfy_extras/nodes_audio.py",
+      "source_sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 88,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "audio['waveform']",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sample_rate",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "vae_sample_rate",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "VAEEncodeAudio.execute",
+      "site": "comfy_extras/nodes_audio.py:88:24 (VAEEncodeAudio.execute)",
+      "source_path": "comfy_extras/nodes_audio.py",
+      "source_sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 842,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "reference_audio['waveform']",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sample_rate",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "vae_sample_rate",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LTXVReferenceAudio.execute",
+      "site": "comfy_extras/nodes_lt.py:842:24 (LTXVReferenceAudio.execute)",
+      "source_path": "comfy_extras/nodes_lt.py",
+      "source_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 745,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "waveform",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sample_rate",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "resample_sr",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "WanDancerEncodeAudio.execute",
+      "site": "comfy_extras/nodes_wandancer.py:745:20 (WanDancerEncodeAudio.execute)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "torchaudio.functional.resample"
+    }
+  ],
+  "static_definition": null
+}

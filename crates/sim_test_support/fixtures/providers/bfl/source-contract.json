@@ -1,0 +1,498 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.bfl",
+  "source_sha256": {
+    "sim_api_nodes/nodes_bfl.py": "78f943d92611ef196cb9e01da6ac686be815e270650760abc168f3c7c525d643",
+    "sim_api_nodes/apis/bfl.py": "162de62b0dea954d1c4c3b405263b92bbeec2fc367f03f296d05083a5a6b89d5",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+  },
+  "scope": "Actual pinned node.execute request AST and request-model defaults; actual scalar/aspect/dimension validation helpers; canonical image encoding/mask arithmetic, transport, and image decoding are explicit unexecuted boundaries in this development oracle.",
+  "cases": [
+    {
+      "input": {
+        "node": "FluxProUltraImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-pro-1.1-ultra/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "prompt_upsampling": false,
+          "seed": 18446744073709551615,
+          "aspect_ratio": "16:9",
+          "safety_tolerance": 6,
+          "output_format": "png",
+          "raw": false,
+          "image_prompt": "aW1hZ2U=",
+          "image_prompt_strength": 0.12
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "FluxKontextProImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-kontext-pro/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "input_image": "aW1hZ2U=",
+          "seed": 18446744073709551615,
+          "guidance": 3.1,
+          "steps": 50,
+          "safety_tolerance": 2,
+          "output_format": "png",
+          "aspect_ratio": "16:9",
+          "prompt_upsampling": false
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "FluxKontextMaxImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-kontext-max/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "input_image": "aW1hZ2U=",
+          "seed": 18446744073709551615,
+          "guidance": 3.1,
+          "steps": 50,
+          "safety_tolerance": 2,
+          "output_format": "png",
+          "aspect_ratio": "16:9",
+          "prompt_upsampling": false
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "FluxProExpandNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 60.0,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-pro-1.0-expand/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "prompt_upsampling": false,
+          "seed": 18446744073709551615,
+          "top": 0,
+          "bottom": 32,
+          "left": 64,
+          "right": 96,
+          "steps": 50,
+          "guidance": 60.0,
+          "safety_tolerance": 6,
+          "output_format": "png",
+          "image": "aW1hZ2U="
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "FluxProFillNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 60.0,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U="
+        ],
+        "mask": "bWFzaw=="
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-pro-1.0-fill/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "prompt_upsampling": false,
+          "seed": 18446744073709551615,
+          "steps": 50,
+          "guidance": 60.0,
+          "safety_tolerance": 6,
+          "output_format": "png",
+          "image": "aW1hZ2U=",
+          "mask": "bWFzaw=="
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "FluxEraseNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 2147483647,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U="
+        ],
+        "mask": "bWFzaw=="
+      },
+      "request": {
+        "path": "/proxy/bfl/v1/flux-tools/erase-v1",
+        "method": "POST",
+        "body": {
+          "image": "aW1hZ2U=",
+          "mask": "bWFzaw==",
+          "dilate_pixels": 10,
+          "seed": 2147483647,
+          "output_format": "png"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "FluxVTONode",
+        "prompt": "",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U=",
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/v1/flux-tools/vto-v1",
+        "method": "POST",
+        "body": {
+          "prompt": "",
+          "person": "aW1hZ2U=",
+          "garment": "aW1hZ2U=",
+          "seed": 18446744073709551615,
+          "safety_tolerance": 5,
+          "output_format": "png"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "Flux2ProImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-2-pro/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "width": 1024,
+          "height": 768,
+          "seed": 18446744073709551615,
+          "prompt_upsampling": false,
+          "input_image": "aW1hZ2U=",
+          "input_image_2": "aW1hZ2U=",
+          "input_image_3": "aW1hZ2U=",
+          "input_image_4": "aW1hZ2U=",
+          "input_image_5": "aW1hZ2U=",
+          "input_image_6": "aW1hZ2U=",
+          "input_image_7": "aW1hZ2U=",
+          "input_image_8": "aW1hZ2U=",
+          "input_image_9": "aW1hZ2U=",
+          "safety_tolerance": 5,
+          "output_format": "png"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "Flux2MaxImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-2-max/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "width": 1024,
+          "height": 768,
+          "seed": 18446744073709551615,
+          "prompt_upsampling": false,
+          "input_image": "aW1hZ2U=",
+          "input_image_2": "aW1hZ2U=",
+          "input_image_3": "aW1hZ2U=",
+          "input_image_4": "aW1hZ2U=",
+          "input_image_5": "aW1hZ2U=",
+          "input_image_6": "aW1hZ2U=",
+          "input_image_7": "aW1hZ2U=",
+          "input_image_8": "aW1hZ2U=",
+          "input_image_9": "aW1hZ2U=",
+          "safety_tolerance": 5,
+          "output_format": "png"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "Flux2ImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [pro]",
+        "images": [
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-2-pro/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "width": 1024,
+          "height": 768,
+          "seed": 18446744073709551615,
+          "input_image": "aW1hZ2U=",
+          "input_image_2": "aW1hZ2U=",
+          "input_image_3": "aW1hZ2U=",
+          "input_image_4": "aW1hZ2U=",
+          "input_image_5": "aW1hZ2U=",
+          "input_image_6": "aW1hZ2U=",
+          "input_image_7": "aW1hZ2U=",
+          "input_image_8": "aW1hZ2U=",
+          "safety_tolerance": 5,
+          "output_format": "png"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "Flux2ImageNode",
+        "prompt": "  cloud ☁  ",
+        "seed": 18446744073709551615,
+        "width": 1024,
+        "height": 768,
+        "aspect_ratio": "16:9",
+        "guidance": 3.15,
+        "steps": 50,
+        "prompt_upsampling": false,
+        "raw": false,
+        "image_prompt_strength": 0.125,
+        "top": 0,
+        "bottom": 32,
+        "left": 64,
+        "right": 96,
+        "dilate_pixels": 10,
+        "model": "Flux.2 [max]",
+        "images": [
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U=",
+          "aW1hZ2U="
+        ]
+      },
+      "request": {
+        "path": "/proxy/bfl/flux-2-max/generate",
+        "method": "POST",
+        "body": {
+          "prompt": "  cloud ☁  ",
+          "width": 1024,
+          "height": 768,
+          "seed": 18446744073709551615,
+          "input_image": "aW1hZ2U=",
+          "input_image_2": "aW1hZ2U=",
+          "input_image_3": "aW1hZ2U=",
+          "input_image_4": "aW1hZ2U=",
+          "input_image_5": "aW1hZ2U=",
+          "input_image_6": "aW1hZ2U=",
+          "input_image_7": "aW1hZ2U=",
+          "input_image_8": "aW1hZ2U=",
+          "safety_tolerance": 5,
+          "output_format": "png"
+        }
+      }
+    }
+  ]
+}

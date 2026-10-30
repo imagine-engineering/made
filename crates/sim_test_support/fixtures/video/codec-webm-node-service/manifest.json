@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-webm-node-service-v1",
+  "truth_mode": "synthetic-retained-webm-node-service",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d"
+  },
+  "dependencies": {
+    "codec_plan_manifest_sha256": "9ff5dde7b0d4fdde599fc377031e88c455e00afcf428e190069569b0c548704f",
+    "codec_ltxv_node_service_manifest_sha256": "e8fb078ace39ce389b206cc7d6add8b5878fd4add50fffdc7797dc152d62c78d",
+    "codec_vp9_webm_thread_bridge_manifest_sha256": "a2b0e44560f451445855d02cd2161848258fa48de9dae611cf3acad7fe9697a9",
+    "codec_vp9_webm_container_metadata_manifest_sha256": "736cd651a9c901e2ef9627509ba07f3283fd4b0708c0f4918a4e85a20d876af8",
+    "codec_vp9_webm_alpha_manifest_sha256": "0d8b7d5f72af18a7ce7172eeb37d5a7d1355d39384f7058dfa5b3718d855943b",
+    "codec_av1_webm_thread_bridge_manifest_sha256": "5b380e1b97a2f03f964eb671a49e7be009b1acc000499854866e55e912bb3a28"
+  },
+  "contract": {
+    "canonical_owner": "sim_nodes::execution::NativeWebmEncodeService",
+    "runtime_adapter": "sim_runtime::native_video_codec_service::NativeWebmCodecRequestService",
+    "actor": "the existing single retained native video codec thread and capacity-one request channel",
+    "request": "canonical IMAGE plus VP9 or AV1 identity, positive reduced frame rate, exact floating CRF bits, ordered serialized metadata, caller stream, scratch, and cancellation",
+    "portable_output": "one moved exact-length contiguous rank-one CPU U8 Tensor plus SHA-256, dimensions, reduced frame rate, frame count, codec, pixel format, bit depth, and alpha projection",
+    "post_actor_copy_count": 0,
+    "service_identity_version": "zed.sim.webm-node-service.v1",
+    "service_identity_binds_actor_and_all_configured_limits": true,
+    "execution_configuration_component": "webm"
+  },
+  "synthetic_fixture": {
+    "vp9_encoded_bytes": "HPPPT",
+    "av1_encoded_bytes": "HA1T",
+    "dimensions": [2, 2],
+    "frame_rate": [2997, 125],
+    "frame_count": 3,
+    "ordered_metadata": [
+      ["prompt", "first"],
+      ["workflow", "{}"],
+      ["prompt", "last"]
+    ],
+    "test_cases": [
+      "checked service identity, request, result digest, and codec profile projections",
+      "VP9 alpha and AV1 requests dispatch through the same retained actor and move its portable Tensor",
+      "actor projection dimensions, frame count, rate, and stream must exactly match the request",
+      "metadata count and byte limits reject before queueing and allocation failure is resource exhaustion",
+      "same actor and limits produce stable service and cache identity while any limit drift changes it",
+      "missing service, cancellation, busy, exhaustion, invalid projection, and actor failure remain typed"
+    ]
+  },
+  "claims": {
+    "synthetic_node_service_and_actor_adapter_executed": true,
+    "portable_result_digest_recomputed": true,
+    "actor_owned_tensor_moved_without_second_copy": true,
+    "caller_scratch_converges_before_success": true,
+    "licensed_or_installed_ffmpeg_libvpx_or_libsvtav1_package": false,
+    "production_codec_availability": false,
+    "synthetic_bytes_are_valid_playable_webm": false,
+    "decoded_numeric_color_alpha_or_ten_bit_oracle": false,
+    "python_json_serialization_or_source_float_fps_projection": false,
+    "save_webm_node_effect_path_or_output_committer_reachable": false,
+    "media_payload_or_handle_published": false,
+    "cache_payload_persistence_recovery_or_restart_owned": false,
+    "all_process_or_native_heap_allocations_intercepted": false
+  }
+}

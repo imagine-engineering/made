@@ -1,0 +1,6 @@
+DROP TABLE public.collaboration_workflow_retries;
+DROP TABLE public.collaboration_workflow_steps;
+DROP TABLE public.collaboration_workflow_runs;
+DROP TABLE public.collaboration_workflow_definition_heads;
+DROP TABLE public.collaboration_workflow_definition_versions;
+DROP TABLE public.collaboration_workflow_definitions;

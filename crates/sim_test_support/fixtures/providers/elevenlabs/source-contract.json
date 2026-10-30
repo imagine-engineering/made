@@ -1,0 +1,841 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.elevenlabs",
+  "source_sha256": {
+    "sim_api_nodes/nodes_elevenlabs.py": "e68033612e73bffa5c9a4353f3a2a280a8803a257debd86e32b0c35dbe9590ef",
+    "sim_api_nodes/apis/elevenlabs.py": "46a4376cadf34f8d192c9b23cd8261e61adca31961ca98ae4b2a9d5912552545",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+  },
+  "scope": "Actual pinned node/request/default and multipart plain-field AST; MP4/AAC input encoding, storage upload, UUID generation and native audio/custom voice materialization are explicit canonical owner boundaries.",
+  "contracts": {
+    "ElevenLabsSpeechToText": {
+      "arguments": [
+        "audio",
+        "model",
+        "language_code",
+        "num_speakers",
+        "seed"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.String.Output(display_name='text'), IO.String.Output(display_name='language_code'), IO.String.Output(display_name='words_json')]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.0073,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
+    },
+    "ElevenLabsVoiceSelector": {
+      "arguments": [
+        "voice"
+      ],
+      "hidden": "[]",
+      "outputs": "[IO.Custom(ELEVENLABS_VOICE).Output(display_name='voice')]"
+    },
+    "ElevenLabsTextToSpeech": {
+      "arguments": [
+        "voice",
+        "text",
+        "stability",
+        "apply_text_normalization",
+        "model",
+        "language_code",
+        "seed",
+        "output_format"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Audio.Output()]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/1K chars\"}}"
+    },
+    "ElevenLabsAudioIsolation": {
+      "arguments": [
+        "audio"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Audio.Output()]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
+    },
+    "ElevenLabsTextToSoundEffects": {
+      "arguments": [
+        "text",
+        "model",
+        "output_format"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Audio.Output()]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.14,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
+    },
+    "ElevenLabsInstantVoiceClone": {
+      "arguments": [
+        "files",
+        "remove_background_noise"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Custom(ELEVENLABS_VOICE).Output(display_name='voice')]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.15}"
+    },
+    "ElevenLabsSpeechToSpeech": {
+      "arguments": [
+        "voice",
+        "audio",
+        "stability",
+        "model",
+        "output_format",
+        "seed",
+        "remove_background_noise"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Audio.Output()]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
+    },
+    "ElevenLabsTextToDialogue": {
+      "arguments": [
+        "stability",
+        "apply_text_normalization",
+        "model",
+        "inputs",
+        "language_code",
+        "seed",
+        "output_format"
+      ],
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Audio.Output()]",
+      "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/1K chars\"}}"
+    }
+  },
+  "voice_map": {
+    "Roger (male, american)": "CwhRBWXzGAHq8TQ4Fs17",
+    "Sarah (female, american)": "EXAVITQu4vr4xnSDxMaL",
+    "Laura (female, american)": "FGY2WhTYpPnrIDTdsKH5",
+    "Charlie (male, australian)": "IKne3meq5aSn9XLyUdCD",
+    "George (male, british)": "JBFqnCBsd6RMkjVDRZzb",
+    "Callum (male, american)": "N2lVS1w4EtoT3dr4eOWO",
+    "River (neutral, american)": "SAz9YHcvj6GT2YYXdXww",
+    "Harry (male, american)": "SOYHLrjzK2X1ezoPC6cr",
+    "Liam (male, american)": "TX3LPaxmHKxFdv7VOQHJ",
+    "Alice (female, british)": "Xb7hH8MSUJpSbSDYk0k2",
+    "Matilda (female, american)": "XrExE9yKIg1WjnnlVkGX",
+    "Will (male, american)": "bIHbv24MWmeRgasZH58o",
+    "Jessica (female, american)": "cgSgspJ2msm6clMCkdW9",
+    "Eric (male, american)": "cjVigY5qzO86Huf0OWal",
+    "Bella (female, american)": "hpp4J3VqNfWAUOO0d1Us",
+    "Chris (male, american)": "iP95p4xoKVk53GoZ742B",
+    "Brian (male, american)": "nPczCjzI2devNBz1zQrb",
+    "Daniel (male, british)": "onwK4e9ZLuTAKqWW03F9",
+    "Lily (female, british)": "pFZP5JQG7iQjIQuC4Bku",
+    "Adam (male, american)": "pNInz6obpgDQGcFmaJgB",
+    "Bill (male, american)": "pqHfZKP75CvOlQylNhV4"
+  },
+  "cases": [
+    {
+      "input": {
+        "node": "ElevenLabsSpeechToText",
+        "arguments": {
+          "audio": {
+            "waveform": {
+              "source_audio": "audio"
+            },
+            "sample_rate": 48000
+          },
+          "model": {
+            "model": "scribe_v2",
+            "diarize": false,
+            "tag_audio_events": true,
+            "timestamps_granularity": "word",
+            "diarization_threshold": 0.22,
+            "temperature": 0.75
+          },
+          "language_code": "  en  ",
+          "num_speakers": 2,
+          "seed": 42
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/speech-to-text",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model_id": "scribe_v2",
+            "cloud_storage_url": "https://storage.fixture.invalid/audio",
+            "language_code": "  en  ",
+            "tag_audio_events": true,
+            "num_speakers": 2,
+            "timestamps_granularity": "word",
+            "diarize": false,
+            "temperature": 0.75,
+            "seed": 42
+          },
+          "content_type": "multipart/form-data",
+          "form_fields": [
+            {
+              "name": "model_id",
+              "value": "scribe_v2"
+            },
+            {
+              "name": "cloud_storage_url",
+              "value": "https://storage.fixture.invalid/audio"
+            },
+            {
+              "name": "language_code",
+              "value": "  en  "
+            },
+            {
+              "name": "tag_audio_events",
+              "value": "True"
+            },
+            {
+              "name": "num_speakers",
+              "value": "2"
+            },
+            {
+              "name": "timestamps_granularity",
+              "value": "word"
+            },
+            {
+              "name": "diarize",
+              "value": "False"
+            },
+            {
+              "name": "temperature",
+              "value": "0.75"
+            },
+            {
+              "name": "seed",
+              "value": "42"
+            }
+          ],
+          "file_fields": [],
+          "as_binary": false
+        }
+      ],
+      "uploads": [
+        {
+          "slot": "audio",
+          "container": "mp4",
+          "codec": "aac",
+          "mime_type": "audio/mp4",
+          "url": "https://storage.fixture.invalid/audio"
+        }
+      ],
+      "preparations": [],
+      "outputs": [
+        "source transcript",
+        "en",
+        "[\n  {\n    \"text\": \"caf\\u00e9 \\u2601\",\n    \"type\": \"word\",\n    \"start\": 0.0,\n    \"end\": 1.5\n  }\n]"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsSpeechToText",
+        "arguments": {
+          "audio": {
+            "waveform": {
+              "source_audio": "audio"
+            },
+            "sample_rate": 48000
+          },
+          "model": {
+            "model": "scribe_v2",
+            "diarize": true,
+            "tag_audio_events": true,
+            "timestamps_granularity": "word",
+            "diarization_threshold": 0.22,
+            "temperature": 0.75
+          },
+          "language_code": " ",
+          "num_speakers": 0,
+          "seed": 42
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/speech-to-text",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model_id": "scribe_v2",
+            "cloud_storage_url": "https://storage.fixture.invalid/audio",
+            "tag_audio_events": true,
+            "timestamps_granularity": "word",
+            "diarize": true,
+            "diarization_threshold": 0.22,
+            "temperature": 0.75,
+            "seed": 42
+          },
+          "content_type": "multipart/form-data",
+          "form_fields": [
+            {
+              "name": "model_id",
+              "value": "scribe_v2"
+            },
+            {
+              "name": "cloud_storage_url",
+              "value": "https://storage.fixture.invalid/audio"
+            },
+            {
+              "name": "tag_audio_events",
+              "value": "True"
+            },
+            {
+              "name": "timestamps_granularity",
+              "value": "word"
+            },
+            {
+              "name": "diarize",
+              "value": "True"
+            },
+            {
+              "name": "diarization_threshold",
+              "value": "0.22"
+            },
+            {
+              "name": "temperature",
+              "value": "0.75"
+            },
+            {
+              "name": "seed",
+              "value": "42"
+            }
+          ],
+          "file_fields": [],
+          "as_binary": false
+        }
+      ],
+      "uploads": [
+        {
+          "slot": "audio",
+          "container": "mp4",
+          "codec": "aac",
+          "mime_type": "audio/mp4",
+          "url": "https://storage.fixture.invalid/audio"
+        }
+      ],
+      "preparations": [],
+      "outputs": [
+        "source transcript",
+        "en",
+        "[\n  {\n    \"text\": \"caf\\u00e9 \\u2601\",\n    \"type\": \"word\",\n    \"start\": 0.0,\n    \"end\": 1.5\n  }\n]"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsVoiceSelector",
+        "arguments": {
+          "voice": "Roger (male, american)"
+        }
+      },
+      "requests": [],
+      "uploads": [],
+      "preparations": [],
+      "outputs": [
+        "CwhRBWXzGAHq8TQ4Fs17"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToSpeech",
+        "arguments": {
+          "voice": "CwhRBWXzGAHq8TQ4Fs17",
+          "text": "  hello café ☁  ",
+          "stability": 0.5,
+          "apply_text_normalization": "auto",
+          "model": {
+            "model": "eleven_multilingual_v2",
+            "similarity_boost": 0.75,
+            "speed": 1.0,
+            "use_speaker_boost": false,
+            "style": 0.0
+          },
+          "language_code": " en ",
+          "seed": 42,
+          "output_format": "mp3_44100_192"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17",
+          "method": "POST",
+          "query_params": {
+            "output_format": "mp3_44100_192"
+          },
+          "body": {
+            "text": "  hello café ☁  ",
+            "model_id": "eleven_multilingual_v2",
+            "language_code": " en ",
+            "voice_settings": {
+              "stability": 0.5,
+              "similarity_boost": 0.75,
+              "style": 0.0,
+              "use_speaker_boost": false,
+              "speed": 1.0
+            },
+            "seed": 42,
+            "apply_text_normalization": "auto"
+          },
+          "content_type": "application/json",
+          "form_fields": [],
+          "file_fields": [],
+          "as_binary": true
+        }
+      ],
+      "uploads": [],
+      "preparations": [],
+      "outputs": [
+        "canonical audio decoder boundary"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToSpeech",
+        "arguments": {
+          "voice": "CwhRBWXzGAHq8TQ4Fs17",
+          "text": "  hello café ☁  ",
+          "stability": 0.5,
+          "apply_text_normalization": "auto",
+          "model": {
+            "model": "eleven_v3",
+            "similarity_boost": 0.75,
+            "speed": 1.0
+          },
+          "language_code": "",
+          "seed": 42,
+          "output_format": "opus_48000_192"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17",
+          "method": "POST",
+          "query_params": {
+            "output_format": "opus_48000_192"
+          },
+          "body": {
+            "text": "  hello café ☁  ",
+            "model_id": "eleven_v3",
+            "voice_settings": {
+              "stability": 0.5,
+              "similarity_boost": 0.75,
+              "speed": 1.0
+            },
+            "seed": 42,
+            "apply_text_normalization": "auto"
+          },
+          "content_type": "application/json",
+          "form_fields": [],
+          "file_fields": [],
+          "as_binary": true
+        }
+      ],
+      "uploads": [],
+      "preparations": [],
+      "outputs": [
+        "canonical audio decoder boundary"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsAudioIsolation",
+        "arguments": {
+          "audio": {
+            "waveform": {
+              "source_audio": "audio"
+            },
+            "sample_rate": 48000
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/audio-isolation",
+          "method": "POST",
+          "query_params": null,
+          "body": null,
+          "content_type": "multipart/form-data",
+          "form_fields": [],
+          "file_fields": [
+            {
+              "name": "audio",
+              "file_name": "audio.mp4",
+              "media_type": "audio/mp4",
+              "source_slot": "audio",
+              "boundary": "canonical MP4/AAC owner required"
+            }
+          ],
+          "as_binary": true
+        }
+      ],
+      "uploads": [],
+      "preparations": [
+        {
+          "slot": "audio",
+          "sample_rate": 48000,
+          "container": "mp4",
+          "codec": "aac"
+        }
+      ],
+      "outputs": [
+        "canonical audio decoder boundary"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToSoundEffects",
+        "arguments": {
+          "text": "  breeze ☁  ",
+          "model": {
+            "model": "eleven_sfx_v2",
+            "duration": 5.5,
+            "prompt_influence": 0.3,
+            "loop": true
+          },
+          "output_format": "opus_48000_192"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/sound-generation",
+          "method": "POST",
+          "query_params": {
+            "output_format": "opus_48000_192"
+          },
+          "body": {
+            "text": "  breeze ☁  ",
+            "duration_seconds": 5.5,
+            "prompt_influence": 0.3,
+            "loop": true
+          },
+          "content_type": "application/json",
+          "form_fields": [],
+          "file_fields": [],
+          "as_binary": true
+        }
+      ],
+      "uploads": [],
+      "preparations": [],
+      "outputs": [
+        "canonical audio decoder boundary"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsInstantVoiceClone",
+        "arguments": {
+          "files": {
+            "sample_2": {
+              "waveform": {
+                "source_audio": "audio"
+              },
+              "sample_rate": 48000
+            },
+            "sample_1": {
+              "waveform": {
+                "source_audio": "audio2"
+              },
+              "sample_rate": 24000
+            }
+          },
+          "remove_background_noise": true
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/voices/add",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "name": "00000000-0000-4000-8000-000000000042",
+            "remove_background_noise": true
+          },
+          "content_type": "multipart/form-data",
+          "form_fields": [
+            {
+              "name": "name",
+              "value": "00000000-0000-4000-8000-000000000042"
+            },
+            {
+              "name": "remove_background_noise",
+              "value": "True"
+            }
+          ],
+          "file_fields": [
+            {
+              "name": "files",
+              "file_name": "sample_2.mp4",
+              "media_type": "audio/mp4",
+              "source_slot": "audio",
+              "boundary": "canonical MP4/AAC owner required"
+            },
+            {
+              "name": "files",
+              "file_name": "sample_1.mp4",
+              "media_type": "audio/mp4",
+              "source_slot": "audio2",
+              "boundary": "canonical MP4/AAC owner required"
+            }
+          ],
+          "as_binary": false
+        }
+      ],
+      "uploads": [],
+      "preparations": [
+        {
+          "slot": "audio",
+          "sample_rate": 48000,
+          "container": "mp4",
+          "codec": "aac"
+        },
+        {
+          "slot": "audio2",
+          "sample_rate": 24000,
+          "container": "mp4",
+          "codec": "aac"
+        }
+      ],
+      "outputs": [
+        "created-voice-42"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsSpeechToSpeech",
+        "arguments": {
+          "voice": "CwhRBWXzGAHq8TQ4Fs17",
+          "audio": {
+            "waveform": {
+              "source_audio": "audio"
+            },
+            "sample_rate": 48000
+          },
+          "stability": 0.5,
+          "model": {
+            "model": "eleven_multilingual_sts_v2",
+            "similarity_boost": 0.75,
+            "speed": 1.0,
+            "use_speaker_boost": false,
+            "style": 0.0
+          },
+          "output_format": "mp3_44100_192",
+          "seed": 42,
+          "remove_background_noise": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/speech-to-speech/CwhRBWXzGAHq8TQ4Fs17",
+          "method": "POST",
+          "query_params": {
+            "output_format": "mp3_44100_192"
+          },
+          "body": {
+            "model_id": "eleven_multilingual_sts_v2",
+            "voice_settings": "{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0.0,\"use_speaker_boost\":false,\"speed\":1.0}",
+            "seed": 42,
+            "remove_background_noise": false
+          },
+          "content_type": "multipart/form-data",
+          "form_fields": [
+            {
+              "name": "model_id",
+              "value": "eleven_multilingual_sts_v2"
+            },
+            {
+              "name": "voice_settings",
+              "value": "{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0.0,\"use_speaker_boost\":false,\"speed\":1.0}"
+            },
+            {
+              "name": "seed",
+              "value": "42"
+            },
+            {
+              "name": "remove_background_noise",
+              "value": "False"
+            }
+          ],
+          "file_fields": [
+            {
+              "name": "audio",
+              "file_name": "audio.mp4",
+              "media_type": "audio/mp4",
+              "source_slot": "audio",
+              "boundary": "canonical MP4/AAC owner required"
+            }
+          ],
+          "as_binary": true
+        }
+      ],
+      "uploads": [],
+      "preparations": [
+        {
+          "slot": "audio",
+          "sample_rate": 48000,
+          "container": "mp4",
+          "codec": "aac"
+        }
+      ],
+      "outputs": [
+        "canonical audio decoder boundary"
+      ]
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToDialogue",
+        "arguments": {
+          "stability": 0.5,
+          "apply_text_normalization": "off",
+          "model": "eleven_v3",
+          "inputs": {
+            "inputs": "2",
+            "text1": "hi café",
+            "voice1": "first-voice",
+            "text2": "hello ☁",
+            "voice2": "second-voice"
+          },
+          "language_code": " ",
+          "seed": 4294967295,
+          "output_format": "mp3_44100_192"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/elevenlabs/v1/text-to-dialogue",
+          "method": "POST",
+          "query_params": {
+            "output_format": "mp3_44100_192"
+          },
+          "body": {
+            "inputs": [
+              {
+                "text": "hi café",
+                "voice_id": "first-voice"
+              },
+              {
+                "text": "hello ☁",
+                "voice_id": "second-voice"
+              }
+            ],
+            "model_id": "eleven_v3",
+            "settings": {
+              "stability": 0.5
+            },
+            "seed": 4294967295,
+            "apply_text_normalization": "off"
+          },
+          "content_type": "application/json",
+          "form_fields": [],
+          "file_fields": [],
+          "as_binary": true
+        }
+      ],
+      "uploads": [],
+      "preparations": [],
+      "outputs": [
+        "canonical audio decoder boundary"
+      ]
+    }
+  ],
+  "preflight_errors": [
+    {
+      "input": {
+        "node": "ElevenLabsSpeechToText",
+        "arguments": {
+          "audio": {
+            "waveform": {
+              "source_audio": "audio"
+            },
+            "sample_rate": 48000
+          },
+          "model": {
+            "model": "scribe_v2",
+            "diarize": true,
+            "tag_audio_events": true,
+            "timestamps_granularity": "word",
+            "diarization_threshold": 0.22,
+            "temperature": 0.75
+          },
+          "language_code": "  en  ",
+          "num_speakers": 2,
+          "seed": 42
+        }
+      },
+      "message": "Number of speakers cannot be specified when diarization is enabled. Either disable diarization or set num_speakers to 0.",
+      "requests": [],
+      "uploads": []
+    },
+    {
+      "input": {
+        "node": "ElevenLabsVoiceSelector",
+        "arguments": {
+          "voice": "unknown voice"
+        }
+      },
+      "message": "Unknown voice: unknown voice",
+      "requests": [],
+      "uploads": []
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToSpeech",
+        "arguments": {
+          "voice": "CwhRBWXzGAHq8TQ4Fs17",
+          "text": " ",
+          "stability": 0.5,
+          "apply_text_normalization": "auto",
+          "model": {
+            "model": "eleven_multilingual_v2",
+            "similarity_boost": 0.75,
+            "speed": 1.0,
+            "use_speaker_boost": false,
+            "style": 0.0
+          },
+          "language_code": " en ",
+          "seed": 42,
+          "output_format": "mp3_44100_192"
+        }
+      },
+      "message": "Field 'prompt' cannot be shorter than 1 characters; was 0 characters long.",
+      "requests": [],
+      "uploads": []
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToSoundEffects",
+        "arguments": {
+          "text": " ",
+          "model": {
+            "model": "eleven_sfx_v2",
+            "duration": 5.5,
+            "prompt_influence": 0.3,
+            "loop": true
+          },
+          "output_format": "opus_48000_192"
+        }
+      },
+      "message": "Field 'prompt' cannot be shorter than 1 characters; was 0 characters long.",
+      "requests": [],
+      "uploads": []
+    },
+    {
+      "input": {
+        "node": "ElevenLabsTextToDialogue",
+        "arguments": {
+          "stability": 0.5,
+          "apply_text_normalization": "off",
+          "model": "eleven_v3",
+          "inputs": {
+            "inputs": "2",
+            "text1": "hi café",
+            "voice1": "first-voice",
+            "text2": " ",
+            "voice2": "second-voice"
+          },
+          "language_code": " ",
+          "seed": 4294967295,
+          "output_format": "mp3_44100_192"
+        }
+      },
+      "message": "Field 'prompt' cannot be shorter than 1 characters; was 0 characters long.",
+      "requests": [],
+      "uploads": []
+    }
+  ]
+}

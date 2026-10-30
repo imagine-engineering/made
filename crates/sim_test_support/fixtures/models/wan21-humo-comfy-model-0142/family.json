@@ -1,0 +1,54 @@
+{
+  "fixture_id": "wan21-humo-sim-model-0142",
+  "feature_id": "COMFY-MODEL-0142",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.audio_proj.audio_proj_glob_1.layer.bias": [128],
+      "model.diffusion_model.blocks.0.ffn.0.weight": [256, 128],
+      "model.diffusion_model.blocks.0.ffn.2.weight": [2, 2],
+      "model.diffusion_model.head.head.weight": [64, 128],
+      "model.diffusion_model.head.modulation": [1, 2, 128],
+      "model.diffusion_model.img_emb.proj.0.bias": [128],
+      "model.diffusion_model.patch_embedding.weight": [128, 36, 1, 2, 2],
+      "model.diffusion_model.time_embedding.0.weight": [2, 2],
+      "model.diffusion_model.time_projection.1.weight": [2, 2],
+      "text_encoders.umt5xxl.transformer.block.weight": [1],
+      "vae.decoder.weight": [1]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "1421421421421421421421421421421421421421421421421421421421421421",
+  "source_weights": [
+    {"key": "model.diffusion_model.time_embedding.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.blocks.0.ffn.2.weight", "shape": [2, 2], "values": [2.0, 0.0, 0.0, 0.5]},
+    {"key": "model.diffusion_model.time_projection.1.weight", "shape": [2, 2], "values": [1.0, 1.0, 1.0, -1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [1.0, 2.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 14,
+  "expected_memory_bytes": 14,
+  "checkpoints": [
+    {"name": "humo_timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "humo_audio_conditioning", "values": [0.7310586, 1.7615942]},
+    {"name": "humo_transformer_block", "values": [1.4621172, 0.8807971]},
+    {"name": "humo_block_normalization", "values": [0.9999941, -0.9999941]},
+    {"name": "humo_head_projection", "values": [0.0, 1.9999882]},
+    {"name": "humo_video_output", "values": [0.0, 0.96402675]}
+  ],
+  "patches": [{
+    "identifier": "wan21-humo-block-delta",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{"key": "native.blocks.0.ffn.2.weight", "expected_shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0], "application": "add"}]
+  }],
+  "patched_checkpoints": [
+    {"name": "humo_timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "humo_audio_conditioning", "values": [0.7310586, 1.7615942]},
+    {"name": "humo_transformer_block", "values": [2.1931758, 2.6423912]},
+    {"name": "humo_block_normalization", "values": [-0.9999901, 0.9999901]},
+    {"name": "humo_head_projection", "values": [0.0, -1.9999802]},
+    {"name": "humo_video_output", "values": [0.0, -0.9640262]}
+  ]
+}

@@ -1,0 +1,1 @@
+DROP TABLE public.collaboration_workflow_run_leases;

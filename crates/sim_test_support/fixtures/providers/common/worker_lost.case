@@ -1,0 +1,13 @@
+schema=1
+provider=fixture
+case=worker_lost
+method=GET
+path=/v1/jobs/fixture
+header=accept:application/json
+body_hex=
+retry_limit=0
+poll_state=running
+poll_limit=1
+cost_microunits=0
+progress=1/2|started
+terminal=worker_lost

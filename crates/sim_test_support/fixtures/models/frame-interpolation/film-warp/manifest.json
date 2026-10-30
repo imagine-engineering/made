@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "truth": "source-fingerprinted reduced exact equation",
+  "source": {
+    "snapshot": "ComfyUI 0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": [
+      "warp",
+      "flow_pyramid_warp"
+    ]
+  },
+  "dependencies": {
+    "film_average_pool_manifest": {
+      "path": "crates/sim_test_support/fixtures/tensor_operations/spatial_functional_kernel_01/film-average-pool/manifest.json",
+      "sha256": "4e2398652d717e772c70aa98eebc85e0923fde89e9407b6fd89914aad1331e74"
+    }
+  },
+  "case": {
+    "name": "two_by_two_half_pixel_horizontal_flow",
+    "input_shape_nchw": [1, 1, 2, 2],
+    "input_f32": [1.0, 3.0, 5.0, 7.0],
+    "flow_shape_nchw": [1, 2, 2, 2],
+    "flow_f32": [0.5, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0],
+    "base_grid_x": [-0.5, 0.5],
+    "base_grid_y": [-0.5, 0.5],
+    "flow_normalization": [1.0, 1.0],
+    "grid_sample": {
+      "mode": "bilinear",
+      "padding_mode": "border",
+      "align_corners": false
+    },
+    "output_shape_nchw": [1, 1, 2, 2],
+    "output_f32": [2.0, 3.0, 6.0, 7.0],
+    "dtypes": ["F16", "BF16", "F32"],
+    "workspace_failure_bytes": 47
+  },
+  "claim_limits": {
+    "licensed_checkpoint_included": false,
+    "upstream_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "film_checkpoint_execution": false,
+    "film_pyramid_or_fusion_execution": false,
+    "rife_grid_semantics": false,
+    "codec_execution": false,
+    "handle_or_cache_execution": false,
+    "output_effect_or_publication": false
+  }
+}

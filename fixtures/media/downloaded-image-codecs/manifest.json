@@ -1,0 +1,191 @@
+{
+  "source_sha256": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+  "python": "3.12.14",
+  "pillow": "12.3.0",
+  "libjpeg_turbo": "3.1.4.1",
+  "libwebp": "1.6.0",
+  "torch": "2.8.0+cpu",
+  "numpy": "1.26.4",
+  "cases": [
+    {
+      "name": "jpeg-rgb-444",
+      "encoded": "jpeg-rgb-444.jpg",
+      "encoded_sha256": "df14ecddcef5693daf0e4d1c1a8fd5202b42d404d4564376b10511118f843c60",
+      "rgba_sha256": "0e6adfe9924cfe25e216448c674f0ca6ac9d967edf9c5494628fefe69f298a86",
+      "f32le_sha256": "67413cb40e36c6fc8a6e339fb1cdffe21190bbab9fa7dd56f1dceff510b73712",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": null
+    },
+    {
+      "name": "jpeg-rgb-420",
+      "encoded": "jpeg-rgb-420.jpg",
+      "encoded_sha256": "e7fd281adcb7546bced86ff666a4ba23561e6fc13c9dd011966b652f49f40c20",
+      "rgba_sha256": "c8e76dd13f8a89c07a44e4881b420f8dbfaa0025c1cbeae368adf7f687c6bf02",
+      "f32le_sha256": "f393c986818632e6bf30611b9c0d58ac16901ee63ba0d0d9c7fc5560d8a8644f",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": null
+    },
+    {
+      "name": "jpeg-progressive",
+      "encoded": "jpeg-progressive.jpg",
+      "encoded_sha256": "e1d613bc3002758900fdcdfc3774a21abcc230956f45efeaa78514cf1aa7cef0",
+      "rgba_sha256": "c8e76dd13f8a89c07a44e4881b420f8dbfaa0025c1cbeae368adf7f687c6bf02",
+      "f32le_sha256": "f393c986818632e6bf30611b9c0d58ac16901ee63ba0d0d9c7fc5560d8a8644f",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": null
+    },
+    {
+      "name": "jpeg-oriented",
+      "encoded": "jpeg-oriented.jpg",
+      "encoded_sha256": "d1795be2d7ed3747dc11a55bcc7d3148b2dde7a46157d93c15e8f1845177689c",
+      "rgba_sha256": "0e6adfe9924cfe25e216448c674f0ca6ac9d967edf9c5494628fefe69f298a86",
+      "f32le_sha256": "67413cb40e36c6fc8a6e339fb1cdffe21190bbab9fa7dd56f1dceff510b73712",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": 6
+    },
+    {
+      "name": "jpeg-grayscale",
+      "encoded": "jpeg-grayscale.jpg",
+      "encoded_sha256": "e6366fb68f5d0dc0f340f400d612dbb6e40bda49017eb79da191e864593f74c0",
+      "rgba_sha256": "360796557e7c303f7d93d3496498cf5b61906bfe3b43c05b3de7383ef02074fc",
+      "f32le_sha256": "e56fcedbdddadc82a9e538d2dfbc3628806bd9807e2d5d1699ce1256189beac3",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "L",
+      "exif_orientation": null
+    },
+    {
+      "name": "jpeg-cmyk",
+      "encoded": "jpeg-cmyk.jpg",
+      "encoded_sha256": "ee79a52bb0c18609316124573299f6e28772a8fe5e1c224572e4220a318d90bd",
+      "rgba_sha256": "367e5cd50a7c4e27f8ed647498de1903471164691a06b05f43a9badc14ab63ac",
+      "f32le_sha256": "a2991248fd1200cce7c5b66553db3b5138ffca28b50806aad9f82054d93719aa",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "CMYK",
+      "exif_orientation": null
+    },
+    {
+      "name": "webp-rgb-lossless",
+      "encoded": "webp-rgb-lossless.webp",
+      "encoded_sha256": "3dbf3643f683dab2cca45c4be15058cc0058ecba1a086ff9bfec9df92ef5b0e8",
+      "rgba_sha256": "c1b54f03c01d32ab0cc0f70419d9aab6c1d857e64bafab258fbd1c9e0fbd1816",
+      "f32le_sha256": "5a40c927534da0488f92394f5a8c8d3d4e68277acd7283ed4a260806bfc86d4b",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": null
+    },
+    {
+      "name": "webp-rgb-lossy",
+      "encoded": "webp-rgb-lossy.webp",
+      "encoded_sha256": "c6e6c9638a76925dcd303b25e9b6a4ffdceabd5ef12d966cffcabdb958503c9b",
+      "rgba_sha256": "4ddee754255e5761ebcf5bb2efffa34254d9379427db9b74cfb0f38c975d98ac",
+      "f32le_sha256": "0a4f6d148f45983751f8b698d294b5099e5b35fd1215cfbe016e1db8669d5851",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": null
+    },
+    {
+      "name": "webp-grayscale",
+      "encoded": "webp-grayscale.webp",
+      "encoded_sha256": "787ce08b9ddec336e476abe3a96cdadb4055cc22af326e88acb88268fc501314",
+      "rgba_sha256": "4c24ee48ba8696ff2875b792a42151288ebdde0b43097ebf6c5fdc8695946f1d",
+      "f32le_sha256": "77f3d150c66b01acd05e59cf753e80f3d62b9ec06e1423f39affe0796e00ac08",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGB",
+      "exif_orientation": null
+    },
+    {
+      "name": "webp-alpha-lossless",
+      "encoded": "webp-alpha-lossless.webp",
+      "encoded_sha256": "e9e14cfbea8c4ad4aa53be970d7d62d25387faef74179f039e649d86b408c6be",
+      "rgba_sha256": "a9d75de6e00675079879d60ea528c459480814c666657d55b721b14476e3dade",
+      "f32le_sha256": "f9c4f5583bdf32d62d08257eb15d9c376c131cb424f6dcfe9ca8cdd6ae863ac7",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGBA",
+      "exif_orientation": null
+    },
+    {
+      "name": "webp-alpha-lossy",
+      "encoded": "webp-alpha-lossy.webp",
+      "encoded_sha256": "da7e4a06c1cbfb453f4d619eb71f1662a14db4b77b3390415920d66c468317b1",
+      "rgba_sha256": "cfaaaefdd1b83c372d85ff2f905032e5f65b094fa1f099601a0b86ddb3578a7b",
+      "f32le_sha256": "83e5db1a5a9fc820856721481ce5bbf247573cdf75fa38f27b56728bf5cedf78",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGBA",
+      "exif_orientation": null
+    },
+    {
+      "name": "webp-oriented",
+      "encoded": "webp-oriented.webp",
+      "encoded_sha256": "d4abdc0a49b48e707d94ec592ae136457c2df02db7931bdb9c25893734a2e5d3",
+      "rgba_sha256": "a9d75de6e00675079879d60ea528c459480814c666657d55b721b14476e3dade",
+      "f32le_sha256": "f9c4f5583bdf32d62d08257eb15d9c376c131cb424f6dcfe9ca8cdd6ae863ac7",
+      "shape": [
+        1,
+        5,
+        9,
+        4
+      ],
+      "decoded_mode": "RGBA",
+      "exif_orientation": 6
+    }
+  ]
+}

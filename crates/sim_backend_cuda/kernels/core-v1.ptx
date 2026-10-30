@@ -1,0 +1,38 @@
+.version 7.8
+.target sm_52
+.address_size 64
+
+.visible .entry zed_cuda_add_f32(
+    .param .u64 input_a,
+    .param .u64 input_b,
+    .param .u64 output,
+    .param .u64 element_count
+)
+{
+    .reg .pred %predicate;
+    .reg .b32 %index, %lane, %block, %block_size, %count;
+    .reg .b64 %a, %b, %out, %offset, %count64;
+    .reg .f32 %left, %right, %sum;
+
+    ld.param.u64 %a, [input_a];
+    ld.param.u64 %b, [input_b];
+    ld.param.u64 %out, [output];
+    ld.param.u64 %count64, [element_count];
+    cvt.u32.u64 %count, %count64;
+    mov.u32 %lane, %tid.x;
+    mov.u32 %block, %ctaid.x;
+    mov.u32 %block_size, %ntid.x;
+    mad.lo.s32 %index, %block, %block_size, %lane;
+    setp.ge.u32 %predicate, %index, %count;
+    @%predicate bra done;
+    mul.wide.u32 %offset, %index, 4;
+    add.s64 %a, %a, %offset;
+    add.s64 %b, %b, %offset;
+    add.s64 %out, %out, %offset;
+    ld.global.f32 %left, [%a];
+    ld.global.f32 %right, [%b];
+    add.rn.f32 %sum, %left, %right;
+    st.global.f32 [%out], %sum;
+done:
+    ret;
+}

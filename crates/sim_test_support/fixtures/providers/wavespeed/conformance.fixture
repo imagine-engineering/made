@@ -1,0 +1,47 @@
+{
+  "namespace": "zed.sim.provider.wavespeed",
+  "source_sha256": "f7c7fec19d8ddfd1bc885498911de9a3555c2c19aa08c6c982a0a45e2a9cf699",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0786",
+      "node_identifier": "WavespeedFlashVSRNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0787",
+      "node_identifier": "WavespeedImageUpscaleNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0206",
+      "method": "GET",
+      "path": "/proxy/wavespeed/api/v3/predictions/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0207",
+      "method": "GET",
+      "path": "/proxy/wavespeed/api/v3/predictions/{initial_res.data.id}/result",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0208",
+      "method": "POST",
+      "path": "/proxy/wavespeed/api/v3/wavespeed-ai/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0209",
+      "method": "POST",
+      "path": "/proxy/wavespeed/api/v3/wavespeed-ai/flashvsr",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0210",
+      "method": "POST",
+      "path": "/proxy/wavespeed/api/v3/wavespeed-ai/{model_path}",
+      "disposition": "executable"
+    }
+  ]
+}

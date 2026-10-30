@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-transform-sim-node-0047",
+  "sources": {
+    "sim_extras/nodes_images.py": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+    "sim_extras/nodes_dataset.py": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+    "sim_extras/nodes_sdpose.py": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+    "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+  },
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0047",
+      "class_type": "CenterCropImages",
+      "catalog_definition_sha256": "f5258e4d133be01f4db12430bc814bdc25d7b937fede545fa8cdd1852740a190",
+      "source": "sim_extras/nodes_dataset.py:749-768",
+      "source_compatibility": "tensor_to_pil uint8 quantization followed by Pillow crop and pil_to_tensor",
+      "case": {
+        "input_shape": [1, 2, 4, 1],
+        "input_values": [0.0, 0.1, 0.5, 0.7, 0.9, 1.0, 1.2, 0.4],
+        "crop": [2, 2],
+        "output_values": [0.09803921568627451, 0.4980392156862745, 1.0, 0.19607843137254902]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0125",
+      "class_type": "CropByBBoxes",
+      "catalog_definition_sha256": "08f10e4d60924fdc5002b2ea82d180c8dd71a2fcd4cb8b54df611dbdfce3366d",
+      "source": "sim_extras/nodes_sdpose.py:672-762",
+      "case": {
+        "input_shape": [2, 80, 120, 3],
+        "frame_boxes": [[10, 12, 20, 30], [15, 8, 40, 25]],
+        "union": [10, 8, 55, 42],
+        "padding": 4,
+        "clamped_crop": [6, 4, 59, 46],
+        "output_shape": [2, 64, 96, 3]
+      },
+      "empty_behavior": "an empty outer list or no frame crops returns the original IMAGE handle"
+    },
+    {
+      "feature_id": "COMFY-NODE-0247",
+      "class_type": "ImageCrop",
+      "catalog_definition_sha256": "6a2e83dfcd98423d8dc1476248f77284f22dd087638c3a815840cd22042392c7",
+      "source": "sim_extras/nodes_images.py:27-56",
+      "compatibility": "deprecated",
+      "case": {
+        "input_shape": [1, 3, 4, 1],
+        "x": 3,
+        "y": 2,
+        "width": 8,
+        "height": 8,
+        "output_shape": [1, 1, 1, 1]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0248",
+      "class_type": "ImageCropV2",
+      "catalog_definition_sha256": "7bff80a167cec29a7737dc1ef26114d0821c49ef4130cc531c6612a26c3a9ec9",
+      "source": "sim_extras/nodes_images.py:59-89",
+      "intermediate_output": "native prepared PNG preview effect committed with the node outcome",
+      "recovery": "preview tickets and partially published IMAGE handles are rolled back on failure or cancellation"
+    },
+    {
+      "feature_id": "COMFY-NODE-0250",
+      "class_type": "ImageFlip",
+      "catalog_definition_sha256": "2950156b24562cc8da1f756574b9fe191c717d8edc336b5da0656af48f47dcf0",
+      "source": "sim_extras/nodes_images.py:636-660",
+      "case": {
+        "input_shape": [1, 2, 3, 1],
+        "input_values": [1, 2, 3, 4, 5, 6],
+        "horizontal_output": [3, 2, 1, 6, 5, 4],
+        "vertical_output": [4, 5, 6, 1, 2, 3]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0258",
+      "class_type": "ImagePadForOutpaint",
+      "catalog_definition_sha256": "ed9bce1af997ce50cdea6eb3de0646a734819fbe2e07ca62e2e70db226d0f17b",
+      "source": "nodes.py:1983-2045",
+      "case": {
+        "input_shape": [1, 2, 3, 1],
+        "padding": [1, 1, 0, 0],
+        "feathering": 1,
+        "image_shape": [1, 3, 4, 1],
+        "mask_shape": [1, 3, 4],
+        "canvas_fill": 0.5,
+        "mask_fill": 1.0
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0261",
+      "class_type": "ImageRotate",
+      "catalog_definition_sha256": "7fed131da61d51f061bb20166431244379e86922b5daf75c3a6dbcb6a6cfd4bd",
+      "source": "sim_extras/nodes_images.py:604-633",
+      "case": {
+        "input_shape": [1, 2, 3, 1],
+        "input_values": [1, 2, 3, 4, 5, 6],
+        "rotation": "90 degrees",
+        "output_shape": [1, 3, 2, 1],
+        "output_values": [3, 6, 2, 5, 1, 4]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0267",
+      "class_type": "ImageStitch",
+      "catalog_definition_sha256": "124c054e8bed03d8702e4336a20bda8f0c6cfe628f6c83b4d2a9788c2cd9409a",
+      "source": "sim_extras/nodes_images.py:269-442",
+      "semantics": "repeat the last frame to match batches, Lanczos-resize only image2 when requested, center-pad non-concatenated dimensions, add one to odd positive spacing widths, fill missing channels with one, then concatenate in source direction order",
+      "spacing_colors": {
+        "white": [1, 1, 1],
+        "black": [0, 0, 0],
+        "red": [1, 0, 0],
+        "green": [0, 1, 0],
+        "blue": [0, 0, 1]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0504",
+      "class_type": "RandomCropImages",
+      "catalog_definition_sha256": "b27066e5da7a4aa80840fa172d2410d5609e92f02bd5244494c467da0ee8a2a6",
+      "source": "sim_extras/nodes_dataset.py:771-797",
+      "rng": {
+        "family": "NumPy RandomState MT19937",
+        "seed_modulus": 4294967295,
+        "seed": 42,
+        "bounds": [8, 5],
+        "coordinates": [6, 3]
+      },
+      "source_compatibility": "canonical source-compatible uint8 crop adapter"
+    },
+    {
+      "feature_id": "COMFY-NODE-0540",
+      "class_type": "ResizeAndPadImage",
+      "catalog_definition_sha256": "e4472818dee17ff8bd42e25a996169499dac94f0b0fcee0d81277dada677ffbf",
+      "source": "sim_extras/nodes_images.py:445-494",
+      "case": {
+        "input_shape": [1, 3, 5, 3],
+        "target": [8, 8],
+        "scaled": [8, 4],
+        "offset": [0, 2]
+      },
+      "interpolation": ["area", "bicubic", "nearest-exact", "bilinear", "lanczos"]
+    }
+  ],
+  "failure_contract": {
+    "invalid_input": "invalid_node_inputs",
+    "missing_handle": "invalid_image_transform_handle",
+    "cancellation": "execution_interrupted with no partially published handles or prepared effects",
+    "cache": "input identity plus the pinned source implementation version",
+    "persistence": "pure tensor outputs persist through canonical native handles; CropV2 preview state uses prepared-effect commit/rollback",
+    "recovery": "fresh execution deterministically recomputes after validation, storage, or cancellation failure"
+  },
+  "platform_scope": {
+    "certified": ["CPU F32 BHWC"],
+    "uncertified": ["Apple Metal", "CUDA", "ROCm", "DirectML", "XPU", "NPU", "MLU"]
+  }
+}

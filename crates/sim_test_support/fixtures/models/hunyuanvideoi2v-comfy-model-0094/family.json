@@ -1,0 +1,53 @@
+{
+  "fixture_id": "hunyuanvideoi2v-sim-model-0094",
+  "feature_id": "COMFY-MODEL-0094",
+  "base_artifact_digest": "0094009400940094009400940094009400940094009400940094009400940094",
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 32,
+  "expected_memory_bytes": 32,
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.txt_in.individual_token_refiner.blocks.0.norm1.weight": [256],
+      "model.diffusion_model.img_in.proj.weight": [256, 33, 1, 2, 2],
+      "model.diffusion_model.final_layer.linear.weight": [132, 256],
+      "model.diffusion_model.txt_in.input_embedder.weight": [256, 4096],
+      "model.diffusion_model.double_blocks.0.attn.weight": [256, 256],
+      "model.diffusion_model.double_blocks.1.attn.weight": [256, 256],
+      "model.diffusion_model.single_blocks.0.attn.weight": [256, 256],
+      "model.diffusion_model.vector_in.in_layer.weight": [256, 768],
+      "model.diffusion_model.guidance_in.in_layer.weight": [256, 256],
+      "model.diffusion_model.byt5_in.fc1.weight": [2048, 1472],
+      "model.diffusion_model.time_r_in.in_layer.weight": [256, 256]
+    },
+    "metadata": {}
+  },
+  "source_weights": [
+    {"key": "model.diffusion_model.img_in.proj.weight", "shape": [1], "values": [1.0]},
+    {"key": "model.diffusion_model.final_layer.linear.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.final_layer.linear.bias", "shape": [2], "values": [0.1, -0.1]},
+    {"key": "model.diffusion_model.txt_in.input_embedder.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.txt_in.input_embedder.bias", "shape": [2], "values": [1.0, -1.0]},
+    {"key": "model.diffusion_model.txt_in.individual_token_refiner.blocks.0.norm1.weight", "shape": [1], "values": [1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [0.0, 0.0]},
+  "checkpoints": [
+    {"name": "conditioning.context_projection", "values": [1.0, -1.0]},
+    {"name": "conditioning.context_activation", "values": [0.7310586, -0.26894143]},
+    {"name": "transformer.double_block_0_attention", "values": [0.7310586, -0.26894143]},
+    {"name": "output.final_projection", "values": [0.8310586, -0.36894143]}
+  ],
+  "patches": [{
+    "identifier": "hunyuanvideoi2v-output-bias",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{"key": "native.final_layer.linear.bias", "expected_shape": [2], "values": [0.5, 0.5], "application": "add"}]
+  }],
+  "patched_checkpoints": [
+    {"name": "conditioning.context_projection", "values": [1.0, -1.0]},
+    {"name": "conditioning.context_activation", "values": [0.7310586, -0.26894143]},
+    {"name": "transformer.double_block_0_attention", "values": [0.7310586, -0.26894143]},
+    {"name": "output.final_projection", "values": [1.3310586, 0.13105857]}
+  ]
+}

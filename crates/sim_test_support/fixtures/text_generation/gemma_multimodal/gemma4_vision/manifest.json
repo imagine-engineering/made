@@ -1,0 +1,46 @@
+{
+  "fixture_schema": "zed.sim.gemma4-vision-fixture.v1",
+  "task_id": "comfy-parity-native-gemma4-vision-projection-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "gemma4_path": "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py",
+    "gemma4_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6"
+  },
+  "preparation_fixture": {
+    "path": "../image_video/manifest.json",
+    "sha256": "0cfb8798861c3081dec929faddeb408f45474bcc828f3438f1e092ca5cd1691e"
+  },
+  "reduced_fixture": {
+    "profile": "E4B",
+    "configuration": {
+      "hidden_size": 4,
+      "intermediate_size": 6,
+      "layers": 1,
+      "attention_heads": 1,
+      "head_dimension": 4,
+      "patch_size": 16,
+      "position_embeddings": 64,
+      "pooling_kernel_size": 3,
+      "output_hidden_size": 3,
+      "rotary_theta": 100.0
+    },
+    "video_prepared_shape": [1, 384, 384, 3],
+    "video_attention_budget": 70,
+    "video_output_tokens": 64,
+    "image_prepared_shape": [1, 768, 768, 3],
+    "image_attention_budget": 280,
+    "image_output_tokens": 256,
+    "video_output_f32le_sha256": "9399da44c1b3273c62809112be00ae3ad75a868904ea951f6df171ff79074ea4"
+  },
+  "claims": {
+    "licensed_checkpoint": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_parity": false,
+    "source_graph_and_shape_parity": true,
+    "failure_atomicity": true
+  }
+}

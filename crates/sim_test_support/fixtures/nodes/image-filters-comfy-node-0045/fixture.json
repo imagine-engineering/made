@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-filters-sim-node-0045",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0045",
+      "class_type": "Canny",
+      "source": "sim_extras/nodes_canny.py:9-40",
+      "source_file_sha256": "5efd352d92d7749b7b9734a1676fee18f4431d44a8e9477822a7a8f38ad26051",
+      "catalog_definition_sha256": "bfa21e20b56aad30e5385eaecb04dc2cbfdeaf2ad31207aa427d1975865b518f",
+      "operation": "Kornia 0.8.2 Canny on CPU F32 BCHW, binary edge channel repeated to RGB"
+    },
+    {
+      "feature_id": "COMFY-NODE-0078",
+      "class_type": "ColorTransfer",
+      "source": "sim_extras/nodes_post_processing.py:668-863",
+      "source_file_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "catalog_definition_sha256": "89c4098f24ab4618a3a2c86f24f6c30f95c246b263076424e7eb80ea5a2d73b4",
+      "methods": ["reinhard_lab", "mkl_lab", "histogram"],
+      "source_stats": ["per_frame", "uniform", "target_frame"],
+      "operation": "source-exact pooled/per-frame RGB-Lab statistics, MKL covariance eigensystem, or 256-bin CDF matching"
+    },
+    {
+      "feature_id": "COMFY-NODE-0240",
+      "class_type": "ImageAddNoise",
+      "source": "sim_extras/nodes_images.py:165-194",
+      "source_file_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "catalog_definition_sha256": "4fc3bc678b045be105199b87fa6de508a04571ebcc72a0b230c75ed4accb3ea9",
+      "operation": "manual-seeded canonical CPU torch.randn profile, strength multiply, add, clamp to [0,1]"
+    },
+    {
+      "feature_id": "COMFY-NODE-0242",
+      "class_type": "ImageBlend",
+      "source": "sim_extras/nodes_post_processing.py:18-76",
+      "source_file_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "catalog_definition_sha256": "a66bb553b3c397d91e45563a33264ecd29e2abd8c8cfc4857366764af76e96fc",
+      "modes": ["normal", "multiply", "screen", "overlay", "soft_light", "difference"],
+      "operation": "source alpha-fix, bicubic center resize, batch broadcast, blend, linear strength, clamp"
+    },
+    {
+      "feature_id": "COMFY-NODE-0243",
+      "class_type": "ImageBlur",
+      "source": "sim_extras/nodes_post_processing.py:78-112",
+      "source_file_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "catalog_definition_sha256": "aeb593a942642a67a5c8cf25b9d97fe098686cf92b3731a688bb829310c5f986",
+      "operation": "source linspace radial Gaussian, reflect padding, grouped convolution, source crop"
+    },
+    {
+      "feature_id": "COMFY-NODE-0259",
+      "class_type": "ImageQuantize",
+      "source": "sim_extras/nodes_post_processing.py:114-178",
+      "source_file_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "catalog_definition_sha256": "542f9dab188bb6641a3fe9ea7e565a39f9be13936584f8c9a9f0fd9bff16950c",
+      "dithers": ["none", "floyd-steinberg", "bayer-2", "bayer-4", "bayer-8", "bayer-16"],
+      "operation": "canonical Pillow-compatible adaptive palette and source dithering owner"
+    },
+    {
+      "feature_id": "COMFY-NODE-0266",
+      "class_type": "ImageSharpen",
+      "source": "sim_extras/nodes_post_processing.py:180-219",
+      "source_file_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "catalog_definition_sha256": "0d04d7d30a330f22b2b0cd50162cd2934a78a18a554fbc18b91df982057265b6",
+      "operation": "source Gaussian times negative alpha*10, adjusted center, reflect convolution, clamp"
+    },
+    {
+      "feature_id": "COMFY-NODE-0453",
+      "class_type": "Morphology",
+      "source": "sim_extras/nodes_morphology.py:10-63",
+      "source_file_sha256": "2638e6d5b1a2c6a3257c2a15f1ee53215712890cc60674db5a2908e2eb505344",
+      "catalog_definition_sha256": "8314dbe25b1795ecd278194a23a17643a2820cd41622a142acf0896b7fd8ea78",
+      "operations": ["erode", "dilate", "open", "close", "gradient", "bottom_hat", "top_hat"],
+      "operation": "canonical Kornia 0.8.2 flat-kernel morphology on CPU F32 BCHW"
+    }
+  ],
+  "behavior": {
+    "input_is_list": false,
+    "output_is_list": [false],
+    "lazy_inputs": false,
+    "effect": "pure",
+    "cache": "input_identity",
+    "cancellation": "checked before resolution, during bounded loops or delegated kernels, and before atomic output publication",
+    "persistence": "source class types and literal widget values round-trip unchanged",
+    "recovery": "foreign or stale IMAGE handles fail closed and fresh handles replay deterministically"
+  }
+}

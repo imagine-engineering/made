@@ -1,0 +1,48 @@
+Zed native Cambricon MLU execution ABI review v1
+
+ABI floor: CNRT 6.6.0 and CNNL 1.20.4
+Targets: aarch64-unknown-linux-gnu, x86_64-unknown-linux-gnu
+Unsafe owner: sim_backend_mlu::loader
+Execution owner: sim_backend_mlu::MluExecutionRuntime
+Certificate owner: sim_runtime::NativeFfiRegistry
+
+CNRT package: cnrt_6.6.0-1.ubuntu20.04_amd64.deb
+CNRT package SHA-256: 70e23ae6197f68f9c0440db985f7a20dc174837b4190ba6c70d70117e3d8fb51
+CNRT header: include/cnrt.h
+CNRT header bytes: 206094
+CNRT header SHA-256: 0c8ca727c2db85c60f69cf8cd96157ee1d547b175ddeaf45c0e94108f794a8f2
+CNRT status declaration lines: 58-156
+CNRT status declaration SHA-256: cd4be949de49130c477d4fd709b7757db10e09bc3ad18578053ee1c0709c6b3f
+
+CNNL package: cnnl_1.20.4-1.ubuntu20.04_amd64.deb
+CNNL package SHA-256: 8874376ecdb81fb555d523197c922baace34d5a6abe567b68e1e74254f2b11e8
+CNNL header: include/cnnl.h
+CNNL header bytes: 2946595
+CNNL header SHA-256: 69eaa4fa560fa02e1e636a0d19917244a2badd94a960721e57fa36059f6fa031
+CNNL status declaration lines: 55-87
+CNNL status declaration SHA-256: d2bdfd96fb9cf6279477af8b7bc90360f285af2aa1e5da5a223298c158909e9a
+
+Reviewed status values:
+cnrtRet_t cnrtSuccess = 0
+cnrtRet_t cnrtErrorNoDevice = 100004
+cnrtRet_t cnrtErrorNoMem = 100100
+cnnlStatus_t CNNL_STATUS_SUCCESS = 0
+cnnlStatus_t CNNL_STATUS_ALLOC_FAILED = 2
+
+The exact public packages were fetched from the URLs pinned in the normative
+native-backend ABI catalog. The nested CNRT package, direct CNNL package, and
+both headers matched the pre-existing package and header digests before these
+facts were recorded. Vendor headers and runtime binaries are not redistributed.
+
+The production error adapter maps cnrtErrorNoMem and
+CNNL_STATUS_ALLOC_FAILED to typed out-of-memory. It maps cnrtErrorNoDevice to
+typed device loss only for a CNRT operation; every reviewed call reselects its
+device before touching a resource. Other CNRT driver failures and all ambiguous
+CNNL execution failures remain typed vendor-call failures. Numeric values are
+classified in their CNRT or CNNL operation domain so a coincident value in the
+other library cannot acquire the wrong meaning.
+
+Development verification: compile abi/verify-bindings.c against the exact
+CNRT/CNNL headers. The verifier checks versions, status sizes, and all five
+status constants. The Rust manifest validator independently rejects missing,
+reordered, renamed, or changed status rows.

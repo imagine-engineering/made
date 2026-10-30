@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "identity": "lcm",
+  "feature_id": "COMFY-MODEL-0191",
+  "source_ordinal": 26,
+  "source": {
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "equation_lines": [1015, 1022, 1024, 1027, 1028, 1029, 1030, 1032, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045],
+    "registry_line": 972,
+    "catalog_line": 192
+  },
+  "tolerance": 0.000001,
+  "seed": 191,
+  "shape": [1, 1, 1, 4],
+  "sigmas": [0.9, 0.7, 0.5, 0.25, 0.0],
+  "initial": [1.0, -1.0, 0.5, -0.5],
+  "profile_sigmas": [0.1, 0.25, 0.5, 0.7, 0.9],
+  "profile_noise_scale": 0.5,
+  "options": {
+    "noise_scale_start": 0.75,
+    "noise_scale_end": -0.75,
+    "noise_clip_standard_deviations": 1.0
+  },
+  "steps": [
+    {
+      "step": 0,
+      "sigma": 0.9,
+      "next_sigma": 0.7,
+      "latent_before": [1.0, -1.0, 0.5, -0.5],
+      "denoised": [0.2, -0.4, 0.6, -0.8],
+      "raw_noise": [0.6925019, 0.40165874, 0.5646089, -1.3020295],
+      "noise_standard_deviation": 0.9350823,
+      "noise_clip": 0.9350823,
+      "interpolation": 0.0,
+      "noise_scale": 0.75,
+      "clipped_scaled_noise": [0.5193764, 0.30124405, 0.42345667, -0.7013117],
+      "latent_after": [0.24178176, -0.014564581, 0.32820985, -0.48545912]
+    },
+    {
+      "step": 1,
+      "sigma": 0.7,
+      "next_sigma": 0.5,
+      "latent_before": [0.24178176, -0.014564581, 0.32820985, -0.48545912],
+      "denoised": [0.1, 0.3, -0.5, 0.7],
+      "raw_noise": [0.025363842, -0.51614505, -1.228057, 1.2920859],
+      "noise_standard_deviation": 1.064445,
+      "noise_clip": 1.064445,
+      "interpolation": 0.33333334,
+      "noise_scale": 0.25,
+      "clipped_scaled_noise": [0.0063409605, -0.12903626, -0.26611125, 0.26611125],
+      "latent_after": [0.05158524, 0.11774094, -0.3165278, 0.4165278]
+    },
+    {
+      "step": 2,
+      "sigma": 0.5,
+      "next_sigma": 0.25,
+      "latent_before": [0.05158524, 0.11774094, -0.3165278, 0.4165278],
+      "denoised": [-0.2, 0.4, -0.6, 0.8],
+      "raw_noise": [-0.10151906, -0.19109175, -0.7256729, -0.032080162],
+      "noise_standard_deviation": 0.31550828,
+      "noise_clip": 0.31550828,
+      "interpolation": 0.6666667,
+      "noise_scale": -0.25,
+      "clipped_scaled_noise": [0.025379764, 0.047772937, 0.07887707, 0.0080200405],
+      "latent_after": [-0.14682753, 0.30597162, -0.44014037, 0.6010025]
+    },
+    {
+      "step": 3,
+      "sigma": 0.25,
+      "next_sigma": 0.0,
+      "latent_before": [-0.14682753, 0.30597162, -0.44014037, 0.6010025],
+      "denoised": [0.9, -0.7, 0.5, -0.3],
+      "raw_noise": null,
+      "noise_standard_deviation": null,
+      "noise_clip": null,
+      "interpolation": null,
+      "noise_scale": null,
+      "clipped_scaled_noise": null,
+      "latent_after": [0.9, -0.7, 0.5, -0.3]
+    }
+  ],
+  "terminal": [0.9, -0.7, 0.5, -0.3]
+}

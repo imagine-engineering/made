@@ -1,0 +1,17 @@
+{
+  "source-svg.svg": {
+    "producer": "actual pinned SVG ordered BytesIO wrapper in executed node AST with hermetic synthetic provider response",
+    "source_wrapper": "sim_api/latest/_util/image_types.py SVG.__init__",
+    "source_wrapper_sha256": "1704789d3bbb5570eb7dae16537a20aa88b63cd551dd54b5ee91781732efc606",
+    "oracle_case": 0,
+    "bytes": 73,
+    "sha256": "83dbe01d858091758c751af54e21b4740dc1f13ad197b223df612685c4d819d3",
+    "validation": "Python ElementTree XML syntax parse only; no rendering/native Artifact allocation/publication claim"
+  },
+  "svg-response.json": {
+    "producer": "hermetic synthetic provider JSON matching source oracle default response",
+    "bytes": 247,
+    "sha256": "5e6f1b6ac9ac751c63876603a6d5eda7ec098ede766372f3a5c0fdc0de617972",
+    "validation": "actual Pydantic/source SVG wrappers execute in independent oracle; native owner acceptance pending"
+  }
+}

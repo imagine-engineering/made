@@ -1,0 +1,4525 @@
+{
+  "client_defaults": {
+    "sync_op": {
+      "price_extractor": null,
+      "data": null,
+      "files": null,
+      "content_type": "application/json",
+      "timeout": 3600.0,
+      "multipart_parser": null,
+      "max_retries": 3,
+      "retry_delay": 1.0,
+      "retry_backoff": 2.0,
+      "wait_label": "Waiting for server",
+      "estimated_duration": null,
+      "final_label_on_success": "Completed",
+      "progress_origin_ts": null,
+      "monitor_progress": true,
+      "max_retries_on_rate_limit": 16,
+      "is_rate_limited": null
+    },
+    "poll_op": {
+      "progress_extractor": null,
+      "price_extractor": null,
+      "completed_statuses": null,
+      "failed_statuses": null,
+      "queued_statuses": null,
+      "data": null,
+      "poll_interval": 5.0,
+      "max_poll_attempts": 480,
+      "timeout_per_poll": 120.0,
+      "max_retries_per_poll": 10,
+      "retry_delay_per_poll": 1.0,
+      "retry_backoff_per_poll": 1.4,
+      "estimated_duration": null,
+      "cancel_endpoint": null,
+      "cancel_timeout": 10.0,
+      "extra_text": null
+    },
+    "download_url_to_bytesio": {
+      "timeout": null,
+      "max_retries": 5,
+      "retry_delay": 1.0,
+      "retry_backoff": 2.0,
+      "cls": null
+    }
+  },
+  "sources": {
+    "sim_api_nodes/nodes_krea.py": "f67aa4c46d33b30c05525ab0f27ebf6e2cbf59e698c62ac5b226786be4153ea7",
+    "sim_api_nodes/apis/krea.py": "455369661ed1a0ee385c08cd86b13a331db505fe5b16cd9b2755806c5d571cdd",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+  },
+  "versions": {
+    "pillow": "12.3.0",
+    "torch": "2.8.0+cpu",
+    "aiohttp": "3.11.8"
+  },
+  "cases": [
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium Turbo",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium-turbo",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "3:2",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "16:9",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2.35:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "4:5",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "2:3",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "raw"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "raw"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "low"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "low"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Large",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "creativity": "high"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/large",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "9:16",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "high"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": " ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": " ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "moodboard_id": " \u001cABCDEF00-1234-5678-9ABC-DEF012345678\u001c ",
+          "moodboard_strength": null
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium",
+          "moodboards": [
+            {
+              "id": "ABCDEF00-1234-5678-9ABC-DEF012345678",
+              "strength": 0.35
+            }
+          ]
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "moodboard_id": "00000000-0000-0000-0000-000000000000",
+          "moodboard_strength": "-0.5"
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium",
+          "moodboards": [
+            {
+              "id": "00000000-0000-0000-0000-000000000000",
+              "strength": -0.5
+            }
+          ]
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "style_reference": [
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": "-2",
+              "ignored": "retained only by chain"
+            },
+            {
+              "url": null,
+              "strength": 2
+            }
+          ]
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium",
+          "image_style_references": [
+            {
+              "strength": -2.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 2.0
+            }
+          ]
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "style_reference": []
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium"
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "style_reference": [
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            },
+            {
+              "url": "https://style.fixture.invalid/a",
+              "strength": 1
+            }
+          ]
+        },
+        "seed": 2147483647
+      },
+      "request": {
+        "path": "/proxy/krea/generate/image/krea/krea-2/medium",
+        "method": "POST",
+        "body": {
+          "prompt": "  source ☁  ",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "seed": 2147483647,
+          "creativity": "medium",
+          "image_style_references": [
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            },
+            {
+              "strength": 1.0,
+              "url": "https://style.fixture.invalid/a"
+            }
+          ]
+        }
+      },
+      "poll": {
+        "path": "/proxy/krea/jobs/job-42",
+        "method": "GET",
+        "queued_statuses": [
+          "backlogged",
+          "queued",
+          "scheduled"
+        ]
+      },
+      "downloads": [
+        "https://output.fixture.invalid/first.png"
+      ],
+      "output": {
+        "mode": "RGBA",
+        "url": "https://output.fixture.invalid/first.png"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "input": {
+        "prompt": "",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "error_type": "Exception",
+      "requests": 0
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "unknown",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium"
+        },
+        "seed": 2147483647
+      },
+      "error_type": "ValueError",
+      "requests": 0
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "moodboard_id": "bad"
+        },
+        "seed": 2147483647
+      },
+      "error_type": "ValueError",
+      "requests": 0
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "moodboard_id": "00000000-0000-0000-0000-000000000000",
+          "moodboard_strength": 1.6
+        },
+        "seed": 2147483647
+      },
+      "error_type": "ValidationError",
+      "requests": 0
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "style_reference": [
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            },
+            {
+              "url": "x",
+              "strength": 1
+            }
+          ]
+        },
+        "seed": 2147483647
+      },
+      "error_type": "ValueError",
+      "requests": 0
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "style_reference": [
+            {
+              "url": "x",
+              "strength": 2.1
+            }
+          ]
+        },
+        "seed": 2147483647
+      },
+      "error_type": "ValidationError",
+      "requests": 0
+    },
+    {
+      "input": {
+        "prompt": "  source ☁  ",
+        "model": {
+          "model": "Krea 2 Medium",
+          "aspect_ratio": "1:1",
+          "resolution": "1K",
+          "creativity": "medium",
+          "style_reference": [
+            {
+              "strength": 1
+            }
+          ]
+        },
+        "seed": 2147483647
+      },
+      "error_type": "KeyError",
+      "requests": 0
+    }
+  ],
+  "chain_cases": [
+    {
+      "incoming": [],
+      "strength": 1,
+      "output": [
+        {
+          "url": "https://asset.fixture.invalid/style.png",
+          "strength": 1.0
+        }
+      ],
+      "upload": {
+        "path": "/proxy/krea/assets",
+        "method": "POST",
+        "field": "file",
+        "file_name": "00000000-0000-4000-8000-000000000000.png",
+        "mime": "image/png",
+        "bytes_hex": "89504e470d0a1a0a0000000d4948445200000002000000020802000000fdd49a730000001649444154789c63a8b797ffcfb09f69d617ddbf4c9f0127c8064b5ef6a8fa0000000049454e44ae426082",
+        "options": {
+          "content_type": "multipart/form-data",
+          "max_retries": 1,
+          "wait_label": "Uploading reference"
+        }
+      }
+    },
+    {
+      "incoming": [
+        {
+          "url": "https://prior.fixture.invalid/0",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/1",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/2",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/3",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/4",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/5",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/6",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/7",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/8",
+          "strength": 0.5,
+          "extra": "preserved"
+        }
+      ],
+      "strength": -2,
+      "output": [
+        {
+          "url": "https://prior.fixture.invalid/0",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/1",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/2",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/3",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/4",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/5",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/6",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/7",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://prior.fixture.invalid/8",
+          "strength": 0.5,
+          "extra": "preserved"
+        },
+        {
+          "url": "https://asset.fixture.invalid/style.png",
+          "strength": -2.0
+        }
+      ],
+      "upload": {
+        "path": "/proxy/krea/assets",
+        "method": "POST",
+        "field": "file",
+        "file_name": "00000000-0000-4000-8000-000000000000.png",
+        "mime": "image/png",
+        "bytes_hex": "89504e470d0a1a0a0000000d4948445200000002000000020802000000fdd49a730000001649444154789c63a8b797ffcfb09f69d617ddbf4c9f0127c8064b5ef6a8fa0000000049454e44ae426082",
+        "options": {
+          "content_type": "multipart/form-data",
+          "max_retries": 1,
+          "wait_label": "Uploading reference"
+        }
+      }
+    }
+  ],
+  "chain_limit_before_upload": true,
+  "multipart": {
+    "boundary": "krea-source-boundary",
+    "bytes_hex": "2d2d6b7265612d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a20696d6167652f706e670d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d2230303030303030302d303030302d343030302d383030302d3030303030303030303030302e706e67220d0a0d0a89504e470d0a1a0a0000000d4948445200000002000000020802000000fdd49a730000001649444154789c63a8b797ffcfb09f69d617ddbf4c9f0127c8064b5ef6a8fa0000000049454e44ae4260820d0a2d2d6b7265612d736f757263652d626f756e646172792d2d0d0a"
+  },
+  "status_constants": {
+    "COMPLETED_STATUSES": [
+      "succeeded",
+      "succeed",
+      "success",
+      "completed",
+      "finished",
+      "done",
+      "complete"
+    ],
+    "FAILED_STATUSES": [
+      "cancelled",
+      "canceled",
+      "canceling",
+      "fail",
+      "failed",
+      "error"
+    ]
+  },
+  "price_badge_gap": "Title-case schema model options; lower-case price lookup keys; widget normalization unproven",
+  "scope": "actual execute/API AST and actual Pillow PNG/aiohttp; transport/native owner gates separate"
+}

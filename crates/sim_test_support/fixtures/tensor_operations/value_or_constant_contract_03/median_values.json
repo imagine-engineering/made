@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "resolution_module": "value_or_constant_contract_03",
+  "operation_id": "COMFY-TENSOR-OP-7775E33D5750",
+  "baseline_overload_id": "COMFY-TENSOR-OP-7775E33D5750:reference",
+  "baseline_fixture_sha256": "89df1ff77173889c9750ab1b14d7a4f13e6e5ea831eb54faabab061a74571147",
+  "owner_task_id": "comfy-parity-tensor-ops-value-or-constant-contract-comfy-tensor-op-6542124fe760",
+  "inventory_kind": "namespace_value_reference",
+  "canonical_target": "torch.median().values",
+  "reference_semantic": {
+    "category": "tensor-property",
+    "value": "torch.median().values"
+  },
+  "canonical_rust_semantic": "TensorPropertyReference::MedianValues",
+  "executable": false,
+  "source_observations": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy_extras/nodes_hidream_o1.py",
+      "line": 233,
+      "use": "seam smoothing median values projection"
+    }
+  ]
+}

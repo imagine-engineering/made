@@ -1,0 +1,44 @@
+{
+  "fixture_id": "svd-img2vid-sim-model-0130",
+  "feature_id": "COMFY-MODEL-0130",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.input_blocks.0.0.weight": [320, 8, 3, 3],
+      "model.diffusion_model.label_emb.0.0.weight": [2, 768]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "1301301301301301301301301301301301301301301301301301301301301301",
+  "source_weights": [
+    {"key": "model.diffusion_model.input_blocks.1.0.in_layers.2.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.middle_block.1.transformer_blocks.0.attn1.to_out.0.weight", "shape": [2, 2], "values": [2.0, 0.0, 0.0, 0.5]},
+    {"key": "model.diffusion_model.output_blocks.0.0.in_layers.2.weight", "shape": [2, 2], "values": [1.0, 1.0, 1.0, -1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [1.0, 2.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 64,
+  "expected_memory_bytes": 64,
+  "checkpoints": [
+    {"name": "adm_conditioning_projection", "values": [1.0, 2.0]},
+    {"name": "spatial_transformer_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "temporal_transformer_projection", "values": [1.4621172, 0.8807971]},
+    {"name": "temporal_attention_normalization", "values": [0.9999941, -0.9999941]},
+    {"name": "video_output_projection", "values": [0.0, 1.9999882]},
+    {"name": "video_latent_output", "values": [0.0, 0.96402675]}
+  ],
+  "patches": [
+    {"identifier": "svd-temporal-transformer-delta", "kind": "lora", "scale": 1.0, "targets": [
+      {"key": "native.middle_block.1.transformer_blocks.0.attn1.to_out.0.weight", "expected_shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0], "application": "add"}
+    ]}
+  ],
+  "patched_checkpoints": [
+    {"name": "adm_conditioning_projection", "values": [1.0, 2.0]},
+    {"name": "spatial_transformer_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "temporal_transformer_projection", "values": [2.1931758, 2.6423912]},
+    {"name": "temporal_attention_normalization", "values": [-0.9999901, 0.9999901]},
+    {"name": "video_output_projection", "values": [0.0, -1.9999802]},
+    {"name": "video_latent_output", "values": [0.0, -0.9640262]}
+  ]
+}

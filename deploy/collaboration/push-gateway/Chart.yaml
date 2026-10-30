@@ -1,0 +1,6 @@
+apiVersion: v2
+name: collaboration-push-gateway
+description: Disabled-by-default deployment contract for the Zed collaboration push gateway
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

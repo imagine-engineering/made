@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "fixture_id": "acestep15-sim-model-0062",
+  "feature_id": "COMFY-MODEL-0062",
+  "source_symbol": "ACEStep15",
+  "source_ordinal": 74,
+  "source_architecture": "model_base.ACEStep15",
+  "latent_feature_id": "COMFY-MODEL-0024",
+  "latent_identifier": "ACEAudio15",
+  "source_constants": {
+    "audio_model": "ace1.5",
+    "memory_usage_factor": 4.7,
+    "sampling_multiplier": 1.0,
+    "sampling_shift": 3.0,
+    "supported_dtypes": ["bfloat16", "float32"]
+  },
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/ace/ace_step15.py",
+      "sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e"
+    },
+    {
+      "path": "crates/sim_model/src/latent_formats/aceaudio15_sim_model_0024.rs",
+      "sha256": "8ed7cf11ff9c586dda0ecde9e683d57d866b25c88f3f9fa7ae7a6a2ed0a07bed"
+    }
+  ],
+  "source_projection": "source_symbol=ACEStep15\nsource_ordinal=74\nunet_config.audio_model=ace1.5\nsampling_settings.multiplier=1.0\nsampling_settings.shift=3.0\nlatent_format=ACEAudio15\nmemory_usage_factor=4.7\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.ACEStep15\nclip_tokenizer=sim.text_encoders.ace15.ACE15Tokenizer\nclip_model=sim.text_encoders.ace15.te(**detect)\n",
+  "source_projection_sha256": "7581314ee8e333264d9981900c89f9420a1538a5a5ce761823191b697df23069",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

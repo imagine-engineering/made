@@ -1,0 +1,51 @@
+Zed native Metal execution ABI review v1
+
+Toolchain: Xcode 26.2 build 17C52, macOS SDK 26.2
+Targets: aarch64-apple-darwin, x86_64-apple-darwin
+Floor: macos-13-metal-3
+Unsafe owner: sim_backend_metal::execution
+Contract: zed-sim-metal-execution-v1
+Reviewed selectors: 29 exact Objective-C type encodings and return-nullability contracts
+Reviewed SDK headers: 12 exact SHA-256 identities
+
+The execution boundary uses the workspace metal 0.33 bindings for MTLDevice,
+MTLCommandQueue, MTLCommandBuffer, MTLBuffer, MTLLibrary, compute/blit command
+encoders, pipeline state, MTLSize, MTLResourceOptions, and command status. The
+only direct Objective-C message outside metal 0.33 reads MTLCommandBuffer.error
+and NSError.code so command-buffer out-of-memory and device-removal failures can
+be mapped without exposing Objective-C objects.
+
+The checked development-time ABI harness resolves every declared selector from
+the Metal protocols (including inherited command-encoder methods) or NSError,
+compares its complete Objective-C type encoding, and hashes all 12 defining SDK
+headers before any metallib is packaged. MTLCommandBuffer.status is the reviewed
+NSUInteger-backed MTLCommandBufferStatus (`Q` on both 64-bit targets); the
+MTLComputePipelineState threadExecutionWidth and maxTotalThreadsPerThreadgroup
+queries are both explicit `Q`-returning contract rows.
+
+The reviewed headers declare MTLDevice buffer and bounded command-queue creation,
+MTLCommandQueue commandBuffer, MTLCommandBuffer compute/blit encoders and error,
+MTLDevice library and pipeline creation, and MTLLibrary function lookup nullable.
+MTLDevice.name and MTLBuffer.contents are nonnull under the reviewed headers'
+NS_ASSUME_NONNULL scopes, and scalar or void returns are not applicable. The runtime calls nullable buffer,
+queue, command-buffer, and encoder selectors through the focused unsafe owner,
+checks the raw pointer before constructing a metal foreign type or reference, and
+maps nil resource creation to a typed allocation failure.
+
+The reviewed source exports only zed_sim_metal_add_f16_v1 and
+zed_sim_metal_add_f32_v1. Both accept two contiguous input buffers, one
+contiguous output buffer, and a checked u32 element count. Runtime compilation
+is forbidden. The signed-package task must retain the exact precompiled
+metallib bytes and NativeFfiRegistry certification for the runtime lifetime.
+
+Unified-memory devices use StorageModeShared. Discrete-memory devices use
+StorageModeManaged, call didModifyRange after CPU writes, and encode
+synchronizeResource after GPU writes before CPU reads. recommendedMaxWorkingSetSize
+is an allocation ceiling and is never projected as host physical memory.
+
+The `sim-parity-device-foundation-apple-metal-mps-sim-model-0015` task's
+symbols-v1.json, reviewed-bindings-v1.txt, readiness source, and
+native-backend-abi/metal.json remain the immutable observation/probing
+foundation. This execution contract is a separate versioned artifact and does
+not grant availability or package trust; dependent trust provisioning owns the
+combined signed package policy and command.

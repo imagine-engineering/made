@@ -1,0 +1,42 @@
+{
+  "task_id": "comfy-parity-native-qwen-multimodal-generation-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "runtime_oracle": null,
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "regular_files": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source_sha256": {
+    "comfy/sd1_clip.py": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2",
+    "comfy/text_encoders/llama.py": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+    "comfy/text_encoders/qwen3vl.py": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06",
+    "comfy/text_encoders/qwen35.py": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+    "comfy/text_encoders/qwen_vl.py": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f"
+  },
+  "dependency_manifest_sha256": {
+    "preparation": "83fb3223fc172169fe9eee9996bbf9fa79bc0e0792fee7b6bf0d028966128880",
+    "tokenizer": "3f9363890aff54953fc92201bc2b4ca4ca72c701821379d6c70b385753a22466",
+    "qwen3_decoder": "4ba446ec47fd492f848f454b5db39485df2b57f16b158343f448e1262b9ec51b",
+    "qwen35_decoder": "6102d1a82dcf1095a648dc11892c93c8fc9c471a7fb175240ebb311174debd9",
+    "vision": "dcacc98210257d9935ce39a66bba958de9c87de1e1bdbff1f69e3b3855791aec",
+    "resource": "b0aa74dfaf3417679419613747b209d8ec861648ef61e9dae145cfafbdf72d5c"
+  },
+  "generation_contract": {
+    "prompt_history": "empty-generated-suffix-only",
+    "attention_mask": null,
+    "qwen3vl_positions": "three-axis-prefill-scalar-continuation",
+    "qwen35_positions": "scalar-source-generation-route",
+    "qwen3vl_deepstack": "vision-capture-order-to-decoder-layers-0-1-2-prefill-only",
+    "marker_policy": "exact-one-to-one-and-complete-embedding-replacement",
+    "cleanup": "canonical-qwen2-decode-skip-special",
+    "transaction": "borrowed-input-return-advanced-clone-on-success"
+  },
+  "claims": {
+    "licensed_full_checkpoint": false,
+    "upstream_python_runtime": false,
+    "accelerator_numerical_parity": false,
+    "external_server": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "provenance": "Actual pinned NestedTensor and batch_latents/reshape_latent_to/common_upscale with real PyTorch tensors.",
+  "pytorch_version": "2.7.1",
+  "source_sha256": {
+    "sim/nested_tensor.py": "fa663325d09ec898c1bd05506a301fb1dd0c7d71580a57c2db87d843b7e49373",
+    "sim_extras/nodes_latent.py": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+    "sim_extras/nodes_post_processing.py": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+    "sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"
+  },
+  "cases": [
+    {
+      "second_side": 2,
+      "error": "TypeError",
+      "message": "expected Tensor as element 0 in argument 0, but got NestedTensor"
+    },
+    {
+      "second_side": 3,
+      "error": "AttributeError",
+      "message": "'NestedTensor' object has no attribute 'reshape'"
+    }
+  ]
+}

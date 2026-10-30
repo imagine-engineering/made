@@ -1,0 +1,313 @@
+{
+  "canonical_target": "torch.maximum",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/audio_encoders/whisper.py:48:24 (WhisperFeatureExtractor.__call__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:380:25 (UniPC.dynamic_thresholding_fn)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:401:29 (UniPC.data_prediction_fn)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:584:65 (DPMSolver.dpm_solver_adaptive)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:601:21 (DPMSolver.dpm_solver_adaptive)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:601:48 (DPMSolver.dpm_solver_adaptive)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/audio_encoders/whisper.py:48:24 (WhisperFeatureExtractor.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:380:25 (UniPC.dynamic_thresholding_fn)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:401:29 (UniPC.data_prediction_fn)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:584:65 (DPMSolver.dpm_solver_adaptive)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:601:21 (DPMSolver.dpm_solver_adaptive)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:601:48 (DPMSolver.dpm_solver_adaptive)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-7db0b0ec6483-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-7DB0B0EC6483",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "a9ab947019930dd4b32004bdb118bb736509e445f8f2c5ae4f59bd26164bd042",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/audio_encoders/whisper.py",
+        "sha256": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22"
+      },
+      {
+        "path": "comfy/extra_samplers/uni_pc.py",
+        "sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.maximum"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_11",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-790cde1ebf17",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "log_mel_spec",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "log_mel_spec.max() - 8.0",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WhisperFeatureExtractor.__call__",
+      "site": "comfy/audio_encoders/whisper.py:48:24 (WhisperFeatureExtractor.__call__)",
+      "source_path": "comfy/audio_encoders/whisper.py",
+      "source_sha256": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
+      "status": "static-call-observed",
+      "target_syntax": "torch.maximum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 380,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.thresholding_max_val * torch.ones_like(s).to(s.device)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "UniPC.dynamic_thresholding_fn",
+      "site": "comfy/extra_samplers/uni_pc.py:380:25 (UniPC.dynamic_thresholding_fn)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.maximum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 401,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.max_val * torch.ones_like(s).to(s.device)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "UniPC.data_prediction_fn",
+      "site": "comfy/extra_samplers/uni_pc.py:401:29 (UniPC.data_prediction_fn)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.maximum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 65,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 584,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "s + pid.h",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DPMSolver.dpm_solver_adaptive",
+      "site": "comfy/k_diffusion/sampling.py:584:65 (DPMSolver.dpm_solver_adaptive)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.maximum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 601,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "atol",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "rtol * torch.maximum(x_low.abs(), x_prev.abs())",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DPMSolver.dpm_solver_adaptive",
+      "site": "comfy/k_diffusion/sampling.py:601:21 (DPMSolver.dpm_solver_adaptive)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.maximum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 48,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 601,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x_low.abs()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x_prev.abs()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "DPMSolver.dpm_solver_adaptive",
+      "site": "comfy/k_diffusion/sampling.py:601:48 (DPMSolver.dpm_solver_adaptive)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.maximum"
+    }
+  ],
+  "static_definition": null
+}

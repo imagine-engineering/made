@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixture_id": "lumina2-sim-model-0107",
+  "feature_id": "COMFY-MODEL-0107",
+  "source_symbol": "Lumina2",
+  "source_ordinal": 49,
+  "source_files": [
+    { "path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69" },
+    { "path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd" },
+    { "path": "projects/sim/ComfyUI/sim/ldm/lumina/model.py", "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9" },
+    { "path": "projects/sim/ComfyUI/sim/text_encoders/lumina2.py", "sha256": "f6af934b3d5014c6df37bb527167d1f94e44b1309079f57d4cb2f9460729da84" },
+    { "path": "crates/sim_model/src/lumina_zimage_family.rs", "sha256": "947bc2e0794a15ccb2145734c9d80b613f5ef380b85ce9408b8b7f907d5a97f0" }
+  ],
+  "source_projection": "source_symbol=Lumina2\nsource_ordinal=49\nunet_config.image_model=lumina2\nsampling_settings.multiplier=1.0\nsampling_settings.shift=6.0\nlatent_format=Flux\nmemory_usage_factor=1.4\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.Lumina2\nclip_tokenizer=sim.text_encoders.lumina2.LuminaTokenizer\nclip_model=sim.text_encoders.lumina2.te\nclip_detect=sim.text_encoders.hunyuan_video.llama_detect(text_encoders.gemma2_2b.transformer.)\nlayouts=prefixed-native,saved-model,standalone-native\ndiffusers=unsupported\nconfiguration.dimension=2304\nconfiguration.heads=24\nconfiguration.kv_heads=8\nconfiguration.patch_size=2\nconfiguration.in_channels=16\nconfiguration.axes_dim=32,32,32\nconfiguration.axes_lens=300,512,512\nstate_mapping=canonical-lumina-zimage\n",
+  "source_projection_sha256": "75c847ca25aedb69a04f166021b8e45a1ef8195822cad5423521cbd200e66d14",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

@@ -1,0 +1,303 @@
+#!/usr/bin/env bash
+
+set +x
+set -euo pipefail
+source script/lib/blob-store.sh
+sim=false
+rust_tools=false
+dry_run=false
+
+# Function for displaying help info
+help_info() {
+  echo "
+Usage: ${0##*/} [options]
+Build a release .tar.gz for Linux.
+
+Options:
+  -h, --help     Display this help and exit.
+  --flatpak      Set ZED_BUNDLE_TYPE=flatpak so that this can be included in system info
+  --sim        Include the Sim integration, accelerator backends, worker, and assets.
+  --rust-tools   Include the Cargo tool window and matching remote-server support.
+  --dry-run      Print the selected package plan without building it.
+  "
+}
+
+# Parse all arguments manually
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            help_info
+            exit 0
+            ;;
+        --flatpak)
+            export ZED_BUNDLE_TYPE=flatpak
+            shift
+            ;;
+        --sim)
+            sim=true
+            shift
+            ;;
+        --rust-tools)
+            rust_tools=true
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            help_info
+            exit 1
+            ;;
+        *)
+            echo "Error: Unexpected argument: $1" >&2
+            help_info
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "$dry_run" = true ]]; then
+    zed_features="none"
+    remote_features="none"
+    if [[ "$rust_tools" = true ]]; then
+        zed_features="rust-tools"
+        remote_features="rust-tools"
+    fi
+    if [[ "$sim" = true ]]; then
+        if [[ "$rust_tools" = true ]]; then
+            zed_features="sim,cuda,rocm,mlu,npu,xpu,rust-tools"
+        else
+            zed_features="sim,cuda,rocm,mlu,npu,xpu"
+        fi
+        echo "mode=sim packages=zed,cli,sim_worker zed_features=${zed_features} remote_features=${remote_features} worker_features=cuda,rocm,mlu,npu,xpu include_sim_worker=true rust_tools=${rust_tools}"
+    else
+        echo "mode=default packages=zed,cli zed_features=${zed_features} remote_features=${remote_features} include_sim_worker=false rust_tools=${rust_tools}"
+    fi
+    exit 0
+fi
+
+signing_mode=development
+if [[ "${ZED_BUNDLE_PHASE:-all}" == "all" || "${ZED_BUNDLE_PHASE:-all}" == "package" ]]; then
+    signing_mode=$(python3 script/check-signing-environment --platform linux)
+    if [[ "$signing_mode" == production ]]; then
+        for tool in gpg gpgconf; do
+            if ! command -v "$tool" >/dev/null; then
+                echo "Production archive signing requires $tool; install GnuPG on the signing runner" >&2
+                exit 1
+            fi
+        done
+    fi
+fi
+
+export ZED_BUNDLE=true
+
+required_product_variables=(
+  ZED_PRODUCT_ID ZED_PRODUCT_DISPLAY_NAME ZED_PRODUCT_EXECUTABLE
+  ZED_PRODUCT_BUNDLE_ID ZED_PRODUCT_URL_SCHEME ZED_PRODUCT_ICON_SET
+  ZED_PRODUCT_APP_FEATURES ZED_PRODUCT_REMOTE_FEATURES ZED_PRODUCT_ARTIFACT_NAME
+)
+for variable_name in "${required_product_variables[@]}"; do
+  if [[ -z "${!variable_name:-}" ]]; then
+    echo "Missing resolved product variable: ${variable_name}. Run cargo xtask bundle --product <id>." >&2
+    exit 1
+  fi
+done
+
+channel="${ZED_RELEASE_CHANNEL:-$(<crates/zed/RELEASE_CHANNEL)}"
+target_dir="${CARGO_TARGET_DIR:-target}"
+bundle_phase="${ZED_BUNDLE_PHASE:-all}"
+case "$bundle_phase" in
+    all|application|remote-server|package) ;;
+    *)
+        echo "Unsupported bundle phase: $bundle_phase" >&2
+        exit 1
+        ;;
+esac
+
+version="${RELEASE_VERSION:-$(script/get-crate-version zed)}"
+# Set RELEASE_VERSION so it's compiled into GPUI and it knows about the version.
+export RELEASE_VERSION="${version}"
+
+commit=$(git rev-parse HEAD | cut -c 1-7)
+
+version_info=$(rustc --version --verbose)
+host_line=$(echo "$version_info" | grep host)
+target_triple=${host_line#*: }
+musl_triple=${target_triple%-gnu}-musl
+remote_server_triple=${REMOTE_SERVER_TARGET:-"${musl_triple}"}
+rustup_installed=false
+if command -v rustup >/dev/null 2>&1; then
+    rustup_installed=true
+fi
+
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
+    if [[ -n "${ZED_PREGENERATED_LICENSES:-}" ]]; then
+        test -s assets/licenses.md
+    else
+        script/generate-licenses
+    fi
+fi
+
+if "$rustup_installed" && [[ "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ]]; then
+    rustup target add "$remote_server_triple"
+fi
+
+export CC=${CC:-$(which clang)}
+
+# Build binary in release mode
+# We need lld to link libwebrtc.a successfully on aarch64-linux.
+# NOTE: Since RUSTFLAGS env var overrides all .cargo/config.toml rustflags
+# (see https://github.com/rust-lang/cargo/issues/5376), the
+# [target.aarch64-unknown-linux-gnu] section in config.toml has no effect here.
+if [[ "$(uname -m)" == "aarch64" ]]; then
+    export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-fuse-ld=lld -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
+else
+    export RUSTFLAGS="${RUSTFLAGS:-} -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
+fi
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
+    if [[ "$sim" = true ]]; then
+        zed_build_features="$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//'),zed/sim,zed/cuda,zed/rocm,zed/mlu,zed/npu,zed/xpu,sim_worker/cuda,sim_worker/rocm,sim_worker/mlu,sim_worker/npu,sim_worker/xpu"
+        if [[ "$rust_tools" = true ]]; then
+            zed_build_features="${zed_build_features},zed/rust-tools"
+        fi
+        cargo build --release --target "${target_triple}" --package zed --package cli --package sim_worker --no-default-features --features "${zed_build_features}"
+    else
+        application_features=$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//')
+        cargo build --release --target "${target_triple}" --package zed --package cli --no-default-features --features "${application_features}"
+    fi
+fi
+# Build remote_server in separate invocation to prevent feature unification from other crates
+# from influencing dynamic libraries required by it.
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ]]; then
+    if [[ "$remote_server_triple" == "$musl_triple" ]]; then
+        export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=+crt-static"
+        musl_cc_var="CC_$(echo "$remote_server_triple" | tr '-' '_')"
+        export "$musl_cc_var"=musl-gcc
+    fi
+    if [[ -n "${ZED_PRODUCT_REMOTE_FEATURES}" ]]; then
+        cargo build --release --target "${remote_server_triple}" --package remote_server --no-default-features --features "${ZED_PRODUCT_REMOTE_FEATURES}"
+    else
+        cargo build --release --target "${remote_server_triple}" --package remote_server --no-default-features
+    fi
+fi
+
+if [[ "$bundle_phase" == "application" ]]; then
+    test -x "${target_dir}/${target_triple}/release/zed"
+    test -x "${target_dir}/${target_triple}/release/cli"
+    exit 0
+elif [[ "$bundle_phase" == "remote-server" ]]; then
+    test -x "${target_dir}/${remote_server_triple}/release/remote_server"
+    exit 0
+fi
+
+test -s assets/licenses.md
+test -x "${target_dir}/${target_triple}/release/zed"
+test -x "${target_dir}/${target_triple}/release/cli"
+test -x "${target_dir}/${remote_server_triple}/release/remote_server"
+
+# Strip debug symbols before packaging.
+# We use llvm-objcopy because GNU objcopy on older distros (e.g. Ubuntu 20.04)
+# doesn't understand CREL sections produced by newer LLVM.
+llvm-objcopy --strip-debug "${target_dir}/${target_triple}/release/zed"
+llvm-objcopy --strip-debug "${target_dir}/${target_triple}/release/cli"
+if [[ "$sim" = true ]]; then
+    llvm-objcopy --strip-debug "${target_dir}/${target_triple}/release/sim-worker"
+fi
+llvm-objcopy --strip-debug "${target_dir}/${remote_server_triple}/release/remote_server"
+
+# Ensure that remote_server does not depend on libssl nor libcrypto, as we got rid of these deps.
+if ldd "${target_dir}/${remote_server_triple}/release/remote_server" | grep -q 'libcrypto\|libssl'; then
+    if [[ "$remote_server_triple" == *-musl ]]; then
+        echo "Error: remote_server still depends on libssl or libcrypto" && exit 1
+    else
+        echo "Info: Using non-musl remote-server build."
+    fi
+fi
+
+suffix=""
+if [ "$channel" != "stable" ]; then
+  suffix="-$channel"
+fi
+
+# Move everything that should end up in the final package
+# into a temp directory.
+temp_dir=$(mktemp -d)
+zed_dir="${temp_dir}/${ZED_PRODUCT_EXECUTABLE}${suffix}.app"
+
+# Binary
+mkdir -p "${zed_dir}/bin" "${zed_dir}/libexec"
+cp "${target_dir}/${target_triple}/release/zed" "${zed_dir}/libexec/${ZED_PRODUCT_EXECUTABLE}-editor"
+if [[ "$sim" = true ]]; then
+    cp "${target_dir}/${target_triple}/release/sim-worker" "${zed_dir}/libexec/sim-worker"
+fi
+cp "${target_dir}/${target_triple}/release/cli" "${zed_dir}/bin/${ZED_PRODUCT_EXECUTABLE}"
+
+if [[ ",${ZED_PRODUCT_APP_FEATURES}," == *,agentic-tools,* ]]; then
+    python3 script/bundle-managed-runtime --platform "linux-$(uname -m)" --destination "${zed_dir}/libexec/llama-cpp"
+fi
+
+# Libs
+# Bundle libstdc++ so older supported systems can run binaries built with our
+# toolchain even when their system libstdc++.so.6 lacks required GLIBCXX symbols.
+find_libs() {
+    ldd ${target_dir}/${target_triple}/release/zed |\
+        cut -d' ' -f3 |\
+        grep -v '\<\(libc.so\|libgcc_s.so\|libm.so\|libpthread.so\|libdl.so\|libasound.so\)'
+}
+
+mkdir -p "${zed_dir}/lib"
+rm -rf "${zed_dir}/lib/*"
+cp $(find_libs) "${zed_dir}/lib"
+
+# Icons
+mkdir -p "${zed_dir}/share/icons/hicolor/512x512/apps"
+cp "${ZED_PRODUCT_ICON_SET}/app-icon.png" "${zed_dir}/share/icons/hicolor/512x512/apps/${ZED_PRODUCT_EXECUTABLE}.png"
+mkdir -p "${zed_dir}/share/icons/hicolor/1024x1024/apps"
+cp "${ZED_PRODUCT_ICON_SET}/app-icon@2x.png" "${zed_dir}/share/icons/hicolor/1024x1024/apps/${ZED_PRODUCT_EXECUTABLE}.png"
+for icon_size in 16 24 32 48 64 128 256; do
+    icon_source="${ZED_PRODUCT_ICON_SET}/icons/app-icon-${icon_size}.png"
+    if [[ -f "${icon_source}" ]]; then
+        icon_destination="${zed_dir}/share/icons/hicolor/${icon_size}x${icon_size}/apps"
+        mkdir -p "${icon_destination}"
+        cp "${icon_source}" "${icon_destination}/${ZED_PRODUCT_EXECUTABLE}.png"
+    fi
+done
+
+# .desktop
+export DO_STARTUP_NOTIFY="true"
+export APP_CLI="${ZED_PRODUCT_EXECUTABLE}"
+export APP_ICON="${ZED_PRODUCT_EXECUTABLE}"
+export APP_URL_SCHEME="${ZED_PRODUCT_URL_SCHEME}"
+export APP_ARGS="%U"
+export APP_NAME="${ZED_PRODUCT_DISPLAY_NAME}"
+APP_ID="${ZED_PRODUCT_BUNDLE_ID}"
+
+mkdir -p "${zed_dir}/share/applications"
+envsubst < "crates/zed/resources/zed.desktop.in" > "${zed_dir}/share/applications/$APP_ID.desktop"
+chmod +x "${zed_dir}/share/applications/$APP_ID.desktop"
+grep -Fx "Name=${APP_NAME}" "${zed_dir}/share/applications/$APP_ID.desktop"
+grep -Fx "Exec=${ZED_PRODUCT_EXECUTABLE} %U" "${zed_dir}/share/applications/$APP_ID.desktop"
+grep -F "x-scheme-handler/${ZED_PRODUCT_URL_SCHEME};" "${zed_dir}/share/applications/$APP_ID.desktop"
+test -x "${zed_dir}/libexec/${ZED_PRODUCT_EXECUTABLE}-editor"
+
+# Copy generated licenses so they'll end up in archive too
+cp "assets/licenses.md" "${zed_dir}/licenses.md"
+
+# Create archive out of everything that's in the temp directory
+arch=$(uname -m)
+archive="${ZED_PRODUCT_ARTIFACT_NAME}"
+
+mkdir -p "${target_dir}/release"
+rm -f "${target_dir}/release/${archive}"
+tar -czvf "${target_dir}/release/$archive" -C "${temp_dir}" "${ZED_PRODUCT_EXECUTABLE}${suffix}.app"
+if [[ "$signing_mode" == production ]]; then
+    python3 script/sign-linux-archive "${target_dir}/release/$archive"
+fi
+
+gzip -f --stdout --best "${target_dir}/${remote_server_triple}/release/remote_server" > "${target_dir}/${ZED_PRODUCT_ID}-remote-server-linux-${arch}.gz"

@@ -1,0 +1,741 @@
+{
+  "canonical_target": "torch.randint",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/float.py:76:19 (stochastic_rounding)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:102:21 (BatchedBrownianTree.__init__)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:570:26 (add_optional_chunk_mask)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:578:39 (add_optional_chunk_mask)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/preprocess.py:105:15 (normalize_depth_v2_style)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/preprocess.py:82:15 (apply_sky_aware_clip)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:48:24 (fps)"
+    },
+    {
+      "expectation": {
+        "attribute": "long",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/upscaling.py:77:27 (ImageConcatWithNoiseAugmentation.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "long",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/modules/encoders/noise_aug_modules.py:25:27 (CLIPEmbeddingNoiseAugmentation.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_hypertile.py:19:15 (random_divisor)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_tomesd.py:53:24 (bipartite_soft_matching_random2d)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/float.py:76:19 (stochastic_rounding)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:102:21 (BatchedBrownianTree.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:570:26 (add_optional_chunk_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:578:39 (add_optional_chunk_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/preprocess.py:105:15 (normalize_depth_v2_style)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/preprocess.py:82:15 (apply_sky_aware_clip)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:48:24 (fps)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/upscaling.py:77:27 (ImageConcatWithNoiseAugmentation.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/encoders/noise_aug_modules.py:25:27 (CLIPEmbeddingNoiseAugmentation.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_hypertile.py:19:15 (random_divisor)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_tomesd.py:53:24 (bipartite_soft_matching_random2d)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-095b3e192800-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "generator",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "high",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "layout",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "low",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "size",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-095B3E192800",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "8c8bdf3bdf6ed817a7aacac8686bc18147db73d5e55070d80f899d5098fd922d",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/float.py",
+        "sha256": "3a6e6c6fb306b5827378f8b2a551984d89b2b9719c24cff39abc423fc1f37c01"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/ace/lyric_encoder.py",
+        "sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/preprocess.py",
+        "sha256": "6bf00e9929451c39763a0661aa1430dbc78917bc028517a4c8dc290897601845"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/upscaling.py",
+        "sha256": "396721fe4d6c8b825f06264aa8b62ec52b399908e8c51d519d67a4d072699084"
+      },
+      {
+        "path": "comfy/ldm/modules/encoders/noise_aug_modules.py",
+        "sha256": "1827ecc2b14052bc17ebe233259e4fb1389c842bbf356018c7a36d57b3985ebf"
+      },
+      {
+        "path": "comfy_extras/nodes_hypertile.py",
+        "sha256": "3434d382ce7de83c1bea181022357f065a0a54a5e78ca2abe6a26c3becd79a93"
+      },
+      {
+        "path": "comfy_extras/nodes_tomesd.py",
+        "sha256": "af0e1461ae6ad220dc7c8e5fe8e53508293329e2bdf3272acd96bfce6774c884"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.randint"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "random_number_generation_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-random-number-generation-comfy-tensor-op-095b3e192800",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.uint8",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "layout",
+          "syntax": "value.layout",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "value.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "generator",
+          "syntax": "generator",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 76,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "256",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "value.size()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "stochastic_rounding",
+      "site": "comfy/float.py:76:19 (stochastic_rounding)",
+      "source_path": "comfy/float.py",
+      "source_sha256": "3a6e6c6fb306b5827378f8b2a551984d89b2b9719c24cff39abc423fc1f37c01",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 102,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2 ** 63 - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "()",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "BatchedBrownianTree.__init__",
+      "site": "comfy/k_diffusion/sampling.py:102:21 (BatchedBrownianTree.__init__)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 570,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "max_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(1,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "add_optional_chunk_mask",
+      "site": "comfy/ldm/ace/lyric_encoder.py:570:26 (add_optional_chunk_mask)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 39,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 578,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "max_left_chunks",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(1,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "add_optional_chunk_mask",
+      "site": "comfy/ldm/ace/lyric_encoder.py:578:39 (add_optional_chunk_mask)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "valid.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 105,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "valid.numel()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(100000,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "normalize_depth_v2_style",
+      "site": "comfy/ldm/depth_anything_3/preprocess.py:105:15 (normalize_depth_v2_style)",
+      "source_path": "comfy/ldm/depth_anything_3/preprocess.py",
+      "source_sha256": "6bf00e9929451c39763a0661aa1430dbc78917bc028517a4c8dc290897601845",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "non_sky_depth.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 82,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "non_sky_depth.numel()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(100000,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "apply_sky_aware_clip",
+      "site": "comfy/ldm/depth_anything_3/preprocess.py:82:15 (apply_sky_aware_clip)",
+      "source_path": "comfy/ldm/depth_anything_3/preprocess.py",
+      "source_sha256": "6bf00e9929451c39763a0661aa1430dbc78917bc028517a4c8dc290897601845",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "src.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "num_points",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(1,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "fps",
+      "site": "comfy/ldm/hunyuan3d/vae.py:48:24 (fps)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "attribute": "long",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 77,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.max_noise_level",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(x.shape[0],)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "ImageConcatWithNoiseAugmentation.forward",
+      "site": "comfy/ldm/modules/diffusionmodules/upscaling.py:77:27 (ImageConcatWithNoiseAugmentation.forward)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/upscaling.py",
+      "source_sha256": "396721fe4d6c8b825f06264aa8b62ec52b399908e8c51d519d67a4d072699084",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "attribute": "long",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 25,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.max_noise_level",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "(x.shape[0],)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "CLIPEmbeddingNoiseAugmentation.forward",
+      "site": "comfy/ldm/modules/encoders/noise_aug_modules.py:25:27 (CLIPEmbeddingNoiseAugmentation.forward)",
+      "source_path": "comfy/ldm/modules/encoders/noise_aug_modules.py",
+      "source_sha256": "1827ecc2b14052bc17ebe233259e4fb1389c842bbf356018c7a36d57b3985ebf",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "low",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "high",
+          "syntax": "len(ns) - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "size",
+          "syntax": "(1,)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "line": 19,
+      "positional_arguments": [],
+      "scope": "random_divisor",
+      "site": "comfy_extras/nodes_hypertile.py:19:15 (random_divisor)",
+      "source_path": "comfy_extras/nodes_hypertile.py",
+      "source_sha256": "3434d382ce7de83c1bea181022357f065a0a54a5e78ca2abe6a26c3becd79a93",
+      "status": "static-call-observed",
+      "target_syntax": "randint"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "size",
+          "syntax": "(hsy, wsx, 1)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "metric.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 53,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sy * sx",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "bipartite_soft_matching_random2d",
+      "site": "comfy_extras/nodes_tomesd.py:53:24 (bipartite_soft_matching_random2d)",
+      "source_path": "comfy_extras/nodes_tomesd.py",
+      "source_sha256": "af0e1461ae6ad220dc7c8e5fe8e53508293329e2bdf3272acd96bfce6774c884",
+      "status": "static-call-observed",
+      "target_syntax": "torch.randint"
+    }
+  ],
+  "static_definition": null
+}

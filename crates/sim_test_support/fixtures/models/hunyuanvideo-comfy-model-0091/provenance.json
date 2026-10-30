@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "fixture_id": "hunyuanvideo-sim-model-0091",
+  "feature_id": "COMFY-MODEL-0091",
+  "source_symbol": "HunyuanVideo",
+  "source_ordinal": 40,
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/hunyuan_video/model.py", "sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/hunyuan_video.py", "sha256": "5e9001d75b3eaaed8bb145be1b1b2a39d012140c11a45078b21beed2ddabae4e"},
+    {"path": "crates/sim_model/src/hunyuan_video_family.rs", "sha256": "e8f81022b58ce66d03c595e455f6f01d78d0a224480b59dafded615cc29cba56"},
+    {"path": "crates/sim_model/src/latent_formats/hunyuanvideo_sim_model_0037.rs", "sha256": "4df46e4d74034b0b1f8ef60bf860dc948fc1b418c08c6f6e2b7e363aaa198854"}
+  ],
+  "source_projection": "source_symbol=HunyuanVideo\nsource_ordinal=40\ninherits=supported_models_base.BASE\nunet_config.image_model=hunyuan_video\nsampling_settings.shift=7.0\nlatent_format=HunyuanVideo\nmemory_usage_factor=1.8\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\nsave_prefix=model.model.\narchitecture=model_base.HunyuanVideo\nmodel_type=FLOW\nclip_target=sim.text_encoders.hunyuan_video.HunyuanVideoTokenizer+hunyuan_video_clip\ndetector=token_refiner+img_in(rank5,in_channels16,patch1x2x2)+final_layer+txt_in+vector_in\nlayouts=prefixed-native,saved-model,standalone-native\ndiffusers=unsupported\nconfiguration.axes_dim=16,56,56\nconfiguration.theta=256\nconfiguration.mlp_ratio=4.0\nconfiguration.vector_input_dimension=768\nconfiguration.byt5_input_dimension=1472\nconfiguration.byt5_intermediate_dimension=2048\nconfiguration.qkv_bias=true\nstate_mapping=canonical-hunyuan-video\n",
+  "source_projection_sha256": "ccf3513980707997ef308b06b90581b552cb47e19f96fdceb0b17bd2c4e1a2bd"
+}

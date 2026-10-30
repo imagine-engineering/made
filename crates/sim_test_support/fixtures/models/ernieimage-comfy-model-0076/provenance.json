@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "fixture_id": "ernieimage-sim-model-0076",
+  "feature_id": "COMFY-MODEL-0076",
+  "source_symbol": "ErnieImage",
+  "source_ordinal": 86,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/ernie/model.py",
+      "sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c"
+    }
+  ],
+  "source_projection": "source_symbol=ErnieImage\nsource_ordinal=86\ninherits=supported_models_base.BASE\nunet_config.image_model=ernie\nsampling_settings.multiplier=1000.0\nsampling_settings.shift=3.0\nmemory_usage_factor=10.0\nlatent_format=Flux2\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.ErnieImage\ndetector_marker=layers.0.mlp.linear_fc2.weight\nmodel_defaults=hidden_size:4096,num_attention_heads:32,num_layers:36,ffn_hidden_size:12288,in_channels:128,out_channels:128,patch_size:1,text_in_dim:3072\nrope_theta=256\nrope_axes_dim=32,48,48\nqk_layernorm=true\nclip_detector=sim.text_encoders.hunyuan_video.llama_detect(text_encoders.ministral3_3b.transformer.)\nclip_tokenizer=sim.text_encoders.ernie.ErnieTokenizer\nclip_model=sim.text_encoders.ernie.te\n",
+  "source_projection_sha256": "00510ab5856b2429a3d1fa2ba36f6457f6a92ed8622d42a9e6d05332f02e371e",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

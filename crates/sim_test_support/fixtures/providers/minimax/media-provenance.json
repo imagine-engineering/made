@@ -1,0 +1,10 @@
+{
+  "downloaded-video.mp4": {
+    "source": "projects/sim/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+    "producer": "pinned frontend browser asset",
+    "source_wrapper": "download_url_to_video_output -> InputImpl.VideoFromFile",
+    "bytes": 6163,
+    "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",
+    "acceptance": "Provenance-bound encoded bytes into rejecting canonical video callback; no MP4 parser/native decode claim. Not the 129-byte structural container."
+  }
+}

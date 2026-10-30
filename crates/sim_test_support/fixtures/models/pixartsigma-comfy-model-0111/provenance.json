@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "fixture_id": "pixartsigma-sim-model-0111",
+  "feature_id": "COMFY-MODEL-0111",
+  "source_symbol": "PixArtSigma",
+  "source_ordinal": 24,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/pixart/pixartms.py",
+      "sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/pixart/blocks.py",
+      "sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/pixart_t5.py",
+      "sha256": "9645107e3fcaafb8adf74b74f7444bc7cf4c9e8b05cdcb7651d65b1798d3d8ac"
+    },
+    {
+      "path": "crates/sim_model/src/pixart_family.rs",
+      "sha256": "59fc6260f85587a760578bd4fb513b27962920dbeada6c84c9de998cc6d2ec2b"
+    }
+  ],
+  "source_projection": "source_symbol=PixArtSigma\nsource_ordinal=24\ninherits=PixArtAlpha\nunet_config.image_model=pixart_sigma\nsampling_settings.beta_schedule=sqrt_linear\nsampling_settings.linear_start=0.0001\nsampling_settings.linear_end=0.02\nsampling_settings.timesteps=1000\nlatent_format=SDXL\nmemory_usage_factor=0.5\nsupported_inference_dtypes=f16,bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.PixArt\nclip_tokenizer=sim.text_encoders.pixart_t5.PixArtTokenizer\nclip_model=sim.text_encoders.pixart_t5.PixArtT5XXL\nlayouts=prefixed-native,standalone-native,diffusers\nconfiguration.hidden_size=1152\nconfiguration.heads=16\nconfiguration.patch_size=2\nconfiguration.caption_channels=4096\nconditioning=c_crossattn\ndiffusers_conversion=depth-checked-qkv-and-kv-assembly\nstate_mapping=canonical-pixart\n",
+  "source_projection_sha256": "375ed38b6b33fc1df39e1bb1a2362645baa3f60d63e92679176a9d3ee2f9147e",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

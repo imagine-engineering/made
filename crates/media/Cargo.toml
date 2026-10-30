@@ -1,0 +1,40 @@
+[package]
+name = "media"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "Apache-2.0"
+description = "Bindings to macos media handling APIs for Zed"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/media.rs"
+doctest = false
+
+[features]
+collaboration = [
+    "dep:collaboration_domain",
+    "dep:image",
+    "dep:sha2",
+    "dep:url",
+]
+
+[dependencies]
+anyhow.workspace = true
+collaboration_domain = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation.workspace = true
+ctor.workspace = true
+foreign-types.workspace = true
+metal.workspace = true
+core-video.workspace = true
+objc.workspace = true
+
+[build-dependencies]
+bindgen = "0.71"

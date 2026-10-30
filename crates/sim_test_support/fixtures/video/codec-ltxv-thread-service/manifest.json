@@ -1,0 +1,41 @@
+{
+  "fixture_schema": "zed.sim.video-codec-ltxv-thread-service.v1",
+  "truth_mode": "synthetic-retained-ltxv-codec-thread-service",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e"
+  },
+  "prerequisites": {
+    "codec_dependency_closure_manifest_sha256": "16deaedd063e29d731420cbf51ae744bf1e4468fb9821e46dc8bbcb37ce6a404",
+    "codec_retained_loader_manifest_sha256": "2ef96c055442b97635cece8661b7610de669bb437482d880a22888a115875f11",
+    "codec_symbol_binding_manifest_sha256": "76ec18127e54deff5b581046786ebd62aafa3e92a34aec45aaad114fcb0a5bd6",
+    "codec_ltxv_h264_admission_manifest_sha256": "2e2ce96b886978cc05876e9b4fc02153685548e9b6d92f07f4f2d5e2855cad88",
+    "codec_ltxv_tensor_preprocess_manifest_sha256": "5fa81e1fb57c8fbc7048ec009e9f3c51995d7ff07075998b0c2cb6ac2b14ed7c"
+  },
+  "contract": {
+    "certified_closure_moves_before_loading": true,
+    "load_bind_admit_and_preprocess_execute_on_one_named_thread": true,
+    "loaded_codec_and_library_drop_thread_matches_creation_thread": true,
+    "proxy_is_send_and_sync": true,
+    "request_queue_capacity": 1,
+    "requests_are_serial_fifo": true,
+    "backpressure_is_typed": true,
+    "caller_scratch_stream_and_cancellation_are_preserved": true,
+    "startup_handshake_precedes_proxy_publication": true,
+    "shutdown_closes_drains_and_joins": true,
+    "configuration_identity_binds_closure_limits_and_runtime_versions": true,
+    "request_failure_allows_clean_retry": true
+  },
+  "claims": {
+    "actual_dlmopen_bind_or_codec_admission_executed": false,
+    "licensed_or_installed_ffmpeg_package": false,
+    "production_mp4_h264_or_pyav_numeric_oracle": false,
+    "application_package_provisioning_or_settings": false,
+    "node_executor_controller_or_worker_injection": false,
+    "native_cache_identity_integration": false,
+    "media_handle_effect_or_output_published": false,
+    "persistence_recovery_or_restart_completed": false
+  }
+}

@@ -1,0 +1,2 @@
+DROP TABLE public.collaboration_identity_profiles;
+DROP FUNCTION public.guard_collaboration_identity_profile_update();

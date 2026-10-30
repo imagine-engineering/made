@@ -1,0 +1,1 @@
+Synthetic x86_64 ELF images are emitted directly by the tracked Rust fixture generator.

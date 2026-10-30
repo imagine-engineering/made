@@ -1,0 +1,139 @@
+{
+  "source": "source/copper-mascot-tile-original.png",
+  "source_sha256": "e314675e6364000e9ef11961a1d7909c4618273e7617d3afcb1051b96abf7ea5",
+  "source_dimensions": [
+    1254,
+    1254
+  ],
+  "application_crop": [
+    24,
+    8,
+    1230,
+    1214
+  ],
+  "mascot_crop": [
+    148,
+    126,
+    1106,
+    1084
+  ],
+  "tile_bounds": [
+    73,
+    77,
+    1181,
+    1153
+  ],
+  "mascot_bounds": [
+    182,
+    222,
+    1072,
+    990
+  ],
+  "mask_method": "corner-connected exterior only; mascot connected white body with enclosed eyes filled",
+  "retained_source_rgb": "unchanged before resizing",
+  "resampling": "single-pass alpha-aware Lanczos",
+  "pillow_version": "12.3.0",
+  "small_size_processing": "sampling only; no redrawing, sharpening, or substituted eyes",
+  "exports": {
+    "app-icon.icns": {
+      "bytes": 1289474,
+      "sha256": "bb3cb6a16d343ae88cbdc5abe66ccf417b6adde2158a79efac0453896e9b46df"
+    },
+    "app-icon.ico": {
+      "bytes": 98664,
+      "sha256": "69814be5f60bd064aee886a384ee66b9a554dc103e9165fa596b8978a47a373f"
+    },
+    "app-icon.png": {
+      "bytes": 207872,
+      "sha256": "89adc3c464668906c0aedeb0d1e981046591da8d2e50f1b38d2d5082fa5aebc7"
+    },
+    "app-icon.svg": {
+      "bytes": 956583,
+      "sha256": "71c82739d020adc3600147215b8697f7764e7b8095c2ad37f846f87feb463c5e"
+    },
+    "app-icon@2x.png": {
+      "bytes": 717293,
+      "sha256": "19112168fb2f0398512d146e411bc2d1cacdbbbabe826d9a3fbc6d5d6992a7c3"
+    },
+    "icons/app-icon-1024.png": {
+      "bytes": 717293,
+      "sha256": "19112168fb2f0398512d146e411bc2d1cacdbbbabe826d9a3fbc6d5d6992a7c3"
+    },
+    "icons/app-icon-128.png": {
+      "bytes": 18963,
+      "sha256": "d14dc412f84a43f65a2caf34289140cac2a5b45e87cefd713bdbecb27d2a83e4"
+    },
+    "icons/app-icon-16.png": {
+      "bytes": 876,
+      "sha256": "4c66d60ec597150f75b0c3c7800e578204a33263f7d2e402d2aa958c37c2e025"
+    },
+    "icons/app-icon-24.png": {
+      "bytes": 1621,
+      "sha256": "cd42f2474e785d87baed32115523361515f3f2736ccdea9eb87352c8a57d08e0"
+    },
+    "icons/app-icon-256.png": {
+      "bytes": 58957,
+      "sha256": "bf53166ace9b7db2e699a34d359c78ec0d507e7c29ec0198b13695fe78b52752"
+    },
+    "icons/app-icon-32.png": {
+      "bytes": 2509,
+      "sha256": "c11a255873a30e6f7a9734fea7847b41c61ececa04b0a817440412aea236311a"
+    },
+    "icons/app-icon-48.png": {
+      "bytes": 4520,
+      "sha256": "c87572e5a975c5c47958548e813e351c0c3f696ac2810d8ce3182950202162ae"
+    },
+    "icons/app-icon-512.png": {
+      "bytes": 207872,
+      "sha256": "89adc3c464668906c0aedeb0d1e981046591da8d2e50f1b38d2d5082fa5aebc7"
+    },
+    "icons/app-icon-64.png": {
+      "bytes": 6785,
+      "sha256": "d61d532cec2499f9820de992efacd124025894f4efb70076ffcbfb8c084002ed"
+    },
+    "logo.png": {
+      "bytes": 351312,
+      "sha256": "db5831a06a85a834fde6307497789f76e8d4f73dcbd05058d81b8f3dc4a70161"
+    },
+    "logo.svg": {
+      "bytes": 468607,
+      "sha256": "cf1689c631c44c2fc168dd45c0f8acdc14778aea4746777941660d79f520c992"
+    },
+    "logos/logo-1024.png": {
+      "bytes": 351312,
+      "sha256": "db5831a06a85a834fde6307497789f76e8d4f73dcbd05058d81b8f3dc4a70161"
+    },
+    "logos/logo-128.png": {
+      "bytes": 11763,
+      "sha256": "d92bbdb0b900474af814538a92ea0b90fe74b5b8646f2ed8adef71e6a3714550"
+    },
+    "logos/logo-16.png": {
+      "bytes": 598,
+      "sha256": "a8e1e43f656e63b834634ab84aff994115b2638fd89e29d024ab9c2b2af76ca3"
+    },
+    "logos/logo-24.png": {
+      "bytes": 988,
+      "sha256": "acf17dec81b11985e189033ff160832f6af31c6ce5cc58dab581a67b374d34f8"
+    },
+    "logos/logo-256.png": {
+      "bytes": 39292,
+      "sha256": "bee4b85f7c3055c2eca0ed154bdde560d49ca3138609b043fafbb258d8ffd467"
+    },
+    "logos/logo-32.png": {
+      "bytes": 1458,
+      "sha256": "3d8c721d7d197c245f49b5c123adc604266e2d03bafe53ea6635e8a8e64d5a4f"
+    },
+    "logos/logo-48.png": {
+      "bytes": 2651,
+      "sha256": "939a0b8b7a822351c12ccaed9fe5fa880bbf194f19fdbc2553c5ec7be1afb776"
+    },
+    "logos/logo-512.png": {
+      "bytes": 129592,
+      "sha256": "a8421d206d80a8df132751f36c9320df6ef882ca4b83f29a9816bc3bbc11c3bc"
+    },
+    "logos/logo-64.png": {
+      "bytes": 3998,
+      "sha256": "fb510118708a3b603e55bd32b864621d85291384478e62588f0fb5453cc9d330"
+    }
+  }
+}

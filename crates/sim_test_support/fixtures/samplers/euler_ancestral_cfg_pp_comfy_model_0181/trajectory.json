@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "identity": "euler_ancestral_cfg_pp",
+  "feature_id": "COMFY-MODEL-0181",
+  "source_ordinal": 3,
+  "source": {
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "equation_lines": [1265, 1307],
+    "ancestral_lines": [68, 75],
+    "noise_lines": [78, 88],
+    "registry_line": 970,
+    "catalog_line": 182
+  },
+  "tolerance": 0.000002,
+  "shape": [3],
+  "sigmas": [2.0, 1.0, 0.0],
+  "initial": [1.0, -0.5, 0.25],
+  "eta": 0.75,
+  "sampler_noise_scale": 0.8,
+  "profile_noise_scale": 0.5,
+  "effective_noise_scale": 0.4,
+  "seed": 181,
+  "rng": {
+    "contract": "COMFY-RNG-B35F0F617BFA",
+    "workflow": "euler-cfg-pp-fixture-workflow",
+    "attempt": "euler-cfg-pp-fixture-attempt",
+    "node": "KSampler-0181",
+    "output": 3,
+    "execution_ordinal": 181,
+    "batch": 0,
+    "retry": 0,
+    "retry_policy": "replay",
+    "seed_transform": "add-one-on-cpu",
+    "placement": "cpu-seeded-transfer"
+  },
+  "constant_flow_case": {
+    "sigmas": [0.8, 0.4, 0.0],
+    "initial": [1.0, -0.5, 0.25],
+    "guided": [
+      [0.4, -0.1, 0.2],
+      [0.1, 0.05, -0.1]
+    ],
+    "unconditional": [
+      [0.2, -0.2, 0.0],
+      [0.0, 0.0, 0.0]
+    ],
+    "eta": 0.5,
+    "sampler_noise_scale": -1.0,
+    "alpha_source": 0.2,
+    "alpha_target": 0.6,
+    "normalized_sigma_source": 4.0,
+    "normalized_sigma_target": 0.6666667,
+    "normalized_sigma_down": 0.58001703,
+    "normalized_sigma_up": 0.3286711,
+    "physical_sigma_down": 0.3480102,
+    "derivative": [1.2, -0.575, 0.3125],
+    "first_latent": [0.65761226, -0.26010588, 0.2287532],
+    "terminal": [0.1, 0.05, -0.1]
+  },
+  "steps": [
+    {
+      "step": 0,
+      "sigma": 2.0,
+      "next_sigma": 1.0,
+      "guided": [0.4, -0.1, 0.2],
+      "unconditional": [0.2, -0.2, 0.0],
+      "alpha_source": 1.0,
+      "alpha_target": 1.0,
+      "sigma_down": 0.76034534,
+      "sigma_up": 0.649519,
+      "derivative": [0.4, -0.15, 0.125],
+      "deterministic": [0.70413816, -0.21405181, 0.29504317]
+    },
+    {
+      "step": 1,
+      "sigma": 1.0,
+      "next_sigma": 0.0,
+      "guided": [0.1, 0.05, -0.1],
+      "unconditional": [0.0, 0.0, 0.0],
+      "alpha_source": null,
+      "alpha_target": null,
+      "sigma_down": null,
+      "sigma_up": null,
+      "derivative": null,
+      "deterministic": [0.1, 0.05, -0.1]
+    }
+  ],
+  "terminal": [0.1, 0.05, -0.1]
+}

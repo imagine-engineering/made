@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-h264-mp4-10bit-owned-tensor-thread-bridge-v1",
+  "truth_mode": "synthetic-retained-h264-mp4-10bit-owned-tensor-thread-bridge",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+  },
+  "dependencies": {
+    "eight_bit_thread_bridge_manifest_sha256": "dea88453625f9d2eaa1146ef6ab98f30a7fb2484cb315d4e87109116aecf5a93",
+    "ten_bit_sequence_encode_manifest_sha256": "e1a47ef7a454f4891e2bf551cbc4bf2842b7c724a48e9d795f3cef71e7edac4f"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_service::NativeLtxvCodecRequestProxy::encode_h264_mp4_batch",
+    "ten_bit_entrypoint": "sim_runtime::native_video_codec_service::NativeLtxvCodecRequestProxy::encode_h264_mp4_10bit_batch",
+    "actor": "the existing single retained native video codec thread and capacity-one request channel",
+    "input": "shallow-cloned canonical IMAGE plus closed ten-bit selection, reduced frame rate, checked H.264 sequence limits, caller stream, scratch, and cancellation",
+    "native_lifetime": "the ten-bit H.264 MP4 session, AVIO output, suite borrow, and every FFmpeg pointer remain on and drop on the actor thread",
+    "portable_output": "one exact-length contiguous rank-one CPU U8 Tensor plus dimensions, reduced frame rate, frame count, SHA-256, ten-bit YUV420P10LE identity, and no alpha",
+    "post_encode_copy_count": 1,
+    "successful_response_retains_scratch_lease": false,
+    "successful_response_backend_accounts_encoded_storage": true,
+    "mixed_ltxv_vp9_av1_and_eight_or_ten_bit_h264_requests_share_one_actor": true,
+    "actor_identity_version": "zed.sim.video-codec-thread.v9"
+  },
+  "synthetic_fixture": {
+    "encoded_bytes": "H10P4",
+    "dimensions": [2, 2],
+    "frame_rate": [2997, 100],
+    "frame_count": 3,
+    "test_cases": [
+      "LTXV preprocessing, VP9 alpha, AV1, eight-bit H.264, and ten-bit H.264 requests execute serially on one non-caller actor thread",
+      "the ten-bit H.264 request preserves IMAGE storage identity, reduced rate, limits, stream, scratch, cancellation, and closed bit-depth selection",
+      "the returned H.264 Tensor is Send plus Sync, CPU U8 contiguous, exact length, content-digest bound, ten-bit YUV420P10LE, and non-alpha",
+      "scratch is zero before the successful response while backend resident bytes remain until Tensor drop",
+      "the existing eight-bit component-backing adapter rejects a contradictory ten-bit actor projection"
+    ]
+  },
+  "claims": {
+    "synthetic_actor_and_owned_ten_bit_h264_tensor_choreography_executed": true,
+    "one_deliberate_post_encode_copy_observed": true,
+    "native_or_workspace_owner_crosses_thread_response": false,
+    "licensed_or_installed_ffmpeg_or_libx264_package": false,
+    "production_codec_availability": false,
+    "synthetic_bytes_are_valid_playable_mp4": false,
+    "numeric_h264_swscale_or_pyav_byte_identity_oracle": false,
+    "aac_audio_or_metadata": false,
+    "public_node_backing_video_slice_save_effect_path_or_output_committer_reachable": false,
+    "media_payload_or_handle_published": false,
+    "cache_persistence_recovery_or_restart_owned": false,
+    "all_native_heap_allocations_intercepted": false
+  }
+}

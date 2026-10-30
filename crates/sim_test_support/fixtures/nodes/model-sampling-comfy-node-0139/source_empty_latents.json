@@ -1,0 +1,7546 @@
+{
+  "provenance": "Actual pinned latent-format classes and fix_empty_latent_channels, repeat_to_batch_size, common_upscale functions executed with real PyTorch tensors; model wrapper supplies only its actual latent-format object.",
+  "source_sha256": {
+    "latent_formats.py": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac",
+    "sample.py": "ee3485747727f9a182b9e7dd5a32a81e9429c329f2dcd248996ea0eba191faea",
+    "utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"
+  },
+  "cases": [
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        24,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        24,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        48,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        96,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        32,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        32,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        64,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        128,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        24,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        24,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        24,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        4,
+        3,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        4,
+        3,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        4,
+        24,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD15",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        24,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        24,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        48,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        96,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        32,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        32,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        64,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        128,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        24,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        24,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        24,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        3,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        24,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "SD3",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        24,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        16,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        24,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        48,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        32,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        2,
+        3
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        2,
+        3
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        16,
+        3
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        32,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        64,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        24,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        3,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        24,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        24,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        24,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Flux2",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        2,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        2,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        1,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        2,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        1,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        2,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        2,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        2,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        1,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        1,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        2,
+        8,
+        12
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        16,
+        1,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        16,
+        1,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        16,
+        2,
+        16,
+        24
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        6,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        6,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        6,
+        6,
+        10
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        16,
+        3,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        16,
+        1,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        16,
+        6,
+        12,
+        20
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "Wan21",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        1,
+        1,
+        1
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        1,
+        1
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        1,
+        1,
+        1
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        1,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        1,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        1,
+        1,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        1,
+        1,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        1,
+        1,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        1,
+        2,
+        3
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        1,
+        2,
+        3
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        1,
+        2,
+        3
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        128,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        128,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        128,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        2,
+        4,
+        4,
+        6
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        2,
+        4,
+        1,
+        4,
+        6
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        1,
+        1
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        1,
+        1
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        3,
+        1,
+        1
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        3,
+        2,
+        2
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        128,
+        1,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": false,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        128,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 0.0,
+      "shares_storage": false
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": null,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 8,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 16,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": null,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 1,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    },
+    {
+      "format": "LTXV",
+      "shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "nonempty": true,
+      "spatial": 32,
+      "temporal": 8,
+      "output_shape": [
+        1,
+        2,
+        3,
+        3,
+        5
+      ],
+      "output_sum": 1.25,
+      "shares_storage": true
+    }
+  ]
+}

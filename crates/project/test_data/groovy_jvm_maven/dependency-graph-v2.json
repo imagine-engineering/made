@@ -1,0 +1,488 @@
+{
+  "version": 2,
+  "occurrencesKnown": true,
+  "nodes": [
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "id": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "id": "node:b9dc7277ce1a7d9879f17d183da521648d3b23d4baa4744eb3af85e91d8a405e"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"right\",\"jar\",\"\",\"1\"]",
+      "id": "node:ae5ef97ada9e755277fcb48e4bd89d128a87479eb3bd1230b7a82010f0b924fb"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+      "id": "node:05a530c4402be8b28467eb71f32812974240db79d08dbced392f2c9af789c926"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"optional\",\"jar\",\"\",\"1\"]",
+      "id": "node:7927bcbc827f4d64113295f6d21e90f85f5c26030afc5abf0f68275e12956e87"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"provided\",\"jar\",\"\",\"1\"]",
+      "id": "node:910e8f80e2abacabd95b35af23003815abd2f2d38e12e08e4c8c431210c4544c"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"test\",\"jar\",\"\",\"1\"]",
+      "id": "node:6f7348825d58655631d16badfa1e51dc2802570105131ace0478cb89ac601351"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"library\",\"pom\",\"\",\"1\"]",
+      "id": "node:9272f6f243249a73b2a436c07361faa8e53cc326ac183d6c9629a644de3e0f57"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"1\"]",
+      "id": "node:1d48005aadaf369f6de51bfac08631efc182814ee53351fa19ce54021eae8f1f"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"managed\",\"jar\",\"\",\"2\"]",
+      "id": "node:538ac9e3636597b3629e2203e1c970fbe8e19cbc8f7665dcee6fb7a9bb7188ee"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "id": "node:7f3325efaf15b36fecc31388c54505abaa5620bc76b8952bd66bf7e7aec8ff67"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"2\"]",
+      "id": "node:26621ff2fb353045c6fa950ddfe6cb50e7dd4b5e574a2d5a2e1234f83bf7a3b8"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "id": "node:3b2118a37d5594c7a13c08d865fdac35fa9ad4e11542311c9e4c76f6c3d25820"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-b\",\"jar\",\"\",\"1\"]",
+      "id": "node:55fa1860cf93a87aacbc9f6e54d6dd36b27a839ec8f0d577dae773f73f7e9c0a"
+    },
+    {
+      "component": "[\"dev.made.groovy.fixture.graph\",\"leaf\",\"jar\",\"\",\"1\"]",
+      "id": "node:d7b2095d3f2f6c582fb788cc23721ab2a3e500cccac51f86f5e5d50ca7207852"
+    }
+  ],
+  "rootNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+  "rootUri": "file:///groovy-graph/",
+  "pomUri": "file:///groovy-graph/application/pom.xml",
+  "rootComponent": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+  "components": [
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "application",
+      "extension": "pom",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "left",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"right\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "right",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "cycle-a",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"optional\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "optional",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"provided\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "provided",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"test\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "test",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"library\",\"pom\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "library",
+      "extension": "pom",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "shared",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"managed\",\"jar\",\"\",\"2\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "managed",
+      "extension": "jar",
+      "classifier": "",
+      "version": "2"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "branch",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"2\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "shared",
+      "extension": "jar",
+      "classifier": "",
+      "version": "2"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"cycle-b\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "cycle-b",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    },
+    {
+      "id": "[\"dev.made.groovy.fixture.graph\",\"leaf\",\"jar\",\"\",\"1\"]",
+      "groupId": "dev.made.groovy.fixture.graph",
+      "artifactId": "leaf",
+      "extension": "jar",
+      "classifier": "",
+      "version": "1"
+    }
+  ],
+  "edges": [
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:b9dc7277ce1a7d9879f17d183da521648d3b23d4baa4744eb3af85e91d8a405e",
+      "selectedNode": "node:b9dc7277ce1a7d9879f17d183da521648d3b23d4baa4744eb3af85e91d8a405e",
+      "position": 0,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": [
+        {
+          "artifactId": "excluded",
+          "groupId": "dev.made.groovy.fixture.graph",
+          "classifier": "*",
+          "extension": "*"
+        }
+      ]
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:ae5ef97ada9e755277fcb48e4bd89d128a87479eb3bd1230b7a82010f0b924fb",
+      "selectedNode": "node:ae5ef97ada9e755277fcb48e4bd89d128a87479eb3bd1230b7a82010f0b924fb",
+      "position": 1,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"right\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"right\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:05a530c4402be8b28467eb71f32812974240db79d08dbced392f2c9af789c926",
+      "selectedNode": "node:05a530c4402be8b28467eb71f32812974240db79d08dbced392f2c9af789c926",
+      "position": 2,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:7927bcbc827f4d64113295f6d21e90f85f5c26030afc5abf0f68275e12956e87",
+      "selectedNode": "node:7927bcbc827f4d64113295f6d21e90f85f5c26030afc5abf0f68275e12956e87",
+      "position": 3,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"optional\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"optional\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": true,
+      "scope": "compile",
+      "optional": true,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:910e8f80e2abacabd95b35af23003815abd2f2d38e12e08e4c8c431210c4544c",
+      "selectedNode": "node:910e8f80e2abacabd95b35af23003815abd2f2d38e12e08e4c8c431210c4544c",
+      "position": 4,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"provided\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"provided\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "provided",
+      "originalOptional": false,
+      "scope": "provided",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:6f7348825d58655631d16badfa1e51dc2802570105131ace0478cb89ac601351",
+      "selectedNode": "node:6f7348825d58655631d16badfa1e51dc2802570105131ace0478cb89ac601351",
+      "position": 5,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"test\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"test\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "test",
+      "originalOptional": false,
+      "scope": "test",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"application\",\"pom\",\"\",\"1\"]",
+      "fromNode": "node:7b1d4a64af71c686ecab9d13a15c37632ab2e97a69fc8659ddc7898faf635b8f",
+      "targetNode": "node:9272f6f243249a73b2a436c07361faa8e53cc326ac183d6c9629a644de3e0f57",
+      "selectedNode": "node:9272f6f243249a73b2a436c07361faa8e53cc326ac183d6c9629a644de3e0f57",
+      "position": 6,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"library\",\"pom\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"library\",\"pom\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": true,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:b9dc7277ce1a7d9879f17d183da521648d3b23d4baa4744eb3af85e91d8a405e",
+      "targetNode": "node:1d48005aadaf369f6de51bfac08631efc182814ee53351fa19ce54021eae8f1f",
+      "selectedNode": "node:1d48005aadaf369f6de51bfac08631efc182814ee53351fa19ce54021eae8f1f",
+      "position": 0,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": false,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:b9dc7277ce1a7d9879f17d183da521648d3b23d4baa4744eb3af85e91d8a405e",
+      "targetNode": "node:538ac9e3636597b3629e2203e1c970fbe8e19cbc8f7665dcee6fb7a9bb7188ee",
+      "selectedNode": "node:538ac9e3636597b3629e2203e1c970fbe8e19cbc8f7665dcee6fb7a9bb7188ee",
+      "position": 1,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"managed\",\"jar\",\"\",\"2\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"managed\",\"jar\",\"\",\"2\"]",
+      "omitted": false,
+      "direct": false,
+      "versionConstraint": "2",
+      "premanagedVersion": "1",
+      "managedBits": 1,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"left\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:b9dc7277ce1a7d9879f17d183da521648d3b23d4baa4744eb3af85e91d8a405e",
+      "targetNode": "node:7f3325efaf15b36fecc31388c54505abaa5620bc76b8952bd66bf7e7aec8ff67",
+      "selectedNode": "node:7f3325efaf15b36fecc31388c54505abaa5620bc76b8952bd66bf7e7aec8ff67",
+      "position": 2,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": false,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"right\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:ae5ef97ada9e755277fcb48e4bd89d128a87479eb3bd1230b7a82010f0b924fb",
+      "targetNode": "node:26621ff2fb353045c6fa950ddfe6cb50e7dd4b5e574a2d5a2e1234f83bf7a3b8",
+      "selectedNode": "node:1d48005aadaf369f6de51bfac08631efc182814ee53351fa19ce54021eae8f1f",
+      "position": 0,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"2\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"shared\",\"jar\",\"\",\"1\"]",
+      "omitted": true,
+      "direct": false,
+      "versionConstraint": "2",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"right\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:ae5ef97ada9e755277fcb48e4bd89d128a87479eb3bd1230b7a82010f0b924fb",
+      "targetNode": "node:3b2118a37d5594c7a13c08d865fdac35fa9ad4e11542311c9e4c76f6c3d25820",
+      "selectedNode": "node:7f3325efaf15b36fecc31388c54505abaa5620bc76b8952bd66bf7e7aec8ff67",
+      "position": 1,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "omitted": true,
+      "direct": false,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": [
+        {
+          "artifactId": "leaf",
+          "groupId": "dev.made.groovy.fixture.graph",
+          "classifier": "*",
+          "extension": "*"
+        }
+      ]
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:05a530c4402be8b28467eb71f32812974240db79d08dbced392f2c9af789c926",
+      "targetNode": "node:55fa1860cf93a87aacbc9f6e54d6dd36b27a839ec8f0d577dae773f73f7e9c0a",
+      "selectedNode": "node:55fa1860cf93a87aacbc9f6e54d6dd36b27a839ec8f0d577dae773f73f7e9c0a",
+      "position": 0,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-b\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"cycle-b\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": false,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    },
+    {
+      "from": "[\"dev.made.groovy.fixture.graph\",\"branch\",\"jar\",\"\",\"1\"]",
+      "fromNode": "node:7f3325efaf15b36fecc31388c54505abaa5620bc76b8952bd66bf7e7aec8ff67",
+      "targetNode": "node:d7b2095d3f2f6c582fb788cc23721ab2a3e500cccac51f86f5e5d50ca7207852",
+      "selectedNode": "node:d7b2095d3f2f6c582fb788cc23721ab2a3e500cccac51f86f5e5d50ca7207852",
+      "position": 0,
+      "component": "[\"dev.made.groovy.fixture.graph\",\"leaf\",\"jar\",\"\",\"1\"]",
+      "selected": "[\"dev.made.groovy.fixture.graph\",\"leaf\",\"jar\",\"\",\"1\"]",
+      "omitted": false,
+      "direct": false,
+      "versionConstraint": "1",
+      "managedBits": 0,
+      "originalScope": "compile",
+      "originalOptional": false,
+      "scope": "compile",
+      "optional": false,
+      "exclusions": []
+    }
+  ],
+  "unavailableDescriptors": [],
+  "collectionComplete": true,
+  "structuralCoverageKnown": true,
+  "originsKnown": false,
+  "artifactsKnown": false,
+  "offline": true,
+  "cachedOnly": true,
+  "cycleCount": 1,
+  "cycles": [
+    {
+      "cyclic": [
+        {
+          "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-b\",\"jar\",\"\",\"1\"]",
+          "scope": "compile",
+          "optional": false,
+          "exclusions": []
+        },
+        {
+          "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+          "scope": "compile",
+          "optional": false,
+          "exclusions": []
+        }
+      ],
+      "preceding": [
+        {
+          "component": "[\"dev.made.groovy.fixture.graph\",\"cycle-a\",\"jar\",\"\",\"1\"]",
+          "scope": "compile",
+          "optional": false,
+          "exclusions": []
+        }
+      ]
+    }
+  ],
+  "cycleOccurrencesKnown": false
+}

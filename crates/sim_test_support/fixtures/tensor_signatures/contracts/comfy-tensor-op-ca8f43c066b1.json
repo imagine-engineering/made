@@ -1,0 +1,434 @@
+{
+  "canonical_target": "torch.cuda.empty_cache",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/model_management.py:1965:9 (soft_empty_cache)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy_extras/nodes_train.py:1222:13 (TrainLoraNode.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy_extras/nodes_train.py:1228:13 (TrainLoraNode.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy_extras/nodes_train.py:345:9 (TrainSampler.sample)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy_extras/nodes_train.py:381:9 (TrainSampler.sample)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy_extras/nodes_train.py:60:9 (TrainGuider.outer_sample)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/execution/test_async_nodes.py:37:9 (TestAsyncNodes._server)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/execution/test_async_nodes.py:54:9 (TestAsyncNodes.shared_client)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/execution/test_execution.py:205:9 (TestExecution.server)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/execution/test_execution.py:228:9 (TestExecution.shared_client)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/execution/test_public_api.py:36:9 (TestPublicAPI._server)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/execution/test_public_api.py:53:9 (TestPublicAPI.shared_client)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/inference/test_inference.py:162:9 (TestInference._server)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests/inference/test_inference.py:198:9 (TestInference._client_graph)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/model_management.py:1965:9 (soft_empty_cache)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:1222:13 (TrainLoraNode.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:1228:13 (TrainLoraNode.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:345:9 (TrainSampler.sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:381:9 (TrainSampler.sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:60:9 (TrainGuider.outer_sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_async_nodes.py:37:9 (TestAsyncNodes._server)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_async_nodes.py:54:9 (TestAsyncNodes.shared_client)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:205:9 (TestExecution.server)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:228:9 (TestExecution.shared_client)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_public_api.py:36:9 (TestPublicAPI._server)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_public_api.py:53:9 (TestPublicAPI.shared_client)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/inference/test_inference.py:162:9 (TestInference._server)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/inference/test_inference.py:198:9 (TestInference._client_graph)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-ca8f43c066b1-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-CA8F43C066B1",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "f8b61d08eb670cd285768f8419935d18ffa871375c961b33fb25d74d274fe560",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/model_management.py",
+        "sha256": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa"
+      },
+      {
+        "path": "comfy_extras/nodes_train.py",
+        "sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      },
+      {
+        "path": "tests/execution/test_async_nodes.py",
+        "sha256": "bd9bf53cb3cceec15dbb3e8c23cdeb9fe027bb13ddca69164bbdf217dc7356d5"
+      },
+      {
+        "path": "tests/execution/test_execution.py",
+        "sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07"
+      },
+      {
+        "path": "tests/execution/test_public_api.py",
+        "sha256": "851fc8f8b1d2bbac625c183a0063b0a490e489a87f4dc27c409df4bcc7c608f5"
+      },
+      {
+        "path": "tests/inference/test_inference.py",
+        "sha256": "f8d80d9e6dc4ea416c010c3a892aa12cfd9ec4508732e74e0a472df2776fcd6f"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.cuda.empty_cache"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_19",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-c8ba6ce3159c",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 1965,
+      "positional_arguments": [],
+      "scope": "soft_empty_cache",
+      "site": "comfy/model_management.py:1965:9 (soft_empty_cache)",
+      "source_path": "comfy/model_management.py",
+      "source_sha256": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 1222,
+      "positional_arguments": [],
+      "scope": "TrainLoraNode.execute",
+      "site": "comfy_extras/nodes_train.py:1222:13 (TrainLoraNode.execute)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 1228,
+      "positional_arguments": [],
+      "scope": "TrainLoraNode.execute",
+      "site": "comfy_extras/nodes_train.py:1228:13 (TrainLoraNode.execute)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 345,
+      "positional_arguments": [],
+      "scope": "TrainSampler.sample",
+      "site": "comfy_extras/nodes_train.py:345:9 (TrainSampler.sample)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 381,
+      "positional_arguments": [],
+      "scope": "TrainSampler.sample",
+      "site": "comfy_extras/nodes_train.py:381:9 (TrainSampler.sample)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 60,
+      "positional_arguments": [],
+      "scope": "TrainGuider.outer_sample",
+      "site": "comfy_extras/nodes_train.py:60:9 (TrainGuider.outer_sample)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 37,
+      "positional_arguments": [],
+      "scope": "TestAsyncNodes._server",
+      "site": "tests/execution/test_async_nodes.py:37:9 (TestAsyncNodes._server)",
+      "source_path": "tests/execution/test_async_nodes.py",
+      "source_sha256": "bd9bf53cb3cceec15dbb3e8c23cdeb9fe027bb13ddca69164bbdf217dc7356d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 54,
+      "positional_arguments": [],
+      "scope": "TestAsyncNodes.shared_client",
+      "site": "tests/execution/test_async_nodes.py:54:9 (TestAsyncNodes.shared_client)",
+      "source_path": "tests/execution/test_async_nodes.py",
+      "source_sha256": "bd9bf53cb3cceec15dbb3e8c23cdeb9fe027bb13ddca69164bbdf217dc7356d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 205,
+      "positional_arguments": [],
+      "scope": "TestExecution.server",
+      "site": "tests/execution/test_execution.py:205:9 (TestExecution.server)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 228,
+      "positional_arguments": [],
+      "scope": "TestExecution.shared_client",
+      "site": "tests/execution/test_execution.py:228:9 (TestExecution.shared_client)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 36,
+      "positional_arguments": [],
+      "scope": "TestPublicAPI._server",
+      "site": "tests/execution/test_public_api.py:36:9 (TestPublicAPI._server)",
+      "source_path": "tests/execution/test_public_api.py",
+      "source_sha256": "851fc8f8b1d2bbac625c183a0063b0a490e489a87f4dc27c409df4bcc7c608f5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 53,
+      "positional_arguments": [],
+      "scope": "TestPublicAPI.shared_client",
+      "site": "tests/execution/test_public_api.py:53:9 (TestPublicAPI.shared_client)",
+      "source_path": "tests/execution/test_public_api.py",
+      "source_sha256": "851fc8f8b1d2bbac625c183a0063b0a490e489a87f4dc27c409df4bcc7c608f5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 162,
+      "positional_arguments": [],
+      "scope": "TestInference._server",
+      "site": "tests/inference/test_inference.py:162:9 (TestInference._server)",
+      "source_path": "tests/inference/test_inference.py",
+      "source_sha256": "f8d80d9e6dc4ea416c010c3a892aa12cfd9ec4508732e74e0a472df2776fcd6f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 198,
+      "positional_arguments": [],
+      "scope": "TestInference._client_graph",
+      "site": "tests/inference/test_inference.py:198:9 (TestInference._client_graph)",
+      "source_path": "tests/inference/test_inference.py",
+      "source_sha256": "f8d80d9e6dc4ea416c010c3a892aa12cfd9ec4508732e74e0a472df2776fcd6f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.cuda.empty_cache"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,220 @@
+{
+  "canonical_target": "torch.Tensor.int",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "argmax",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/clip_model.py:189:74 (CLIPTextModel_.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:1636:53 (SAM31Tracker._match_and_add_detections)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:610:28 (Qwen35VisionModel.fast_pos_embed_interpolate)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:611:28 (Qwen35VisionModel.fast_pos_embed_interpolate)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/qwen35.py:612:28 (Qwen35VisionModel.fast_pos_embed_interpolate)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/qwen35.py:613:28 (Qwen35VisionModel.fast_pos_embed_interpolate)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/clip_model.py:189:74 (CLIPTextModel_.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:1636:53 (SAM31Tracker._match_and_add_detections)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:610:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:611:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:612:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:613:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-d5d333c89a34-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-D5D333C89A34",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "45893744b8187848d6a8054eb768fbcb68676ae056b1b12832a5ee6c9b2c17a1",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/clip_model.py",
+        "sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845"
+      },
+      {
+        "path": "comfy/ldm/sam3/tracker.py",
+        "sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e"
+      },
+      {
+        "path": "comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.int"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_20",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-d54af27b4d70",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 74,
+      "consumer_output_expectation": {
+        "attribute": "argmax",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 189,
+      "positional_arguments": [],
+      "scope": "CLIPTextModel_.forward",
+      "site": "comfy/clip_model.py:189:74 (CLIPTextModel_.forward)",
+      "source_path": "comfy/clip_model.py",
+      "source_sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+      "status": "static-call-observed",
+      "target_syntax": "(torch.round(input_tokens).to(dtype=torch.int, device=x.device) == self.eos_token_id).int"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1636,
+      "positional_arguments": [],
+      "scope": "SAM31Tracker._match_and_add_detections",
+      "site": "comfy/ldm/sam3/tracker.py:1636:53 (SAM31Tracker._match_and_add_detections)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "new_dets.int"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 610,
+      "positional_arguments": [],
+      "scope": "Qwen35VisionModel.fast_pos_embed_interpolate",
+      "site": "comfy/text_encoders/qwen35.py:610:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "h_idxs.int"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 611,
+      "positional_arguments": [],
+      "scope": "Qwen35VisionModel.fast_pos_embed_interpolate",
+      "site": "comfy/text_encoders/qwen35.py:611:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "w_idxs.int"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 612,
+      "positional_arguments": [],
+      "scope": "Qwen35VisionModel.fast_pos_embed_interpolate",
+      "site": "comfy/text_encoders/qwen35.py:612:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "h_idxs.int"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 613,
+      "positional_arguments": [],
+      "scope": "Qwen35VisionModel.fast_pos_embed_interpolate",
+      "site": "comfy/text_encoders/qwen35.py:613:28 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "w_idxs.int"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,2 @@
+DROP TABLE public.collaboration_git_ci_projections;
+DROP TABLE public.collaboration_git_review_projections;

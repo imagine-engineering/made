@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "contract": "zed-sim-metal-execution-v1",
+  "backend": "metal",
+  "abi_floor": "macos-13-metal-3",
+  "targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin"
+  ],
+  "reviewed_sdk_version": "26.2",
+  "reviewed_xcode_build": "17C52",
+  "unsafe_owner": "sim_backend_metal::execution",
+  "runtime_compilation_forbidden": true,
+  "resource_selectors": [
+    {"class": "MTLBlitCommandEncoder", "selector": "endEncoding", "encoding": "v16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLBlitCommandEncoder", "selector": "synchronizeResource:", "encoding": "v24@0:8@16", "return_nullability": "not-applicable"},
+    {"class": "MTLBuffer", "selector": "contents", "encoding": "^v16@0:8", "return_nullability": "nonnull"},
+    {"class": "MTLBuffer", "selector": "didModifyRange:", "encoding": "v32@0:8{_NSRange=QQ}16", "return_nullability": "not-applicable"},
+    {"class": "MTLBuffer", "selector": "length", "encoding": "Q16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLCommandBuffer", "selector": "blitCommandEncoder", "encoding": "@16@0:8", "return_nullability": "nullable"},
+    {"class": "MTLCommandBuffer", "selector": "commit", "encoding": "v16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLCommandBuffer", "selector": "computeCommandEncoder", "encoding": "@16@0:8", "return_nullability": "nullable"},
+    {"class": "MTLCommandBuffer", "selector": "error", "encoding": "@16@0:8", "return_nullability": "nullable"},
+    {"class": "MTLCommandBuffer", "selector": "status", "encoding": "Q16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLCommandBuffer", "selector": "waitUntilCompleted", "encoding": "v16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLCommandQueue", "selector": "commandBuffer", "encoding": "@16@0:8", "return_nullability": "nullable"},
+    {"class": "MTLComputeCommandEncoder", "selector": "dispatchThreads:threadsPerThreadgroup:", "encoding": "v64@0:8{?=QQQ}16{?=QQQ}40", "return_nullability": "not-applicable"},
+    {"class": "MTLComputeCommandEncoder", "selector": "endEncoding", "encoding": "v16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLComputeCommandEncoder", "selector": "setBuffer:offset:atIndex:", "encoding": "v40@0:8@16Q24Q32", "return_nullability": "not-applicable"},
+    {"class": "MTLComputeCommandEncoder", "selector": "setBytes:length:atIndex:", "encoding": "v40@0:8r^v16Q24Q32", "return_nullability": "not-applicable"},
+    {"class": "MTLComputeCommandEncoder", "selector": "setComputePipelineState:", "encoding": "v24@0:8@16", "return_nullability": "not-applicable"},
+    {"class": "MTLComputePipelineState", "selector": "maxTotalThreadsPerThreadgroup", "encoding": "Q16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLComputePipelineState", "selector": "threadExecutionWidth", "encoding": "Q16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLDevice", "selector": "hasUnifiedMemory", "encoding": "B16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLDevice", "selector": "name", "encoding": "@16@0:8", "return_nullability": "nonnull"},
+    {"class": "MTLDevice", "selector": "newBufferWithLength:options:", "encoding": "@32@0:8Q16Q24", "return_nullability": "nullable"},
+    {"class": "MTLDevice", "selector": "newCommandQueueWithMaxCommandBufferCount:", "encoding": "@24@0:8Q16", "return_nullability": "nullable"},
+    {"class": "MTLDevice", "selector": "newComputePipelineStateWithFunction:error:", "encoding": "@32@0:8@16^@24", "return_nullability": "nullable"},
+    {"class": "MTLDevice", "selector": "newLibraryWithData:error:", "encoding": "@32@0:8@16^@24", "return_nullability": "nullable"},
+    {"class": "MTLDevice", "selector": "recommendedMaxWorkingSetSize", "encoding": "Q16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLDevice", "selector": "registryID", "encoding": "Q16@0:8", "return_nullability": "not-applicable"},
+    {"class": "MTLLibrary", "selector": "newFunctionWithName:", "encoding": "@24@0:8@16", "return_nullability": "nullable"},
+    {"class": "NSError", "selector": "code", "encoding": "q16@0:8", "return_nullability": "not-applicable"}
+  ],
+  "reviewed_headers": [
+    {"path": "System/Library/Frameworks/Foundation.framework/Headers/NSError.h", "sha256": "38eb1743d3fe217c51c438de7d1ba4b8dd87d928e31948d7511147eee80ca9ee"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLBlitCommandEncoder.h", "sha256": "46995fb123b4fa11934565cc5423aa850bab890d2b915dc3c6dffea804470037"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLBuffer.h", "sha256": "733a9cdaf29cf00e106f226afa119ea56efda456cd07bb1b87d354d5ced3f63a"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLCommandBuffer.h", "sha256": "a5a1ead36de20b4c1f4dce8193b945fb981e67456ca4a3a1395d167c9df475e7"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLCommandEncoder.h", "sha256": "3b074115dd01ec1d33155ef8d68ede4373ea471ea0a2be660344845d6c36f35b"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLCommandQueue.h", "sha256": "6e9da7a33496e30ef20cd415a51dfc72cf1d3f6892b1d8d7e8cfdeab451f5761"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLComputeCommandEncoder.h", "sha256": "610bcf8f3e6cb6a7067622f4395d8aa292c56226afde457ac6cb902937872b7b"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLComputePipeline.h", "sha256": "4109810fedcc753e9e92e50e13ba22bc150e389f3cbe89163bb1d055b8939099"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLDevice.h", "sha256": "41c2dbbb0e572e0cd8ea64022a649bfcea51a880f74ff2194d6ee7a68377f36d"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLLibrary.h", "sha256": "9b190787cc3ca1148c96c9914df805ceb926038b2acbbc41f38fb9003fea9893"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLResource.h", "sha256": "6100bf17139327113e3a0e6782f1cd3f08493eee37432f92afb8c37bd39dca78"},
+    {"path": "System/Library/Frameworks/Metal.framework/Headers/MTLTypes.h", "sha256": "835ba381014a9a666b61dfa9277c6213b6f73cec9d2d64f1a567bb5cd51de1ec"}
+  ],
+  "kernels": [
+    {"dtype": "f16", "function": "zed_sim_metal_add_f16_v1", "input_buffers": [0, 1], "output_buffer": 2, "element_count_buffer": 3},
+    {"dtype": "f32", "function": "zed_sim_metal_add_f32_v1", "input_buffers": [0, 1], "output_buffer": 2, "element_count_buffer": 3}
+  ],
+  "storage_modes": {
+    "unified_memory": "shared",
+    "discrete_memory": "managed",
+    "managed_cpu_write_requires_did_modify_range": true,
+    "managed_gpu_write_requires_synchronize_resource": true
+  },
+  "maximum_command_buffers_per_stream": 64,
+  "source_sha256": "1c93eb5fe65f495e02b1132a5de597d7f945c6463ffb5f89c0f03f8aa1dfc91b",
+  "metallib_sha256_by_target": {
+    "aarch64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b",
+    "x86_64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b"
+  },
+  "authorization_state": "requires-native-ffi-registry-and-signed-package"
+}

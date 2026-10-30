@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "identity": "karras",
+  "feature_id": "COMFY-MODEL-0206",
+  "source_ordinal": 2,
+  "source": {
+    "equation_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "equation_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "equation_lines": [23, 30],
+    "registry_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "registry_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "registry_line": 1349,
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "catalog_line": 207
+  },
+  "profile_sigmas": [0.25, 4.0],
+  "tolerance": 0.000002,
+  "cases": [
+    {
+      "name": "rho_seven",
+      "steps": 5,
+      "denoise": 1.0,
+      "start_step": null,
+      "end_step": null,
+      "discard_penultimate": false,
+      "expected": [4.0, 2.2016346, 1.1461222, 0.5578675, 0.25, 0.0]
+    },
+    {
+      "name": "single_step",
+      "steps": 1,
+      "denoise": 1.0,
+      "start_step": null,
+      "end_step": null,
+      "discard_penultimate": false,
+      "expected": [4.0, 0.0]
+    },
+    {
+      "name": "partial_denoise_tail",
+      "steps": 3,
+      "denoise": 0.5,
+      "start_step": null,
+      "end_step": null,
+      "discard_penultimate": false,
+      "expected": [0.8669275, 0.4785612, 0.25, 0.0]
+    },
+    {
+      "name": "explicit_window",
+      "steps": 5,
+      "denoise": 1.0,
+      "start_step": 1,
+      "end_step": 3,
+      "discard_penultimate": false,
+      "expected": [2.2016346, 1.1461222, 0.5578675]
+    }
+  ]
+}

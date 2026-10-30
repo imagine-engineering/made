@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "backend": "rocm",
+  "abi_floor": "6.1.0",
+  "target": "x86_64-unknown-linux-gnu",
+  "libraries": [
+    {
+      "name": "libamdhip64",
+      "file": "libamdhip64.so",
+      "symbols": [
+        { "name": "hipInit", "signature": "hipError_t(unsigned int)" },
+        { "name": "hipRuntimeGetVersion", "signature": "hipError_t(int*)" },
+        { "name": "hipDriverGetVersion", "signature": "hipError_t(int*)" },
+        { "name": "hipGetDeviceCount", "signature": "hipError_t(int*)" },
+        { "name": "hipDeviceGetName", "signature": "hipError_t(char*,int,hipDevice_t)" },
+        { "name": "hipDeviceTotalMem", "signature": "hipError_t(size_t*,hipDevice_t)" },
+        { "name": "hipDeviceGetAttribute", "signature": "hipError_t(int*,hipDeviceAttribute_t,int)" },
+        { "name": "hipSetDevice", "signature": "hipError_t(int)" },
+        { "name": "hipMalloc", "signature": "hipError_t(void**,size_t)" },
+        { "name": "hipFree", "signature": "hipError_t(void*)" },
+        { "name": "hipMemcpyAsync", "signature": "hipError_t(void*,const void*,size_t,hipMemcpyKind,hipStream_t)" },
+        { "name": "hipMemsetAsync", "signature": "hipError_t(void*,int,size_t,hipStream_t)" },
+        { "name": "hipStreamCreateWithFlags", "signature": "hipError_t(hipStream_t*,unsigned int)" },
+        { "name": "hipStreamDestroy", "signature": "hipError_t(hipStream_t)" },
+        { "name": "hipStreamSynchronize", "signature": "hipError_t(hipStream_t)" },
+        { "name": "hipEventCreateWithFlags", "signature": "hipError_t(hipEvent_t*,unsigned int)" },
+        { "name": "hipEventRecord", "signature": "hipError_t(hipEvent_t,hipStream_t)" },
+        { "name": "hipEventSynchronize", "signature": "hipError_t(hipEvent_t)" },
+        { "name": "hipEventDestroy", "signature": "hipError_t(hipEvent_t)" },
+        { "name": "hipGetLastError", "signature": "hipError_t(void)" },
+        { "name": "hipGetErrorString", "signature": "const char*(hipError_t)" },
+        { "name": "hipModuleLoadData", "signature": "hipError_t(hipModule_t*,const void*)" },
+        { "name": "hipModuleGetFunction", "signature": "hipError_t(hipFunction_t*,hipModule_t,const char*)" },
+        { "name": "hipModuleLaunchKernel", "signature": "hipError_t(hipFunction_t,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,hipStream_t,void**,void**)" },
+        { "name": "hipModuleUnload", "signature": "hipError_t(hipModule_t)" }
+      ]
+    },
+    {
+      "name": "libhiprtc",
+      "file": "libhiprtc.so",
+      "symbols": [
+        { "name": "hiprtcVersion", "signature": "hiprtcResult(int*,int*)" },
+        { "name": "hiprtcCreateProgram", "signature": "hiprtcResult(hiprtcProgram*,const char*,const char*,int,const char* const*,const char* const*)" },
+        { "name": "hiprtcCompileProgram", "signature": "hiprtcResult(hiprtcProgram,int,const char* const*)" },
+        { "name": "hiprtcGetCodeSize", "signature": "hiprtcResult(hiprtcProgram,size_t*)" },
+        { "name": "hiprtcGetCode", "signature": "hiprtcResult(hiprtcProgram,char*)" },
+        { "name": "hiprtcDestroyProgram", "signature": "hiprtcResult(hiprtcProgram*)" },
+        { "name": "hiprtcGetProgramLogSize", "signature": "hiprtcResult(hiprtcProgram,size_t*)" },
+        { "name": "hiprtcGetProgramLog", "signature": "hiprtcResult(hiprtcProgram,char*)" },
+        { "name": "hiprtcGetErrorString", "signature": "const char*(hiprtcResult)" }
+      ]
+    },
+    {
+      "name": "librocblas",
+      "file": "librocblas.so",
+      "symbols": [
+        { "name": "rocblas_get_version_string_size", "signature": "rocblas_status(size_t*)" },
+        { "name": "rocblas_get_version_string", "signature": "rocblas_status(char*,size_t)" },
+        { "name": "rocblas_create_handle", "signature": "rocblas_status(rocblas_handle*)" },
+        { "name": "rocblas_destroy_handle", "signature": "rocblas_status(rocblas_handle)" },
+        { "name": "rocblas_set_stream", "signature": "rocblas_status(rocblas_handle,hipStream_t)" },
+        { "name": "rocblas_sgemm", "signature": "rocblas_status(rocblas_handle,rocblas_operation,rocblas_operation,rocblas_int,rocblas_int,rocblas_int,const float*,const float*,rocblas_int,const float*,rocblas_int,const float*,float*,rocblas_int)" }
+      ]
+    },
+    {
+      "name": "libMIOpen",
+      "file": "libMIOpen.so",
+      "symbols": [
+        { "name": "miopenGetVersion", "signature": "miopenStatus_t(size_t*,size_t*,size_t*)" },
+        { "name": "miopenCreate", "signature": "miopenStatus_t(miopenHandle_t*)" },
+        { "name": "miopenDestroy", "signature": "miopenStatus_t(miopenHandle_t)" },
+        { "name": "miopenSetStream", "signature": "miopenStatus_t(miopenHandle_t,miopenAcceleratorQueue_t)" },
+        { "name": "miopenCreateTensorDescriptor", "signature": "miopenStatus_t(miopenTensorDescriptor_t*)" },
+        { "name": "miopenDestroyTensorDescriptor", "signature": "miopenStatus_t(miopenTensorDescriptor_t)" },
+        { "name": "miopenSet4dTensorDescriptor", "signature": "miopenStatus_t(miopenTensorDescriptor_t,miopenDataType_t,int,int,int,int)" },
+        { "name": "miopenCreateConvolutionDescriptor", "signature": "miopenStatus_t(miopenConvolutionDescriptor_t*)" },
+        { "name": "miopenDestroyConvolutionDescriptor", "signature": "miopenStatus_t(miopenConvolutionDescriptor_t)" },
+        { "name": "miopenInitConvolutionDescriptor", "signature": "miopenStatus_t(miopenConvolutionDescriptor_t,miopenConvolutionMode_t,int,int,int,int,int,int)" },
+        { "name": "miopenConvolutionForwardGetWorkSpaceSize", "signature": "miopenStatus_t(miopenHandle_t,miopenTensorDescriptor_t,miopenTensorDescriptor_t,miopenConvolutionDescriptor_t,miopenTensorDescriptor_t,size_t*)" },
+        { "name": "miopenConvolutionForward", "signature": "miopenStatus_t(miopenHandle_t,const void*,miopenTensorDescriptor_t,const void*,miopenTensorDescriptor_t,const void*,miopenConvolutionDescriptor_t,miopenConvFwdAlgorithm_t,const void*,miopenTensorDescriptor_t,void*,void*,size_t)" }
+      ]
+    }
+  ],
+  "layouts": [
+    { "name": "hipUUID", "size": 16, "align": 1 },
+    { "name": "hipIpcMemHandle_t", "size": 64, "align": 1 },
+    { "name": "miopenConvAlgoPerf_t", "size": 16, "align": 8 }
+  ],
+  "headers": [
+    { "name": "hip_runtime_api.h", "source": "https://github.com/ROCm/HIP/tree/rocm-6.1.2", "sha256": "7f36ffc64b62b0255ca76a561be64a8481be6154330e31b23ede30bc0e226b23" },
+    { "name": "hip_common.h", "source": "https://github.com/ROCm/HIP/tree/rocm-6.1.2", "sha256": "ab968f846dc31d6d22509edac92e657ccfd99d940d6cc98b99f74794ec1b3dd0" },
+    { "name": "driver_types.h", "source": "https://github.com/ROCm/HIP/tree/rocm-6.1.2", "sha256": "9b51c8f341c2f34aa44de728d89774ef0a0bfe34f2e3c973f49883095ffccec8" },
+    { "name": "hiprtc.h", "source": "https://github.com/ROCm/HIP/tree/rocm-6.1.2", "sha256": "9e92ba7f66646087b96e52481aea1fb931b43eb48c4b69a414152aadd3a9d00d" },
+    { "name": "rocblas.h", "source": "https://github.com/ROCm/rocBLAS/tree/rocm-6.1.2", "sha256": "312b39e9a670a780abe9a87414624b60d54cc52c019b34567e8a063348cca577" },
+    { "name": "rocblas-auxiliary.h", "source": "https://github.com/ROCm/rocBLAS/tree/rocm-6.1.2", "sha256": "2d576576c044b6ce36a2e2ffeb8924b0004e622dca5d992802fdc130b7f7d217" },
+    { "name": "rocblas-functions.h", "source": "https://github.com/ROCm/rocBLAS/tree/rocm-6.1.2", "sha256": "30dd7c36decde74904a89f77d42ed8d239b201ff5fbae45b2315347c4fc5f337" },
+    { "name": "rocblas-types.h", "source": "https://github.com/ROCm/rocBLAS/tree/rocm-6.1.2", "sha256": "d7fa26470c43dabdf5786b6ece86db62b5f0ced1ded227e805ec4373879ab305" },
+    { "name": "miopen.h", "source": "https://github.com/ROCm/MIOpen/tree/rocm-6.1.2", "sha256": "95f4ee132da9da5c53548331b445d7faf207bfbb13855de2eab57a9bae5438a9" }
+  ],
+  "unsafe_owner": "sim_backend_rocm::loader",
+  "package": {
+    "redistributes_amd_runtime": false,
+    "signature_required": true,
+    "notice_file": "LICENSES"
+  }
+}

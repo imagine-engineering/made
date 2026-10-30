@@ -1,0 +1,170 @@
+import groovy.json.JsonOutput
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
+import org.gradle.api.artifacts.FileCollectionDependency
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentSelector
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentSelector
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+
+gradle.beforeProject { project ->
+    project.tasks.register('_madeDoctorDependencies') {
+        group = 'verification'
+        description = 'Export selected dependency resolver facts for an explicitly reviewed Made Doctor Task'
+        doLast {
+            if (gradle.gradleVersion != '8.13') {
+                throw new GradleException('Made Doctor supports only the reviewed Gradle 8.13 resolver adapter.')
+            }
+            def configurationName = project.findProperty('madeDoctorConfiguration')
+            def outputName = project.findProperty('madeDoctorReport')
+            if (!(configurationName instanceof String) || !(outputName instanceof String)) {
+                throw new GradleException('Made Doctor requires an exact configuration and new reviewed report path.')
+            }
+            def configuration = project.configurations.findByName(configurationName)
+            if (configuration == null || !configuration.canBeResolved) {
+                throw new GradleException('The reviewed Gradle dependency configuration is unavailable or not resolvable.')
+            }
+            def output = new File(outputName).toPath()
+            if (!output.isAbsolute() || Files.exists(output, LinkOption.NOFOLLOW_LINKS)
+                    || !Files.isDirectory(output.parent, LinkOption.NOFOLLOW_LINKS)
+                    || Files.isSymbolicLink(output.parent)
+                    || output.parent.toRealPath() != output.parent.toAbsolutePath().normalize()) {
+                throw new GradleException('Made Doctor requires a new report in a canonical existing directory.')
+            }
+            int retainedBytes = 0
+            def text = { Object raw, boolean allowEmpty = false ->
+                String value = raw == null ? '' : raw.toString()
+                int bytes = value.getBytes('UTF-8').length
+                if ((!allowEmpty && value.isEmpty()) || bytes > 512
+                        || value.chars().anyMatch { character -> Character.isISOControl(character) }) {
+                    throw new GradleException('Gradle dependency field is invalid or exceeds the report limit.')
+                }
+                retainedBytes = Math.addExact(retainedBytes, bytes)
+                if (retainedBytes > 8 * 1024 * 1024) {
+                    throw new GradleException('Gradle dependency report aggregate limit exceeded.')
+                }
+                value
+            }
+            def identity = { Object raw ->
+                String value = raw.toString()
+                if (value.getBytes('UTF-8').length > 16 * 1024) {
+                    throw new GradleException('Gradle dependency identity exceeds the report limit.')
+                }
+                MessageDigest.getInstance('SHA-256').digest(value.getBytes('UTF-8')).encodeHex().toString()
+            }
+            def selector = { requested ->
+                if (requested instanceof ModuleComponentSelector) {
+                    return text("${requested.group}:${requested.module}:${requested.version}")
+                }
+                if (requested instanceof ProjectComponentSelector) {
+                    return text("project ${requested.projectPath}")
+                }
+                text('unidentified dependency selector')
+            }
+            def nodes = []
+            def edges = []
+            def indices = [:]
+            def pending = new ArrayDeque()
+            boolean partial = false
+            int unresolved = 0
+            def addComponent = { component ->
+                def identifier = component.id
+                String key = identity("${identifier.class.name}:${identifier.displayName}")
+                if (indices.containsKey(key)) {
+                    return indices[key]
+                }
+                if (nodes.size() >= 4096 || pending.size() >= 4096) {
+                    throw new GradleException('Gradle dependency node limit exceeded.')
+                }
+                String kind = 'unknown'
+                String group = ''
+                String module = 'unidentified component'
+                String version = ''
+                String projectPath = null
+                if (identifier instanceof ModuleComponentIdentifier) {
+                    kind = 'module'
+                    group = text(identifier.group)
+                    module = text(identifier.module)
+                    version = text(identifier.version)
+                } else if (identifier instanceof ProjectComponentIdentifier) {
+                    kind = 'project'
+                    projectPath = text(identifier.projectPath)
+                    group = text(component.moduleVersion?.group, true)
+                    module = text(component.moduleVersion?.name ?: 'project')
+                    version = text(component.moduleVersion?.version, true)
+                } else {
+                    partial = true
+                }
+                def variants = []
+                for (variant in component.variants) {
+                    if (variants.size() >= 64) {
+                        throw new GradleException('Gradle dependency variant limit exceeded.')
+                    }
+                    variants.add(text(variant.displayName))
+                }
+                int index = nodes.size()
+                indices[key] = index
+                nodes.add([component: key, kind: kind, group: group, module: module,
+                    version: version, projectPath: projectPath, variants: variants])
+                pending.addLast(component)
+                index
+            }
+            def addUnknown = { String key, String label ->
+                if (nodes.size() >= 4096) {
+                    throw new GradleException('Gradle dependency node limit exceeded.')
+                }
+                int index = nodes.size()
+                nodes.add([component: identity(key), kind: 'unknown', group: '', module: label,
+                    version: '', projectPath: null, variants: []])
+                partial = true
+                index
+            }
+            def addEdge = { int parent, int child, String requested, boolean constraint ->
+                if (edges.size() >= 32768) {
+                    throw new GradleException('Gradle dependency edge limit exceeded.')
+                }
+                edges.add([parent: parent, child: child, requested: requested, constraint: constraint])
+            }
+            def root = configuration.incoming.resolutionResult.rootComponent.get()
+            int rootIndex = addComponent(root)
+            while (!pending.isEmpty()) {
+                def component = pending.removeFirst()
+                String key = identity("${component.id.class.name}:${component.id.displayName}")
+                int parent = indices[key]
+                for (dependency in component.dependencies) {
+                    String requested = selector(dependency.requested)
+                    if (dependency instanceof ResolvedDependencyResult) {
+                        int child = addComponent(dependency.selected)
+                        addEdge(parent, child, requested, dependency.constraint)
+                    } else if (dependency instanceof UnresolvedDependencyResult) {
+                        unresolved = Math.addExact(unresolved, 1)
+                        int child = addUnknown("unresolved:${parent}:${edges.size()}:${requested}", 'unresolved dependency')
+                        addEdge(parent, child, requested, dependency.constraint)
+                    } else {
+                        int child = addUnknown("unknown:${parent}:${edges.size()}", 'unsupported dependency result')
+                        addEdge(parent, child, requested, false)
+                    }
+                }
+            }
+            for (dependency in configuration.allDependencies) {
+                if (dependency instanceof FileCollectionDependency) {
+                    int child = addUnknown("file:${edges.size()}", 'unidentified file dependency')
+                    addEdge(rootIndex, child, text('self-resolving file dependency'), false)
+                }
+            }
+            def report = [version: 1, gradleVersion: '8.13', configuration: text(configurationName),
+                projectPath: text(project.path), root: rootIndex, nodes: nodes, edges: edges,
+                unresolvedDependencies: unresolved, partial: partial]
+            byte[] contents = JsonOutput.toJson(report).getBytes('UTF-8')
+            if (contents.length > 8 * 1024 * 1024) {
+                throw new GradleException('Gradle dependency report byte limit exceeded.')
+            }
+            Files.write(output, contents, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+            logger.lifecycle('Made Doctor dependency report written; repository origins and artifact classifiers remain unknown.')
+        }
+    }
+}

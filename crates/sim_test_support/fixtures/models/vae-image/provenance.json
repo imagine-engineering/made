@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sim-native-image-vae-source-manifests-v1",
+  "oracle_kind": "development-time-source-conformance",
+  "production_dependency": false,
+  "sources": [
+    {
+      "path": "projects/sim/ComfyUI/sim/sd.py",
+      "sha256": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/models/autoencoder.py",
+      "sha256": "24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/model.py",
+      "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/modules/temporal_ae.py",
+      "sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/taesd/taesd.py",
+      "sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/cascade/stage_a.py",
+      "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/cascade/stage_c_coder.py",
+      "sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/pixel_space_convert.py",
+      "sha256": "60cc5e4ea109da1e384ca3121121098b0f295e012dec6ca1c73779c2ed9d8cbf"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/hunyuan_video/vae.py",
+      "sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78"
+    }
+  ]
+}

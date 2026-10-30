@@ -1,0 +1,599 @@
+{
+  "canonical_target": "torch.nan_to_num",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1438:18 (res_multistep)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1439:18 (res_multistep)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/layers.py:256:19 (DoubleStreamBlock.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/layers.py:354:17 (SingleStreamBlock.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/model.py:259:19 (Flux.forward_orig)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lumina/model.py:70:16 (clamp_fp16)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/t5.py:248:17 (T5.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_custom_sampler.py:1109:17 (AddNoise.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_latent.py:126:14 (LatentInterpolate.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_latent.py:127:14 (LatentInterpolate.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_latent.py:131:14 (LatentInterpolate.execute)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/sampling.py:1438:18 (res_multistep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1439:18 (res_multistep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:256:19 (DoubleStreamBlock.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:354:17 (SingleStreamBlock.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/model.py:259:19 (Flux.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:70:16 (clamp_fp16)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/t5.py:248:17 (T5.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_custom_sampler.py:1109:17 (AddNoise.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_latent.py:126:14 (LatentInterpolate.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_latent.py:127:14 (LatentInterpolate.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_latent.py:131:14 (LatentInterpolate.execute)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-290b200830f8-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "nan",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "neginf",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "posinf",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-290B200830F8",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "89f5ff66efabeb365528c07e18fac7a9e73c8ed8e1c097c414ff58952e958a65",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/flux/layers.py",
+        "sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc"
+      },
+      {
+        "path": "comfy/ldm/flux/model.py",
+        "sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368"
+      },
+      {
+        "path": "comfy/ldm/lumina/model.py",
+        "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"
+      },
+      {
+        "path": "comfy/text_encoders/t5.py",
+        "sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc"
+      },
+      {
+        "path": "comfy_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4"
+      },
+      {
+        "path": "comfy_extras/nodes_latent.py",
+        "sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nan_to_num"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_04",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-2881abe3d797",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 1438,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "phi1_val - phi2_val / c2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "res_multistep",
+      "site": "comfy/k_diffusion/sampling.py:1438:18 (res_multistep)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 1439,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "phi2_val / c2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "res_multistep",
+      "site": "comfy/k_diffusion/sampling.py:1439:18 (res_multistep)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "posinf",
+          "syntax": "65504",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "neginf",
+          "syntax": "-65504",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 256,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "txt",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DoubleStreamBlock.forward",
+      "site": "comfy/ldm/flux/layers.py:256:19 (DoubleStreamBlock.forward)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "posinf",
+          "syntax": "65504",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "neginf",
+          "syntax": "-65504",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 354,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SingleStreamBlock.forward",
+      "site": "comfy/ldm/flux/layers.py:354:17 (SingleStreamBlock.forward)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "posinf",
+          "syntax": "65504",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "neginf",
+          "syntax": "-65504",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 259,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "img",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Flux.forward_orig",
+      "site": "comfy/ldm/flux/model.py:259:19 (Flux.forward_orig)",
+      "source_path": "comfy/ldm/flux/model.py",
+      "source_sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "posinf",
+          "syntax": "65504",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "neginf",
+          "syntax": "-65504",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 70,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "clamp_fp16",
+      "site": "comfy/ldm/lumina/model.py:70:16 (clamp_fp16)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 248,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "T5.forward",
+      "site": "comfy/text_encoders/t5.py:248:17 (T5.forward)",
+      "source_path": "comfy/text_encoders/t5.py",
+      "source_sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "nan",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "posinf",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "neginf",
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 1109,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "noisy",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AddNoise.execute",
+      "site": "comfy_extras/nodes_custom_sampler.py:1109:17 (AddNoise.execute)",
+      "source_path": "comfy_extras/nodes_custom_sampler.py",
+      "source_sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 126,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "s1 / m1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "LatentInterpolate.execute",
+      "site": "comfy_extras/nodes_latent.py:126:14 (LatentInterpolate.execute)",
+      "source_path": "comfy_extras/nodes_latent.py",
+      "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 127,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "s2 / m2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "LatentInterpolate.execute",
+      "site": "comfy_extras/nodes_latent.py:127:14 (LatentInterpolate.execute)",
+      "source_path": "comfy_extras/nodes_latent.py",
+      "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 131,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t / mt",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "LatentInterpolate.execute",
+      "site": "comfy_extras/nodes_latent.py:131:14 (LatentInterpolate.execute)",
+      "source_path": "comfy_extras/nodes_latent.py",
+      "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nan_to_num"
+    }
+  ],
+  "static_definition": null
+}

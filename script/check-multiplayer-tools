@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+workspace_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$workspace_root"
+
+mode=quick
+profile=both
+tree_file=""
+tree_only=false
+
+usage() {
+    echo "Usage: ${0##*/} [--quick|--full] [--profile standard|multiplayer|both] [--tree-file PATH] [--tree-only]"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --quick)
+            mode=quick
+            shift
+            ;;
+        --full)
+            mode=full
+            shift
+            ;;
+        --profile)
+            if [[ $# -lt 2 ]]; then
+                echo "--profile requires standard, multiplayer, or both" >&2
+                exit 2
+            fi
+            profile=$2
+            shift 2
+            ;;
+        --tree-file)
+            if [[ $# -lt 2 ]]; then
+                echo "--tree-file requires a path" >&2
+                exit 2
+            fi
+            tree_file=$2
+            shift 2
+            ;;
+        --tree-only)
+            tree_only=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+case "$profile" in
+    standard|multiplayer|both) ;;
+    *)
+        echo "Unknown profile: $profile" >&2
+        exit 2
+        ;;
+esac
+
+forbidden_dependency_pattern='^(collaboration_domain|nostr_compat|buzz([-_][[:alnum:]_-]+)?|sprig|git[-_]credential[-_]nostr|git[-_]sign[-_]nostr)[[:space:]]'
+
+if [[ -n "$tree_file" ]]; then
+    if [[ ! -f "$tree_file" ]]; then
+        echo "Dependency tree fixture does not exist: $tree_file" >&2
+        exit 2
+    fi
+    standard_tree=$(<"$tree_file")
+else
+    standard_tree=$(cargo tree --locked -p zed --no-default-features -e normal --prefix none)
+    default_tree=$(cargo tree --locked -p zed -e normal --prefix none)
+    standard_tree+=$'\n'"$default_tree"
+fi
+
+forbidden_dependencies=$(printf '%s\n' "$standard_tree" | grep -E "$forbidden_dependency_pattern" || true)
+if [[ -n "$forbidden_dependencies" ]]; then
+    echo "Standard Zed dependency graph contains multiplayer-only packages:" >&2
+    printf '%s\n' "$forbidden_dependencies" >&2
+    exit 1
+fi
+echo "dependency-tree standard: passed"
+
+if [[ "$tree_only" = true ]]; then
+    exit 0
+fi
+
+# A name-filtered run cannot prove a profile is healthy: a test that asserts behavior gated behind
+# a feature the profile does not enable still compiles, and only an unfiltered run of its owning
+# crate reports the failure.
+owner_library_features() {
+    local selected_profile=$1
+    local features="gpui_platform/runtime_shaders"
+
+    if [[ "$selected_profile" = "multiplayer" ]]; then
+        features+=" git_ui/multiplayer-tools sidebar/multiplayer-tools agent_ui/multiplayer-tools"
+    fi
+
+    echo "$features"
+}
+
+run_quick_profile() {
+    local selected_profile=$1
+    local zed_features="gpui_platform/runtime_shaders"
+    local workspace_features="workspace/test-support gpui_platform/runtime_shaders"
+
+    if [[ "$selected_profile" = "multiplayer" ]]; then
+        zed_features="zed/multiplayer-tools gpui_platform/runtime_shaders"
+        workspace_features+=" workspace/multiplayer-tools"
+    fi
+
+    echo "check $selected_profile"
+    CARGO_INCREMENTAL=0 cargo check \
+        -p zed \
+        -p gpui_platform \
+        --no-default-features \
+        --features "$zed_features"
+
+    echo "test $selected_profile capability admission"
+    CARGO_INCREMENTAL=0 cargo test \
+        -p workspace \
+        -p gpui_platform \
+        multiplayer_capability \
+        --no-default-features \
+        --features "$workspace_features"
+
+    echo "test $selected_profile workspace library"
+    CARGO_INCREMENTAL=0 cargo test \
+        -p workspace \
+        -p gpui_platform \
+        --lib \
+        --no-default-features \
+        --features "$workspace_features"
+
+    echo "smoke $selected_profile package profile"
+    script/multiplayer-build-profile "$selected_profile" --dry-run
+}
+
+run_full_profile() {
+    local selected_profile=$1
+    local zed_features="gpui_platform/runtime_shaders"
+
+    if [[ "$selected_profile" = "multiplayer" ]]; then
+        zed_features="zed/multiplayer-tools zed/multiplayer-test-support gpui_platform/runtime_shaders"
+    fi
+
+    echo "test $selected_profile application"
+    local application_test_output
+    application_test_output=$(mktemp "${TMPDIR:-/tmp}/collaborative-application-tests.XXXXXX")
+    if CARGO_INCREMENTAL=0 cargo test \
+        -p zed \
+        -p gpui_platform \
+        --no-default-features \
+        --features "$zed_features" | tee "$application_test_output"; then
+        local required_application_tests=(test_action_namespaces)
+        if [[ "$selected_profile" = "multiplayer" ]]; then
+            required_application_tests+=(
+                collaborative_conversation_pending_ready_clear_and_project_fences
+                collaborative_conversation_load_error_and_stale_switch_stay_mounted
+                collaborative_conversation_auth_required_and_same_thread_reauthentication_gate_input
+                collaborative_native_no_model_builtin_submit_preserves_production_composition
+            )
+        fi
+        local test_name
+        for test_name in "${required_application_tests[@]}"; do
+            if ! grep -Fxq "test zed::tests::$test_name ... ok" "$application_test_output"; then
+                echo "Required $selected_profile application test did not pass: $test_name" >&2
+                rm -f "$application_test_output"
+                return 1
+            fi
+        done
+        rm -f "$application_test_output"
+    else
+        local test_exit_code=$?
+        rm -f "$application_test_output"
+        return "$test_exit_code"
+    fi
+
+    echo "test $selected_profile collaborative owner libraries"
+    CARGO_INCREMENTAL=0 cargo test \
+        -p git_ui \
+        -p sidebar \
+        -p agent_ui \
+        -p gpui_platform \
+        --lib \
+        --no-default-features \
+        --features "$(owner_library_features "$selected_profile")"
+
+    echo "clippy $selected_profile"
+    GITHUB_ACTIONS=1 CARGO_INCREMENTAL=0 ./script/clippy \
+        --no-all-features \
+        -p zed \
+        -p gpui_platform \
+        --no-default-features \
+        --features "$zed_features"
+}
+
+profiles=()
+if [[ "$profile" = "both" ]]; then
+    profiles=(standard multiplayer)
+else
+    profiles=("$profile")
+fi
+
+for selected_profile in "${profiles[@]}"; do
+    run_quick_profile "$selected_profile"
+    if [[ "$mode" = "full" ]]; then
+        run_full_profile "$selected_profile"
+    fi
+done
+
+python3 .agents/skills/feature-spec/scripts/validate_spec.py \
+    .agents/specs/collaborative-workspace
+
+echo "multiplayer-tools $mode matrix passed for: ${profiles[*]}"

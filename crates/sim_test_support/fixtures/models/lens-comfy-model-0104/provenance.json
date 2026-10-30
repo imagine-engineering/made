@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "fixture_id": "lens-sim-model-0104",
+  "feature_id": "COMFY-MODEL-0104",
+  "source_symbol": "Lens",
+  "source_ordinal": 81,
+  "latent_feature_id": "COMFY-MODEL-0030",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lens/model.py", "sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/gpt_oss.py", "sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc"}
+  ],
+  "source_projection": "Lens|81|image_model=lens|latent=Flux2|dtypes=bf16,f32|memory=4.0|shift=1.829|patch=2|clip=gpt_oss_20b|dynamic_prefix=gpt_oss.transformer.,standalone",
+  "source_projection_sha256": "9e7ff8d4ef82df5ac7be06bc89c5752851e93136a1e4d8010a69c0da4e26d5b2",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

@@ -1,0 +1,12 @@
+[package]
+name = "product_flavor"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lib]
+path = "product_flavor.rs"
+
+[lints]
+workspace = true

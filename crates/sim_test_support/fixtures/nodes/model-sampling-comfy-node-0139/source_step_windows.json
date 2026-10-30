@@ -1,0 +1,1614 @@
+{
+  "provenance": "Pinned KSampler.sample control flow with real PyTorch tensors; model sampling replaced only by a recorder to distinguish dispatch from unchanged-latent branches. This does not claim model inference.",
+  "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+  "cases": [
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": null,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": []
+      }
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 0,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 1,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 3,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [],
+      "start_step": 10000,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": null,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 0,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          10.0,
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": {
+        "sigmas": [
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 1,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": {
+        "sigmas": [
+          7.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 3,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": null,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": null,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 0,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 0,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 1,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 1,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 3,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 3,
+      "force_full_denoise": true,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 10000,
+      "force_full_denoise": false,
+      "output": "latent"
+    },
+    {
+      "sigmas": [
+        10.0,
+        7.0,
+        2.0,
+        0.0
+      ],
+      "start_step": 10000,
+      "last_step": 10000,
+      "force_full_denoise": true,
+      "output": "latent"
+    }
+  ]
+}

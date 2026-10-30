@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.ship]
+inherits = "release"
+lto = true
+
+[profile.ci]
+inherits = "dev"
+debug = 0

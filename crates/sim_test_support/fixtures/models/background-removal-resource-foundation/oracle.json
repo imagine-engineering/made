@@ -1,0 +1,215 @@
+{
+  "f32_rule": "Every source f32 primitive is rounded with IEEE-754 little-endian pack/unpack; convolution, linear, interpolation, and deform accumulation use fused f32 multiply-add where the canonical source owner does. Transcendental results are bit-pinned to the recorded CPython/libm platform.",
+  "format": "zed.sim.background-removal-reduced-oracle.v1",
+  "generator_command": "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/background-removal-resource-foundation/generate_oracle.py",
+  "generator_sha256": "097a5411d3c79e8b996fc058c113cc16ce27696839c006d66b4f75d260794921",
+  "input_shape": [
+    1,
+    3,
+    5,
+    4
+  ],
+  "mutations": {
+    "aspp-dilated-branch": {
+      "delta": 10.0,
+      "output_bits": [
+        1056965550,
+        1056964846,
+        1056963640,
+        1056962212,
+        1056960773,
+        1056968978,
+        1056968291,
+        1056967602,
+        1056966915,
+        1056966211,
+        1056972412,
+        1056971748,
+        1056971080,
+        1056970414,
+        1056969736
+      ],
+      "raw_f32_sha256": "736a36d7960a110fb7f9f47240dbbee8e9b00b5201fa3db665672a21f1179064",
+      "state_index": 73,
+      "state_key": "decoder.decoder_block1.dec_att.aspp_deforms.2.atrous_conv.regular_conv.weight"
+    },
+    "aspp-global-pool": {
+      "delta": 0.125,
+      "output_bits": [
+        1056965452,
+        1056964747,
+        1056963436,
+        1056962004,
+        1056960561,
+        1056968878,
+        1056968192,
+        1056967504,
+        1056966817,
+        1056966113,
+        1056972310,
+        1056971649,
+        1056970985,
+        1056970322,
+        1056969647
+      ],
+      "raw_f32_sha256": "6a1ba431f308e72b0de8dcf7228aaaf2b6eadc0fc5034ebcf0d1da368a32c055",
+      "state_index": 1,
+      "state_key": "decoder.decoder_block1.dec_att.global_avg_pool.1.weight"
+    },
+    "deform-mask": {
+      "delta": 100.0,
+      "output_bits": [
+        1056965453,
+        1056964747,
+        1056963440,
+        1056962006,
+        1056960561,
+        1056968879,
+        1056968193,
+        1056967504,
+        1056966818,
+        1056966114,
+        1056972311,
+        1056971650,
+        1056970985,
+        1056970323,
+        1056969648
+      ],
+      "raw_f32_sha256": "9df71c73e3fe358c3d9a37d37c4b94edb78711703cd86b53f563e05b1e494109",
+      "state_index": 85,
+      "state_key": "decoder.decoder_block1.dec_att.aspp_deforms.1.atrous_conv.modulator_conv.weight"
+    },
+    "deform-offset": {
+      "delta": -100.0,
+      "output_bits": [
+        1056965452,
+        1056964747,
+        1056963436,
+        1056962004,
+        1056960561,
+        1056968878,
+        1056968192,
+        1056967504,
+        1056966817,
+        1056966113,
+        1056972310,
+        1056971649,
+        1056970985,
+        1056970322,
+        1056969648
+      ],
+      "raw_f32_sha256": "936fd98363a965654075dc951983060f1f4662f453038c9923c1a18488568e3d",
+      "state_index": 139,
+      "state_key": "decoder.decoder_block1.dec_att.aspp_deforms.1.atrous_conv.offset_conv.weight"
+    },
+    "relative-position-index": {
+      "buffer_index": 0,
+      "delta": 3,
+      "output_bits": [
+        1056965451,
+        1056964746,
+        1056963436,
+        1056962002,
+        1056960559,
+        1056968877,
+        1056968191,
+        1056967503,
+        1056966817,
+        1056966113,
+        1056972310,
+        1056971649,
+        1056970985,
+        1056970322,
+        1056969647
+      ],
+      "raw_f32_sha256": "7f92f27d16d091e3e3d667521e2bdbd0722090eb96528ac4a00afbd3275eef0f",
+      "state_key": "bb.layers.0.blocks.0.attn.relative_position_index"
+    },
+    "shifted-window-block": {
+      "delta": 1.0,
+      "output_bits": [
+        1056965371,
+        1056964662,
+        1056963260,
+        1056961820,
+        1056960369,
+        1056968811,
+        1056968122,
+        1056967432,
+        1056966743,
+        1056966036,
+        1056972258,
+        1056971595,
+        1056970929,
+        1056970265,
+        1056969588
+      ],
+      "raw_f32_sha256": "0f3ff01bde3adc6b0a059fa14fa24901a3aeca605a317d81ebe0449da618f8d1",
+      "state_index": 0,
+      "state_key": "bb.layers.0.blocks.1.attn.proj.bias"
+    },
+    "unused-decoder-head": {
+      "delta": 0.125,
+      "output_bits": [
+        1056965453,
+        1056964747,
+        1056963438,
+        1056962004,
+        1056960561,
+        1056968878,
+        1056968192,
+        1056967504,
+        1056966818,
+        1056966114,
+        1056972310,
+        1056971649,
+        1056970985,
+        1056970323,
+        1056969648
+      ],
+      "raw_f32_sha256": "10a250f2cab0a9b19470113e4bfc00f7c73a0669a3272ed960e4c3b8ada53653",
+      "state_index": 0,
+      "state_key": "decoder.conv_ms_spvn_4.weight"
+    }
+  },
+  "output_bits": [
+    1056965453,
+    1056964747,
+    1056963438,
+    1056962004,
+    1056960561,
+    1056968878,
+    1056968192,
+    1056967504,
+    1056966818,
+    1056966114,
+    1056972310,
+    1056971649,
+    1056970985,
+    1056970323,
+    1056969648
+  ],
+  "output_shape": [
+    1,
+    3,
+    5
+  ],
+  "pinned_sources": {
+    "projects/sim/ComfyUI/sim/background_removal/birefnet.json": "50dd9639fa207a823437370b46d32a56b3f00eb1bef3bd225fe87eeeb8f255d2",
+    "projects/sim/ComfyUI/sim/background_removal/birefnet.py": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+    "projects/sim/ComfyUI/sim/bg_removal_model.py": "c4f6f7beea512c759849efa07f03f09044ea76fe5c71fb7afff31e4886e4daa7",
+    "projects/sim/ComfyUI/sim/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/sim/ComfyUI/sim_extras/nodes_bg_removal.py": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce"
+  },
+  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "preprocessed_shape": [
+    1,
+    3,
+    8,
+    8
+  ],
+  "python": "3.14.5",
+  "raw_f32_sha256": "10a250f2cab0a9b19470113e4bfc00f7c73a0669a3272ed960e4c3b8ada53653"
+}

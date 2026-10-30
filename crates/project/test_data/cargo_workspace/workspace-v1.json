@@ -1,0 +1,82 @@
+{
+  "packages": [
+    {
+      "name": "member-one",
+      "version": "0.1.0",
+      "id": "path+file:///workspace/member-one#0.1.0",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [
+        {"name":"member-two","source":null,"req":"*","kind":null,"rename":"renamed_member","optional":true,"uses_default_features":false,"features":["extra"],"target":"cfg(unix)","registry":null,"path":"/workspace/member-two"},
+        {"name":"serde","source":"registry+https://github.com/rust-lang/crates.io-index","req":"^1","kind":null,"rename":null,"optional":false,"uses_default_features":true,"features":["derive"],"target":null,"registry":"https://github.com/rust-lang/crates.io-index"},
+        {"name":"pretty_assertions","source":"registry+https://github.com/rust-lang/crates.io-index","req":"^1","kind":"dev","rename":null,"optional":false,"uses_default_features":true,"features":[],"target":null,"registry":null},
+        {"name":"cc","source":"registry+https://github.com/rust-lang/crates.io-index","req":"^1","kind":"build","rename":null,"optional":false,"uses_default_features":true,"features":[],"target":null,"registry":null},
+        {"name":"git_dep","source":"git+https://example.invalid/repo#deadbeef","req":"*","kind":null,"rename":null,"optional":false,"uses_default_features":true,"features":[],"target":null,"registry":null}
+      ],
+      "targets": [
+        {"kind":["lib"],"crate_types":["lib"],"name":"member_one","src_path":"/workspace/member-one/src/lib.rs","edition":"2024","doc":true,"doctest":true,"test":true},
+        {"kind":["bin"],"crate_types":["bin"],"name":"member-one","src_path":"/workspace/member-one/src/main.rs","edition":"2024","doc":true,"doctest":false,"test":true},
+        {"kind":["example"],"crate_types":["bin"],"name":"demo","src_path":"/workspace/member-one/examples/demo.rs","edition":"2024","required-features":["extra"],"doc":false,"doctest":false,"test":false},
+        {"kind":["test"],"crate_types":["bin"],"name":"integration","src_path":"/workspace/member-one/tests/integration.rs","edition":"2024","doc":false,"doctest":false,"test":true},
+        {"kind":["bench"],"crate_types":["bin"],"name":"throughput","src_path":"/workspace/member-one/benches/throughput.rs","edition":"2024","doc":false,"doctest":false,"test":true},
+        {"kind":["custom-build"],"crate_types":["bin"],"name":"build-script-build","src_path":"/workspace/member-one/build.rs","edition":"2024","doc":false,"doctest":false,"test":false},
+        {"kind":["future-kind"],"crate_types":["bin"],"name":"future","src_path":"/workspace/member-one/src/future.rs","edition":"2024","doc":false,"doctest":false,"test":false}
+      ],
+      "features": {"default":["extra"],"extra":["dep:member-two"]},
+      "manifest_path": "/workspace/member-one/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2024",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "member-two",
+      "version": "0.2.0",
+      "id": "path+file:///workspace/member-two#0.2.0",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [],
+      "targets": [{"kind":["lib"],"crate_types":["lib"],"name":"member_two","src_path":"/workspace/member-two/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true}],
+      "features": {"extra":[]},
+      "manifest_path": "/workspace/member-two/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    }
+  ],
+  "workspace_members": ["path+file:///workspace/member-one#0.1.0", "path+file:///workspace/member-two#0.2.0"],
+  "workspace_default_members": ["path+file:///workspace/member-one#0.1.0"],
+  "resolve": {
+    "root": null,
+    "nodes": [
+      {"id":"path+file:///workspace/member-one#0.1.0","dependencies":["path+file:///workspace/member-two#0.2.0"],"deps":[{"name":"renamed_member","pkg":"path+file:///workspace/member-two#0.2.0","dep_kinds":[{"kind":null,"target":"cfg(unix)"}]}],"features":["default","extra","implicit"]},
+      {"id":"path+file:///workspace/member-two#0.2.0","dependencies":[],"deps":[],"features":[]}
+    ]
+  },
+  "target_directory": "/workspace/target",
+  "version": 1,
+  "workspace_root": "/workspace"
+}

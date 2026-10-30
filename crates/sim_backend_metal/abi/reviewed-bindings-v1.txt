@@ -1,0 +1,25 @@
+Apple Metal MPS reviewed ABI evidence v1
+Xcode 26.2 build 17C52; macosx26.2 SDK; floor macos-13-metal-3
+Targets: aarch64-apple-darwin, x86_64-apple-darwin
+Unsafe owner: sim_backend_metal::loader
+C symbols: MTLCreateSystemDefaultDevice, MPSSupportsMTLDevice
+Readiness function: zed_sim_metal_readiness_v1
+Full header SHA-256 values are fixed in abi/symbols-v1.json and were measured from the installed Xcode SDK without redistributing headers.
+Reviewed declaration ranges:
+MTLDevice.h:130-137 9d25ce2b2c75969360d3f1464a97555a73f2549a9fc0e3daae25b081f7b905ac
+MTLDevice.h:231-256 1f112501bec576e0c50562419c21cdc792587d61b4a8860e55d33d708ad8168d
+MTLDevice.h:494-507 ecfd85843188b20bb7ffb4ba7bc3ad8ac9524f72f12984e8d5a4c1c3c9facb9b
+MTLDevice.h:760-765 13862071fe2a5203877790e8cd32fc4f40abb1be91bb553147062e593d4f3e94
+MTLDevice.h:816-825 9ca1b58f4111eedd073a2c987aa67ec60fb93295bff6d9ac8b23eafadb89bc3a
+MTLDevice.h:864-867 92b34e4c4b50f106462bb0d132a83951b8f021a5ef0fcf5b1742a22892b59045
+MTLTypes.h:12-48 542440520e26d4a48ae6f59037f9a3852b6ec0ef110ae79fa1deeb1025776821
+MetalPerformanceShaders.h:26-33 0c398354e17d3bf892d201147811c1699539f1955c3488964a9faed5e4989611
+MPSCoreTypes.h:237-313 b20b4909b096f628a31d234d60ac480d3616fe815fafc0871a04a5ee5db486db
+MPSGraphDevice.h:23-45 4f6f03f9691a8785a16273e4bbd43b099fdade9808ab7968aa9d4903a7d15b44
+MPSGraphTensorData.h:22-77 dcc4beeb2288617989555320b5fe2ccb9eaf984487ae7d52c2a4f237ba010864
+MPSGraph.h:196-260 2f17073c753ed6b62606fca1bfb1fccf02a0703c9ce1cab63e809173d71d0578
+MPSGraphMemoryOps.h:28-86 e306ea9236e1e11d0a07d7cef5b47cebfeaddc0592a0ba53d5810d825b22aa5f
+MPSGraphArithmeticOps.h:438-453 f1024c034694218ff669c3fef9915bac3002993eb8e31ca4cdb9b551dbbb1c23
+Objective-C selector names and exact arm64/x86_64 encodings are fixed in symbols-v1.json.
+Layouts: MTLOrigin 24/8, MTLSize 24/8, MTLRegion 48/8, MPSDataType 4/4, Objective-C BOOL 1/1.
+MPSDataType Float16=0x10000010, Float32=0x10000020; MTLGPUFamilyMetal3=5001.

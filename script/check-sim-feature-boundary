@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+python3 - <<'PY'
+import json,os,pathlib,subprocess,tomllib
+root=pathlib.Path.cwd()
+zed=tomllib.loads((root/'crates/zed/Cargo.toml').read_text())
+features=zed['features']; dependencies=zed['dependencies']
+expected={'graphics_ui','clock','sim_api','sim_model','sim_plugin_host','sim_runtime','sim_tensor','sim_types','sim_ui'}
+assert features['default']==['agentic-tools'], 'preserve the baseline agentic default; Sim stays opt-in'
+assert set(features['sim'])=={'dep:'+name for name in expected}
+assert 'comfy' not in features and 'comfy-test-support' not in features
+assert all(dependencies[name].get('optional') is True for name in expected)
+for backend in ['corex','cuda','directml','metal','mlu','npu','rocm','xpu']:
+    assert 'sim' in features[backend]
+assert all('sim' not in entry and 'comfy' not in entry for entry in features['test-support'])
+extension_host=tomllib.loads((root/'crates/extension_host/Cargo.toml').read_text())
+assert 'sim_model' not in extension_host['dependencies']
+for name in ['sim_runtime','comfy_runtime']:
+    assert '"'+name+'"' not in (root/'assets/settings/default.json').read_text()
+def tree(*features):
+    arguments=['cargo','tree','--locked','--offline','-p','zed','--no-default-features','-e','normal','--prefix','none']
+    if features: arguments+=['--features',','.join(features)]
+    return subprocess.check_output(arguments,text=True)
+plain=tree(); copper=tree('agentic-tools','rust-tools'); enabled=tree('sim')
+def native_packages(value):return sorted({line.split()[0] for line in value.splitlines() if line.startswith('sim_')})
+assert native_packages(plain)==[]
+assert native_packages(copper)==[]
+assert 'sim_ui' in native_packages(enabled)
+plans={}
+for platform in ['mac','linux']:
+    def plan(*args):return subprocess.check_output(['bash','script/bundle-'+platform,*args,'--dry-run'],text=True).strip()
+    default=plan(); canonical=plan('--sim')
+    assert 'include_sim_worker=false' in default
+    assert 'include_sim_worker=true' in canonical and 'sim_worker' in canonical
+    plans[platform]={'default':default,'sim':canonical}
+windows=(root/'script/bundle-windows.ps1').read_text()
+assert '[Alias("Comfy")]' not in windows and '[switch]$Sim' in windows
+mac=(root/'script/bundle-mac').read_text()
+assert 'bundle_application_features="${bundle_application_features},sim,metal"' in mac
+assert '--features "${bundle_application_features}" --target "$target_triple"' in mac
+record={'validation_id':'VAL-SIM-BUILD-001','legacy_validation_identity':'VAL-COMFY-BUILD-001','default_and_copper_exclude_sim':True,'legacy_build_aliases_removed':True,'enabled_native_packages':native_packages(enabled),'plans':plans,'windows':'static Sim option check only'}
+output=pathlib.Path(os.environ.get('SIM_RENAME_EVIDENCE_DIR','target/sim-feature-boundary'))
+output.mkdir(parents=True,exist_ok=True);(output/'feature-boundary.json').write_text(json.dumps(record,indent=2)+'\n')
+print('Sim feature boundary passed: disabled, Copper, Sim-only features and package plans')
+PY

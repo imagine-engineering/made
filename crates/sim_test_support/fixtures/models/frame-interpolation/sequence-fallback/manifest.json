@@ -1,0 +1,103 @@
+{
+  "artifact": "zed-native-frame-interpolation-sequence-fallback-v1",
+  "evidence_kind": "source-fingerprinted attempt-local FILM and RIFE sequence fallback execution",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "files": [
+      {
+        "file": "sim_extras/nodes_frame_interpolation.py",
+        "sha256": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369",
+        "symbols": ["FrameInterpolate.execute"]
+      },
+      {
+        "file": "sim_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+        "symbols": ["FILMNet.forward", "FILMNet.forward_multi_timestep"]
+      },
+      {
+        "file": "sim_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+        "symbols": ["IFNet.forward"]
+      },
+      {
+        "file": "sim/model_management.py",
+        "sha256": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+        "symbols": ["OOM_EXCEPTION", "soft_empty_cache"]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "fixture": "../invocation/manifest.json",
+      "sha256": "c3d4edcb87f3cbc8eb4b111665ded8ec968da4a7c520188d24b6d8d90e194ced"
+    },
+    {
+      "fixture": "../film-multi-timestep/manifest.json",
+      "sha256": "2782dd2f7f4d3a259c5ff6d6585c424dbad51d7f350bbfa0df456fc83d0381"
+    },
+    {
+      "fixture": "../film-sequence/manifest.json",
+      "sha256": "a65cc4bdb08b33c4e69abacca0bf1926c2fead6d127a49efcced93038c0c0e56"
+    },
+    {
+      "fixture": "../rife-execution/manifest.json",
+      "sha256": "8231af843ace2626d5ba6cda835ca3fd1e05fbfd17ea5e94f7308f1f56de4cda"
+    },
+    {
+      "fixture": "../rife-sequence/manifest.json",
+      "sha256": "b5e107c16a9656705f37c383e6623dd5da7f0a4c3c1d9c43dc074ea9f1df922a"
+    },
+    {
+      "fixture": "../resource-exhaustion/manifest.json",
+      "sha256": "8bd5821abf84b8f48191561e8077baf9657316c8f24ffdf66197714c4a7805c3"
+    }
+  ],
+  "execution_policy": {
+    "typed_retry_error": "FrameInterpolationError::ResourceExhausted",
+    "error_message_matching": false,
+    "cancellation_precedence": true,
+    "failed_attempt_temporaries_are_local": true,
+    "terminal_batch_one_preserves_original_resource_exhaustion": true,
+    "rife": {
+      "initial_single_timestep_batch": "multiplier minus one",
+      "oom_transition": "floor halve to at least one and retry the same unfinished chunk",
+      "reduced_batch_persists_across_pairs": true,
+      "timestep_order": "strictly increasing source order"
+    },
+    "film": {
+      "multi_timestep_attempted_once": true,
+      "typed_oom_disables_multi_for_invocation": true,
+      "multiplier_two_scalar_retry": true,
+      "multiplier_greater_than_two_behavior": "ordinary execution failure from pinned timestep.mean(...).item() scalarization",
+      "multi_element_fallback_halving": false
+    }
+  },
+  "deterministic_oracle": {
+    "rife_batch_trace": [4, 2, 1, 1, 1, 1],
+    "rife_persistent_next_pair_trace": [1, 1, 1, 1],
+    "rife_timestep_tensor_values": [0.25, 0.5, 0.75],
+    "film_multiplier_two_trace": ["multi", "single"],
+    "film_multiplier_four_runner_calls_before_scalarization_failure": 1,
+    "ordinary_execution_attempts": 1,
+    "cancelled_exhaustion_attempts": 1,
+    "scratch_in_use_bytes_after_completion": 0,
+    "input_and_model_identity_immutable": true,
+    "successful_output_storage_is_fresh": true
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "production_weight_numeric_parity": false,
+    "second_resource_exhaustion_taxonomy": false,
+    "allocator_or_workspace_owner": false,
+    "node_or_handle_execution": false,
+    "native_cache_or_persistent_fallback_state": false,
+    "codec_or_container_execution": false,
+    "effect_or_publication_execution": false,
+    "persistence_or_recovery_execution": false
+  }
+}

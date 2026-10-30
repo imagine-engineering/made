@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "provenance": "source-derived synthetic reduced exact-weight execution oracle",
+  "simui": {
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source": {
+    "path": "sim_extras/frame_interpolation_models/ifnet.py",
+    "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+  },
+  "profile": {
+    "head_channels": 2,
+    "block_channels": [2, 2, 2, 2, 2],
+    "alignment": 64,
+    "all_five_ifblocks": true,
+    "scales": [16, 8, 4, 2, 1],
+    "weight_fill": 0.0,
+    "bias_fill": 0.0,
+    "residual_beta_fill": 1.0
+  },
+  "case": {
+    "name": "zero_flow_midpoint",
+    "first": {
+      "shape": [1, 3, 64, 64],
+      "fill": 0.0
+    },
+    "second": {
+      "shape": [1, 3, 64, 64],
+      "fill": 1.0
+    },
+    "timestep": 0.5,
+    "expected": {
+      "shape": [1, 3, 64, 64],
+      "fill": 0.5,
+      "flow": 0.0,
+      "mask": 0.0,
+      "sigmoid_mask": 0.5
+    }
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "full_production_numeric_parity": false,
+    "film_execution": false,
+    "pair_feature_cache": false,
+    "handle_resolution_or_publication": false
+  }
+}

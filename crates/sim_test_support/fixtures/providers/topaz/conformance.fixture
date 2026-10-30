@@ -1,0 +1,75 @@
+{
+  "namespace": "zed.sim.provider.topaz",
+  "source_sha256": "fb080452ffabf0fd519dfc4ca0da8393f0e0a548c1dfdbb62bd5f5fc542fc4b6",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0677",
+      "node_identifier": "TopazImageEnhance"
+    },
+    {
+      "feature_id": "COMFY-NODE-0678",
+      "node_identifier": "TopazVideoEnhance"
+    },
+    {
+      "feature_id": "COMFY-NODE-0679",
+      "node_identifier": "TopazVideoEnhanceV2"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0174",
+      "method": "GET",
+      "path": "/proxy/topaz/image/v1/download/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0175",
+      "method": "GET",
+      "path": "/proxy/topaz/image/v1/download/{initial_response.process_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0176",
+      "method": "POST",
+      "path": "/proxy/topaz/image/v1/enhance-gen/async",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0177",
+      "method": "GET",
+      "path": "/proxy/topaz/image/v1/status/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0178",
+      "method": "GET",
+      "path": "/proxy/topaz/image/v1/status/{initial_response.process_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0179",
+      "method": "POST",
+      "path": "/proxy/topaz/video/",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0180",
+      "method": "PATCH",
+      "path": "/proxy/topaz/video/{initial_res.requestId}/accept",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0181",
+      "method": "PATCH",
+      "path": "/proxy/topaz/video/{initial_res.requestId}/complete-upload",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0182",
+      "method": "GET",
+      "path": "/proxy/topaz/video/{initial_res.requestId}/status",
+      "disposition": "executable"
+    }
+  ]
+}

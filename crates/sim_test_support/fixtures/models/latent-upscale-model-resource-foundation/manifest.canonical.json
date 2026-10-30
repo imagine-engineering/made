@@ -1,0 +1,86 @@
+{
+  "cases": [
+    {
+      "architecture": "hunyuan-video-1.5-720p",
+      "expected": [-1.1164966, 0.0, 1.4934920],
+      "id": "720-integrated-residual-order",
+      "input": [-1.0, 0.0, 1.0]
+    },
+    {
+      "architecture": "hunyuan-video-1.5-1080p",
+      "conv_in_weights": [1.0, 2.0],
+      "expected": [0.7310586],
+      "id": "1080-repeat-rms-shortcut-order",
+      "input": [1.0],
+      "output_weights": [1.0, -1.0],
+      "repeat_count": 2,
+      "residual_blocks_per_stage": 3,
+      "residual_branch_weights": [
+        [0.5, -0.25],
+        [-0.75, 0.5],
+        [0.25, 1.0]
+      ]
+    },
+    {
+      "expected_frames": [10.0, 11.0, 20.0, 21.0],
+      "id": "pixel-shuffle-dimension-one",
+      "input_channels": [[10.0, 20.0], [11.0, 21.0]]
+    },
+    {
+      "expected": [[1.0, 2.0], [3.0, 4.0]],
+      "id": "pixel-shuffle-dimension-two",
+      "input_channels": [1.0, 2.0, 3.0, 4.0]
+    },
+    {
+      "expected_frames": [[[0.0, 1.0], [2.0, 3.0]], [[4.0, 5.0], [6.0, 7.0]]],
+      "id": "pixel-shuffle-dimension-three",
+      "input_channels": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+    },
+    {
+      "expected_numerator": [[1, 6, 1], [6, 36, 6], [1, 6, 1]],
+      "id": "rational-blur-center-delta",
+      "normalization_denominator": 256
+    },
+    {
+      "id": "nearest-exact-half-coordinate",
+      "input": [0.0, 10.0],
+      "target_length": 3
+    },
+    {
+      "id": "bislerp-edge-cases",
+      "pairs": [
+        {"left": [0.0, 0.0], "ratio": 0.25, "right": [2.0, 0.0]},
+        {"left": [1.0, 0.0], "ratio": 0.5, "right": [1.0, 0.0]},
+        {"left": [1.0, 0.0], "ratio": 0.5, "right": [-1.0, 0.0]},
+        {"left": [1.0, 0.25], "ratio": 0.375, "right": [0.125, 1.5]}
+      ]
+    },
+    {
+      "expected_normalized": [1.0, 1.0, 1.0, 2.0],
+      "expected_unnormalized": [8.0, 0.0, 2.0, 32.0],
+      "id": "ltx-vae-statistics-order",
+      "input": [-1.0, 0.5, 2.0, 4.0],
+      "mean": [10.0, -2.0, 1.0, 0.0],
+      "model_raw": [12.0, 2.0, 1.5, 16.0],
+      "standard_deviation": [2.0, 4.0, 0.5, 8.0]
+    }
+  ],
+  "loader_precedence": [
+    "blocks.0.block.0.conv.weight",
+    "up.0.block.0.conv1.conv.weight",
+    "post_upsample_res_blocks.0.conv2.bias"
+  ],
+  "rational_scales": [[3, 4], [3, 2], [2, 1], [4, 1]],
+  "schema_version": 1,
+  "sources": [
+    {"path": "projects/sim/ComfyUI/sim_extras/nodes_hunyuan.py", "sha256": "028abde8d150dfe890ae987d8f87b0df439a3e9d068d7c63400d7f442dc4b7d7"},
+    {"path": "projects/sim/ComfyUI/sim_extras/nodes_lt_upsampler.py", "sha256": "3ba74f44d0e68c1d07bb71ccbaa596932b9ff5a7b9d9828c578f42048cdc0318"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/hunyuan_video/upsampler.py", "sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lightricks/latent_upsampler.py", "sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/model.py", "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/hunyuan_video/vae_refiner.py", "sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lightricks/vae/causal_video_autoencoder.py", "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"},
+    {"path": "projects/sim/ComfyUI/sim/utils.py", "sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"}
+  ],
+  "upscale_modes": ["nearest-exact", "bilinear", "area", "bicubic", "bislerp"]
+}

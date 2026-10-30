@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-partner-three-d-sim-node-0686",
+  "provider": {
+    "binding": "provider_required",
+    "namespace": "sim-api",
+    "reason": "cloud provider authorization is required",
+    "effect": "provider",
+    "cache": "never",
+    "hidden_authority": ["auth_token_sim_org", "api_key_sim_org", "unique_id"]
+  },
+  "source": {
+    "catalog_path": "sim_api_nodes/nodes_tripo.py",
+    "oracle_path": "ComfyUI/sim_api_nodes/nodes_tripo.py",
+    "sha256": "d380b5bb5a9b07427dc2bf40dd06c745341e08f50ed83338f0c45d05c127a10e"
+  },
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0686",
+      "class_type": "TripoConversionNode",
+      "source_lines": [746, 928],
+      "source_symbol_sha256": "14aafa9c5fc430eb125bb946eb634dc0e65d63688413fc1cd079677e78b83cbd",
+      "definition_sha256": "691502d632d0278b2de6a02afe92a089e5f8571881f8e2c34f6f813c58f1781f",
+      "catalog_sha256": "8f1665cd772522347633453406fe554d13233b8e49938f66697607c835a56706",
+      "outputs": [],
+      "output_node": true,
+      "operation": "submit model conversion options for a MODEL_TASK_ID, RIG_TASK_ID, or RETARGET_TASK_ID and poll the Tripo conversion task"
+    },
+    {
+      "feature_id": "COMFY-NODE-0687",
+      "class_type": "TripoImageToModelNode",
+      "source_lines": [206, 351],
+      "source_symbol_sha256": "020243931c5a05655804ce601f23821731725734dc7abd49bba2a554a0a272f6",
+      "definition_sha256": "32c951f273846b2a516d54ae5959d09c656dab1c55c80b985358f17e17bfc253",
+      "catalog_sha256": "4dbf51524d90f5f2e3d8213cdf695f7d01d40d88fd04f376545149e720dfaa99",
+      "outputs": ["STRING", "MODEL_TASK_ID", "FILE_3D_GLB"],
+      "output_node": true,
+      "operation": "upload one required image, submit image-to-model options, poll to completion, and materialize the GLB"
+    },
+    {
+      "feature_id": "COMFY-NODE-0688",
+      "class_type": "TripoImportModelNode",
+      "source_lines": [931, 1012],
+      "source_symbol_sha256": "4fa13a108804f2a52190a85b5b5d58ff18190e9d182b556abada444788012fab",
+      "definition_sha256": "352199b6043698c2b8bef4aa7c536865eb7b1499c781c83968ec1cf2614a71b4",
+      "catalog_sha256": "02626b59bcd839b66cf4be4051a049807bd75f9eb308bda1e5392a87e9d5230b",
+      "outputs": ["MODEL_TASK_ID"],
+      "output_node": false,
+      "operation": "validate GLB, FBX, OBJ, or STL up to 150 MiB, upload it, import it, and return the completed model task identifier"
+    },
+    {
+      "feature_id": "COMFY-NODE-0689",
+      "class_type": "TripoMultiviewToModelNode",
+      "source_lines": [354, 514],
+      "source_symbol_sha256": "17e8b7a72b6d98585daf5c4839f6fdea08f236fb06287dedc4bf8723bdf5c885",
+      "definition_sha256": "3acf3e91ffaba991bd7a6dd503bb10dbcd8dd91fe868a0c106c88ede0530d347",
+      "catalog_sha256": "fcd01c0f84c63a6c1c3902d6fc89610f4aeae4fba5962be9b9186694953acb80",
+      "outputs": ["STRING", "MODEL_TASK_ID", "FILE_3D_GLB"],
+      "output_node": true,
+      "operation": "require front plus at least one side or back image, preserve view order, submit multiview generation, and materialize the GLB"
+    },
+    {
+      "feature_id": "COMFY-NODE-0690",
+      "class_type": "TripoP1ImageToModelNode",
+      "source_lines": [1215, 1292],
+      "source_symbol_sha256": "e45f8b77bf5240852c9ad7d065811a4b580ca4f38849d67c7bd62964fb2768b1",
+      "definition_sha256": "ba116a25cbfdef4366af5373b3e3921b3740515d063d7538a74a44085ab24c06",
+      "catalog_sha256": "28882d415d3b07671b387f2e9ab9957c0a48b31b7109e3e69ab1f25beb970fd7",
+      "outputs": ["STRING", "MODEL_TASK_ID", "FILE_3D_GLB"],
+      "output_node": false,
+      "operation": "upload one required image and submit P1 image-to-model with structured output mode and common geometry options"
+    },
+    {
+      "feature_id": "COMFY-NODE-0691",
+      "class_type": "TripoP1MultiviewToModelNode",
+      "source_lines": [1295, 1379],
+      "source_symbol_sha256": "a9f1b334ca425631b5f841328ff993df82636cf3e3b7d1269c46f2b396155970",
+      "definition_sha256": "d45811e75e699b675b5f9beb56e8118943f801bf3e92e2116d918f51e84249d0",
+      "catalog_sha256": "644f56776319814bc039ecd7b03a750a83c58a0baf1b2b681fbf8fb17f44c041",
+      "outputs": ["STRING", "MODEL_TASK_ID", "FILE_3D_GLB"],
+      "output_node": false,
+      "operation": "require at least two ordered views, encode omitted views explicitly, and submit P1 multiview generation"
+    },
+    {
+      "feature_id": "COMFY-NODE-0692",
+      "class_type": "TripoP1TextToModelNode",
+      "source_lines": [1144, 1212],
+      "source_symbol_sha256": "189b0c301daf29e57962038f5cd8b7045baf12a6903877f155c0befcb5abd297",
+      "definition_sha256": "f4a7f72f9a7ccd2453edb78613d260e95f499caf732e49a7aa339d333c4b6ce0",
+      "catalog_sha256": "cfa67c877008af4cb26286186a381969c56bef8d93d479c9de372cf656de6025",
+      "outputs": ["STRING", "MODEL_TASK_ID", "FILE_3D_GLB"],
+      "output_node": false,
+      "operation": "require a prompt and submit P1 text-to-model with structured output mode, seeds, and common geometry options"
+    },
+    {
+      "feature_id": "COMFY-NODE-0693",
+      "class_type": "TripoRefineNode",
+      "source_lines": [604, 641],
+      "source_symbol_sha256": "502064a5f153ed05b985f859f27b26eb5219427a17b876cfebedfdcf3194fe12",
+      "definition_sha256": "5fcf01d9671d52fa9d73508c4981ab50f1617be92b61d4f1796ea33e1ceda70d",
+      "catalog_sha256": "57fb89620aff3831c5272250939bde682e27f8aeb4f9d2aed26e0a5845254d4f",
+      "outputs": ["STRING", "MODEL_TASK_ID", "FILE_3D_GLB"],
+      "output_node": true,
+      "operation": "submit refinement for a v1.4 model task and materialize the completed GLB"
+    },
+    {
+      "feature_id": "COMFY-NODE-0694",
+      "class_type": "TripoRetargetNode",
+      "source_lines": [681, 743],
+      "source_symbol_sha256": "c20ad0b1f59058cbb866e83e236f01ba480b41951ff9486190cb311e6636b33c",
+      "definition_sha256": "b4dc590a7ee05021dbc6da542e26b54f74beac94c9bb0542c8eefa2e000ea265",
+      "catalog_sha256": "f2ab81759e0c7045008dad76b3c45a599d85be463ab4f908529ec6667a78dc73",
+      "outputs": ["STRING", "RETARGET_TASK_ID", "FILE_3D_GLB"],
+      "output_node": true,
+      "operation": "submit one cataloged animation preset for a rig task and return the retarget task and GLB"
+    },
+    {
+      "feature_id": "COMFY-NODE-0695",
+      "class_type": "TripoRigNode",
+      "source_lines": [644, 678],
+      "source_symbol_sha256": "01b2b71097b5bbac33e09e2d81e655a145db1ae30bd704e2cc0cbdd215f0a0a0",
+      "definition_sha256": "a57335cd7a810be967b97e4828179117789d9c14f0424fef5c71b1fe6eb651f8",
+      "catalog_sha256": "0f27c531c036025c938bf5e68580109fb0a4e83d1446d1ce375dd8e483ca13af",
+      "outputs": ["STRING", "RIG_TASK_ID", "FILE_3D_GLB"],
+      "output_node": true,
+      "operation": "submit rigging for a model task and return the rig task and GLB"
+    }
+  ],
+  "behavior": {
+    "input_is_list": false,
+    "output_is_list": false,
+    "lazy_inputs": false,
+    "provider_execution": "signed sim-api component/provider invocation owns credentials, upload, request, polling, cancellation, billing authorization, output materialization, and recovery",
+    "failure": "provider authorization, schema, upload, validation, remote failure, cancellation, and materialization errors fail closed without fabricated task or file handles",
+    "persistence": "source class types, typed provider task handles, structured P1 widget metadata, price expressions, and file type unions round-trip through the pinned source schema",
+    "recovery": "retry requires a fresh authorized invocation; stale provider receipts and foreign task handles remain rejected"
+  },
+  "evidence_claims": {
+    "exact_provider_disposition": true,
+    "provider_namespace_is_canonical": true,
+    "credentials_embedded_in_family": false,
+    "provider_result_fabrication": false,
+    "python_or_javascript_runtime_dependency": false
+  }
+}

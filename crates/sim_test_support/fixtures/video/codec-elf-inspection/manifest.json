@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "truth_classification": "synthetic-structural-elf-contract",
+  "source_snapshot": {
+    "project": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "dependency_fixtures": {
+    "video/codec-ffi-certification/manifest.json": "f69947e75aae0a17d5b14ca2e100b2bd86f817ddb4e9930b75f4319528947d75",
+    "video/codec-package-capture/manifest.json": "808de8318a888e8101e0deb8b458492ac68562859aba8e239d295868b1d086b0"
+  },
+  "inspection_contract": {
+    "format": "little-endian-elf64",
+    "machines": {
+      "x86_64": 62,
+      "aarch64": 183
+    },
+    "exact_soname_required": true,
+    "signed_symbol_subset_required": true,
+    "needed_names_recorded": true,
+    "needed_names_authorized": false,
+    "rpath_runpath_forbidden": true,
+    "maximum_dynamic_table_bytes": 67108864
+  },
+  "claims": {
+    "synthetic_elf_structure_oracle": true,
+    "five_library_inspection_transaction": true,
+    "rocm_uses_shared_production_inspector": true,
+    "licensed_ffmpeg_binary": false,
+    "host_library_probed": false,
+    "native_library_loaded": false,
+    "runtime_symbol_address_resolved": false,
+    "ffi_certificate_issued_by_inspection": false,
+    "dependency_authorization": false,
+    "encoder_availability_probed": false,
+    "codec_execution": false,
+    "upstream_runtime_numeric_oracle": false,
+    "accelerator_numeric_oracle": false
+  }
+}

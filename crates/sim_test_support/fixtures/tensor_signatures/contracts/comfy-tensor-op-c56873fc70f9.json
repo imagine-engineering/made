@@ -1,0 +1,393 @@
+{
+  "canonical_target": "torch.Tensor.select",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:757:9 (get_unreferenced_unhashed_asset_ids)"
+    },
+    {
+      "expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:764:25 (get_unreferenced_unhashed_asset_ids)"
+    },
+    {
+      "expectation": {
+        "attribute": "join",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:809:9 (get_references_for_prefixes)"
+    },
+    {
+      "expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:966:9 (get_unenriched_references)"
+    },
+    {
+      "expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/tags.py:214:9 (add_missing_tag_for_asset_id)"
+    },
+    {
+      "expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/tags.py:252:17 (remove_missing_tag_for_asset_id)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "app/assets/database/queries/asset_reference.py:757:9 (get_unreferenced_unhashed_asset_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:764:25 (get_unreferenced_unhashed_asset_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:809:9 (get_references_for_prefixes)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:966:9 (get_unenriched_references)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/tags.py:214:9 (add_missing_tag_for_asset_id)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/tags.py:252:17 (remove_missing_tag_for_asset_id)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-c56873fc70f9-v1",
+  "inventory_kind": "reclassified-external-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match index bounds, negative indices, mask broadcasting, repeated-index behavior, output shape, and invalid-index failures.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_3",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_4",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_5",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_6",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-C56873FC70F9",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "f49b0525a689983c8391572b3099cb8446570165d5583862197dc2454ba11feb",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "app/assets/database/queries/asset_reference.py",
+        "sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59"
+      },
+      {
+        "path": "app/assets/database/queries/tags.py",
+        "sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.select"
+  },
+  "resolution": {
+    "blocker_reason": "Imported non-tensor receiver evidence proves this is not a PyTorch Tensor contract; its native behavior remains assigned to the owning source feature rather than receiving a fake tensor kernel.",
+    "expected_resolution_module": "indexing_masking_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": false,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-indexing-masking-comfy-tensor-op-006e05c5daaf",
+    "state": "reclassified_external"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 757,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sa.literal(1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "get_unreferenced_unhashed_asset_ids",
+      "site": "app/assets/database/queries/asset_reference.py:757:9 (get_unreferenced_unhashed_asset_ids)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "sa.select"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 764,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "Asset.id",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "get_unreferenced_unhashed_asset_ids",
+      "site": "app/assets/database/queries/asset_reference.py:764:25 (get_unreferenced_unhashed_asset_ids)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "sa.select"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "attribute": "join",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 809,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "AssetReference.id",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "AssetReference.file_path",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "AssetReference.mtime_ns",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "AssetReference.needs_verify",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "AssetReference.asset_id",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 5,
+          "starred": false,
+          "syntax": "Asset.hash",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 6,
+          "starred": false,
+          "syntax": "Asset.size_bytes",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "get_references_for_prefixes",
+      "site": "app/assets/database/queries/asset_reference.py:809:9 (get_references_for_prefixes)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "sa.select"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 966,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "AssetReference.id",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "AssetReference.asset_id",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "AssetReference.file_path",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "AssetReference.enrichment_level",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "get_unenriched_references",
+      "site": "app/assets/database/queries/asset_reference.py:966:9 (get_unenriched_references)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "sa.select"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 214,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "AssetReference.id.label('asset_reference_id')",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "sa.literal('missing').label('tag_name')",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sa.literal(origin).label('origin')",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "sa.literal(get_utc_now()).label('added_at')",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "add_missing_tag_for_asset_id",
+      "site": "app/assets/database/queries/tags.py:214:9 (add_missing_tag_for_asset_id)",
+      "source_path": "app/assets/database/queries/tags.py",
+      "source_sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a",
+      "status": "static-call-observed",
+      "target_syntax": "sa.select"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "attribute": "where",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 252,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "AssetReference.id",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "remove_missing_tag_for_asset_id",
+      "site": "app/assets/database/queries/tags.py:252:17 (remove_missing_tag_for_asset_id)",
+      "source_path": "app/assets/database/queries/tags.py",
+      "source_sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a",
+      "status": "static-call-observed",
+      "target_syntax": "sa.select"
+    }
+  ],
+  "static_definition": null
+}

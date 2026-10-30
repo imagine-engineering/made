@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-utilities-primitive-sim-node-0494",
+  "sources": [
+    {
+      "path": "sim_extras/nodes_primitive.py",
+      "sha256": "a64a4efa55d36016d01587fefac37f98c70e42b1d9757b7b308b720ac0d966b6",
+      "symbols": [
+        { "feature_id": "COMFY-NODE-0494", "class_type": "PrimitiveBoolean", "symbol": "Boolean", "line": 79, "end_line": 94, "sha256": "2f4bd009a927f0c7f511db3455e74d3dfc7eb54f642cda1aa3159d495b6452db" },
+        { "feature_id": "COMFY-NODE-0496", "class_type": "PrimitiveFloat", "symbol": "Float", "line": 61, "end_line": 76, "sha256": "df57e5900e972e17da365fbbdb7b7db777dda6f9f938e1074f1a89451d4b7c73" },
+        { "feature_id": "COMFY-NODE-0497", "class_type": "PrimitiveInt", "symbol": "Int", "line": 43, "end_line": 58, "sha256": "b928ec40c781043c1c8652de3aebedc755d9b63be9e2c773e3fb26ce4d594bba" },
+        { "feature_id": "COMFY-NODE-0498", "class_type": "PrimitiveString", "symbol": "String", "line": 7, "end_line": 22, "sha256": "800e924983fa14ee2ffe6eafa3db229403ad2859e6f67b4ae52531d07fb40400" },
+        { "feature_id": "COMFY-NODE-0499", "class_type": "PrimitiveStringMultiline", "symbol": "StringMultiline", "line": 25, "end_line": 40, "sha256": "357b981ebba849afacc23d3b2cdc2f605e4c1899bb84c2376a1525cf69344e57" }
+      ]
+    },
+    {
+      "path": "sim_extras/nodes_images.py",
+      "sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "symbols": [
+        { "feature_id": "COMFY-NODE-0495", "class_type": "PrimitiveBoundingBox", "symbol": "BoundingBox", "line": 92, "end_line": 110, "sha256": "dc50286b09b8aaf7ff21eb699b9a04317f099b3deedb6cb7d4a1ec7668edeb97" }
+      ]
+    }
+  ],
+  "contracts": {
+    "PrimitiveBoolean": { "input": "BOOLEAN", "output": "BOOLEAN", "operation": "identity" },
+    "PrimitiveBoundingBox": {
+      "inputs": {
+        "x": [0, 16384],
+        "y": [0, 16384],
+        "width": [1, 16384],
+        "height": [1, 16384]
+      },
+      "defaults": { "x": 0, "y": 0, "width": 512, "height": 512 },
+      "output": "BOUNDING_BOX",
+      "operation": "identity dictionary with x, y, width, and height"
+    },
+    "PrimitiveFloat": {
+      "input": "FLOAT",
+      "output": "FLOAT",
+      "minimum": -9223372036854775807,
+      "maximum": 9223372036854775807,
+      "step": 0.1,
+      "operation": "identity"
+    },
+    "PrimitiveInt": {
+      "input": "INT",
+      "output": "INT",
+      "minimum": -9223372036854775807,
+      "maximum": 9223372036854775807,
+      "control_after_generate": "fixed",
+      "operation": "identity"
+    },
+    "PrimitiveString": {
+      "input": "STRING",
+      "output": "STRING",
+      "deprecated": true,
+      "operation": "identity"
+    },
+    "PrimitiveStringMultiline": {
+      "input": "STRING",
+      "output": "STRING",
+      "multiline": true,
+      "essentials_category": "Basics",
+      "operation": "identity",
+      "preserved_values": ["", "tab\tvalue", "first\r\nsecond", "snow 雪", "emoji 🙂"]
+    }
+  },
+  "behavior": {
+    "input_is_list": false,
+    "output_is_list": [false],
+    "lazy_inputs": false,
+    "effect": "pure",
+    "cache": "input_identity",
+    "text_limit_bytes": 1048576,
+    "text_rejects": ["NUL", "controls other than tab, CR, and LF", "oversize UTF-8"],
+    "bounding_box_owner": "sim_media::NativeBoundingBoxPayload",
+    "cancellation": "execution_interrupted before output publication",
+    "persistence": "source class type and literal primitive values round-trip exactly",
+    "recovery": "primitive values replay directly; stale BOUNDING_BOX handles fail and fresh execution succeeds"
+  }
+}

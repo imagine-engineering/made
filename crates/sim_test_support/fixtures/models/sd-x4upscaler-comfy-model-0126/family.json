@@ -1,0 +1,69 @@
+{
+  "fixture_id": "sd-x4upscaler-sim-model-0126",
+  "feature_id": "COMFY-MODEL-0126",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.input_blocks.0.0.weight": [256, 7, 3, 3]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "1261261261261261261261261261261261261261261261261261261261261261",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.input_blocks.1.0.in_layers.2.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.middle_block.1.transformer_blocks.0.attn1.to_out.0.weight",
+      "shape": [2, 2],
+      "values": [2.0, 0.0, 0.0, 0.5]
+    },
+    {
+      "key": "model.diffusion_model.output_blocks.0.0.in_layers.2.weight",
+      "shape": [2, 2],
+      "values": [1.0, 1.0, 1.0, -1.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [1.0, 2.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 56,
+  "expected_memory_bytes": 56,
+  "checkpoints": [
+    {"name": "noise_level_conditioning", "values": [1.0, 2.0]},
+    {"name": "upscaler_input_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "middle_transformer_projection", "values": [1.4621172, 0.8807971]},
+    {"name": "middle_transformer_normalization", "values": [0.9999941, -0.9999941]},
+    {"name": "upscaler_output_projection", "values": [0.0, 1.9999882]},
+    {"name": "upscaled_latent", "values": [0.0, 0.96402675]}
+  ],
+  "patches": [
+    {
+      "identifier": "sd-x4-middle-transformer-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.middle_block.1.transformer_blocks.0.attn1.to_out.0.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "noise_level_conditioning", "values": [1.0, 2.0]},
+    {"name": "upscaler_input_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "middle_transformer_projection", "values": [2.1931758, 2.6423912]},
+    {"name": "middle_transformer_normalization", "values": [-0.9999901, 0.9999901]},
+    {"name": "upscaler_output_projection", "values": [0.0, -1.9999802]},
+    {"name": "upscaled_latent", "values": [0.0, -0.9640262]}
+  ]
+}

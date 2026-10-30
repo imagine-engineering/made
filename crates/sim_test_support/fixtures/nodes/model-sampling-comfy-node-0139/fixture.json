@@ -1,0 +1,2286 @@
+{
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0139",
+      "class_type": "DualModelGuider",
+      "source": {
+        "catalog_line": 948,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 976,
+          "kind": "ClassDef",
+          "line": 948,
+          "sha256": "a60803156e98d2ffe975d39922dfbeacafd1a2155d88dd2e285ac1426a1e7a33",
+          "status": "parsed_definition",
+          "symbol": "DualModelGuider"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "d87c142edc3726491c00d33ad7466a48821012df5f029a2409ea6f415eb88611",
+        "definition_sha256": "9bbe177988aed075da720e76bb838dd7a4c1968a3fc4bc49e544d05564be8666",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": "Model used for the positive (conditional) pass.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model_negative",
+            "raw_link": false,
+            "requirement": "optional",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": "Model used for the negative (unconditional) pass. Use the same model for ordinary CFG.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "positive",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "CONDITIONING"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "4.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "finite_decimal",
+                  "value": "0.01"
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "cfg",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.1"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "negative",
+            "raw_link": false,
+            "requirement": "optional",
+            "socketless": false,
+            "source_type_names": [
+              "CONDITIONING"
+            ],
+            "step": null,
+            "tooltip": "Negative conditioning run on the negative model. Leave unconnected for a text-free (image-only) unconditional pass.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "9bbe177988aed075da720e76bb838dd7a4c1968a3fc4bc49e544d05564be8666",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0139",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "GUIDER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "Dual Model CFG Guider",
+          "is_deprecated": false,
+          "is_experimental": true
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/guiders",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0169",
+      "class_type": "ExponentialScheduler",
+      "source": {
+        "catalog_line": 69,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 88,
+          "kind": "ClassDef",
+          "line": 69,
+          "sha256": "fd0ffd7f108d635e55fc68736e93812ae336a99b15318e3484e6596e7c942e56",
+          "status": "parsed_definition",
+          "symbol": "ExponentialScheduler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "0bcaeaad1aacba4e272195337fc8c12fd8497a701cd4719fed49283463a424bf",
+        "definition_sha256": "626b9c93816770175c9d095d8430e9405d406164b7beae213af57aa0717b6d80",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 20
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "14.614642"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "5000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sigma_max",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0291675"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "5000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sigma_min",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "626b9c93816770175c9d095d8430e9405d406164b7beae213af57aa0717b6d80",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0169",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/schedulers",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0170",
+      "class_type": "ExtendIntermediateSigmas",
+      "source": {
+        "catalog_line": 297,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 348,
+          "kind": "ClassDef",
+          "line": 297,
+          "sha256": "d761e82ce055bc56a551d3e446117febb2cdbd6c0286ef620d0a078c96f047ba",
+          "status": "parsed_definition",
+          "symbol": "ExtendIntermediateSigmas"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "a37fbbce0d75c6c7cdaa3ae6bb222b7192001ac9e0b3cd7062b067011d0e7fde",
+        "definition_sha256": "3bc01759298e59db36a0ea17ba20f3bd20b33074496693323862459094ecd1cb",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sigmas",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SIGMAS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 2
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 100
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "preserved_expression",
+              "sha256": "affdda431d0cd024b29207384d057daaacce9d8d192e9b9fc2d3df27355739ab",
+              "source": "{\"kind\":\"unary\",\"operand\":{\"kind\":\"literal\",\"source\":\"1.0\",\"value\":1.0},\"operator\":\"USub\"}"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "20000.0"
+            },
+            "minimum": {
+              "kind": "preserved_expression",
+              "sha256": "affdda431d0cd024b29207384d057daaacce9d8d192e9b9fc2d3df27355739ab",
+              "source": "{\"kind\":\"unary\",\"operand\":{\"kind\":\"literal\",\"source\":\"1.0\",\"value\":1.0},\"operator\":\"USub\"}"
+            },
+            "multiline": false,
+            "name": "start_at_sigma",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "12.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "20000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "end_at_sigma",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "linear"
+              },
+              {
+                "kind": "string",
+                "value": "cosine"
+              },
+              {
+                "kind": "string",
+                "value": "sine"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "spacing",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "3bc01759298e59db36a0ea17ba20f3bd20b33074496693323862459094ecd1cb",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0170",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/sigmas",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0173",
+      "class_type": "FlipSigmas",
+      "source": {
+        "catalog_line": 254,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 274,
+          "kind": "ClassDef",
+          "line": 254,
+          "sha256": "1feeedd65ce9c274218e9fe1e56228faba35085045f800861161818361bae768",
+          "status": "parsed_definition",
+          "symbol": "FlipSigmas"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "496b19561535f534363e28bf2d492fb1957e2d6e3fe5f23ddbb2b025bb7ddfda",
+        "definition_sha256": "fab94338572c7514945848098662f973a600790f31d89f59a5bcf8099e283acc",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sigmas",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SIGMAS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "fab94338572c7514945848098662f973a600790f31d89f59a5bcf8099e283acc",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0173",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/sigmas",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0177",
+      "class_type": "Flux2Scheduler",
+      "source": {
+        "catalog_line": 213,
+        "path": "sim_extras/nodes_flux.py",
+        "sha256": "71c9d804a9acfb7a828fecb8fcc4b93e28f4417f0c4259a68910f4027059741f",
+        "symbol": {
+          "end_line": 233,
+          "kind": "ClassDef",
+          "line": 213,
+          "sha256": "9606177f37f7bc03aef524623f03b7f24bcdc3d9327dcdf74863fe2befeb2b65",
+          "status": "parsed_definition",
+          "symbol": "Flux2Scheduler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "6cce9b5669eaffaa59e8a65e7360c14f18540bb2abb3b5ea8a14a529c55b2da5",
+        "definition_sha256": "e425e2335a9f13f749a284bf9c422b8cbf95e1d69e4362fdb833c0232e979911",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 20
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1024
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1024
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "e425e2335a9f13f749a284bf9c422b8cbf95e1d69e4362fdb833c0232e979911",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0177",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/schedulers",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0208",
+      "class_type": "GITSScheduler",
+      "source": {
+        "catalog_line": 338,
+        "path": "sim_extras/nodes_gits.py",
+        "sha256": "41667051c97b10d9ecbe0c9aac7991e1abce69382c6406a8444e7b500a559ae6",
+        "symbol": {
+          "end_line": 370,
+          "kind": "ClassDef",
+          "line": 338,
+          "sha256": "f46681970fece985f6a4b62d0817d1ea306f1ca9a20189f937512dd5717f458b",
+          "status": "parsed_definition",
+          "symbol": "GITSScheduler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "ece29edca65f9f63947cf406e9f63ca4ad78c75fdd0cce115e2434ffac46455c",
+        "definition_sha256": "5148bf4c145a911fc44f7075116b5b91aaab4e912a2d0e566068725159b98ea7",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.20"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.50"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.80"
+            },
+            "multiline": false,
+            "name": "coeff",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.05"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 10
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 1000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 2
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "denoise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "5148bf4c145a911fc44f7075116b5b91aaab4e912a2d0e566068725159b98ea7",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0208",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/schedulers",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0237",
+      "class_type": "Ideogram4Scheduler",
+      "source": {
+        "catalog_line": 35,
+        "path": "sim_extras/nodes_ideogram4.py",
+        "sha256": "2ef584e244ecb5614b7284eacfaaab7bbdfa398f0595c32c1562d99150ebe301",
+        "symbol": {
+          "end_line": 54,
+          "kind": "ClassDef",
+          "line": 35,
+          "sha256": "af0749713ce223d2246fc24b5100f18aa68d56746480990282899c223578b8f4",
+          "status": "parsed_definition",
+          "symbol": "Ideogram4Scheduler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "49a2961cf7b2368c8ac6a471ab144e44c8bfbd56b778e478ac80b2616851735b",
+        "definition_sha256": "79a195160d26a454cf664324d757f93ae9c910f105adc30755c8705494b8370d",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 20
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 200
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1024
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 8192
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 256
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1024
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 8192
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 256
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "preserved_expression",
+              "sha256": "6bc41aeffee5f4226b17db941151bfd42102d2dd82bd2b6f8518b19fe10d398b",
+              "source": "{\"kind\":\"unary\",\"operand\":{\"kind\":\"literal\",\"source\":\"10.0\",\"value\":10.0},\"operator\":\"USub\"}"
+            },
+            "multiline": false,
+            "name": "mu",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.05"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.75"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "5.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.1"
+            },
+            "multiline": false,
+            "name": "std",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.05"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "79a195160d26a454cf664324d757f93ae9c910f105adc30755c8705494b8370d",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0237",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "Ideogram 4 Scheduler",
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/schedulers",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0278",
+      "class_type": "KarrasScheduler",
+      "source": {
+        "catalog_line": 47,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 67,
+          "kind": "ClassDef",
+          "line": 47,
+          "sha256": "8e8eb6e679be955d85e7673ec509c721a2705b87625d67a300e624f2993f37c9",
+          "status": "parsed_definition",
+          "symbol": "KarrasScheduler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "0da5a07e9bda7ef38fda73cd25658443ca85f4f388e4a793d3ec2546b0c07c37",
+        "definition_sha256": "6d892320b302b11fa5c91e5ca405512f908a7a71cf5f0db312c8a707ed29d0e6",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 20
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "14.614642"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "5000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sigma_max",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0291675"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "5000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "sigma_min",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "7.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "rho",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "6d892320b302b11fa5c91e5ca405512f908a7a71cf5f0db312c8a707ed29d0e6",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0278",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SIGMAS",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling/schedulers",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0306",
+      "class_type": "KSampler",
+      "source": {
+        "catalog_line": 1580,
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+        "symbol": {
+          "end_line": 1607,
+          "kind": "ClassDef",
+          "line": 1580,
+          "sha256": "424ed53193bac7db2ce78caa87db1d010eb344657d9334c40220a0f6c5ad9cae",
+          "status": "parsed_definition",
+          "symbol": "KSampler"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "3d5b184cdab895e82af8b2de05996d3751749f3c0f6fed83d39d8f97860d59c8",
+        "definition_sha256": "3d28054981236977ea003cf0b676a5e839818ae078baf31b71fea851e328c398",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": "The model used for denoising the input latent.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "control_after_generate",
+                "value": {
+                  "kind": "boolean",
+                  "value": true
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 18446744073709551615
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "seed",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": "The random seed used for creating the noise.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 20
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": "The number of steps used in the denoising process.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "8.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "finite_decimal",
+                  "value": "0.01"
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "cfg",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.1"
+            },
+            "tooltip": "The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sampler_name",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SAMPLERS"
+            ],
+            "step": null,
+            "tooltip": "The algorithm used when sampling, this can affect the quality, speed, and style of the generated output.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "scheduler",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SCHEDULERS"
+            ],
+            "step": null,
+            "tooltip": "The scheduler controls how noise is gradually removed to form the image.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "positive",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "CONDITIONING"
+            ],
+            "step": null,
+            "tooltip": "The conditioning describing the attributes you want to include in the image.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "negative",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "CONDITIONING"
+            ],
+            "step": null,
+            "tooltip": "The conditioning describing the attributes you want to exclude from the image.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "latent_image",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "LATENT"
+            ],
+            "step": null,
+            "tooltip": "The latent image to denoise.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "denoise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "3d28054981236977ea003cf0b676a5e839818ae078baf31b71fea851e328c398",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [
+            {
+              "name": "FUNCTION",
+              "value": {
+                "kind": "string",
+                "value": "sample"
+              }
+            },
+            {
+              "name": "CATEGORY",
+              "value": {
+                "kind": "string",
+                "value": "model/sampling"
+              }
+            }
+          ],
+          "feature_id": "COMFY-NODE-0306",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v1",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": "Uses the provided model, positive and negative conditioning to denoise the latent image.",
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v1",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling",
+      "output_node": false
+    },
+    {
+      "feature_id": "COMFY-NODE-0307",
+      "class_type": "KSamplerAdvanced",
+      "source": {
+        "catalog_line": 1609,
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+        "symbol": {
+          "end_line": 1641,
+          "kind": "ClassDef",
+          "line": 1609,
+          "sha256": "80d468dc005f6a3672dcd9c7f6af4bf5b84ea93233a71860fa78ccb928046ecd",
+          "status": "parsed_definition",
+          "symbol": "KSamplerAdvanced"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "e7da0ce9673412416241e120fe5b3545b1f55622330196baaa7b6cd6cb4e3ef5",
+        "definition_sha256": "6ba49820fe08c4f35710a92d5351d474a637eebeb98b97d397e9c6ebb35bd24e",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "enable"
+              },
+              {
+                "kind": "string",
+                "value": "disable"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "add_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "control_after_generate",
+                "value": {
+                  "kind": "boolean",
+                  "value": true
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 18446744073709551615
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "noise_seed",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 20
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "8.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "finite_decimal",
+                  "value": "0.01"
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "cfg",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.1"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "sampler_name",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SAMPLERS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "scheduler",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "SCHEDULERS"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "positive",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "CONDITIONING"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "negative",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "CONDITIONING"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "latent_image",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "LATENT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "start_at_step",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 10000
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "end_at_step",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "disable"
+              },
+              {
+                "kind": "string",
+                "value": "enable"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "return_with_leftover_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "6ba49820fe08c4f35710a92d5351d474a637eebeb98b97d397e9c6ebb35bd24e",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [
+            {
+              "name": "FUNCTION",
+              "value": {
+                "kind": "string",
+                "value": "sample"
+              }
+            },
+            {
+              "name": "CATEGORY",
+              "value": {
+                "kind": "string",
+                "value": "model/sampling"
+              }
+            }
+          ],
+          "feature_id": "COMFY-NODE-0307",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v1",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v1",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/sampling",
+      "output_node": false
+    }
+  ]
+}

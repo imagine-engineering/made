@@ -1,0 +1,1424 @@
+# Generated from xtask::workflows::release_promotion
+# Rebuild with `cargo xtask workflows`.
+name: release_promotion
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+on:
+  push:
+    tags:
+    - rust-v*
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version component for a manual release: patch, minor, or major'
+        type: string
+        default: patch
+      version:
+        description: Optional exact X.Y.Z version for manual recovery
+        type: string
+        default: ''
+      commit_sha:
+        description: Optional tested release commit SHA; defaults to the selected release commit
+        type: string
+        default: ''
+  workflow_run:
+    types:
+    - completed
+    workflows:
+    - run_tests
+    branches:
+    - release
+permissions:
+  contents: read
+jobs:
+  prepare_release:
+    if: vars.COPPER_RELEASE_ENABLED == 'true' && vars.COPPER_RELEASE_BOOTSTRAP_SHA != '' && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'release' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha != vars.COPPER_RELEASE_BOOTSTRAP_SHA) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-v')))
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        fetch-depth: 0
+        ref: main
+    - name: release::promotion_check
+      run: |
+        set -euo pipefail
+        if [[ "$RELEASE_ENABLED" != "true" || ! "$BOOTSTRAP_SHA" =~ ^[0-9a-f]{40}$ || ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release promotion is disabled or the bootstrap/commit SHA is invalid" >&2
+            exit 1
+        fi
+        git fetch origin +refs/heads/release:refs/remotes/origin/release --tags
+        if [[ "$COMMIT_SHA" == "$BOOTSTRAP_SHA" ]]; then
+            echo "The initial release-branch commit can never be released" >&2
+            exit 1
+        fi
+        git merge-base --is-ancestor "$BOOTSTRAP_SHA" "$COMMIT_SHA"
+        RELEASE_HISTORY="$(git rev-list --first-parent origin/release)"
+        if ! grep -Fxq "$COMMIT_SHA" <<<"$RELEASE_HISTORY"; then
+            echo "Release commit is not on the first-parent history of origin/release" >&2
+            exit 1
+        fi
+        CI_RUNS="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/run_tests.yml/runs" \
+            -f branch=release -f event=push -f head_sha="$COMMIT_SHA" -f per_page=100 --paginate --slurp)"
+        if ! jq -e --arg commit "$COMMIT_SHA" --arg repository "$GITHUB_REPOSITORY" --arg run_id "$CI_RUN_ID" '
+            [.[].workflow_runs[]] | max_by(.id) |
+            .head_sha == $commit and .head_branch == "release" and .event == "push" and
+            .head_repository.full_name == $repository and .repository.full_name == $repository and
+            .path == ".github/workflows/run_tests.yml" and
+            .status == "completed" and .conclusion == "success" and
+            ($run_id == "" or (.id | tostring) == $run_id)
+        ' <<<"$CI_RUNS" >/dev/null; then
+            echo "The latest exact-commit release push CI must have completed successfully in this repository" >&2
+            exit 1
+        fi
+      env:
+        COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || (github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha) }}
+        BOOTSTRAP_SHA: ${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}
+        RELEASE_ENABLED: ${{ vars.COPPER_RELEASE_ENABLED }}
+        CI_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '' }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        fetch-depth: 0
+        fetch-tags: true
+        ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || (github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha) }}
+    - id: resolve-release
+      name: release::prepare_release
+      run: |
+        git fetch origin +refs/heads/release:refs/remotes/origin/release --tags
+
+        ARGS=(release-version --commit "$COMMIT_SHA" --bootstrap-commit "$BOOTSTRAP_SHA" --bump "$BUMP")
+        if [[ -n "$EXPLICIT_VERSION" ]]; then
+            ARGS+=(--explicit-version "$EXPLICIT_VERSION")
+        fi
+        if [[ -n "$EXISTING_TAG" ]]; then
+            ARGS+=(--existing-tag "$EXISTING_TAG")
+        fi
+        DECISION="$(cargo xtask "${ARGS[@]}")"
+        jq -e '.commit_sha and .version and .tag' <<<"$DECISION" >/dev/null
+        {
+            echo "commit_sha=$(jq -r '.commit_sha' <<<"$DECISION")"
+            echo "version=$(jq -r '.version' <<<"$DECISION")"
+            echo "tag=$(jq -r '.tag' <<<"$DECISION")"
+        } >> "$GITHUB_OUTPUT"
+      env:
+        COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || (github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha) }}
+        BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
+        EXPLICIT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+        BOOTSTRAP_SHA: ${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}
+        EXISTING_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+    - name: release::generate_release_bundle_plans
+      run: |
+        mkdir -p release-bundle-plans
+        target/debug/xtask bundle --product rust --platform linux --target x86_64-unknown-linux-gnu --signing required --dry-run \
+            | jq --arg commit_sha "$COMMIT_SHA" '. + {commit_sha: $commit_sha}' > release-bundle-plans/rust-linux-x86_64.json
+        target/debug/xtask bundle --product rust --platform macos --target aarch64-apple-darwin --signing required --dry-run \
+            | jq --arg commit_sha "$COMMIT_SHA" '. + {commit_sha: $commit_sha}' > release-bundle-plans/rust-macos-aarch64.json
+        target/debug/xtask bundle --product rust --platform windows --target x86_64-pc-windows-msvc --signing required --dry-run \
+            | jq --arg commit_sha "$COMMIT_SHA" '. + {commit_sha: $commit_sha}' > release-bundle-plans/rust-windows-x86_64.json
+      env:
+        COMMIT_SHA: ${{ steps.resolve-release.outputs.commit_sha }}
+        RELEASE_VERSION: ${{ steps.resolve-release.outputs.version }}
+    - name: release::prepare_release
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: release-bundle-plans
+        path: release-bundle-plans
+        if-no-files-found: error
+    outputs:
+      commit_sha: ${{ steps.resolve-release.outputs.commit_sha }}
+      version: ${{ steps.resolve-release.outputs.version }}
+      tag: ${{ steps.resolve-release.outputs.tag }}
+    timeout-minutes: 15
+  signing_preflight:
+    needs:
+    - prepare_release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::signing_preflight
+      run: python3 script/check-signing-environment --platform macos --policy required
+      env:
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
+        APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+        APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+    - name: release::signing_preflight
+      run: python3 script/check-signing-environment --platform windows --policy required
+      env:
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ACCOUNT_NAME: ${{ secrets.ACCOUNT_NAME }}
+        CERT_PROFILE_NAME: ${{ secrets.CERT_PROFILE_NAME }}
+        ENDPOINT: ${{ secrets.ENDPOINT }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        FILE_DIGEST: ${{ secrets.FILE_DIGEST }}
+        TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
+        TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
+    - name: release::signing_preflight
+      run: python3 script/check-signing-environment --platform linux --policy required
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        LINUX_SIGNING_KEY_PASSWORD: ${{ secrets.LINUX_SIGNING_KEY_PASSWORD }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+    timeout-minutes: 5
+  release_licenses:
+    needs:
+    - prepare_release
+    - signing_preflight
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: steps::install_cargo_about
+      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+      with:
+        tool: cargo-about@0.8.2
+        fallback: none
+    - name: release::release_licenses
+      run: |
+        sha256_file() {
+            sha256sum "$1" | awk '{print $1}'
+        }
+        test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+        git diff --quiet "$COMMIT_SHA" -- Cargo.lock
+        script/generate-licenses
+        mkdir -p release-licenses
+        cp assets/licenses.md release-licenses/licenses.md
+        CARGO_LOCK_BLOB="$(git rev-parse "${COMMIT_SHA}:Cargo.lock")"
+        LICENSES_HASH="$(sha256_file release-licenses/licenses.md)"
+        jq -n \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg cargo_lock_blob "$CARGO_LOCK_BLOB" \
+            --arg licenses_hash "$LICENSES_HASH" \
+            '{commit_sha: $commit_sha, cargo_lock_blob: $cargo_lock_blob, licenses_hash: $licenses_hash}' \
+            > release-licenses/metadata.json
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::release_licenses
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: release-licenses
+        path: release-licenses
+        if-no-files-found: error
+    timeout-minutes: 20
+  application_builds:
+    needs:
+    - prepare_release
+    - release_licenses
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
+      SCCACHE_GHA_ENABLED: on
+      SCCACHE_IDLE_TIMEOUT: '0'
+      RUSTC_WRAPPER: sccache
+      CARGO_TARGET_DIR: target/products/${{ matrix.product }}
+      ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
+      ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
+      ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
+      ZED_PRODUCT_URL_SCHEME: ${{ matrix.url_scheme }}
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/${{ matrix.icon_set }}
+      ZED_PRODUCT_DATA_NAMESPACE: ${{ matrix.data_namespace }}
+      ZED_PRODUCT_UPDATE_NAMESPACE: ${{ matrix.update_namespace }}
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
+      ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
+      ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
+      ZED_RELEASE_CHANNEL: stable
+    strategy:
+      matrix:
+        include:
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: linux
+          runner: ubuntu-22.04
+          target: x86_64-unknown-linux-gnu
+          remote_target: x86_64-unknown-linux-musl
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-linux-x86_64
+          remote_artifact: rust-remote-server-linux-x86_64
+          plan_file: rust-linux-x86_64.json
+          artifact: rust-linux-x86_64
+          artifact_suffix: linux-x86_64.tar.gz
+          artifact_path: target/products/rust/release/rust-*-linux-x86_64.tar.gz*
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: macos
+          runner: macos-15
+          target: aarch64-apple-darwin
+          remote_target: aarch64-apple-darwin
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-macos-aarch64
+          remote_artifact: rust-remote-server-macos-aarch64
+          plan_file: rust-macos-aarch64.json
+          artifact: rust-macos-aarch64
+          artifact_suffix: macos-aarch64.dmg
+          artifact_path: target/products/rust/release/rust-*-macos-aarch64.dmg
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: windows
+          runner: windows-2022
+          target: x86_64-pc-windows-msvc
+          remote_target: x86_64-pc-windows-msvc
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-windows-x86_64
+          remote_artifact: rust-remote-server-windows-x86_64
+          plan_file: rust-windows-x86_64.json
+          artifact: rust-windows-x86_64
+          artifact_suffix: windows-x86_64.exe
+          artifact_path: target/products/rust/release/rust-*-windows-x86_64.exe
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::application_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-licenses
+        path: release-licenses
+    - name: release::verify_release_licenses
+      run: |
+        sha256_file() {
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
+                shasum -a 256 "$1" | awk '{print $1}'
+            else
+                sha256sum "$1" | awk '{print $1}'
+            fi
+        }
+        test -s release-licenses/licenses.md
+        test -s release-licenses/metadata.json
+        test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+        git diff --quiet "$COMMIT_SHA" -- Cargo.lock
+        CARGO_LOCK_BLOB="$(git rev-parse "${COMMIT_SHA}:Cargo.lock")"
+        LICENSES_HASH="$(sha256_file release-licenses/licenses.md)"
+        jq -e \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg cargo_lock_blob "$CARGO_LOCK_BLOB" \
+            --arg licenses_hash "$LICENSES_HASH" \
+            '.commit_sha == $commit_sha and .cargo_lock_blob == $cargo_lock_blob and .licenses_hash == $licenses_hash' \
+            release-licenses/metadata.json >/dev/null
+        cp release-licenses/licenses.md assets/licenses.md
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::configure_release_cache_namespace
+      run: |
+        TOOLCHAIN_HASH="$(git hash-object rust-toolchain.toml)"
+        echo "SCCACHE_GHA_VERSION=release-v2-${RUNNER_OS}-${CACHE_TARGET}-${TOOLCHAIN_HASH}" >> "$GITHUB_ENV"
+      env:
+        CACHE_TARGET: ${{ matrix.target }}
+    - name: steps::setup_release_sccache
+      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+      with:
+        version: v0.16.0
+        disable_annotations: 'true'
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: release::application_builds
+      if: matrix.platform == 'linux'
+      run: ./script/linux && ./script/download-wasi-sdk
+    - name: release::application_builds
+      if: matrix.platform == 'linux'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        export ZED_BUNDLE_PHASE=application
+        script/bundle-linux
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        ZED_PREGENERATED_LICENSES: '1'
+        CC: clang
+        CXX: clang++
+    - name: release::application_builds
+      if: matrix.platform == 'macos'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        export ZED_BUNDLE_PHASE=application
+        script/bundle-mac "$TARGET"
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
+        ZED_PREGENERATED_LICENSES: '1'
+    - name: release::application_builds
+      if: matrix.platform == 'windows'
+      run: |
+        cargo test -p auto_update_helper --locked
+        if ($LASTEXITCODE -ne 0) { throw "Windows updater tests failed" }
+        bash ./script/clippy --no-all-features -p auto_update_helper
+        if ($LASTEXITCODE -ne 0) { throw "Windows updater Clippy failed" }
+      shell: pwsh
+    - name: release::application_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
+        $env:ZED_BUNDLE_PHASE = "application"
+        script/bundle-windows.ps1 -Architecture x86_64
+      shell: pwsh
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        ZED_PREGENERATED_LICENSES: '1'
+    - name: release::application_builds
+      if: matrix.platform != 'windows'
+      run: |
+        SOURCE="target/products/${PRODUCT_ID}/${TARGET}/release"
+        mkdir -p release-application
+        cp "$SOURCE/zed" "$SOURCE/cli" release-application/
+        if [[ "$TARGET" == *-apple-darwin ]]; then
+            cp "$SOURCE/native-cargo-runtime-observer" release-application/
+        fi
+        jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$FEATURES" \
+            '{commit_sha: $commit_sha, target: $target, features: $features}' > release-application/metadata.json
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        FEATURES: ${{ matrix.application_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::application_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $source = "target/products/$env:PRODUCT_ID/$env:TARGET/release"
+        New-Item -ItemType Directory -Path release-application -Force | Out-Null
+        Copy-Item "$source/zed.exe", "$source/cli.exe", "$source/auto_update_helper.exe", "$source/zed.pdb", "$source/cli.pdb", "$source/auto_update_helper.pdb" -Destination release-application
+        @{
+            commit_sha = $env:COMMIT_SHA
+            target = $env:TARGET
+            features = $env:FEATURES
+        } | ConvertTo-Json | Set-Content release-application/metadata.json
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        FEATURES: ${{ matrix.application_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::application_builds
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.application_artifact }}
+        path: release-application
+        if-no-files-found: error
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform != 'windows'
+      run: |
+        STATS="$(sccache --show-stats)"
+        printf '%s\n' "$STATS"
+        {
+            printf '### sccache: %s / %s\n\n```text\n' "$RUNNER_OS" "$SCCACHE_GHA_VERSION"
+            printf '%s\n' "$STATS"
+            printf '```\n'
+        } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform == 'windows'
+      run: |
+        $stats = (& sccache --show-stats | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --show-stats failed with exit code $LASTEXITCODE"
+        }
+        Write-Host $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('### sccache: {0} / {1}' -f $env:RUNNER_OS, $env:SCCACHE_GHA_VERSION)
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+        & sccache --stop-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --stop-server failed with exit code $LASTEXITCODE"
+        }
+      shell: pwsh
+    timeout-minutes: 180
+  remote_server_builds:
+    needs:
+    - prepare_release
+    - signing_preflight
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
+      SCCACHE_GHA_ENABLED: on
+      SCCACHE_IDLE_TIMEOUT: '0'
+      RUSTC_WRAPPER: sccache
+      CARGO_TARGET_DIR: target/products/${{ matrix.product }}
+      ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
+      ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
+      ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
+      ZED_PRODUCT_URL_SCHEME: ${{ matrix.url_scheme }}
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/${{ matrix.icon_set }}
+      ZED_PRODUCT_DATA_NAMESPACE: ${{ matrix.data_namespace }}
+      ZED_PRODUCT_UPDATE_NAMESPACE: ${{ matrix.update_namespace }}
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
+      ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
+      ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
+      ZED_RELEASE_CHANNEL: stable
+    strategy:
+      matrix:
+        include:
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: linux
+          runner: ubuntu-22.04
+          target: x86_64-unknown-linux-gnu
+          remote_target: x86_64-unknown-linux-musl
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-linux-x86_64
+          remote_artifact: rust-remote-server-linux-x86_64
+          plan_file: rust-linux-x86_64.json
+          artifact: rust-linux-x86_64
+          artifact_suffix: linux-x86_64.tar.gz
+          artifact_path: target/products/rust/release/rust-*-linux-x86_64.tar.gz*
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: macos
+          runner: macos-15
+          target: aarch64-apple-darwin
+          remote_target: aarch64-apple-darwin
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-macos-aarch64
+          remote_artifact: rust-remote-server-macos-aarch64
+          plan_file: rust-macos-aarch64.json
+          artifact: rust-macos-aarch64
+          artifact_suffix: macos-aarch64.dmg
+          artifact_path: target/products/rust/release/rust-*-macos-aarch64.dmg
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: windows
+          runner: windows-2022
+          target: x86_64-pc-windows-msvc
+          remote_target: x86_64-pc-windows-msvc
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-windows-x86_64
+          remote_artifact: rust-remote-server-windows-x86_64
+          plan_file: rust-windows-x86_64.json
+          artifact: rust-windows-x86_64
+          artifact_suffix: windows-x86_64.exe
+          artifact_path: target/products/rust/release/rust-*-windows-x86_64.exe
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::configure_release_cache_namespace
+      run: |
+        TOOLCHAIN_HASH="$(git hash-object rust-toolchain.toml)"
+        echo "SCCACHE_GHA_VERSION=release-v2-${RUNNER_OS}-${CACHE_TARGET}-${TOOLCHAIN_HASH}" >> "$GITHUB_ENV"
+      env:
+        CACHE_TARGET: ${{ matrix.remote_target }}
+    - name: steps::setup_release_sccache
+      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+      with:
+        version: v0.16.0
+        disable_annotations: 'true'
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: release::remote_server_builds
+      if: matrix.platform == 'linux'
+      run: ./script/linux && ./script/download-wasi-sdk
+    - name: release::remote_server_builds
+      if: matrix.platform == 'linux'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        export ZED_BUNDLE_PHASE=remote-server
+        script/bundle-linux
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        CC: clang
+        CXX: clang++
+    - name: release::remote_server_builds
+      if: matrix.platform == 'macos'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        export ZED_BUNDLE_PHASE=remote-server
+        script/bundle-mac "$TARGET"
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
+    - name: release::remote_server_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
+        $env:ZED_BUNDLE_PHASE = "remote-server"
+        script/bundle-windows.ps1 -Architecture x86_64
+      shell: pwsh
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+    - name: release::remote_server_builds
+      if: matrix.platform != 'windows'
+      run: |
+        SOURCE="target/products/${PRODUCT_ID}/${REMOTE_TARGET}/release"
+        mkdir -p release-remote-server
+        cp "$SOURCE/remote_server" release-remote-server/
+        jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$REMOTE_TARGET" --arg features "$FEATURES" \
+            '{commit_sha: $commit_sha, target: $target, features: $features}' > release-remote-server/metadata.json
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::remote_server_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $source = "target/products/$env:PRODUCT_ID/$env:REMOTE_TARGET/release"
+        New-Item -ItemType Directory -Path release-remote-server -Force | Out-Null
+        Copy-Item "$source/remote_server.exe", "$source/remote_server.pdb" -Destination release-remote-server
+        @{
+            commit_sha = $env:COMMIT_SHA
+            target = $env:REMOTE_TARGET
+            features = $env:FEATURES
+        } | ConvertTo-Json | Set-Content release-remote-server/metadata.json
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::remote_server_builds
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.remote_artifact }}
+        path: release-remote-server
+        if-no-files-found: error
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform != 'windows'
+      run: |
+        STATS="$(sccache --show-stats)"
+        printf '%s\n' "$STATS"
+        {
+            printf '### sccache: %s / %s\n\n```text\n' "$RUNNER_OS" "$SCCACHE_GHA_VERSION"
+            printf '%s\n' "$STATS"
+            printf '```\n'
+        } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform == 'windows'
+      run: |
+        $stats = (& sccache --show-stats | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --show-stats failed with exit code $LASTEXITCODE"
+        }
+        Write-Host $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('### sccache: {0} / {1}' -f $env:RUNNER_OS, $env:SCCACHE_GHA_VERSION)
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+        & sccache --stop-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --stop-server failed with exit code $LASTEXITCODE"
+        }
+      shell: pwsh
+    timeout-minutes: 120
+  product_builds:
+    needs:
+    - prepare_release
+    - release_licenses
+    - application_builds
+    - remote_server_builds
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
+      ZED_PRODUCT_SIGNING: required
+      CARGO_TARGET_DIR: target/products/${{ matrix.product }}
+      ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
+      ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
+      ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
+      ZED_PRODUCT_URL_SCHEME: ${{ matrix.url_scheme }}
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/${{ matrix.icon_set }}
+      ZED_PRODUCT_DATA_NAMESPACE: ${{ matrix.data_namespace }}
+      ZED_PRODUCT_UPDATE_NAMESPACE: ${{ matrix.update_namespace }}
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
+      ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
+      ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
+      ZED_RELEASE_CHANNEL: stable
+    strategy:
+      matrix:
+        include:
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: linux
+          runner: ubuntu-22.04
+          target: x86_64-unknown-linux-gnu
+          remote_target: x86_64-unknown-linux-musl
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-linux-x86_64
+          remote_artifact: rust-remote-server-linux-x86_64
+          plan_file: rust-linux-x86_64.json
+          artifact: rust-linux-x86_64
+          artifact_suffix: linux-x86_64.tar.gz
+          artifact_path: target/products/rust/release/rust-*-linux-x86_64.tar.gz*
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: macos
+          runner: macos-15
+          target: aarch64-apple-darwin
+          remote_target: aarch64-apple-darwin
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-macos-aarch64
+          remote_artifact: rust-remote-server-macos-aarch64
+          plan_file: rust-macos-aarch64.json
+          artifact: rust-macos-aarch64
+          artifact_suffix: macos-aarch64.dmg
+          artifact_path: target/products/rust/release/rust-*-macos-aarch64.dmg
+        - product: rust
+          display_name: Copper
+          executable_name: copper
+          bundle_identifier: dev.ideflavors.rust
+          url_scheme: ide-rust
+          icon_set: assets/product_flavors/rust
+          data_namespace: ide-rust
+          update_namespace: rust
+          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
+          platform: windows
+          runner: windows-2022
+          target: x86_64-pc-windows-msvc
+          remote_target: x86_64-pc-windows-msvc
+          application_features: agentic-tools,rust-tools
+          remote_features: rust-tools
+          application_artifact: rust-application-windows-x86_64
+          remote_artifact: rust-remote-server-windows-x86_64
+          plan_file: rust-windows-x86_64.json
+          artifact: rust-windows-x86_64
+          artifact_suffix: windows-x86_64.exe
+          artifact_path: target/products/rust/release/rust-*-windows-x86_64.exe
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::setup_signing_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-licenses
+        path: release-licenses
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-bundle-plans
+        path: release-bundle-plans
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: ${{ matrix.application_artifact }}
+        path: release-application
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: ${{ matrix.remote_artifact }}
+        path: release-remote-server
+    - name: release::verify_release_licenses
+      run: |
+        sha256_file() {
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
+                shasum -a 256 "$1" | awk '{print $1}'
+            else
+                sha256sum "$1" | awk '{print $1}'
+            fi
+        }
+        test -s release-licenses/licenses.md
+        test -s release-licenses/metadata.json
+        test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+        git diff --quiet "$COMMIT_SHA" -- Cargo.lock
+        CARGO_LOCK_BLOB="$(git rev-parse "${COMMIT_SHA}:Cargo.lock")"
+        LICENSES_HASH="$(sha256_file release-licenses/licenses.md)"
+        jq -e \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg cargo_lock_blob "$CARGO_LOCK_BLOB" \
+            --arg licenses_hash "$LICENSES_HASH" \
+            '.commit_sha == $commit_sha and .cargo_lock_blob == $cargo_lock_blob and .licenses_hash == $licenses_hash' \
+            release-licenses/metadata.json >/dev/null
+        cp release-licenses/licenses.md assets/licenses.md
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: matrix.platform != 'windows'
+      run: |
+        jq -e --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$APPLICATION_FEATURES" \
+            '.commit_sha == $commit_sha and .target == $target and .features == $features' \
+            release-application/metadata.json >/dev/null
+        jq -e --arg commit_sha "$COMMIT_SHA" --arg target "$REMOTE_TARGET" --arg features "$REMOTE_FEATURES" \
+            '.commit_sha == $commit_sha and .target == $target and .features == $features' \
+            release-remote-server/metadata.json >/dev/null
+        APPLICATION_DEST="target/products/${PRODUCT_ID}/${TARGET}/release"
+        REMOTE_DEST="target/products/${PRODUCT_ID}/${REMOTE_TARGET}/release"
+        mkdir -p "$APPLICATION_DEST" "$REMOTE_DEST"
+        cp release-application/zed release-application/cli "$APPLICATION_DEST/"
+        cp release-remote-server/remote_server "$REMOTE_DEST/"
+        if [[ "$TARGET" == *-apple-darwin ]]; then
+            cp release-application/native-cargo-runtime-observer "$APPLICATION_DEST/"
+            chmod +x "$APPLICATION_DEST/native-cargo-runtime-observer"
+        fi
+        chmod +x "$APPLICATION_DEST/zed" "$APPLICATION_DEST/cli" "$REMOTE_DEST/remote_server"
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        APPLICATION_FEATURES: ${{ matrix.application_features }}
+        REMOTE_FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $applicationMetadata = Get-Content release-application/metadata.json | ConvertFrom-Json
+        $remoteMetadata = Get-Content release-remote-server/metadata.json | ConvertFrom-Json
+        if ($applicationMetadata.commit_sha -ne $env:COMMIT_SHA -or $applicationMetadata.target -ne $env:TARGET -or $applicationMetadata.features -ne $env:APPLICATION_FEATURES) {
+            throw "Application artifact metadata does not match the release plan"
+        }
+        if ($remoteMetadata.commit_sha -ne $env:COMMIT_SHA -or $remoteMetadata.target -ne $env:REMOTE_TARGET -or $remoteMetadata.features -ne $env:REMOTE_FEATURES) {
+            throw "Remote-server artifact metadata does not match the release plan"
+        }
+        $applicationDest = "target/products/$env:PRODUCT_ID/$env:TARGET/release"
+        $remoteDest = "target/products/$env:PRODUCT_ID/$env:REMOTE_TARGET/release"
+        New-Item -ItemType Directory -Path $applicationDest, $remoteDest -Force | Out-Null
+        Copy-Item release-application/zed.exe, release-application/cli.exe, release-application/auto_update_helper.exe, release-application/zed.pdb, release-application/cli.pdb, release-application/auto_update_helper.pdb -Destination $applicationDest
+        Copy-Item release-remote-server/remote_server.exe, release-remote-server/remote_server.pdb -Destination $remoteDest
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        APPLICATION_FEATURES: ${{ matrix.application_features }}
+        REMOTE_FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::cache_macos_cargo_bundle
+      if: matrix.platform == 'macos'
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ~/.cargo/bin/cargo-bundle
+        key: release-tool-v1-cargo-bundle-0.11.0-${{ runner.os }}-${{ runner.arch }}
+    - name: release::product_builds
+      if: matrix.platform == 'macos'
+      run: uname -m && rustc -vV && df -h . && xcode-select -p
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: release::product_builds
+      if: matrix.platform == 'linux'
+      run: ./script/linux && ./script/download-wasi-sdk
+    - name: release::product_builds
+      if: matrix.platform == 'linux'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        export ZED_BUNDLE_PHASE=package
+        script/bundle-linux
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        CC: clang
+        CXX: clang++
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        LINUX_SIGNING_KEY_PASSWORD: ${{ secrets.LINUX_SIGNING_KEY_PASSWORD }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+    - name: release::product_builds
+      if: matrix.platform == 'macos'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        export ZED_BUNDLE_PHASE=package
+        script/bundle-mac "$TARGET"
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
+        APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+        APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: Install-Module -Name TrustedSigning -RequiredVersion 0.5.8 -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop
+      shell: pwsh
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
+        $env:ZED_BUNDLE_PHASE = "package"
+        script/bundle-windows.ps1 -Architecture x86_64
+      shell: pwsh
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ACCOUNT_NAME: ${{ secrets.ACCOUNT_NAME }}
+        CERT_PROFILE_NAME: ${{ secrets.CERT_PROFILE_NAME }}
+        ENDPOINT: ${{ secrets.ENDPOINT }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        FILE_DIGEST: ${{ secrets.FILE_DIGEST }}
+        TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
+        TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
+    - name: release::product_builds
+      if: matrix.platform != 'windows'
+      run: |
+        export ZED_PRODUCT_ARTIFACT_NAME="${PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
+        python3 script/smoke-product-bundle \
+            --product "$PRODUCT_ID" \
+            --platform "$PLATFORM" \
+            --target "$TARGET" \
+            --plan "release-bundle-plans/$PLAN_FILE" \
+            --commit-sha "$COMMIT_SHA"
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        PLATFORM: ${{ matrix.platform }}
+        TARGET: ${{ matrix.target }}
+        PLAN_FILE: ${{ matrix.plan_file }}
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
+        python script/smoke-product-bundle `
+            --product $env:PRODUCT_ID `
+            --platform windows `
+            --target $env:TARGET `
+            --plan "release-bundle-plans/$env:PLAN_FILE" `
+            --commit-sha $env:COMMIT_SHA
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        PLAN_FILE: ${{ matrix.plan_file }}
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: always() && matrix.platform == 'macos'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.artifact }}-signing-evidence
+        path: target/products/${{ matrix.product }}/signing-evidence
+    - name: release::product_builds
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.artifact }}
+        path: ${{ matrix.artifact_path }}
+        if-no-files-found: error
+    - name: release::product_builds
+      if: always() && matrix.platform != 'windows'
+      run: |
+        printf '### sccache: package-only job\n\nNo Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
+    - name: release::product_builds
+      if: always() && matrix.platform == 'windows'
+      run: |
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### sccache: package-only job'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
+      shell: pwsh
+    - name: release::product_builds
+      if: always() && matrix.platform == 'macos'
+      run: df -h . && du -sh target
+    timeout-minutes: 90
+  publish_product:
+    needs:
+    - prepare_release
+    - product_builds
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        fetch-depth: 0
+        fetch-tags: true
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::publish_product
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: rust-linux-x86_64
+        path: release-artifacts
+    - name: release::publish_product
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: rust-macos-aarch64
+        path: release-artifacts
+    - name: release::publish_product
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: rust-windows-x86_64
+        path: release-artifacts
+    - name: release::promotion_check
+      run: |
+        set -euo pipefail
+        if [[ "$RELEASE_ENABLED" != "true" || ! "$BOOTSTRAP_SHA" =~ ^[0-9a-f]{40}$ || ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release promotion is disabled or the bootstrap/commit SHA is invalid" >&2
+            exit 1
+        fi
+        git fetch origin +refs/heads/release:refs/remotes/origin/release --tags
+        if [[ "$COMMIT_SHA" == "$BOOTSTRAP_SHA" ]]; then
+            echo "The initial release-branch commit can never be released" >&2
+            exit 1
+        fi
+        git merge-base --is-ancestor "$BOOTSTRAP_SHA" "$COMMIT_SHA"
+        RELEASE_HISTORY="$(git rev-list --first-parent origin/release)"
+        if ! grep -Fxq "$COMMIT_SHA" <<<"$RELEASE_HISTORY"; then
+            echo "Release commit is not on the first-parent history of origin/release" >&2
+            exit 1
+        fi
+        CI_RUNS="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/run_tests.yml/runs" \
+            -f branch=release -f event=push -f head_sha="$COMMIT_SHA" -f per_page=100 --paginate --slurp)"
+        if ! jq -e --arg commit "$COMMIT_SHA" --arg repository "$GITHUB_REPOSITORY" --arg run_id "$CI_RUN_ID" '
+            [.[].workflow_runs[]] | max_by(.id) |
+            .head_sha == $commit and .head_branch == "release" and .event == "push" and
+            .head_repository.full_name == $repository and .repository.full_name == $repository and
+            .path == ".github/workflows/run_tests.yml" and
+            .status == "completed" and .conclusion == "success" and
+            ($run_id == "" or (.id | tostring) == $run_id)
+        ' <<<"$CI_RUNS" >/dev/null; then
+            echo "The latest exact-commit release push CI must have completed successfully in this repository" >&2
+            exit 1
+        fi
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+        BOOTSTRAP_SHA: ${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}
+        RELEASE_ENABLED: ${{ vars.COPPER_RELEASE_ENABLED }}
+        CI_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '' }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: release::publish_product
+      run: |
+        git fetch origin +refs/heads/release:refs/remotes/origin/release --tags
+
+        ARGS=(release-version --commit "$COMMIT_SHA" --bootstrap-commit "$BOOTSTRAP_SHA" --bump "$BUMP")
+        if [[ -n "$EXPLICIT_VERSION" ]]; then
+            ARGS+=(--explicit-version "$EXPLICIT_VERSION")
+        fi
+        if [[ -n "$EXISTING_TAG" ]]; then
+            ARGS+=(--existing-tag "$EXISTING_TAG")
+        fi
+        DECISION="$(cargo xtask "${ARGS[@]}")"
+        ACTUAL_COMMIT="$(jq -r '.commit_sha' <<<"$DECISION")"
+        ACTUAL_VERSION="$(jq -r '.version' <<<"$DECISION")"
+        ACTUAL_TAG="$(jq -r '.tag' <<<"$DECISION")"
+        if [[ "$ACTUAL_COMMIT" != "$COMMIT_SHA" || "$ACTUAL_VERSION" != "$VERSION" || "$ACTUAL_TAG" != "$TAG" ]]; then
+            echo "Release state changed while artifacts were building; refusing stale publication" >&2
+            exit 1
+        fi
+
+        mapfile -t FILES < <(find release-artifacts -type f -print | sort)
+        if [[ ${#FILES[@]} -ne 5 ]]; then
+            echo "Expected exactly 5 Copper artifacts, found ${#FILES[@]}" >&2
+            exit 1
+        fi
+        PATTERNS=(
+            'rust-*-linux-x86_64.tar.gz'
+            'rust-*-linux-x86_64.tar.gz.asc'
+            'rust-*-linux-x86_64.tar.gz.pub'
+            'rust-*-macos-aarch64.dmg'
+            'rust-*-windows-x86_64.exe'
+        )
+        for PATTERN in "${PATTERNS[@]}"; do
+            mapfile -t MATCHES < <(find release-artifacts -type f -name "$PATTERN")
+            if [[ ${#MATCHES[@]} -ne 1 ]]; then
+                echo "Expected exactly one artifact matching $PATTERN, found ${#MATCHES[@]}" >&2
+                exit 1
+            fi
+        done
+        LINUX_ARCHIVE="$(find release-artifacts -type f -name 'rust-*-linux-x86_64.tar.gz')"
+        python3 script/sign-linux-archive --verify-only "$LINUX_ARCHIVE"
+        if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            TAG_COMMIT="$(git rev-parse "$TAG^{commit}")"
+            if [[ "$TAG_COMMIT" != "$COMMIT_SHA" ]]; then
+                echo "Existing tag $TAG points to $TAG_COMMIT, not $COMMIT_SHA" >&2
+                exit 1
+            fi
+        else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" "$COMMIT_SHA" -m "Copper $VERSION"
+            git push origin "refs/tags/$TAG"
+        fi
+
+        TITLE="Copper $VERSION"
+        if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --title "$TITLE" --generate-notes --verify-tag
+        fi
+
+        mapfile -t REMOTE_NAMES < <(gh release view "$TAG" --json assets --jq '.assets[].name' | sort)
+        for FILE in "${FILES[@]}"; do
+            NAME="$(basename "$FILE")"
+            if ! printf '%s\n' "${REMOTE_NAMES[@]}" | grep -Fxq "$NAME"; then
+                gh release upload "$TAG" "$FILE"
+            fi
+        done
+
+        mapfile -t EXPECTED_NAMES < <(printf '%s\n' "${FILES[@]}" | xargs -n1 basename | sort)
+        mapfile -t REMOTE_NAMES < <(gh release view "$TAG" --json assets --jq '.assets[].name' | sort)
+        if ! diff -u <(printf '%s\n' "${EXPECTED_NAMES[@]}") <(printf '%s\n' "${REMOTE_NAMES[@]}") ; then
+            echo "GitHub Release assets do not exactly match the validated Copper artifacts" >&2
+            exit 1
+        fi
+        gh release edit "$TAG" --title "$TITLE" --draft=false
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+        VERSION: ${{ needs.prepare_release.outputs.version }}
+        TAG: ${{ needs.prepare_release.outputs.tag }}
+        BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
+        EXPLICIT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+        BOOTSTRAP_SHA: ${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}
+        EXISTING_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+    timeout-minutes: 15
+  refresh_website:
+    needs:
+    - publish_product
+    - prepare_release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: website_refresh::refresh_job
+      run: |-
+        python3 - <<'PYTHON'
+        #!/usr/bin/env python3
+        """Refresh Amplify and verify the published Copper release on the public page."""
+
+        import argparse
+        import json
+        import os
+        import re
+        import sys
+        import time
+        from datetime import datetime, timezone
+        from email.utils import parsedate_to_datetime
+        from html.parser import HTMLParser
+        from http.client import HTTPException
+        from urllib.error import HTTPError, URLError
+        from urllib.parse import parse_qs, quote, urlsplit
+        from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+        class RefreshError(Exception):
+            pass
+
+
+        class NoRedirects(HTTPRedirectHandler):
+            def redirect_request(self, request, fp, code, message, headers, newurl):
+                return None
+
+
+        def diagnostic(stage, status=None, message="", headers=None):
+            record = {"stage": stage, "status": status, "message": message}
+            print(json.dumps(record), flush=True)
+
+
+        def validate_webhook(url):
+            try:
+                parts = urlsplit(url)
+                query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=True)
+                valid = (
+                    parts.scheme == "https"
+                    and re.fullmatch(r"webhooks\.amplify\.[a-z0-9-]+\.amazonaws\.com", parts.netloc)
+                    and parts.path == "/prod/webhooks"
+                    and not parts.fragment
+                    and set(query) == {"id", "token", "operation"}
+                    and all(len(values) == 1 and values[0].strip() for values in query.values())
+                    and query["operation"] == ["startbuild"]
+                    and url.isascii()
+                    and not any(character.isspace() for character in url)
+                )
+            except ValueError:
+                valid = False
+            if not valid:
+                raise RefreshError("Configure AMPLIFY_REBUILD_WEBHOOK for the existing website app's main branch.")
+            # The opaque URL does not encode the app or branch. Verify those in the console.
+            return url
+
+
+        def retry_delay(headers, attempt, now=time.time):
+            value = headers.get("retry-after")
+            if value is None:
+                return 2 ** (attempt + 1)
+            try:
+                seconds = int(value) if re.fullmatch(r"\d+", value) else parsedate_to_datetime(value).timestamp() - now()
+                return max(1, seconds)
+            except (TypeError, ValueError, OverflowError):
+                raise RefreshError("Invalid Retry-After header; inspect the hosting service before recovery.") from None
+
+
+        def request(request, opener, limit=4_000_000):
+            try:
+                with opener.open(request, timeout=30) as response:
+                    body = b"" if request.get_method() == "POST" else response.read(limit + 1)
+                    if len(body) > limit:
+                        raise RefreshError("Response exceeded the allowed size.")
+                    return response.status, response.headers, body
+            except HTTPError as error:
+                status, headers = error.code, error.headers
+                error.close()
+                return status, headers, b""
+            except (URLError, TimeoutError, OSError, HTTPException):
+                # A lost response can follow a successful POST. Never print its secret URL.
+                return None, {}, b""
+
+
+        def published_release(tag, opener, token="", sleep=time.sleep):
+            if not re.fullmatch(r"rust-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", tag):
+                raise RefreshError("Expected an existing Copper release tag: rust-vX.Y.Z.")
+            if token and (not token.isascii() or any(character.isspace() for character in token)):
+                raise RefreshError("Invalid GitHub authentication configuration; no webhook was sent.")
+            headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "made-website-refresh"}
+            if token:
+                headers["Authorization"] = "Bearer " + token
+            waited = 0
+            for attempt in range(3):
+                status, response_headers, body = request(Request("https://api.github.com/repos/simtropolis/made/releases/tags/" + quote(tag, safe=""), headers=headers), opener)
+                if status == 200:
+                    break
+                diagnostic("publication", status, "Unable to read published GitHub release metadata.")
+                if status not in (None, 429, 500, 502, 503, 504) or attempt == 2:
+                    raise RefreshError("GitHub release verification failed; no webhook was sent.")
+                wait = retry_delay(response_headers, attempt)
+                if waited + wait > 120:
+                    raise RefreshError("GitHub retry wait exceeds budget; no webhook was sent.")
+                waited += wait
+                sleep(wait)
+            try:
+                release = json.loads(body)
+                published = datetime.fromisoformat(release["published_at"].replace("Z", "+00:00"))
+                assets = release["assets"]
+                urls = {asset["browser_download_url"] for asset in assets if asset["state"] == "uploaded"}
+                valid = release["tag_name"] == tag and not release["draft"] and bool(urls) and len(urls) == len(assets)
+                for url in urls:
+                    parts = urlsplit(url)
+                    valid = valid and parts.scheme == "https" and parts.netloc == "github.com" and parts.path.startswith("/simtropolis/made/releases/download/" + tag + "/") and not parts.query and not parts.fragment
+                if not valid:
+                    raise ValueError()
+            except (ValueError, TypeError, KeyError, AttributeError):
+                raise RefreshError("Invalid, draft, or incomplete Copper release metadata; no webhook was sent.") from None
+            diagnostic("publication", 200, "Published release metadata verified: " + tag + ".")
+            return {"tag": tag, "version": tag[6:], "urls": urls, "published": published.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")}
+
+
+        class ReleasePage(HTMLParser):
+            def __init__(self, tag):
+                super().__init__(convert_charrefs=True)
+                self.tag = tag
+                self.active = False
+                self.found = 0
+                self.urls = set()
+                self.dates = set()
+                self.text = []
+
+            def handle_starttag(self, name, attributes):
+                attributes = dict(attributes)
+                if name == "article" and attributes.get("id") == self.tag:
+                    self.active = True
+                    self.found += 1
+                if self.active:
+                    if name == "a" and attributes.get("href", "").startswith("https://github.com/simtropolis/made/releases/download/"):
+                        self.urls.add(attributes["href"])
+                    if name == "time":
+                        self.dates.add(attributes.get("datetime"))
+
+            def handle_endtag(self, name):
+                if name == "article":
+                    self.active = False
+
+            def handle_data(self, data):
+                if self.active:
+                    self.text.append(data)
+
+
+        def page_is_current(release, opener):
+            status, headers, body = request(Request("https://simtropolis.ai/releases?release=" + quote(release["tag"], safe=""), headers={"Cache-Control": "no-cache", "User-Agent": "made-website-refresh"}), opener)
+            if status != 200:
+                return False
+            parser = ReleasePage(release["tag"])
+            try:
+                parser.feed(body.decode("utf-8"))
+            except (UnicodeError, ValueError):
+                return False
+            return parser.found == 1 and parser.urls == release["urls"] and release["published"] in parser.dates and "Copper " + release["version"] in "".join(parser.text)
+
+
+        def wait_for_deployment(release, opener, sleep=time.sleep, monotonic=time.monotonic, timeout=900):
+            deadline = monotonic() + timeout
+            while True:
+                if page_is_current(release, opener):
+                    diagnostic("deployment", 200, "Verified triggering version, publication date, and exact asset URLs on /releases: " + release["tag"] + ".")
+                    return True
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    return False
+                sleep(min(15, remaining))
+
+
+        def refresh(tag, webhook, *, verify_only=False, opener=None, sleep=time.sleep, monotonic=time.monotonic, token="", deployment_timeout=900):
+            if not verify_only:
+                validate_webhook(webhook)
+            opener = opener or build_opener(NoRedirects)
+            release = published_release(tag, opener, token, sleep)
+            if page_is_current(release, opener):
+                diagnostic("deployment", 200, "Triggering release and exact assets are already deployed; no duplicate rebuild requested.")
+                return "already-current"
+            if verify_only:
+                raise RefreshError("The triggering release's version, date, and exact assets are not deployed.")
+            waited = 0
+            for attempt in range(3):
+                status, headers, _ = request(Request(webhook, data=b"{}", headers={"Content-Type": "application/json"}, method="POST"), opener)
+                if status is not None and 200 <= status < 300:
+                    diagnostic("rebuild", status, "Rebuild accepted; deployment is not yet verified.", headers)
+                    break
+                if status in (429, 503):
+                    diagnostic("rebuild", status, "Transient webhook response; retries are bounded and can enqueue duplicate website builds if the service accepted this request.", headers)
+                    if attempt == 2:
+                        raise RefreshError("Webhook retry attempts exhausted; Copper remains published. Use refresh-only recovery after checking Amplify's build queue.")
+                    wait = retry_delay(headers, attempt)
+                    if waited + wait > 120:
+                        raise RefreshError("Required webhook retry wait exceeds budget; retry later using refresh-only recovery.")
+                    waited += wait
+                    diagnostic("retry", status, f"Waiting {wait:g} seconds before webhook attempt {attempt + 2} of 3.")
+                    sleep(wait)
+                    if page_is_current(release, opener):
+                        diagnostic("deployment", 200, "Triggering release and exact assets appeared before retry; no duplicate rebuild requested.")
+                        return "deployed"
+                    continue
+                if status is None or status in (408, 500, 502, 504):
+                    diagnostic("rebuild", status, "Acceptance unknown. Observing deployment without resending the non-idempotent POST; a build may already be running.", headers)
+                    break
+                diagnostic("rebuild", status, "Webhook configuration or authentication rejected; no retry.", headers)
+                raise RefreshError("Invalid or unauthorized webhook; Copper remains published. Fix configuration before refresh-only recovery.")
+            if wait_for_deployment(release, opener, sleep, monotonic, deployment_timeout):
+                return "deployed"
+            raise RefreshError("Website deployment was not verified within 15 minutes. Copper remains published; inspect existing Amplify builds before refresh-only recovery to avoid duplicates.")
+
+
+        def main():
+            parser = argparse.ArgumentParser(description=__doc__)
+            parser.add_argument("--verify-only", action="store_true")
+            arguments = parser.parse_args()
+            try:
+                refresh(os.environ.get("COPPER_RELEASE_TAG", ""), os.environ.get("AMPLIFY_REBUILD_WEBHOOK", ""), verify_only=arguments.verify_only, token=os.environ.get("GH_TOKEN", ""))
+            except RefreshError as error:
+                diagnostic("failed", message=str(error))
+                return 1
+            return 0
+
+
+        if __name__ == "__main__":
+            sys.exit(main())
+
+        PYTHON
+      shell: bash -euo pipefail {0}
+      env:
+        COPPER_RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+        GH_TOKEN: ${{ github.token }}
+        AMPLIFY_REBUILD_WEBHOOK: ${{ secrets.AMPLIFY_REBUILD_WEBHOOK }}
+    concurrency:
+      group: website-main-release-refresh
+      cancel-in-progress: false
+    timeout-minutes: 30
+concurrency:
+  group: copper-release
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}

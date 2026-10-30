@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "sim-parity-native-nodes-image-batch-sim-node-0621",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0621",
+      "class_type": "ShuffleImageTextDataset",
+      "source": "sim_extras/nodes_dataset.py:892-935",
+      "source_file_sha256": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+      "rng_phase": "training-and-data-order",
+      "seed_modulus": 4294967295,
+      "input_cardinality": "list",
+      "output_cardinality": ["list", "list"],
+      "pairing": "one text per image; extra texts are ignored; missing texts fail",
+      "cases": [
+        {
+          "seed": 7,
+          "length": 10,
+          "permutation": [8, 5, 0, 2, 1, 9, 7, 3, 6, 4]
+        },
+        {
+          "seed": 42,
+          "length": 5,
+          "permutation": [1, 4, 2, 0, 3]
+        }
+      ]
+    },
+    {
+      "feature_id": "COMFY-NODE-0631",
+      "class_type": "SplitImageToTileList",
+      "source": "sim_extras/nodes_images.py:705-763",
+      "source_file_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "layout": "BHWC",
+      "order": "row-major",
+      "limits": {
+        "tile_width": [64, 16384],
+        "tile_height": [64, 16384],
+        "overlap": [0, 4096]
+      },
+      "cases": [
+        {
+          "image": [1, 96, 160, 1],
+          "tile": [64, 64],
+          "overlap": 16,
+          "coordinates": [[0, 64, 0, 64], [48, 112, 0, 64], [96, 160, 0, 64], [0, 64, 32, 96], [48, 112, 32, 96], [96, 160, 32, 96]]
+        },
+        {
+          "image": [1, 48, 32, 1],
+          "tile": [64, 64],
+          "overlap": 0,
+          "coordinates": [[0, 32, 0, 48]]
+        }
+      ]
+    }
+  ],
+  "failure_contract": {
+    "cancellation": "execution_interrupted with no partial tile publication",
+    "invalid_input": "invalid_node_inputs",
+    "missing_handle": "invalid_image_handle",
+    "recovery": "deterministic replay from the same source seed and inputs"
+  }
+}

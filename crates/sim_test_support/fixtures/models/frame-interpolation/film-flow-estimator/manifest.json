@@ -1,0 +1,54 @@
+{
+  "artifact": "zed-native-film-flow-estimator-v1",
+  "evidence_kind": "source-fingerprinted reduced exact-weight predictor plus production schedule contract",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": ["FlowEstimator.forward", "PyramidFlowEstimator.forward"]
+  },
+  "dependency": {
+    "fixture": "../film-flow-pyramid-synthesis/manifest.json",
+    "sha256": "9e9600e0ed69d783d379c70ae55d96b6eb212e55f6314f5dc03d7b28d1352a28"
+  },
+  "production_schedule": {
+    "feature_channels": [64, 192, 448, 960, 960, 960, 960],
+    "shared_predictor_levels": [6, 5, 4, 3],
+    "specialized_predictors": [
+      [2, "predict_flow._predictors.0"],
+      [1, "predict_flow._predictors.1"],
+      [0, "predict_flow._predictors.2"]
+    ],
+    "predictor_layers": [
+      "three activated 3x3 convolutions",
+      "one activated 1x1 bottleneck",
+      "one nonactivated 1x1 two-channel output"
+    ],
+    "step": "upsample accumulated flow by exact target size, multiply by two, warp second features, predict and add residual",
+    "returned_order": "fine-to-coarse residual flows"
+  },
+  "reduced_predictor": {
+    "first_feature": 1.0,
+    "second_feature": 2.0,
+    "concatenated_channels": 2,
+    "intermediate_channels": [2, 2, 2, 1],
+    "expected_output": [6.0, 12.0],
+    "fresh_output_storage": true,
+    "input_tensors_are_immutable": true,
+    "non_film_profile_rejected": true
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "production_dense_weight_numeric_parity": false,
+    "flow_pyramid_synthesis_reimplemented": false,
+    "fusion_execution": false,
+    "codec_or_container_execution": false,
+    "handle_or_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

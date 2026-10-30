@@ -1,0 +1,2330 @@
+{
+  "fixture_id": "sd15-tiny-v1",
+  "prefix_map": {
+    "cond_stage_model.": "clip_l.",
+    "first_stage_model.": "",
+    "model.diffusion_model.": ""
+  },
+  "schema_version": 1,
+  "weight_generation": "splitmix64-sha256-key-signed-top24-f32-v1",
+  "weights": [
+    {
+      "dtype": "F32",
+      "element_count": 2464,
+      "key": "cond_stage_model.transformer.text_model.embeddings.position_embedding.weight",
+      "shape": [
+        77,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1581056,
+      "key": "cond_stage_model.transformer.text_model.embeddings.token_embedding.weight",
+      "shape": [
+        49408,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.layer_norm1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.layer_norm1.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.layer_norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.layer_norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.mlp.fc1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.mlp.fc1.weight",
+      "shape": [
+        128,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.mlp.fc2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.mlp.fc2.weight",
+      "shape": [
+        32,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.k_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.k_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.out_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.out_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.q_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.q_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.v_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.v_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.layer_norm1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.layer_norm1.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.layer_norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.layer_norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.mlp.fc1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.mlp.fc1.weight",
+      "shape": [
+        128,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.mlp.fc2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.mlp.fc2.weight",
+      "shape": [
+        32,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.k_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.k_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.out_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.out_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.q_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.q_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.v_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "cond_stage_model.transformer.text_model.encoder.layers.1.self_attn.v_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.final_layer_norm.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "cond_stage_model.transformer.text_model.final_layer_norm.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.conv_in.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4608,
+      "key": "first_stage_model.decoder.conv_in.weight",
+      "shape": [
+        128,
+        4,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 3,
+      "key": "first_stage_model.decoder.conv_out.bias",
+      "shape": [
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 864,
+      "key": "first_stage_model.decoder.conv_out.weight",
+      "shape": [
+        3,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.attn_1.k.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "first_stage_model.decoder.mid.attn_1.k.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.attn_1.norm.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.attn_1.norm.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.attn_1.proj_out.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "first_stage_model.decoder.mid.attn_1.proj_out.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.attn_1.q.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "first_stage_model.decoder.mid.attn_1.q.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.attn_1.v.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "first_stage_model.decoder.mid.attn_1.v.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_1.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.mid.block_1.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_1.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.mid.block_1.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_1.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_1.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_1.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_1.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_2.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.mid.block_2.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_2.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.mid.block_2.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_2.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_2.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_2.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.mid.block_2.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.norm_out.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.norm_out.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.block.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.up.0.block.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.block.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.up.0.block.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.block.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.block.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.block.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.block.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.0.upsample.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.up.0.upsample.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.block.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.up.1.block.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.block.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.up.1.block.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.block.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.block.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.block.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.block.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.1.upsample.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "first_stage_model.decoder.up.1.upsample.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.2.block.conv1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 73728,
+      "key": "first_stage_model.decoder.up.2.block.conv1.weight",
+      "shape": [
+        64,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.2.block.conv2.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 36864,
+      "key": "first_stage_model.decoder.up.2.block.conv2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.2.block.nin_shortcut.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 8192,
+      "key": "first_stage_model.decoder.up.2.block.nin_shortcut.weight",
+      "shape": [
+        64,
+        128,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.2.block.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "first_stage_model.decoder.up.2.block.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.2.block.norm2.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.2.block.norm2.weight",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.2.upsample.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 36864,
+      "key": "first_stage_model.decoder.up.2.upsample.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.up.3.block.conv1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 18432,
+      "key": "first_stage_model.decoder.up.3.block.conv1.weight",
+      "shape": [
+        32,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.up.3.block.conv2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 9216,
+      "key": "first_stage_model.decoder.up.3.block.conv2.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.up.3.block.nin_shortcut.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 2048,
+      "key": "first_stage_model.decoder.up.3.block.nin_shortcut.weight",
+      "shape": [
+        32,
+        64,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.3.block.norm1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.decoder.up.3.block.norm1.weight",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.up.3.block.norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.decoder.up.3.block.norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "first_stage_model.encoder.conv_in.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 864,
+      "key": "first_stage_model.encoder.conv_in.weight",
+      "shape": [
+        32,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 8,
+      "key": "first_stage_model.encoder.conv_out.bias",
+      "shape": [
+        8
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 2304,
+      "key": "first_stage_model.encoder.conv_out.weight",
+      "shape": [
+        8,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4,
+      "key": "first_stage_model.post_quant_conv.bias",
+      "shape": [
+        4
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16,
+      "key": "first_stage_model.post_quant_conv.weight",
+      "shape": [
+        4,
+        4,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 8,
+      "key": "first_stage_model.quant_conv.bias",
+      "shape": [
+        8
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "first_stage_model.quant_conv.weight",
+      "shape": [
+        8,
+        8,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.context_projection.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1024,
+      "key": "model.diffusion_model.context_projection.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.downsample.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 9216,
+      "key": "model.diffusion_model.down.0.downsample.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.conv1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 9216,
+      "key": "model.diffusion_model.down.0.res.conv1.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.conv2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 9216,
+      "key": "model.diffusion_model.down.0.res.conv2.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.norm1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.norm1.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.0.res.time_emb_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "model.diffusion_model.down.0.res.time_emb_proj.weight",
+      "shape": [
+        32,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.downsample.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 36864,
+      "key": "model.diffusion_model.down.1.downsample.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.res.conv1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 18432,
+      "key": "model.diffusion_model.down.1.res.conv1.weight",
+      "shape": [
+        64,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.res.conv2.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 36864,
+      "key": "model.diffusion_model.down.1.res.conv2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.res.nin_shortcut.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 2048,
+      "key": "model.diffusion_model.down.1.res.nin_shortcut.weight",
+      "shape": [
+        64,
+        32,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.1.res.norm1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.down.1.res.norm1.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.res.norm2.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.res.norm2.weight",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.1.res.time_emb_proj.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 8192,
+      "key": "model.diffusion_model.down.1.res.time_emb_proj.weight",
+      "shape": [
+        64,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.downsample.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.down.2.downsample.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.res.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 73728,
+      "key": "model.diffusion_model.down.2.res.conv1.weight",
+      "shape": [
+        128,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.res.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.down.2.res.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.res.nin_shortcut.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 8192,
+      "key": "model.diffusion_model.down.2.res.nin_shortcut.weight",
+      "shape": [
+        128,
+        64,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.2.res.norm1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.down.2.res.norm1.weight",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.res.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.res.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.2.res.time_emb_proj.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.down.2.res.time_emb_proj.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.down.3.res.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.down.3.res.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.down.3.res.time_emb_proj.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.down.3.res.time_emb_proj.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.input_blocks.0.0.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1152,
+      "key": "model.diffusion_model.input_blocks.0.0.weight",
+      "shape": [
+        32,
+        4,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.attn_1.k.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "model.diffusion_model.mid.attn_1.k.weight",
+      "shape": [
+        128,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.attn_1.norm.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.attn_1.norm.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.attn_1.proj_out.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.mid.attn_1.proj_out.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.attn_1.q.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.mid.attn_1.q.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.attn_1.v.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "model.diffusion_model.mid.attn_1.v.weight",
+      "shape": [
+        128,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.mid.block_1.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.mid.block_1.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_1.time_emb_proj.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.mid.block_1.time_emb_proj.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.mid.block_2.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.mid.block_2.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.norm1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.norm1.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.mid.block_2.time_emb_proj.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.mid.block_2.time_emb_proj.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.out.0.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.out.0.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4,
+      "key": "model.diffusion_model.out.2.bias",
+      "shape": [
+        4
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 1152,
+      "key": "model.diffusion_model.out.2.weight",
+      "shape": [
+        4,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.time_embed.0.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "model.diffusion_model.time_embed.0.weight",
+      "shape": [
+        128,
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.time_embed.2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.time_embed.2.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.res.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 294912,
+      "key": "model.diffusion_model.up.0.res.conv1.weight",
+      "shape": [
+        128,
+        256,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.res.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.up.0.res.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.res.nin_shortcut.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32768,
+      "key": "model.diffusion_model.up.0.res.nin_shortcut.weight",
+      "shape": [
+        128,
+        256,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 256,
+      "key": "model.diffusion_model.up.0.res.norm1.bias",
+      "shape": [
+        256
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 256,
+      "key": "model.diffusion_model.up.0.res.norm1.weight",
+      "shape": [
+        256
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.res.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.res.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.res.time_emb_proj.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.up.0.res.time_emb_proj.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.0.upsample.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.up.0.upsample.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.res.conv1.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 294912,
+      "key": "model.diffusion_model.up.1.res.conv1.weight",
+      "shape": [
+        128,
+        256,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.res.conv2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.up.1.res.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.res.nin_shortcut.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32768,
+      "key": "model.diffusion_model.up.1.res.nin_shortcut.weight",
+      "shape": [
+        128,
+        256,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 256,
+      "key": "model.diffusion_model.up.1.res.norm1.bias",
+      "shape": [
+        256
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 256,
+      "key": "model.diffusion_model.up.1.res.norm1.weight",
+      "shape": [
+        256
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.res.norm2.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.res.norm2.weight",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.res.time_emb_proj.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 16384,
+      "key": "model.diffusion_model.up.1.res.time_emb_proj.weight",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 128,
+      "key": "model.diffusion_model.up.1.upsample.bias",
+      "shape": [
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 147456,
+      "key": "model.diffusion_model.up.1.upsample.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.res.conv1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 110592,
+      "key": "model.diffusion_model.up.2.res.conv1.weight",
+      "shape": [
+        64,
+        192,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.res.conv2.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 36864,
+      "key": "model.diffusion_model.up.2.res.conv2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.res.nin_shortcut.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 12288,
+      "key": "model.diffusion_model.up.2.res.nin_shortcut.weight",
+      "shape": [
+        64,
+        192,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 192,
+      "key": "model.diffusion_model.up.2.res.norm1.bias",
+      "shape": [
+        192
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 192,
+      "key": "model.diffusion_model.up.2.res.norm1.weight",
+      "shape": [
+        192
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.res.norm2.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.res.norm2.weight",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.res.time_emb_proj.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 8192,
+      "key": "model.diffusion_model.up.2.res.time_emb_proj.weight",
+      "shape": [
+        64,
+        128
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 64,
+      "key": "model.diffusion_model.up.2.upsample.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 36864,
+      "key": "model.diffusion_model.up.2.upsample.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.up.3.res.conv1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 27648,
+      "key": "model.diffusion_model.up.3.res.conv1.weight",
+      "shape": [
+        32,
+        96,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.up.3.res.conv2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 9216,
+      "key": "model.diffusion_model.up.3.res.conv2.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.up.3.res.nin_shortcut.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 3072,
+      "key": "model.diffusion_model.up.3.res.nin_shortcut.weight",
+      "shape": [
+        32,
+        96,
+        1,
+        1
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 96,
+      "key": "model.diffusion_model.up.3.res.norm1.bias",
+      "shape": [
+        96
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 96,
+      "key": "model.diffusion_model.up.3.res.norm1.weight",
+      "shape": [
+        96
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.up.3.res.norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.up.3.res.norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 32,
+      "key": "model.diffusion_model.up.3.res.time_emb_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "dtype": "F32",
+      "element_count": 4096,
+      "key": "model.diffusion_model.up.3.res.time_emb_proj.weight",
+      "shape": [
+        32,
+        128
+      ]
+    }
+  ]
+}

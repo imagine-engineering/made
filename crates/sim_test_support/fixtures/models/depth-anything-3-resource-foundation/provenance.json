@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "oracle_kind": "standard-library-only scalar translation of the complete reduced DA3 backbone, local/global attention, QK normalization, two-axis RoPE, reference reorder/restore, DPT and DualDPT main/auxiliary heads, camera encoder/decoder, weighted homography, QL, and the complete versioned V2 CPU MT19937 100-sample RANSAC, scoring, strict-first selection, and refit ray-pose graph",
+  "generator_path": "crates/sim_test_support/fixtures/models/depth-anything-3-resource-foundation/generate_oracle.py",
+  "generator_command": "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/depth-anything-3-resource-foundation/generate_oracle.py",
+  "generator_sha256": "99c2118e1b22f5c11f118872d62c4b8c36fc7af289fdf844732c3abb1a346b52",
+  "source_graph_path": "crates/sim_test_support/fixtures/models/depth-anything-3-resource-foundation/source_graph.py",
+  "source_graph_sha256": "8d0dcca62f0a8eaca1a5237e6630f0d4dede14a62f9a2f6f1df40ada0341ffcc",
+  "oracle_path": "crates/sim_test_support/fixtures/models/depth-anything-3-resource-foundation/oracle.json",
+  "oracle_sha256": "c9e1de05a36f74277fc14e79bd147c8146029135ee76c3b0dd8af83e24c2d47c",
+  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.5",
+  "transcendental_boundary": "F32 camera atan, DPT positional sin/cos/pow, and canonical exponential oracle bits call the pinned macOS host libc atanf/sinf/cosf/powf/expf through Python ctypes; they are not claimed portable to another libc or platform.",
+  "fixture_profile": "test-support-only hidden4/layers4/heads1/patch2/image4 DPT and DualDPT",
+  "ray_pose_fixture_admission": "Each reduced DualDPT view has 256 finite positive bit-distinct confidence weights and 256 finite source-valid ray-z lanes. Candidate order delegates torch/Rust unstable descending argsort without pinning an unspecified tied permutation; the oracle pins the minimum adjacent confidence ULP/value gaps and minimum absolute ray-z value.",
+  "production_profiles": [
+    "vits",
+    "vitb",
+    "vitl",
+    "vitg"
+  ],
+  "storage_projection": "F16, BF16, and F32 source storage is retained and independently projected to checked CPU F32 execution state; source dtype and both byte streams are identity-bound.",
+  "pinned_sources": {
+    "projects/sim/ComfyUI/sim_extras/nodes_depth_anything_3.py": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/model.py": "6f05ba0c22a34304f6bd6cde7e6dd26ceef474a99ad51d6632940f8d2decf6b0",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/preprocess.py": "6bf00e9929451c39763a0661aa1430dbc78917bc028517a4c8dc290897601845",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/dpt.py": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/camera.py": "b9c1bc79862c8f2b59a6058da1bf47c1aaef84ca75ec5131805fbdf2f81dca9a",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/ray_pose.py": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/reference_view_selector.py": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/transform.py": "30291a7f8d3d83cc6a911daf603342444ed30e7141abb3ba8ccc7f41273ac763",
+    "projects/sim/ComfyUI/sim/image_encoders/dino2.py": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
+    "projects/sim/ComfyUI/sim/model_detection.py": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072",
+    "projects/sim/ComfyUI/sim/text_encoders/bert.py": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c",
+    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/sim/ComfyUI/sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "projects/sim/ComfyUI/sim/supported_models.py": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69",
+    "projects/sim/ComfyUI/sim/model_base.py": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+  },
+  "oracle_platform_sha256": {
+    "oracle-linux-gnu-x86_64.json": "970fac1e2f9af04ed43f42fd5ec23c2bfe61061342cd8ae8fa015036f2a4ccc8"
+  },
+  "oracle_platform_provenance": {
+    "oracle-linux-gnu-x86_64.json": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+      "python": "3.14.4",
+      "transcendental_boundary": "Independent ctypes calls to Linux glibc float libm; same scalar F32 source equations and tolerances as the historical oracle. Exact bits are scoped to this recorded environment."
+    }
+  }
+}

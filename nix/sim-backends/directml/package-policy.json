@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "backend": "directml",
+  "abi_floor": "1.13.1",
+  "target_version": "0x6200",
+  "minimum_windows_build": 19041,
+  "allowed_targets": [
+    "aarch64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc"
+  ],
+  "source_package": {
+    "id": "Microsoft.AI.DirectML",
+    "version": "1.13.1",
+    "sha256": "a38cef0d59f314fbcc0cd6551c5a762db7cfdaf8a977f85df32a0b1e279d3ba7"
+  },
+  "architecture_payloads": {
+    "aarch64-pc-windows-msvc": {
+      "source_path": "bin/arm64-win/DirectML.dll",
+      "byte_length": 13947936,
+      "sha256": "96a5b8b75c4cd5e47fe9a4a87d0146276930fa58083b0538fd1b503e98b842f4"
+    },
+    "x86_64-pc-windows-msvc": {
+      "source_path": "bin/x64-win/DirectML.dll",
+      "byte_length": 14021152,
+      "sha256": "5ab77cc5db8e1544d386fd28586598317da8dcbef098fb86d8d8a60e739e0e5d"
+    }
+  },
+  "file_version": "1.13.1.0",
+  "discovery_order": [
+    "signed_application_package",
+    "compatible_system32_component"
+  ],
+  "allowed_payloads": [
+    "DirectML.dll",
+    "LICENSE-CODE.txt",
+    "LICENSE.txt",
+    "LICENSES",
+    "ThirdPartyNotices.txt",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json"
+  ],
+  "required_payloads": [
+    "DirectML.dll",
+    "LICENSE-CODE.txt",
+    "LICENSE.txt",
+    "LICENSES",
+    "ThirdPartyNotices.txt",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json"
+  ],
+  "forbidden_payloads": [
+    "D3D12.dll",
+    "DXGI.dll",
+    "DirectML.Debug.dll",
+    "*.h",
+    "*.lib",
+    "*.pdb"
+  ],
+  "authenticode_required": true,
+  "authenticode_is_authorization": false,
+  "final_application_signing_required": true,
+  "signature_algorithm": "ed25519",
+  "signature_domain": "zed-sim-directml-package-v1",
+  "signature_payload_format": "domain-nul-u64be-signer-u64be-coverage",
+  "signature_receipt_format": "canonical-json-v1",
+  "signature_coverage": "package-coverage-v1",
+  "signature_coverage_format": "sha256-decimal-size-two-space-path",
+  "signature_coverage_excludes": [
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "signature_verifier": "sim_runtime-native-rust-ed25519",
+  "signature_authority": "sim_runtime::DirectMlPackageVerificationKey",
+  "signature_required_before_install": true,
+  "structural_receipt_required": true,
+  "runtime_authorization_from_structure": false,
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "runtime_compilation_forbidden": true,
+  "unsafe_owner": "sim_backend_directml::loader"
+}

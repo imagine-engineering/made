@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "fixture_id": "ideogram4-sim-model-0096",
+  "feature_id": "COMFY-MODEL-0096",
+  "source_symbol": "Ideogram4",
+  "source_ordinal": 78,
+  "latent_feature_id": "COMFY-MODEL-0030",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/ideogram4/model.py", "sha256": "886e9e114fe3546c2e699c8d736816ede5aaca442b09d8bea7ba090279537666"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/ideogram4.py", "sha256": "dfe31ad9c3204bf2f98c81cbc498284f661f4162f35486baed38a9a847c52343"}
+  ],
+  "source_projection": "Ideogram4|78|image_model=ideogram4|latent=Flux2|dtypes=bf16,f32|memory=11.6|heads=18|head_dim=256|llm_features=53248|mrope=24,20,20|clip=qwen3vl_8b",
+  "source_projection_sha256": "e48c5e2a63317bbe598e4c902beb35d31ec1f54f02fe4b9225ca9ce721fd5c18",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

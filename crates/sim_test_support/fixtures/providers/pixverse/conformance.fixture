@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.pixverse",
+  "source_sha256": "3b96c96e9b5f6458e8ec6e93392f0cf9dae76b733b721ac55ead15a5351e7f84",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0481",
+      "node_identifier": "PixverseImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0482",
+      "node_identifier": "PixverseTemplateNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0483",
+      "node_identifier": "PixverseTextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0484",
+      "node_identifier": "PixverseTransitionVideoNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0128",
+      "method": "POST",
+      "path": "/proxy/pixverse/image/upload",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0129",
+      "method": "POST",
+      "path": "/proxy/pixverse/video/img/generate",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0130",
+      "method": "GET",
+      "path": "/proxy/pixverse/video/result/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0131",
+      "method": "GET",
+      "path": "/proxy/pixverse/video/result/{response_api.Resp.video_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0132",
+      "method": "POST",
+      "path": "/proxy/pixverse/video/text/generate",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0133",
+      "method": "POST",
+      "path": "/proxy/pixverse/video/transition/generate",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending"
+}

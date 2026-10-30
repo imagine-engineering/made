@@ -1,0 +1,1219 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_metal/abi/symbols-v1.json"
+kernel_source="$workspace/crates/sim_backend_metal/kernels/readiness.metal"
+licenses="$workspace/crates/sim_backend_metal/LICENSES"
+execution_abi="$workspace/crates/sim_backend_metal/abi/execution-v1.json"
+execution_bindings="$workspace/crates/sim_backend_metal/abi/reviewed-execution-bindings-v1.txt"
+execution_kernel_source="$workspace/crates/sim_backend_metal/kernels/tensor_ops.metal"
+execution_licenses="$workspace/crates/sim_backend_metal/LICENSES.execution"
+policy="$workspace/nix/sim-backends/metal/package-policy.json"
+execution_policy="$workspace/nix/sim-backends/metal/execution-policy.json"
+contract_schema="$workspace/nix/sim-backends/metal/ffi-contracts-v1.schema.json"
+execution_packager="$workspace/script/package-sim-backend-metal-execution"
+signature_algorithm="ed25519"
+signature_domain="zed-sim-metal-package-v1"
+coverage_file_name="package-coverage.sha256"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET ED25519_RECEIPT SIGNER_ID FFI_CONTRACTS_CATALOG" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --write-contract-catalog OUTPUT_FILE TARGET" >&2
+    echo "       $0 --self-test" >&2
+}
+
+validate_regular_input() {
+    python3 - "$1" "$2" <<'PY'
+import pathlib
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1])
+label = sys.argv[2]
+metadata = path.lstat()
+if not stat.S_ISREG(metadata.st_mode):
+    raise SystemExit(f"{label} must be a regular file and not a symbolic link")
+if metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+    raise SystemExit(f"{label} must be nonempty and at most 4 MiB")
+PY
+}
+
+validate_target_and_signer() {
+    python3 - "$1" "$2" <<'PY'
+import re
+import sys
+
+target, signer = sys.argv[1:]
+if target not in ("aarch64-apple-darwin", "x86_64-apple-darwin"):
+    raise SystemExit("Metal package target must be aarch64-apple-darwin or x86_64-apple-darwin")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None or len(signer) > 128:
+    raise SystemExit("signer ID must use the canonical lowercase authority grammar")
+PY
+}
+
+validate_receipt_shape() {
+    python3 - "$1" <<'PY'
+import json
+import pathlib
+import re
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1])
+metadata = path.lstat()
+if not stat.S_ISREG(metadata.st_mode):
+    raise SystemExit("Ed25519 receipt must be a regular file, not a symbolic link")
+if metadata.st_size == 0 or metadata.st_size > 1024:
+    raise SystemExit("Ed25519 receipt must be nonempty and at most 1 KiB")
+raw = path.read_bytes()
+
+def reject_duplicates(values):
+    result = {}
+    for key, value in values:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+try:
+    receipt = json.loads(raw, object_pairs_hook=reject_duplicates)
+except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit(f"Ed25519 receipt is not strict JSON: {error}")
+if not isinstance(receipt, dict) or list(receipt) != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("Ed25519 receipt fields must be canonical and contain no unknown fields")
+if type(receipt["schema_version"]) is not int or receipt["schema_version"] != 1:
+    raise SystemExit("Ed25519 receipt schema_version must be 1")
+if receipt["algorithm"] != "ed25519":
+    raise SystemExit("Ed25519 receipt algorithm must be ed25519")
+signature = receipt["signature"]
+if not isinstance(signature, str) or re.fullmatch(r"[0-9a-f]{128}", signature) is None:
+    raise SystemExit("Ed25519 receipt signature must be exactly 128 lowercase hexadecimal characters")
+canonical = json.dumps(receipt, separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+if raw != canonical:
+    raise SystemExit("Ed25519 receipt must use canonical-json-v1 encoding")
+PY
+}
+
+validate_and_copy_contract_catalog() {
+    source=$1
+    destination=$2
+    target=$3
+    readiness_metallib=$4
+    tensor_metallib=$5
+    python3 - \
+        "$source" "$destination" "$target" "$readiness_metallib" "$tensor_metallib" \
+        "$contract_schema" "$abi_manifest" "$execution_abi" "$policy" "$execution_policy" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import sys
+
+(
+    source_path,
+    destination_path,
+    target,
+    readiness_metallib_path,
+    tensor_metallib_path,
+    schema_path,
+    abi_manifest_path,
+    execution_abi_path,
+    policy_path,
+    execution_policy_path,
+) = map(pathlib.Path, sys.argv[1:])
+target = target.as_posix()
+
+def reject_duplicates(values):
+    result = {}
+    for key, value in values:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+def load_reviewed_json(path, label):
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 1024 * 1024:
+        raise SystemExit(f"{label} must be a nonempty regular file of at most 1 MiB")
+    try:
+        return json.loads(path.read_bytes(), object_pairs_hook=reject_duplicates)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        raise SystemExit(f"{label} is not strict JSON: {error}")
+
+load_reviewed_json(schema_path, "reviewed FFI contract schema")
+foundation = load_reviewed_json(abi_manifest_path, "reviewed foundation ABI")
+execution = load_reviewed_json(execution_abi_path, "reviewed execution ABI")
+package_policy = load_reviewed_json(policy_path, "reviewed package policy")
+reviewed_execution_policy = load_reviewed_json(
+    execution_policy_path, "reviewed execution policy"
+)
+
+flags = os.O_RDONLY
+if hasattr(os, "O_NOFOLLOW"):
+    flags |= os.O_NOFOLLOW
+try:
+    descriptor = os.open(source_path, flags)
+except OSError as error:
+    raise SystemExit(
+        f"cannot open reviewed FFI contract catalog without following links: {error}"
+    )
+try:
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise SystemExit("reviewed FFI contract catalog must be a regular file")
+    if before.st_size == 0 or before.st_size > 1024 * 1024:
+        raise SystemExit(
+            "reviewed FFI contract catalog must be nonempty and at most 1 MiB"
+        )
+    chunks = []
+    remaining = before.st_size
+    while remaining:
+        chunk = os.read(descriptor, min(remaining, 64 * 1024))
+        if not chunk:
+            raise SystemExit("reviewed FFI contract catalog changed while being read")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    if os.read(descriptor, 1):
+        raise SystemExit("reviewed FFI contract catalog grew while being read")
+    after = os.fstat(descriptor)
+    if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise SystemExit("reviewed FFI contract catalog changed while being read")
+finally:
+    os.close(descriptor)
+raw = b"".join(chunks)
+try:
+    catalog = json.loads(raw, object_pairs_hook=reject_duplicates)
+except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit(f"reviewed FFI contract catalog is not strict JSON: {error}")
+
+top_level_fields = [
+    "schema_version",
+    "backend",
+    "abi_floor",
+    "target",
+    "minimum_macos_version",
+    "metal_language_version",
+    "minimum_metal_family",
+    "abi_manifest_sha256",
+    "execution_abi_sha256",
+    "frameworks",
+    "classes",
+    "resource_selectors",
+    "layouts",
+    "metallibs",
+    "runtime_compilation_forbidden",
+]
+if not isinstance(catalog, dict) or list(catalog) != top_level_fields:
+    raise SystemExit(
+        "FFI contract catalog fields are missing, unknown, or not in reviewed order"
+    )
+
+def sha256(path):
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0:
+        raise SystemExit(f"catalog-bound payload must be a nonempty regular file: {path}")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+framework_identities = {
+    "Metal": "metal-framework",
+    "MetalPerformanceShaders": "metal-performance-shaders-framework",
+    "MetalPerformanceShadersGraph": "metal-performance-shaders-graph-framework",
+}
+frameworks = []
+for framework in foundation["frameworks"]:
+    required_symbols = framework["symbols"]
+    if framework["name"] == "MetalPerformanceShadersGraph":
+        if required_symbols:
+            raise SystemExit("reviewed MPSGraph ABI unexpectedly exports C symbols")
+        required_symbols = [
+            "objc.MPSGraph",
+            "objc.MPSGraphDevice",
+            "objc.MPSGraphTensorData",
+        ]
+    frameworks.append(
+        {
+            "identity": framework_identities[framework["name"]],
+            "name": framework["name"],
+            "install_name": framework["install_name"],
+            "image_name": framework["image_name"],
+            "required_symbols": required_symbols,
+            "unsafe_owner": "sim_backend_metal::loader",
+        }
+    )
+frameworks.sort(key=lambda row: row["identity"])
+classes = []
+for class_row in foundation["classes"]:
+    classes.append(
+        {
+            "name": class_row["name"],
+            "image_name": class_row["image_name"],
+            "selectors": sorted(
+                class_row["selectors"], key=lambda row: (row["kind"], row["name"])
+            ),
+        }
+    )
+classes.sort(key=lambda row: row["name"])
+
+metallibs = [
+    {
+        "identity": "metal-readiness-metallib",
+        "path": "kernels/readiness.metallib",
+        "sha256": sha256(readiness_metallib_path),
+        "source_path": "kernels/readiness.metal",
+        "source_sha256": package_policy["readiness_source_sha256"],
+        "required_functions": [foundation["readiness_function"]],
+        "unsafe_owner": "sim_backend_metal::loader",
+    },
+    {
+        "identity": "metal-tensor-ops-metallib",
+        "path": "kernels/tensor_ops.metallib",
+        "sha256": sha256(tensor_metallib_path),
+        "source_path": "kernels/tensor_ops.metal",
+        "source_sha256": reviewed_execution_policy["tensor_ops_source_sha256"],
+        "required_functions": sorted(row["function"] for row in execution["kernels"]),
+        "unsafe_owner": "sim_backend_metal::execution",
+    },
+]
+
+expected = {
+    "schema_version": 1,
+    "backend": "metal",
+    "abi_floor": "macos-13-metal-3",
+    "target": target,
+    "minimum_macos_version": package_policy["minimum_macos_version"],
+    "metal_language_version": package_policy["metal_language_version"],
+    "minimum_metal_family": package_policy["minimum_metal_family"],
+    "abi_manifest_sha256": sha256(abi_manifest_path),
+    "execution_abi_sha256": sha256(execution_abi_path),
+    "frameworks": frameworks,
+    "classes": classes,
+    "resource_selectors": execution["resource_selectors"],
+    "layouts": foundation["layouts"],
+    "metallibs": metallibs,
+    "runtime_compilation_forbidden": True,
+}
+
+row_fields = {
+    "frameworks": [
+        "identity",
+        "name",
+        "install_name",
+        "image_name",
+        "required_symbols",
+        "unsafe_owner",
+    ],
+    "classes": ["name", "image_name", "selectors"],
+    "resource_selectors": [
+        "class",
+        "selector",
+        "encoding",
+        "return_nullability",
+    ],
+    "layouts": ["name", "size", "align"],
+    "metallibs": [
+        "identity",
+        "path",
+        "sha256",
+        "source_path",
+        "source_sha256",
+        "required_functions",
+        "unsafe_owner",
+    ],
+}
+for collection, fields in row_fields.items():
+    rows = catalog.get(collection)
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) or list(row) != fields for row in rows
+    ):
+        raise SystemExit(
+            f"FFI contract {collection} rows have missing, unknown, or reordered fields"
+        )
+for row in catalog["classes"]:
+    selectors = row["selectors"]
+    if not isinstance(selectors, list) or any(
+        not isinstance(selector, dict)
+        or list(selector) != ["kind", "name", "encoding"]
+        for selector in selectors
+    ):
+        raise SystemExit("FFI contract class selector rows are malformed")
+    selector_identities = [
+        (selector["kind"], selector["name"]) for selector in selectors
+    ]
+    if selector_identities != sorted(selector_identities) or len(
+        selector_identities
+    ) != len(set(selector_identities)):
+        raise SystemExit("FFI contract class selectors must be sorted and unique")
+
+for collection, identity_key in (
+    ("frameworks", "identity"),
+    ("classes", "name"),
+    ("metallibs", "identity"),
+):
+    identities = [row[identity_key] for row in catalog[collection]]
+    if identities != sorted(identities) or len(identities) != len(set(identities)):
+        raise SystemExit(f"FFI contract {collection} must be sorted and unique")
+resource_identities = [
+    (row["class"], row["selector"]) for row in catalog["resource_selectors"]
+]
+if resource_identities != sorted(resource_identities) or len(resource_identities) != len(
+    set(resource_identities)
+):
+    raise SystemExit("FFI contract resource selectors must be sorted and unique")
+layout_identities = [row["name"] for row in catalog["layouts"]]
+if layout_identities != sorted(layout_identities) or len(layout_identities) != len(
+    set(layout_identities)
+):
+    raise SystemExit("FFI contract layouts must be sorted and unique")
+
+if catalog != expected:
+    raise SystemExit(
+        "FFI contract catalog differs from the exact reviewed target, ABI, "
+        "framework, selector, owner, source, function, or metallib contract"
+    )
+
+destination_descriptor = os.open(
+    destination_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
+)
+try:
+    written = 0
+    while written < len(raw):
+        written += os.write(destination_descriptor, raw[written:])
+finally:
+    os.close(destination_descriptor)
+PY
+}
+
+validate_sdk_headers() {
+    sdk_root=$1
+    python3 - "$abi_manifest" "$sdk_root" <<'PY'
+import hashlib
+import json
+import pathlib
+import stat
+import sys
+
+manifest_path = pathlib.Path(sys.argv[1])
+sdk_root = pathlib.Path(sys.argv[2])
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+def physical_path(logical):
+    if logical.startswith("Metal/"):
+        return sdk_root / "System/Library/Frameworks/Metal.framework/Headers" / logical.removeprefix("Metal/")
+    if logical.startswith("MetalPerformanceShaders/"):
+        return sdk_root / "System/Library/Frameworks/MetalPerformanceShaders.framework/Headers" / logical.removeprefix("MetalPerformanceShaders/")
+    if logical.startswith("MPSCore/"):
+        return sdk_root / "System/Library/Frameworks/MetalPerformanceShaders.framework/Frameworks/MPSCore.framework/Headers" / logical.removeprefix("MPSCore/")
+    if logical.startswith("MPSGraph/"):
+        return sdk_root / "System/Library/Frameworks/MetalPerformanceShadersGraph.framework/Headers" / logical.removeprefix("MPSGraph/")
+    return sdk_root / logical
+
+for row in manifest["headers"]:
+    path = physical_path(row["path"])
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise SystemExit(f"reviewed SDK header is not a regular file: {row['path']}")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual != row["sha256"]:
+        raise SystemExit(f"reviewed SDK header digest mismatch: {row['path']}")
+PY
+}
+
+compile_metallib() {
+    output=$1
+    command -v xcrun >/dev/null 2>&1 || {
+        echo "xcrun is required for development-time Metal package compilation" >&2
+        exit 1
+    }
+    sdk_version=$(xcrun -sdk macosx --show-sdk-version)
+    if [ "$sdk_version" != "26.2" ]; then
+        echo "reviewed Metal package compiler requires macOS SDK 26.2, found $sdk_version" >&2
+        exit 1
+    fi
+    xcode_build=$(xcodebuild -version | sed -n 's/^Build version //p')
+    if [ "$xcode_build" != "17C52" ]; then
+        echo "reviewed Metal package compiler requires Xcode build 17C52, found $xcode_build" >&2
+        exit 1
+    fi
+    sdk_root=$(xcrun -sdk macosx --show-sdk-path)
+    validate_sdk_headers "$sdk_root" || exit 1
+
+    compile_directory=$(mktemp -d "${TMPDIR:-/tmp}/sim-metal-compile.XXXXXX")
+    module_cache="$compile_directory/module-cache"
+    mkdir -p "$module_cache"
+    if ! xcrun -sdk macosx metal \
+        -std=metal3.0 -mmacosx-version-min=13.0 \
+        -fmodules-cache-path="$module_cache" -c "$kernel_source" \
+        -o "$compile_directory/readiness.air"; then
+        rm -rf -- "$compile_directory"
+        return 1
+    fi
+    if ! xcrun -sdk macosx metallib "$compile_directory/readiness.air" -o "$output"; then
+        rm -rf -- "$compile_directory"
+        return 1
+    fi
+    rm -rf -- "$compile_directory"
+}
+
+generate_adapter_manifest() {
+    destination=$1
+    target=$2
+    signer=$3
+    abi_digest=$4
+    execution_abi_digest=$5
+    contract_digest=$6
+    readiness_source_digest=$7
+    readiness_metallib_digest=$8
+    readiness_metallib_size=$9
+    shift 9
+    tensor_source_digest=$1
+    tensor_metallib_digest=$2
+    tensor_metallib_size=$3
+    python3 - \
+        "$destination" "$target" "$signer" "$abi_digest" "$execution_abi_digest" \
+        "$contract_digest" "$readiness_source_digest" "$readiness_metallib_digest" \
+        "$readiness_metallib_size" "$tensor_source_digest" "$tensor_metallib_digest" \
+        "$tensor_metallib_size" "$signature_algorithm" "$signature_domain" <<'PY'
+import json
+import pathlib
+import sys
+
+(
+    destination,
+    target,
+    signer,
+    abi_digest,
+    execution_abi_digest,
+    contract_digest,
+    readiness_source_digest,
+    readiness_metallib_digest,
+    readiness_metallib_size,
+    tensor_source_digest,
+    tensor_metallib_digest,
+    tensor_metallib_size,
+    signature_algorithm,
+    signature_domain,
+) = sys.argv[1:]
+manifest = {
+    "schema_version": 2,
+    "backend": "metal",
+    "abi_floor": "macos-13-metal-3",
+    "target": target,
+    "minimum_macos_version": "13.0",
+    "metal_language_version": "metal3.0",
+    "minimum_metal_family": 5001,
+    "abi_manifest_sha256": abi_digest,
+    "execution_abi_sha256": execution_abi_digest,
+    "ffi_contracts_sha256": contract_digest,
+    "readiness_source_sha256": readiness_source_digest,
+    "readiness_metallib_sha256": readiness_metallib_digest,
+    "readiness_metallib_size": int(readiness_metallib_size),
+    "tensor_ops_source_sha256": tensor_source_digest,
+    "tensor_ops_metallib_sha256": tensor_metallib_digest,
+    "tensor_ops_metallib_size": int(tensor_metallib_size),
+    "readiness_function": "zed_sim_metal_readiness_v1",
+    "tensor_functions": [
+        "zed_sim_metal_add_f16_v1",
+        "zed_sim_metal_add_f32_v1",
+    ],
+    "redistributes_apple_frameworks": False,
+    "required_system_frameworks": [
+        "/System/Library/Frameworks/Metal.framework/Metal",
+        "/System/Library/Frameworks/MetalPerformanceShaders.framework/MetalPerformanceShaders",
+        "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/MetalPerformanceShadersGraph",
+    ],
+    "required_entitlements": [],
+    "reviewed_sdk_version": "26.2",
+    "reviewed_xcode_build": "17C52",
+    "signer": signer,
+    "signature_algorithm": signature_algorithm,
+    "signature_coverage": "package-coverage-v1",
+    "signature_domain": signature_domain,
+    "final_application_signing_required": True,
+    "runtime_compilation_forbidden": True,
+}
+pathlib.Path(destination).write_text(
+    json.dumps(manifest, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+generate_coverage() {
+    python3 - "$1" "$coverage_file_name" <<'PY'
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+coverage_name = sys.argv[2]
+excluded = {"adapter-manifest.sig", coverage_name}
+rows = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        if relative in excluded:
+            continue
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SystemExit(f"coverage input is not a regular file: {relative}")
+        contents = path.read_bytes()
+        rows.append((relative, f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n"))
+(root / coverage_name).write_text(
+    "".join(row for _relative, row in sorted(rows)),
+    encoding="utf-8",
+)
+PY
+}
+
+validate_final_tree() {
+    validate_receipt_shape "$1/adapter-manifest.sig" || return 1
+    python3 - "$policy" "$1" <<'PY' || return 1
+import fnmatch
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+policy_path = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("Metal package root must be a directory and not a symbolic link")
+def reject_duplicates(values):
+    result = {}
+    for key, value in values:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+try:
+    policy = json.loads(policy_path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
+except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit(f"reviewed package policy is not strict JSON: {error}")
+allowed = policy["allowed_payloads"]
+required = policy["required_payloads"]
+forbidden = policy["forbidden_payloads"]
+excluded = set(policy["signature_coverage_excludes"])
+
+def payload_matches(path, pattern):
+    expression = "".join("[^/]*" if character == "*" else "[^/]" if character == "?" else re.escape(character) for character in pattern)
+    return re.fullmatch(expression, path) is not None
+
+def directory_is_declared(path):
+    return any(pattern.startswith(path + "/") for pattern in allowed)
+
+observed = set()
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for entry_name in directory_names + file_names:
+        entry = pathlib.Path(directory, entry_name)
+        relative = entry.relative_to(root).as_posix()
+        mode = entry.lstat().st_mode
+        if stat.S_ISLNK(mode):
+            raise SystemExit(f"symbolic links are forbidden in Metal packages: {relative}")
+        if stat.S_ISDIR(mode):
+            if not directory_is_declared(relative):
+                raise SystemExit(f"package directory is not declared by the allowlist: {relative}")
+            continue
+        if not stat.S_ISREG(mode):
+            raise SystemExit(f"non-regular package entry is forbidden: {relative}")
+        if entry.stat().st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"Metal package payload exceeds the 4 MiB bound: {relative}")
+        if any(fnmatch.fnmatchcase(entry.name, pattern) or payload_matches(relative, pattern) for pattern in forbidden):
+            raise SystemExit(f"Apple framework, SDK, AIR, or dylib redistribution is forbidden: {relative}")
+        if not any(payload_matches(relative, pattern) for pattern in allowed):
+            raise SystemExit(f"package payload is not declared by the allowlist: {relative}")
+        observed.add(relative)
+
+missing = sorted(path for path in required if path not in observed)
+if missing:
+    raise SystemExit("required package payloads are missing: " + ", ".join(missing))
+
+try:
+    package_policy = json.loads(
+        (root / "package-policy.json").read_text(encoding="utf-8"),
+        object_pairs_hook=reject_duplicates,
+    )
+except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit(f"packaged policy is not strict JSON: {error}")
+if package_policy != policy:
+    raise SystemExit("packaged policy differs from the reviewed package policy")
+try:
+    manifest = json.loads(
+        (root / "adapter-manifest.json").read_text(encoding="utf-8"),
+        object_pairs_hook=reject_duplicates,
+    )
+except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit(f"adapter manifest is not strict JSON: {error}")
+expected_manifest_fields = [
+    "schema_version",
+    "backend",
+    "abi_floor",
+    "target",
+    "minimum_macos_version",
+    "metal_language_version",
+    "minimum_metal_family",
+    "abi_manifest_sha256",
+    "execution_abi_sha256",
+    "ffi_contracts_sha256",
+    "readiness_source_sha256",
+    "readiness_metallib_sha256",
+    "readiness_metallib_size",
+    "tensor_ops_source_sha256",
+    "tensor_ops_metallib_sha256",
+    "tensor_ops_metallib_size",
+    "readiness_function",
+    "tensor_functions",
+    "redistributes_apple_frameworks",
+    "required_system_frameworks",
+    "required_entitlements",
+    "reviewed_sdk_version",
+    "reviewed_xcode_build",
+    "signer",
+    "signature_algorithm",
+    "signature_coverage",
+    "signature_domain",
+    "final_application_signing_required",
+    "runtime_compilation_forbidden",
+]
+if list(manifest) != expected_manifest_fields:
+    raise SystemExit("adapter manifest fields are missing, unknown, or not in canonical order")
+if manifest["schema_version"] != 2 or manifest["backend"] != "metal" or manifest["abi_floor"] != policy["abi_floor"]:
+    raise SystemExit("adapter manifest identity differs from package policy")
+if manifest["target"] not in policy["allowed_targets"]:
+    raise SystemExit("adapter manifest target is not allowed")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", manifest["signer"]) is None or len(manifest["signer"]) > 128:
+    raise SystemExit("adapter manifest signer does not use the canonical authority grammar")
+for key in ("minimum_macos_version", "metal_language_version", "minimum_metal_family",
+            "readiness_function", "required_system_frameworks", "required_entitlements",
+            "reviewed_sdk_version", "reviewed_xcode_build", "signature_algorithm",
+            "signature_coverage", "signature_domain", "final_application_signing_required",
+            "runtime_compilation_forbidden"):
+    if manifest[key] != policy[key]:
+        raise SystemExit(f"adapter manifest {key} differs from package policy")
+if manifest["redistributes_apple_frameworks"] is not False:
+    raise SystemExit("adapter manifest cannot redistribute Apple frameworks")
+for field, relative in (
+    ("abi_manifest_sha256", "abi/symbols-v1.json"),
+    ("execution_abi_sha256", "abi/execution-v1.json"),
+    ("ffi_contracts_sha256", "ffi-contracts-v1.json"),
+    ("readiness_source_sha256", "kernels/readiness.metal"),
+    ("readiness_metallib_sha256", "kernels/readiness.metallib"),
+    ("tensor_ops_source_sha256", "kernels/tensor_ops.metal"),
+    ("tensor_ops_metallib_sha256", "kernels/tensor_ops.metallib"),
+):
+    digest = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+    if manifest[field] != digest:
+        raise SystemExit(f"adapter manifest {field} does not match {relative}")
+if manifest["readiness_source_sha256"] != policy["readiness_source_sha256"]:
+    raise SystemExit("readiness source differs from the reviewed digest")
+if manifest["abi_manifest_sha256"] != policy["abi_manifest_sha256"]:
+    raise SystemExit("ABI manifest differs from the reviewed digest")
+if manifest["execution_abi_sha256"] != policy["execution_abi_sha256"]:
+    raise SystemExit("execution ABI differs from the reviewed digest")
+if hashlib.sha256((root / "abi/reviewed-execution-bindings-v1.txt").read_bytes()).hexdigest() != policy["reviewed_execution_bindings_sha256"]:
+    raise SystemExit("reviewed execution bindings differ from the reviewed digest")
+if hashlib.sha256((root / "execution-policy.json").read_bytes()).hexdigest() != policy["execution_policy_sha256"]:
+    raise SystemExit("execution policy differs from the reviewed digest")
+if hashlib.sha256((root / "LICENSES").read_bytes()).hexdigest() != policy["license_notice_sha256"]:
+    raise SystemExit("license notice differs from the reviewed digest")
+if hashlib.sha256((root / "LICENSES.execution").read_bytes()).hexdigest() != policy["execution_license_notice_sha256"]:
+    raise SystemExit("execution license notice differs from the reviewed digest")
+expected_metallib_digest = policy["readiness_metallib_sha256_by_target"].get(manifest["target"])
+if manifest["readiness_metallib_sha256"] != expected_metallib_digest:
+    raise SystemExit("readiness metallib differs from the reviewed target digest")
+if manifest["readiness_metallib_size"] != (root / "kernels/readiness.metallib").stat().st_size:
+    raise SystemExit("adapter manifest metallib size does not match the payload")
+if manifest["tensor_ops_source_sha256"] != policy["tensor_ops_source_sha256"]:
+    raise SystemExit("tensor source differs from the reviewed digest")
+expected_tensor_metallib_digest = policy["tensor_ops_metallib_sha256_by_target"].get(manifest["target"])
+if manifest["tensor_ops_metallib_sha256"] != expected_tensor_metallib_digest:
+    raise SystemExit("tensor metallib differs from the reviewed target digest")
+if manifest["tensor_ops_metallib_size"] != (root / "kernels/tensor_ops.metallib").stat().st_size:
+    raise SystemExit("adapter manifest tensor metallib size does not match the payload")
+if manifest["tensor_functions"] != [
+    "zed_sim_metal_add_f16_v1",
+    "zed_sim_metal_add_f32_v1",
+]:
+    raise SystemExit("adapter manifest tensor functions differ from the reviewed contract")
+
+for relative in (
+    "abi/symbols-v1.json",
+    "abi/execution-v1.json",
+    "ffi-contracts-v1.json",
+    "execution-policy.json",
+    "package-policy.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+):
+    try:
+        json.loads((root / relative).read_bytes(), object_pairs_hook=reject_duplicates)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        raise SystemExit(f"packaged JSON is not strict: {relative}: {error}")
+
+coverage_path = root / "package-coverage.sha256"
+rows = []
+for relative in sorted(observed - excluded):
+    contents = (root / relative).read_bytes()
+    rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+if coverage_path.read_bytes() != "".join(rows).encode("utf-8"):
+    raise SystemExit("package coverage no longer matches the declared payload tree")
+PY
+    catalog_target=$(python3 - "$1/adapter-manifest.json" <<'PY'
+import json
+import pathlib
+import sys
+print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["target"])
+PY
+)
+    catalog_validation_directory=$(mktemp -d "${TMPDIR:-/tmp}/sim-metal-catalog-validation.XXXXXX")
+    if ! validate_and_copy_contract_catalog \
+        "$1/ffi-contracts-v1.json" "$catalog_validation_directory/catalog.json" \
+        "$catalog_target" "$1/kernels/readiness.metallib" "$1/kernels/tensor_ops.metallib"
+    then
+        rm -rf -- "$catalog_validation_directory"
+        return 1
+    fi
+    rm -rf -- "$catalog_validation_directory"
+}
+
+build_package() (
+    output_directory=$1
+    target=$2
+    receipt=$3
+    signer=$4
+    contract_catalog=$5
+    validate_target_and_signer "$target" "$signer" || exit 1
+    validate_receipt_shape "$receipt" || exit 1
+    validate_regular_input "$abi_manifest" "ABI manifest" || exit 1
+    validate_regular_input "$kernel_source" "readiness source" || exit 1
+    validate_regular_input "$licenses" "license notice" || exit 1
+    validate_regular_input "$execution_abi" "execution ABI" || exit 1
+    validate_regular_input "$execution_bindings" "reviewed execution bindings" || exit 1
+    validate_regular_input "$execution_kernel_source" "tensor source" || exit 1
+    validate_regular_input "$execution_licenses" "execution license notice" || exit 1
+    validate_regular_input "$execution_policy" "execution policy" || exit 1
+    validate_regular_input "$contract_schema" "FFI contract schema" || exit 1
+    validate_regular_input "$policy" "package policy" || exit 1
+    if [ -e "$output_directory" ] || [ -L "$output_directory" ]; then
+        echo "output directory already exists: $output_directory" >&2
+        exit 1
+    fi
+
+    parent=$(dirname -- "$output_directory")
+    mkdir -p "$parent"
+    staging_directory=$(mktemp -d "$parent/.sim-metal-package.XXXXXX")
+    execution_parent=$(mktemp -d "$parent/.sim-metal-execution-input.XXXXXX")
+    trap 'rm -rf -- "$staging_directory" "$execution_parent"' 0 HUP INT TERM
+    "$execution_packager" "$execution_parent/package" "$target" >/dev/null
+    mkdir -p "$staging_directory/abi" "$staging_directory/kernels"
+    cp "$abi_manifest" "$staging_directory/abi/symbols-v1.json"
+    cp "$execution_parent/package/abi/execution-v1.json" "$staging_directory/abi/execution-v1.json"
+    cp "$execution_parent/package/abi/reviewed-execution-bindings-v1.txt" \
+        "$staging_directory/abi/reviewed-execution-bindings-v1.txt"
+    cp "$kernel_source" "$staging_directory/kernels/readiness.metal"
+    cp "$execution_parent/package/kernels/tensor_ops.metal" "$staging_directory/kernels/tensor_ops.metal"
+    cp "$execution_parent/package/kernels/tensor_ops.metallib" "$staging_directory/kernels/tensor_ops.metallib"
+    cp "$licenses" "$staging_directory/LICENSES"
+    cp "$execution_licenses" "$staging_directory/LICENSES.execution"
+    cp "$execution_policy" "$staging_directory/execution-policy.json"
+    cp "$policy" "$staging_directory/package-policy.json"
+    cp "$receipt" "$staging_directory/adapter-manifest.sig"
+    compile_metallib "$staging_directory/kernels/readiness.metallib" || exit 1
+    validate_and_copy_contract_catalog \
+        "$contract_catalog" "$staging_directory/ffi-contracts-v1.json" "$target" \
+        "$staging_directory/kernels/readiness.metallib" \
+        "$staging_directory/kernels/tensor_ops.metallib"
+    rm -rf -- "$execution_parent"
+
+    abi_digest=$(shasum -a 256 "$staging_directory/abi/symbols-v1.json" | awk '{print $1}')
+    execution_abi_digest=$(shasum -a 256 "$staging_directory/abi/execution-v1.json" | awk '{print $1}')
+    contract_digest=$(shasum -a 256 "$staging_directory/ffi-contracts-v1.json" | awk '{print $1}')
+    readiness_source_digest=$(shasum -a 256 "$staging_directory/kernels/readiness.metal" | awk '{print $1}')
+    readiness_metallib_digest=$(shasum -a 256 "$staging_directory/kernels/readiness.metallib" | awk '{print $1}')
+    readiness_metallib_size=$(wc -c < "$staging_directory/kernels/readiness.metallib" | tr -d ' ')
+    tensor_source_digest=$(shasum -a 256 "$staging_directory/kernels/tensor_ops.metal" | awk '{print $1}')
+    tensor_metallib_digest=$(shasum -a 256 "$staging_directory/kernels/tensor_ops.metallib" | awk '{print $1}')
+    tensor_metallib_size=$(wc -c < "$staging_directory/kernels/tensor_ops.metallib" | tr -d ' ')
+    generate_adapter_manifest "$staging_directory/adapter-manifest.json" "$target" "$signer" \
+        "$abi_digest" "$execution_abi_digest" "$contract_digest" \
+        "$readiness_source_digest" "$readiness_metallib_digest" "$readiness_metallib_size" \
+        "$tensor_source_digest" "$tensor_metallib_digest" "$tensor_metallib_size"
+    generate_coverage "$staging_directory"
+    validate_final_tree "$staging_directory" || exit 1
+    mv "$staging_directory" "$output_directory"
+    trap - 0 HUP INT TERM
+    echo "packaged signed-structure Metal foundation and execution adapter for $target at $output_directory"
+)
+
+write_self_test_catalog() {
+    destination=$1
+    target=$2
+    python3 - \
+        "$destination" "$target" "$abi_manifest" "$execution_abi" "$policy" \
+        "$execution_policy" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+destination, target, abi_path, execution_path, policy_path, execution_policy_path = sys.argv[1:]
+
+def load(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+def digest(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+foundation = load(abi_path)
+execution = load(execution_path)
+policy = load(policy_path)
+execution_policy = load(execution_policy_path)
+identities = {
+    "Metal": "metal-framework",
+    "MetalPerformanceShaders": "metal-performance-shaders-framework",
+    "MetalPerformanceShadersGraph": "metal-performance-shaders-graph-framework",
+}
+frameworks = []
+for framework in foundation["frameworks"]:
+    required_symbols = framework["symbols"]
+    if framework["name"] == "MetalPerformanceShadersGraph":
+        required_symbols = [
+            "objc.MPSGraph",
+            "objc.MPSGraphDevice",
+            "objc.MPSGraphTensorData",
+        ]
+    frameworks.append(
+        {
+            "identity": identities[framework["name"]],
+            "name": framework["name"],
+            "install_name": framework["install_name"],
+            "image_name": framework["image_name"],
+            "required_symbols": required_symbols,
+            "unsafe_owner": "sim_backend_metal::loader",
+        }
+    )
+frameworks.sort(key=lambda row: row["identity"])
+classes = []
+for class_row in foundation["classes"]:
+    classes.append(
+        {
+            "name": class_row["name"],
+            "image_name": class_row["image_name"],
+            "selectors": sorted(
+                class_row["selectors"], key=lambda row: (row["kind"], row["name"])
+            ),
+        }
+    )
+classes.sort(key=lambda row: row["name"])
+catalog = {
+    "schema_version": 1,
+    "backend": "metal",
+    "abi_floor": "macos-13-metal-3",
+    "target": target,
+    "minimum_macos_version": "13.0",
+    "metal_language_version": "metal3.0",
+    "minimum_metal_family": 5001,
+    "abi_manifest_sha256": digest(abi_path),
+    "execution_abi_sha256": digest(execution_path),
+    "frameworks": frameworks,
+    "classes": classes,
+    "resource_selectors": execution["resource_selectors"],
+    "layouts": foundation["layouts"],
+    "metallibs": [
+        {
+            "identity": "metal-readiness-metallib",
+            "path": "kernels/readiness.metallib",
+            "sha256": policy["readiness_metallib_sha256_by_target"][target],
+            "source_path": "kernels/readiness.metal",
+            "source_sha256": policy["readiness_source_sha256"],
+            "required_functions": [foundation["readiness_function"]],
+            "unsafe_owner": "sim_backend_metal::loader",
+        },
+        {
+            "identity": "metal-tensor-ops-metallib",
+            "path": "kernels/tensor_ops.metallib",
+            "sha256": execution_policy["tensor_ops_metallib_sha256_by_target"][target],
+            "source_path": "kernels/tensor_ops.metal",
+            "source_sha256": execution_policy["tensor_ops_source_sha256"],
+            "required_functions": sorted(row["function"] for row in execution["kernels"]),
+            "unsafe_owner": "sim_backend_metal::execution",
+        },
+    ],
+    "runtime_compilation_forbidden": True,
+}
+pathlib.Path(destination).write_text(
+    json.dumps(catalog, separators=(",", ":"), ensure_ascii=True) + "\n",
+    encoding="ascii",
+)
+PY
+}
+
+run_self_test() {
+    temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/sim-metal-package-test.XXXXXX")
+    trap 'rm -rf -- "$temporary_directory"' 0 HUP INT TERM
+    receipt="$temporary_directory/receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}' > "$receipt"
+    catalog_aarch64="$temporary_directory/ffi-contracts-aarch64.json"
+    catalog_x86="$temporary_directory/ffi-contracts-x86.json"
+    write_self_test_catalog "$catalog_aarch64" aarch64-apple-darwin
+    write_self_test_catalog "$catalog_x86" x86_64-apple-darwin
+
+    build_package "$temporary_directory/package-a" aarch64-apple-darwin "$receipt" self-test.signer "$catalog_aarch64" >/dev/null
+    build_package "$temporary_directory/package-b" aarch64-apple-darwin "$receipt" self-test.signer "$catalog_aarch64" >/dev/null
+    build_package "$temporary_directory/package-x86" x86_64-apple-darwin "$receipt" self-test.signer "$catalog_x86" >/dev/null
+    cmp -s "$temporary_directory/package-a/kernels/readiness.metallib" "$temporary_directory/package-b/kernels/readiness.metallib" || {
+        echo "self-test Metal compiler output was not deterministic" >&2
+        exit 1
+    }
+    cmp -s "$temporary_directory/package-a/package-coverage.sha256" "$temporary_directory/package-b/package-coverage.sha256" || {
+        echo "self-test package coverage was not deterministic" >&2
+        exit 1
+    }
+    validate_final_tree "$temporary_directory/package-a"
+    validate_final_tree "$temporary_directory/package-x86"
+    cmp -s "$catalog_aarch64" "$temporary_directory/package-a/ffi-contracts-v1.json" || {
+        echo "self-test package did not preserve the separately reviewed FFI catalog" >&2
+        exit 1
+    }
+    for covered_path in \
+        abi/symbols-v1.json \
+        abi/execution-v1.json \
+        abi/reviewed-execution-bindings-v1.txt \
+        ffi-contracts-v1.json \
+        execution-policy.json \
+        kernels/readiness.metal \
+        kernels/readiness.metallib \
+        kernels/tensor_ops.metal \
+        kernels/tensor_ops.metallib
+    do
+        if ! grep -Fq "  $covered_path" "$temporary_directory/package-a/package-coverage.sha256"; then
+            echo "self-test signature coverage omitted $covered_path" >&2
+            exit 1
+        fi
+    done
+
+    reject_catalog() {
+        rejected_catalog=$1
+        rejected_name=$2
+        if validate_and_copy_contract_catalog \
+            "$rejected_catalog" "$temporary_directory/rejected-$rejected_name.json" \
+            aarch64-apple-darwin \
+            "$temporary_directory/package-a/kernels/readiness.metallib" \
+            "$temporary_directory/package-a/kernels/tensor_ops.metallib" \
+            >/dev/null 2>&1
+        then
+            echo "self-test accepted $rejected_name FFI contract catalog" >&2
+            exit 1
+        fi
+    }
+    python3 - "$catalog_aarch64" "$temporary_directory" <<'PY'
+import json
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1])
+destination = pathlib.Path(sys.argv[2])
+raw = source.read_text(encoding="ascii")
+
+(destination / "duplicate-catalog.json").write_text(
+    raw.replace('"backend":"metal"', '"backend":"metal","backend":"metal"', 1),
+    encoding="ascii",
+)
+(destination / "malformed-catalog.json").write_text('{"schema_version":1', encoding="ascii")
+
+def mutate(name, callback):
+    document = json.loads(raw)
+    callback(document)
+    (destination / f"{name}-catalog.json").write_text(
+        json.dumps(document, separators=(",", ":")) + "\n",
+        encoding="ascii",
+    )
+
+mutate("unknown", lambda document: document.update({"unknown": True}))
+mutate(
+    "unsorted",
+    lambda document: document["frameworks"].reverse(),
+)
+mutate(
+    "unsorted-nested",
+    lambda document: document["classes"][0]["selectors"].reverse(),
+)
+mutate(
+    "duplicate-row",
+    lambda document: document["frameworks"].append(document["frameworks"][0]),
+)
+mutate(
+    "wrong-target",
+    lambda document: document.update({"target": "x86_64-apple-darwin"}),
+)
+mutate(
+    "wrong-owner",
+    lambda document: document["frameworks"][0].update(
+        {"unsafe_owner": "sim_backend_metal::execution"}
+    ),
+)
+mutate(
+    "wrong-abi",
+    lambda document: document.update({"abi_floor": "macos-14-metal-3"}),
+)
+mutate(
+    "wrong-digest",
+    lambda document: document["metallibs"][0].update({"sha256": "0" * 64}),
+)
+mutate(
+    "wrong-selector",
+    lambda document: document["resource_selectors"][0].update(
+        {"encoding": "v24@0:8"}
+    ),
+)
+mutate(
+    "wrong-function",
+    lambda document: document["metallibs"][1].update(
+        {"required_functions": ["zed_sim_metal_add_f32_v1"]}
+    ),
+)
+(destination / "oversized-catalog.json").write_bytes(b" " * (1024 * 1024 + 1))
+PY
+    for rejected_name in duplicate malformed unknown unsorted unsorted-nested duplicate-row wrong-target wrong-owner \
+        wrong-abi wrong-digest wrong-selector wrong-function oversized
+    do
+        reject_catalog "$temporary_directory/$rejected_name-catalog.json" "$rejected_name"
+    done
+    ln -s "$catalog_aarch64" "$temporary_directory/symlink-catalog.json"
+    reject_catalog "$temporary_directory/symlink-catalog.json" symlink
+
+    if build_package "$temporary_directory/bad-target" arm64-apple-ios "$receipt" self-test.signer "$catalog_aarch64" >/dev/null 2>&1; then
+        echo "self-test accepted an unsupported target" >&2
+        exit 1
+    fi
+    if build_package "$temporary_directory/bad-signer" aarch64-apple-darwin "$receipt" Bad..Signer "$catalog_aarch64" >/dev/null 2>&1; then
+        echo "self-test accepted a malformed signer ID" >&2
+        exit 1
+    fi
+    invalid_receipt="$temporary_directory/invalid-receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"ABC"}' > "$invalid_receipt"
+    if build_package "$temporary_directory/bad-receipt" aarch64-apple-darwin "$invalid_receipt" self-test.signer "$catalog_aarch64" >/dev/null 2>&1; then
+        echo "self-test accepted a malformed Ed25519 receipt" >&2
+        exit 1
+    fi
+
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-binary"
+    printf 'x' >> "$temporary_directory/tampered-binary/kernels/readiness.metallib"
+    generate_coverage "$temporary_directory/tampered-binary"
+    if validate_final_tree "$temporary_directory/tampered-binary" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered metallib" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-execution-binary"
+    printf 'x' >> "$temporary_directory/tampered-execution-binary/kernels/tensor_ops.metallib"
+    generate_coverage "$temporary_directory/tampered-execution-binary"
+    if validate_final_tree "$temporary_directory/tampered-execution-binary" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered tensor metallib" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-contracts"
+    printf 'x' >> "$temporary_directory/tampered-contracts/ffi-contracts-v1.json"
+    generate_coverage "$temporary_directory/tampered-contracts"
+    if validate_final_tree "$temporary_directory/tampered-contracts" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered FFI contract catalog" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-source"
+    printf 'x' >> "$temporary_directory/tampered-source/kernels/readiness.metal"
+    generate_coverage "$temporary_directory/tampered-source"
+    if validate_final_tree "$temporary_directory/tampered-source" >/dev/null 2>&1; then
+        echo "self-test accepted tampered readiness source" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-abi"
+    printf 'x' >> "$temporary_directory/tampered-abi/abi/symbols-v1.json"
+    generate_coverage "$temporary_directory/tampered-abi"
+    if validate_final_tree "$temporary_directory/tampered-abi" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered ABI manifest" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-coverage"
+    printf 'x' >> "$temporary_directory/tampered-coverage/package-coverage.sha256"
+    if validate_final_tree "$temporary_directory/tampered-coverage" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered package coverage ledger" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-target"
+    python3 - "$temporary_directory/tampered-target/adapter-manifest.json" <<'PY'
+import json
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+manifest = json.loads(path.read_text(encoding="utf-8"))
+manifest["target"] = "arm64-apple-ios"
+path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+    generate_coverage "$temporary_directory/tampered-target"
+    if validate_final_tree "$temporary_directory/tampered-target" >/dev/null 2>&1; then
+        echo "self-test accepted a target-mismatched manifest" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/redistributed-framework"
+    mkdir "$temporary_directory/redistributed-framework/Metal.framework"
+    if validate_final_tree "$temporary_directory/redistributed-framework" >/dev/null 2>&1; then
+        echo "self-test accepted redistributed Apple framework content" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/symlink-package"
+    ln -s readiness.metallib "$temporary_directory/symlink-package/kernels/alias.metallib"
+    if validate_final_tree "$temporary_directory/symlink-package" >/dev/null 2>&1; then
+        echo "self-test accepted a symbolic-link payload" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/uncovered-payload"
+    printf 'x' > "$temporary_directory/uncovered-payload/unknown.bin"
+    if validate_final_tree "$temporary_directory/uncovered-payload" >/dev/null 2>&1; then
+        echo "self-test accepted a signature-uncovered payload" >&2
+        exit 1
+    fi
+    cp -R "$temporary_directory/package-a" "$temporary_directory/tampered-receipt"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"ABC"}' > "$temporary_directory/tampered-receipt/adapter-manifest.sig"
+    if validate_final_tree "$temporary_directory/tampered-receipt" >/dev/null 2>&1; then
+        echo "self-test accepted a malformed untrusted receipt structure" >&2
+        exit 1
+    fi
+    echo "Metal package self-test passed"
+}
+
+if [ "$#" -eq 1 ] && [ "$1" = "--self-test" ]; then
+    run_self_test
+elif [ "$#" -eq 2 ] && [ "$1" = "--inspect-structure" ]; then
+    validate_final_tree "$2"
+    echo "inspected untrusted Metal package structure at $2; structural validation cannot authorize it"
+elif [ "$#" -eq 3 ] && [ "$1" = "--write-contract-catalog" ]; then
+    validate_target_and_signer "$3" "development.catalog" || exit 1
+    if [ -e "$2" ] || [ -L "$2" ]; then
+        echo "contract catalog output already exists: $2" >&2
+        exit 1
+    fi
+    write_self_test_catalog "$2" "$3"
+    echo "wrote development-time Metal contract catalog for $3 at $2"
+elif [ "$#" -eq 5 ]; then
+    build_package "$1" "$2" "$3" "$4" "$5"
+else
+    usage
+    exit 2
+fi

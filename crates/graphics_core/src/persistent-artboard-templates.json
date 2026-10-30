@@ -1,0 +1,885 @@
+{
+  "artboard": {
+    "document_node": {
+      "call_argument": {
+        "Concrete": {
+          "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+        }
+      },
+      "context_features": {
+        "extract": "",
+        "inject": ""
+      },
+      "implementation": {
+        "Network": {
+          "exports": [
+            {
+              "Node": {
+                "node_id": 4,
+                "output_index": 0
+              }
+            }
+          ],
+          "nodes": [
+            [
+              0,
+              {
+                "call_argument": {
+                  "Generic": "T"
+                },
+                "context_features": {
+                  "extract": "",
+                  "inject": ""
+                },
+                "implementation": {
+                  "ProtoNode": {
+                    "name": "graphic_nodes::artboard::CreateArtboardNode"
+                  }
+                },
+                "inputs": [
+                  {
+                    "Import": {
+                      "import_index": 1,
+                      "import_type": {
+                        "Fn": [
+                          {
+                            "Concrete": {
+                              "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                            }
+                          },
+                          {
+                            "Generic": "T"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Import": {
+                      "import_index": 2,
+                      "import_type": {
+                        "Item": {
+                          "Concrete": {
+                            "name": "graph_craft::document::value::TaggedValue"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Import": {
+                      "import_index": 3,
+                      "import_type": {
+                        "Item": {
+                          "Concrete": {
+                            "name": "graph_craft::document::value::TaggedValue"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Import": {
+                      "import_index": 4,
+                      "import_type": {
+                        "Item": {
+                          "Concrete": {
+                            "name": "graph_craft::document::value::TaggedValue"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Import": {
+                      "import_index": 5,
+                      "import_type": {
+                        "Item": {
+                          "Concrete": {
+                            "name": "graph_craft::document::value::TaggedValue"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ],
+                "skip_deduplication": false,
+                "visible": true
+              }
+            ],
+            [
+              1,
+              {
+                "call_argument": {
+                  "Concrete": {
+                    "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                  }
+                },
+                "context_features": {
+                  "extract": "",
+                  "inject": ""
+                },
+                "implementation": {
+                  "ProtoNode": {
+                    "name": "graphic_nodes::graphic::PathOfSubgraphNode"
+                  }
+                },
+                "inputs": [
+                  {
+                    "Reflection": "DocumentNodePath"
+                  }
+                ],
+                "skip_deduplication": false,
+                "visible": true
+              }
+            ],
+            [
+              2,
+              {
+                "call_argument": {
+                  "Concrete": {
+                    "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                  }
+                },
+                "context_features": {
+                  "extract": "",
+                  "inject": ""
+                },
+                "implementation": {
+                  "ProtoNode": {
+                    "name": "graphic_nodes::graphic::WriteAttributeNode"
+                  }
+                },
+                "inputs": [
+                  {
+                    "Node": {
+                      "node_id": 0,
+                      "output_index": 0
+                    }
+                  },
+                  {
+                    "Value": {
+                      "exposed": false,
+                      "tagged_value": {
+                        "String": "editor:layer_path"
+                      }
+                    }
+                  },
+                  {
+                    "Node": {
+                      "node_id": 1,
+                      "output_index": 0
+                    }
+                  }
+                ],
+                "skip_deduplication": false,
+                "visible": true
+              }
+            ],
+            [
+              3,
+              {
+                "call_argument": {
+                  "Generic": "T"
+                },
+                "context_features": {
+                  "extract": "",
+                  "inject": ""
+                },
+                "implementation": {
+                  "ProtoNode": {
+                    "name": "graphene_core::memo::MonitorNode"
+                  }
+                },
+                "inputs": [
+                  {
+                    "Node": {
+                      "node_id": 2,
+                      "output_index": 0
+                    }
+                  }
+                ],
+                "skip_deduplication": true,
+                "visible": true
+              }
+            ],
+            [
+              4,
+              {
+                "call_argument": {
+                  "Concrete": {
+                    "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                  }
+                },
+                "context_features": {
+                  "extract": "",
+                  "inject": ""
+                },
+                "implementation": {
+                  "ProtoNode": {
+                    "name": "graphic_nodes::graphic::ExtendNode"
+                  }
+                },
+                "inputs": [
+                  {
+                    "Import": {
+                      "import_index": 0,
+                      "import_type": {
+                        "Fn": [
+                          {
+                            "Concrete": {
+                              "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                            }
+                          },
+                          {
+                            "List": {
+                              "Concrete": {
+                                "name": "graphic_types::artboard::Artboard"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Node": {
+                      "node_id": 3,
+                      "output_index": 0
+                    }
+                  }
+                ],
+                "skip_deduplication": false,
+                "visible": true
+              }
+            ]
+          ],
+          "scope_injections": []
+        }
+      },
+      "inputs": [
+        {
+          "Value": {
+            "exposed": true,
+            "tagged_value": {
+              "TypeDefault": {
+                "List": {
+                  "Concrete": {
+                    "name": "graphic_types::artboard::Artboard"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Value": {
+            "exposed": true,
+            "tagged_value": {
+              "TypeDefault": {
+                "List": {
+                  "Concrete": {
+                    "name": "graphic_types::graphic::Graphic"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Value": {
+            "exposed": false,
+            "tagged_value": {
+              "DVec2": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "Value": {
+            "exposed": false,
+            "tagged_value": {
+              "DVec2": [
+                1920.0,
+                1080.0
+              ]
+            }
+          }
+        },
+        {
+          "Value": {
+            "exposed": false,
+            "tagged_value": {
+              "Color": {
+                "alpha": 1.0,
+                "blue": 1.0,
+                "green": 1.0,
+                "linear": true,
+                "red": 1.0
+              }
+            }
+          }
+        },
+        {
+          "Value": {
+            "exposed": false,
+            "tagged_value": {
+              "Bool": true
+            }
+          }
+        }
+      ],
+      "skip_deduplication": false,
+      "visible": true
+    },
+    "persistent_node_metadata": {
+      "display_name": "Artboard",
+      "input_metadata": [
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "TODO",
+            "input_name": "Base",
+            "widget_override": null
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "TODO",
+            "input_name": "Content",
+            "widget_override": "hidden"
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {
+              "is_integer": true,
+              "unit": " px",
+              "x": "X",
+              "y": "Y"
+            },
+            "input_description": "TODO",
+            "input_name": "Location",
+            "widget_override": "vec2"
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {
+              "is_integer": true,
+              "unit": " px",
+              "x": "W",
+              "y": "H"
+            },
+            "input_description": "TODO",
+            "input_name": "Dimensions",
+            "widget_override": "vec2"
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "TODO",
+            "input_name": "Background",
+            "widget_override": "artboard_background"
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "TODO",
+            "input_name": "Clip",
+            "widget_override": null
+          }
+        }
+      ],
+      "locked": false,
+      "network_metadata": {
+        "persistent_metadata": {
+          "navigation_metadata": {
+            "node_graph_ptz": {
+              "flip": false,
+              "pan": [
+                0.0,
+                0.0
+              ],
+              "tilt": 0.0,
+              "zoom": 1.0
+            },
+            "node_graph_to_viewport": [
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "node_graph_width": 0.0
+          },
+          "node_metadata": [
+            [
+              0,
+              {
+                "persistent_metadata": {
+                  "display_name": "",
+                  "input_metadata": [
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "Graphics to include within the artboard.\n",
+                        "input_name": "Content",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "Coordinate of the top-left corner of the artboard within the document.\n",
+                        "input_name": "Location",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "Width and height of the artboard within the document.\n",
+                        "input_name": "Dimensions",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "Color of the artboard background.\n",
+                        "input_name": "Background",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "Whether to cut off the contained content that extends outside the artboard, or keep it visible.\n",
+                        "input_name": "Clip",
+                        "widget_override": null
+                      }
+                    }
+                  ],
+                  "locked": false,
+                  "network_metadata": null,
+                  "node_type_metadata": {
+                    "Node": {
+                      "position": {
+                        "Absolute": [
+                          -21,
+                          -3
+                        ]
+                      }
+                    }
+                  },
+                  "output_names": [],
+                  "pinned": false,
+                  "storage_id": null
+                }
+              }
+            ],
+            [
+              1,
+              {
+                "persistent_metadata": {
+                  "display_name": "",
+                  "input_metadata": [
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "",
+                        "input_name": "Node Path",
+                        "widget_override": null
+                      }
+                    }
+                  ],
+                  "locked": false,
+                  "network_metadata": null,
+                  "node_type_metadata": {
+                    "Node": {
+                      "position": {
+                        "Absolute": [
+                          -21,
+                          3
+                        ]
+                      }
+                    }
+                  },
+                  "output_names": [],
+                  "pinned": false,
+                  "storage_id": null
+                }
+              }
+            ],
+            [
+              2,
+              {
+                "persistent_metadata": {
+                  "display_name": "",
+                  "input_metadata": [
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "The list to set the named attribute on (one value per item).\n",
+                        "input_name": "Content",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "The attribute name (key) to write or replace.\n",
+                        "input_name": "Name",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "The node that produces the attribute value for each item. Called once per item with the item's index in context.\n",
+                        "input_name": "Value",
+                        "widget_override": null
+                      }
+                    }
+                  ],
+                  "locked": false,
+                  "network_metadata": null,
+                  "node_type_metadata": {
+                    "Node": {
+                      "position": {
+                        "Absolute": [
+                          -14,
+                          -3
+                        ]
+                      }
+                    }
+                  },
+                  "output_names": [],
+                  "pinned": false,
+                  "storage_id": null
+                }
+              }
+            ],
+            [
+              3,
+              {
+                "persistent_metadata": {
+                  "display_name": "",
+                  "input_metadata": [
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "",
+                        "input_name": "Content",
+                        "widget_override": null
+                      }
+                    }
+                  ],
+                  "locked": false,
+                  "network_metadata": null,
+                  "node_type_metadata": {
+                    "Node": {
+                      "position": {
+                        "Absolute": [
+                          -7,
+                          -3
+                        ]
+                      }
+                    }
+                  },
+                  "output_names": [],
+                  "pinned": false,
+                  "storage_id": null
+                }
+              }
+            ],
+            [
+              4,
+              {
+                "persistent_metadata": {
+                  "display_name": "",
+                  "input_metadata": [
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "The list whose items will appear at the start of the extended list.\n",
+                        "input_name": "Base",
+                        "widget_override": null
+                      }
+                    },
+                    {
+                      "persistent_metadata": {
+                        "input_data": {},
+                        "input_description": "The list whose items will appear at the end of the extended list.\n",
+                        "input_name": "New",
+                        "widget_override": null
+                      }
+                    }
+                  ],
+                  "locked": false,
+                  "network_metadata": null,
+                  "node_type_metadata": {
+                    "Node": {
+                      "position": {
+                        "Absolute": [
+                          0,
+                          -4
+                        ]
+                      }
+                    }
+                  },
+                  "output_names": [],
+                  "pinned": false,
+                  "storage_id": null
+                }
+              }
+            ]
+          ],
+          "pinned_node_order": [],
+          "previewing": "No",
+          "reference": "Artboard"
+        }
+      },
+      "node_type_metadata": {
+        "Layer": {
+          "position": {
+            "Absolute": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "output_names": [
+        "Out"
+      ],
+      "pinned": false,
+      "storage_id": null
+    }
+  },
+  "decode_image": {
+    "document_node": {
+      "call_argument": {
+        "Concrete": {
+          "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+        }
+      },
+      "context_features": {
+        "extract": "",
+        "inject": ""
+      },
+      "implementation": {
+        "ProtoNode": {
+          "name": "graphene_std::platform_application_io::DecodeImageNode"
+        }
+      },
+      "inputs": [
+        {
+          "Value": {
+            "exposed": true,
+            "tagged_value": {
+              "TypeDefault": {
+                "Item": {
+                  "Concrete": {
+                    "name": "graphene_resource::Resource"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "skip_deduplication": false,
+      "visible": true
+    },
+    "persistent_node_metadata": {
+      "display_name": "",
+      "input_metadata": [
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "",
+            "input_name": "Data",
+            "widget_override": null
+          }
+        }
+      ],
+      "locked": false,
+      "network_metadata": null,
+      "node_type_metadata": {
+        "Node": {
+          "position": {
+            "Absolute": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "output_names": [],
+      "pinned": false,
+      "storage_id": null
+    }
+  },
+  "replace_transform": {
+    "document_node": {
+      "call_argument": {
+        "Concrete": {
+          "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+        }
+      },
+      "context_features": {
+        "extract": "",
+        "inject": "FOOTPRINT"
+      },
+      "implementation": {
+        "ProtoNode": {
+          "name": "transform_nodes::transform_nodes::ReplaceTransformNode"
+        }
+      },
+      "inputs": [
+        {
+          "Value": {
+            "exposed": true,
+            "tagged_value": {
+              "TypeDefault": {
+                "List": {
+                  "Concrete": {
+                    "name": "graphic_types::graphic::Graphic"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Value": {
+            "exposed": false,
+            "tagged_value": {
+              "DAffine2": [
+                1.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "skip_deduplication": false,
+      "visible": true
+    },
+    "persistent_node_metadata": {
+      "display_name": "",
+      "input_metadata": [
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "",
+            "input_name": "Content",
+            "widget_override": null
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "",
+            "input_name": "Transform",
+            "widget_override": null
+          }
+        }
+      ],
+      "locked": false,
+      "network_metadata": null,
+      "node_type_metadata": {
+        "Node": {
+          "position": {
+            "Absolute": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "output_names": [],
+      "pinned": false,
+      "storage_id": null
+    }
+  },
+  "resource": {
+    "document_node": {
+      "call_argument": {
+        "Concrete": {
+          "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+        }
+      },
+      "context_features": {
+        "extract": "",
+        "inject": ""
+      },
+      "implementation": {
+        "ProtoNode": {
+          "name": "graphene_std::platform_application_io::ResourceNode"
+        }
+      },
+      "inputs": [
+        {
+          "Scope": "graphene_std::platform_application_io::EditorApiNode"
+        },
+        {
+          "Value": {
+            "exposed": true,
+            "tagged_value": "None"
+          }
+        }
+      ],
+      "skip_deduplication": false,
+      "visible": true
+    },
+    "persistent_node_metadata": {
+      "display_name": "",
+      "input_metadata": [
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "The scope-provided editor API giving access to the platform's resource storage.\n",
+            "input_name": "Editor Api",
+            "widget_override": null
+          }
+        },
+        {
+          "persistent_metadata": {
+            "input_data": {},
+            "input_description": "The content hash identifying which stored resource to load.\n",
+            "input_name": "Hash",
+            "widget_override": null
+          }
+        }
+      ],
+      "locked": false,
+      "network_metadata": null,
+      "node_type_metadata": {
+        "Node": {
+          "position": {
+            "Absolute": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "output_names": [],
+      "pinned": false,
+      "storage_id": null
+    }
+  }
+}

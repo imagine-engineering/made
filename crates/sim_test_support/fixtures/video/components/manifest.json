@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-components-v1",
+  "provenance": {
+    "mode": "code-inferred-component-contract",
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "source_sha256": {
+      "comfy_extras/nodes_video.py": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+      "comfy_api/latest/_input/video_types.py": "6cba96f1f254094436de6c3e64c0a7b469e7cbaf3578c234c18eea88cf93926d",
+      "comfy_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+      "comfy_api/latest/_util/video_types.py": "5d2f7dd2b82aecec3c05f8f5bd9519530736825d33590207ea0aa32b8cc8627f",
+      "tests-unit/comfy_api_test/video_bit_depth_test.py": "ef54c6b01e971e052df9632d6e9e88cf55fee3b08eadfe19b534e2441dd3ad81",
+      "tests-unit/comfy_api_test/video_types_test.py": "3934cf232c3faa281f64d64a6ef1d5f5b74f0a78e5aa48ec8af7c6a3154f9fc8"
+    },
+    "licensed_checkpoint": null,
+    "upstream_runtime_oracle": null,
+    "codec_numeric_oracle": null
+  },
+  "component_contract": {
+    "bit_depths": [8, 10],
+    "frame_layout": "BHWC",
+    "frame_dtypes": ["F32", "U8"],
+    "separate_alpha_layout": "BHW1-F32",
+    "audio_is_optional": true,
+    "metadata_is_bounded": true,
+    "duration_equation": "frame_count * denominator / numerator",
+    "dimensions_order": ["width", "height"]
+  },
+  "exact_float_frame_rates": {
+    "23.976": [210895126300459, 8796093022208],
+    "29.97": [1054475631502295, 35184372088832],
+    "59.94": [1054475631502295, 17592186044416],
+    "0.01": [5764607523034235, 576460752303423488]
+  },
+  "duration_probe": {
+    "frames": 100,
+    "frame_rate": [24000, 1001],
+    "seconds_equation": "100 * 1001 / 24000"
+  },
+  "intentional_native_narrowing": {
+    "empty_component_video": "rejected",
+    "reason": "Native VIDEO handles require at least one frame so duration and tensor residency remain concrete."
+  },
+  "excluded_ownership": [
+    "demux",
+    "decode",
+    "encode",
+    "container",
+    "filesystem path",
+    "frame interpolation",
+    "cache",
+    "publication"
+  ]
+}

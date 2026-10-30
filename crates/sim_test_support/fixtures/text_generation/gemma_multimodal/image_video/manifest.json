@@ -1,0 +1,76 @@
+{
+  "fixture_kind": "code-inferred-native-gemma-image-video-preparation",
+  "oracle_observation": "Static source-derived contract; no licensed Gemma checkpoint or upstream Python runtime output was used.",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/lt.py",
+      "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+      "symbols": ["Gemma3_Tokenizer.tokenize_with_weights"]
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py",
+      "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "symbols": ["Gemma4_Tokenizer.tokenize_with_weights"]
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/utils.py",
+      "sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "symbols": ["common_upscale"]
+    }
+  ],
+  "configuration": {
+    "gemma3_target_area_pixels": 802816,
+    "gemma3_resize": "area-no-crop-rgb-first-three",
+    "gemma3_maximum_soft_tokens": 256,
+    "gemma4_patch_size": 16,
+    "gemma4_pooling_size": 3,
+    "gemma4_side_multiple": 48,
+    "gemma4_image_maximum_soft_tokens": 280,
+    "gemma4_video_maximum_soft_tokens": 70,
+    "gemma4_video_source_fps": 24,
+    "gemma4_resize": "clamp-u8-truncate-bicubic-antialias-u8-rgb-first-three",
+    "native_backend": "cpu-f32"
+  },
+  "deterministic_cases": [
+    {
+      "name": "gemma3-square-area",
+      "input_shape": [2, 512, 512, 4],
+      "target_shape": [2, 896, 896, 3],
+      "maximum_soft_tokens": 256
+    },
+    {
+      "name": "gemma3-portrait-rounding",
+      "input_height": 17,
+      "input_width": 31,
+      "target_height": 664,
+      "target_width": 1210
+    },
+    {
+      "name": "gemma4-image-budget",
+      "input_shape": [1, 48, 48, 4],
+      "target_shape": [1, 768, 768, 3],
+      "maximum_soft_tokens": 280
+    },
+    {
+      "name": "gemma4-video-precedence-and-subsampling",
+      "image_present": true,
+      "video_shape": [49, 48, 48, 4],
+      "selected_source_frames": [0, 24, 48],
+      "timestamps_seconds": [0, 1, 2],
+      "target_shape_per_frame": [1, 384, 384, 3],
+      "maximum_soft_tokens": 70
+    }
+  ],
+  "validation": {
+    "exact": true,
+    "numeric_tolerance": 0.000001,
+    "nondeterminism": "none",
+    "runtime_oracle_available": false
+  }
+}

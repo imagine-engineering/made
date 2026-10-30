@@ -1,0 +1,16 @@
+Zed ROCm adapter notices
+
+The Zed adapter source is licensed under GPL-3.0-or-later as declared by the crate manifest.
+
+The reviewed declarations are derived from ROCm 6.1.2 public C headers:
+
+- HIP and hipRTC: Copyright Advanced Micro Devices, Inc.; MIT License.
+- rocBLAS: Copyright Advanced Micro Devices, Inc.; MIT License.
+- MIOpen: Copyright Advanced Micro Devices, Inc.; MIT License.
+
+Upstream license texts and source are available from the pinned repositories recorded in
+abi/symbols-v1.json. The package manifest records their exact header SHA-256 digests.
+
+AMD runtime libraries are not redistributed. Users provide an installed compatible ROCm SDK via
+SIM_ROCM_ROOT or ROCM_PATH. A signed Zed package contains only reviewed Zed adapter metadata,
+not libamdhip64, libhiprtc, librocblas, or libMIOpen.

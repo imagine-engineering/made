@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "scope": "actual encoded input, actual source File3D byte wrapper; no native decode/allocation/render claim",
+  "assets": [
+    {
+      "fixture": "source-response.glb",
+      "source": "/home/asvegah/repos/sim/projects/sim/ComfyUI-Frontend/browser_tests/assets/workflowInMedia/workflow.glb",
+      "bytes": 8718,
+      "sha256": "58c25aa16792e8905c1d539f584be38458501e5800f0f05bdcd529cd25cbf11a",
+      "producer": "pinned real ComfyUI-Frontend asset",
+      "source_wrapper": "sim_api/latest/_util/geometry_types.py:File3D",
+      "format_admission": {
+        "status": "malformed; native success unproved",
+        "magic": "glTF",
+        "version": 2,
+        "declared_length": 8716,
+        "actual_length": 8718,
+        "first_chunk_prefix_hex": "efbfbd2100004a534f4e",
+        "finding": "First chunk framing contains UTF-8 replacement sequence efbfbd; standard GLB chunk JSON parsing fails. Actual source File3D BytesIO wrapper does not validate format.",
+        "canonical_owner_limit": "NativeFile3DPayload::checked Glb validation checks only magic and minimum length; no production rejection or parser success claimed"
+      }
+    },
+    {
+      "fixture": "source-response.obj",
+      "source": "/home/asvegah/repos/sim/projects/sim/ComfyUI-Frontend/browser_tests/assets/cube.obj",
+      "bytes": 941,
+      "sha256": "c2e3e5bbfe0218e649d6fe5361a1ff8622e03de16145da1599a859d778d67021",
+      "producer": "pinned real ComfyUI-Frontend asset",
+      "source_wrapper": "sim_api/latest/_util/geometry_types.py:File3D",
+      "format_admission": {
+        "status": "text source asset only; native rendering unproved",
+        "missing_dependency": "mtllib Untitled.mtl"
+      }
+    },
+    {
+      "fixture": "source-image.png",
+      "source": "sim_api_nodes/nodes_rodin.py:tensor_to_filelike",
+      "source_sha256": "e833ab2c68c6c619b4666b269e04e2f3c36a076f6a9e2b44f1bc845ba3614555",
+      "bytes": 69,
+      "sha256": "f029834058561cb09b37aaf5507f9b040949e6dc2827a643556cc37807789f70",
+      "producer": "actual source PIL/NumPy function with metadata input adapter instead of Torch",
+      "pixels_rgb": [
+        127,
+        63,
+        31
+      ]
+    }
+  ]
+}

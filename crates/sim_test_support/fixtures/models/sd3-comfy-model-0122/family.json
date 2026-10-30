@@ -1,0 +1,65 @@
+{
+  "fixture_id": "sd3-sim-model-0122",
+  "feature_id": "COMFY-MODEL-0122",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.x_embedder.proj.weight": [128, 16, 2, 2],
+      "model.diffusion_model.t_embedder.mlp.0.weight": [2, 2],
+      "model.diffusion_model.joint_blocks.0.x_block.attn.qkv.weight": [6, 2],
+      "model.diffusion_model.joint_blocks.0.context_block.attn.qkv.weight": [6, 2],
+      "model.diffusion_model.joint_blocks.0.x_block.attn.proj.weight": [2, 2],
+      "model.diffusion_model.final_layer.linear.weight": [2, 2],
+      "text_encoders.clip_l.transformer.text_model.final_layer_norm.weight": [2],
+      "text_encoders.clip_g.transformer.text_model.final_layer_norm.weight": [2],
+      "text_encoders.t5xxl.transformer.encoder.final_layer_norm.weight": [2]
+    },
+    "metadata": {
+      "model_layout": "diffusers",
+      "model_family": "AuraFlow"
+    }
+  },
+  "base_artifact_digest": "1221221221221221221221221221221221221221221221221221221221221221",
+  "source_weights": [
+    {"key": "model.diffusion_model.x_embedder.proj.weight", "shape": [1], "values": [1.0]},
+    {"key": "model.diffusion_model.t_embedder.mlp.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.joint_blocks.0.x_block.attn.qkv.weight", "shape": [1], "values": [1.0]},
+    {"key": "model.diffusion_model.joint_blocks.0.context_block.attn.qkv.weight", "shape": [1], "values": [1.0]},
+    {"key": "model.diffusion_model.joint_blocks.0.x_block.attn.proj.weight", "shape": [2, 2], "values": [2.0, 0.0, 0.0, 0.5]},
+    {"key": "model.diffusion_model.final_layer.linear.weight", "shape": [2, 2], "values": [1.0, 1.0, 1.0, -1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [1.0, 2.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 34,
+  "expected_memory_bytes": 34,
+  "checkpoints": [
+    {"name": "sd3_timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "sd3_image_attention", "values": [2.0, 1.0]},
+    {"name": "sd3_joint_conditioning", "values": [2.0, 1.0]},
+    {"name": "sd3_final_projection", "values": [3.0, 1.0]},
+    {"name": "sd3_flow_prediction", "values": [0.9950548, 0.7615942]}
+  ],
+  "patches": [
+    {
+      "identifier": "sd3-image-attention-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.joint_blocks.0.x_block.attn.proj.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "sd3_timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "sd3_image_attention", "values": [3.0, 3.0]},
+    {"name": "sd3_joint_conditioning", "values": [3.0, 3.0]},
+    {"name": "sd3_final_projection", "values": [6.0, 0.0]},
+    {"name": "sd3_flow_prediction", "values": [0.9999877, 0.0]}
+  ]
+}

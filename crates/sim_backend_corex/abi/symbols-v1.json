@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "backend": "corex",
+  "abi_floor": "CoreX-IXRT-0.8-ABI-profile",
+  "review_state": "blocked-missing-vendor-headers",
+  "targets": ["x86_64-unknown-linux-gnu"],
+  "discovery_order": ["SIM_COREX_ROOT", "IXRT_HOME", "signed_package_roots"],
+  "libraries": [
+    {
+      "id": "ixblas",
+      "filename": "libixblas.so",
+      "symbols": []
+    },
+    {
+      "id": "ixrt",
+      "filename": "libixrt.so",
+      "symbols": []
+    }
+  ],
+  "layouts": [],
+  "evidence": {
+    "official_repository": "https://github.com/Deep-Spark/iluvatar-corex-ixrt",
+    "pinned_tag": "v4.3.0",
+    "pinned_commit": "0528f3ae5da5dd2255f21966b82bedcb2de65582",
+    "pinned_tree": "3b503f464cfbbe4adab6f54ec6bb46558bc4b386",
+    "observed_build_file": "cmake/FindIxrt.cmake",
+    "observed_include_placeholder": "ixrt/include",
+    "observation": "The official OSS tree requires IXRT_HOME/include from a separately downloaded SDK; ixrt/include contains only ../include and the proprietary ABI headers are absent.",
+    "proves_ixrt_0_8_abi": false
+  },
+  "missing_evidence": [
+    {
+      "id": "ixblas-symbol-signatures",
+      "required_for": "Declaring or resolving any libixblas.so function"
+    },
+    {
+      "id": "ixrt-0.8-symbol-signatures",
+      "required_for": "Declaring or resolving any libixrt.so function"
+    },
+    {
+      "id": "ixrt-0.8-type-layouts",
+      "required_for": "Passing any IXRT or IXBLAS handle, enum, descriptor, or structure"
+    },
+    {
+      "id": "normalized-header-digests",
+      "required_for": "Matching a supplied SDK to the reviewed IXRT 0.8 ABI profile"
+    }
+  ],
+  "unsafe_owner": "sim_backend_corex::loader",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "package": {
+    "redistributes_vendor_runtime": false,
+    "license_approval_required_for_redistribution": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-corex-package-v1",
+    "final_application_signing_required": true,
+    "runtime_loading_enabled": false
+  }
+}

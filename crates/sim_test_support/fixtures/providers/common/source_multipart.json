@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "aiohttp_version": "3.11.8",
+  "formdata_sha256": "0942670960cd1c571749867f4eea5a4faac7918f90ee086cb2f5b369804f228d",
+  "multipart_sha256": "d63221ec61058122fe7272d0cdb3412d65c726507858acb2d0d066fe2d58dd5e",
+  "producer_sha256": "71b16c1a35684808f7f36e6208006ecd7fb42f5f2f1784d9595e34fa19e66661",
+  "boundary": "sim-source-boundary",
+  "cases": [
+    {
+      "fields": [
+        {
+          "name": "prompt",
+          "file_name": null,
+          "media_type": "text/plain; charset=utf-8",
+          "bytes_hex": "e2988120736f75726365"
+        },
+        {
+          "name": "files",
+          "file_name": "one.bin",
+          "media_type": "application/octet-stream",
+          "bytes_hex": "00ff0d0a"
+        },
+        {
+          "name": "files",
+          "file_name": "two.bin",
+          "media_type": "application/octet-stream",
+          "bytes_hex": "6e657874"
+        }
+      ],
+      "body_hex": "2d2d636f6d66792d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a20746578742f706c61696e3b20636861727365743d7574662d380d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2270726f6d7074220d0a0d0ae2988120736f757263650d0a2d2d636f6d66792d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a206170706c69636174696f6e2f6f637465742d73747265616d0d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c6573223b2066696c656e616d653d226f6e652e62696e220d0a0d0a00ff0d0a0d0a2d2d636f6d66792d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a206170706c69636174696f6e2f6f637465742d73747265616d0d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c6573223b2066696c656e616d653d2274776f2e62696e220d0a0d0a6e6578740d0a2d2d636f6d66792d736f757263652d626f756e646172792d2d0d0a"
+    },
+    {
+      "fields": [
+        {
+          "name": "prompt",
+          "file_name": null,
+          "media_type": "text/plain; charset=utf-8",
+          "bytes_hex": ""
+        },
+        {
+          "name": "file",
+          "file_name": "empty.bin",
+          "media_type": "application/octet-stream",
+          "bytes_hex": ""
+        }
+      ],
+      "body_hex": "2d2d636f6d66792d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a20746578742f706c61696e3b20636861727365743d7574662d380d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2270726f6d7074220d0a0d0a0d0a2d2d636f6d66792d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a206170706c69636174696f6e2f6f637465742d73747265616d0d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d22656d7074792e62696e220d0a0d0a0d0a2d2d636f6d66792d736f757263652d626f756e646172792d2d0d0a"
+    },
+    {
+      "fields": [
+        {
+          "name": "file",
+          "file_name": "image.png",
+          "media_type": "image/png",
+          "bytes_hex": "89504e470d0a1a0a"
+        }
+      ],
+      "body_hex": "2d2d636f6d66792d736f757263652d626f756e646172790d0a436f6e74656e742d547970653a20696d6167652f706e670d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d22696d6167652e706e67220d0a0d0a89504e470d0a1a0a0d0a2d2d636f6d66792d736f757263652d626f756e646172792d2d0d0a"
+    }
+  ],
+  "urlencoded": {
+    "cases": [
+      {
+        "name": "quote-plus",
+        "fields": [
+          {
+            "name": "field",
+            "value": "~ + /?&= 🌊"
+          }
+        ],
+        "body_utf8": "field=~+%2B+%2F%3F%26%3D+%F0%9F%8C%8A",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "ordered-repeat-empty",
+        "fields": [
+          {
+            "name": "same",
+            "value": "first"
+          },
+          {
+            "name": "same",
+            "value": "second"
+          },
+          {
+            "name": "empty",
+            "value": ""
+          }
+        ],
+        "body_utf8": "same=first&same=second&empty=",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "unicode-space",
+        "fields": [
+          {
+            "name": "unicode",
+            "value": "é漢字"
+          },
+          {
+            "name": "spaces",
+            "value": " a b "
+          }
+        ],
+        "body_utf8": "unicode=%C3%A9%E6%BC%A2%E5%AD%97&spaces=+a+b+",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "all-ascii",
+        "fields": [
+          {
+            "name": "ascii",
+            "value": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+          }
+        ],
+        "body_utf8": "ascii=%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F+%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~%7F",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "empty-form",
+        "fields": [],
+        "body_utf8": "",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "empty-names",
+        "fields": [
+          {
+            "name": "",
+            "value": ""
+          },
+          {
+            "name": "",
+            "value": "two"
+          }
+        ],
+        "body_utf8": "=&=two",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "escaped-names",
+        "fields": [
+          {
+            "name": "a&=+ []~",
+            "value": "value"
+          }
+        ],
+        "body_utf8": "a%26%3D%2B+%5B%5D~=value",
+        "content_type": "application/x-www-form-urlencoded"
+      },
+      {
+        "name": "literal-percent",
+        "fields": [
+          {
+            "name": "field",
+            "value": "%20+*"
+          }
+        ],
+        "body_utf8": "field=%2520%2B%2A",
+        "content_type": "application/x-www-form-urlencoded"
+      }
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-empty-root-category-declared-by-source-sim-node-0757",
+  "feature_id": "COMFY-NODE-0757",
+  "source": {
+    "catalog_path": "sim_extras/nodes_nop.py",
+    "oracle_path": "ComfyUI/sim_extras/nodes_nop.py",
+    "sha256": "4f9130b7db711de4aae861dbe47790a5a105203ffcdd98ccf5a8286a09adca62",
+    "byte_length": 1411,
+    "class_line": 10,
+    "schema_line": 12,
+    "execute_line": 27,
+    "extension_registration_line": 33
+  },
+  "descriptor": {
+    "class_type": "wanBlockSwap",
+    "implementation_version": "source-4f9130b7-v1",
+    "display_name": "wanBlockSwap",
+    "category": "",
+    "description": "Intercept wanBlockSwap custom node that causes major instability and make it no-op.",
+    "is_deprecated": true,
+    "is_experimental": false,
+    "inputs": [
+      {
+        "name": "model",
+        "kind": "model",
+        "type_id": "MODEL",
+        "required": true,
+        "hidden": false,
+        "lazy": false,
+        "cardinality": "scalar",
+        "allows_literal": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "model",
+        "kind": "model",
+        "type_id": "MODEL",
+        "is_list": false
+      }
+    ],
+    "output_node": false,
+    "effect": "pure",
+    "cache": "input_identity"
+  },
+  "behavior": {
+    "success": "returns_the_exact_input_handle",
+    "input_is_list": false,
+    "output_is_list": [false],
+    "lazy_inputs": false,
+    "effects": [],
+    "invalid_inputs": [
+      "missing_model",
+      "extra_input",
+      "literal_model",
+      "list_model",
+      "wrong_handle_type",
+      "wrong_store",
+      "wrong_generation",
+      "digest_mismatch",
+      "missing_handle"
+    ],
+    "cancellation": "interrupted_without_output_or_publication",
+    "persistence": {
+      "class_type": "wanBlockSwap",
+      "inputs": {
+        "model": [7, 0]
+      },
+      "unknown_data": {
+        "source_extension": "wanBlockSwap",
+        "preserve": true
+      }
+    },
+    "recovery": "stale_worker_handles_fail_and_a_fresh_input_handle_succeeds"
+  }
+}

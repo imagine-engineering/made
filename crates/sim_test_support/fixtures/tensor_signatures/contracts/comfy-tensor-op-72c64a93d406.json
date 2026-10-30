@@ -1,0 +1,605 @@
+{
+  "canonical_target": "torch.nn.BatchNorm2d",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:28:16 (get_normalization)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:179:13 (StageA.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:33:13 (EfficientNetEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:52:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:56:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:60:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:64:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:68:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:72:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:76:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:80:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/models/autoencoder.py:189:23 (AutoencodingEngineLegacy.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:34:21 (ConvBNAct.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:28:16 (get_normalization)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:179:13 (StageA.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:33:13 (EfficientNetEncoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:52:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:56:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:60:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:64:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:68:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:72:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:76:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:80:13 (Previewer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/models/autoencoder.py:189:23 (AutoencodingEngineLegacy.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:34:21 (ConvBNAct.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-72c64a93d406-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "affine",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "eps",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "momentum",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "track_running_stats",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-72C64A93D406",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "f5ce49b39ff6dd021c387a3da478baa78993c15e9533f6db45785243e310b254",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_c_coder.py",
+        "sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8"
+      },
+      {
+        "path": "comfy/ldm/models/autoencoder.py",
+        "sha256": "24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0"
+      },
+      {
+        "path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+        "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.BatchNorm2d"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "neural_network_module_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-neural-network-module-comfy-tensor-op-5b8ce1451811",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 28,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "num_features",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_normalization",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:28:16 (get_normalization)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 179,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_latent",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "StageA.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:179:13 (StageA.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "affine",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 33,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_latent",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "EfficientNetEncoder.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:33:13 (EfficientNetEncoder.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 52,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:52:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 56,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:56:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 60,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:60:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 64,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:64:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 68,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:68:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 72,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:72:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 76,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:76:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 80,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:80:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "eps",
+          "syntax": "self.bn_eps",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "momentum",
+          "syntax": "self.bn_momentum",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "affine",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "track_running_stats",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 189,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "math.prod(self.ps) * ddconfig['z_channels']",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "AutoencodingEngineLegacy.__init__",
+      "site": "comfy/ldm/models/autoencoder.py:189:23 (AutoencodingEngineLegacy.__init__)",
+      "source_path": "comfy/ldm/models/autoencoder.py",
+      "source_sha256": "24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.BatchNorm2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 34,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "oc",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ConvBNAct.__init__",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:34:21 (ConvBNAct.__init__)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "nn.BatchNorm2d"
+    }
+  ],
+  "static_definition": null
+}

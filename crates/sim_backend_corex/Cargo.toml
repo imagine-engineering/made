@@ -1,0 +1,19 @@
+[package]
+name = "sim_backend_corex"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_backend_corex.rs"
+[dependencies]
+anyhow.workspace = true
+sim_types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true

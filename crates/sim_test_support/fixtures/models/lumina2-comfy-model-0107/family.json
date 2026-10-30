@@ -1,0 +1,50 @@
+{
+  "fixture_id": "lumina2-sim-model-0107",
+  "feature_id": "COMFY-MODEL-0107",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.cap_embedder.1.weight": [2304, 2048],
+      "model.diffusion_model.noise_refiner.0.attention.qkv.weight": [3840, 2304]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0107010701070107010701070107010701070107010701070107010701070107",
+  "source_weights": [
+    { "key": "model.diffusion_model.cap_embedder.1.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.cap_embedder.1.bias", "shape": [2], "values": [0.0, 0.0] },
+    { "key": "model.diffusion_model.noise_refiner.0.attention.k_norm.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.x_embedder.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.x_embedder.bias", "shape": [2], "values": [0.0, 0.0] },
+    { "key": "model.diffusion_model.final_layer.linear.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.final_layer.linear.bias", "shape": [2], "values": [0.0, 0.0] }
+  ],
+  "input": { "key": "input", "shape": [1, 2], "values": [1.0, -1.0] },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 104,
+  "expected_memory_bytes": 104,
+  "checkpoints": [
+    { "name": "input.patch_projection", "values": [1.0, -1.0] },
+    { "name": "caption.projection", "values": [1.0, -1.0] },
+    { "name": "transformer.activation", "values": [0.7310586, -0.26894143] },
+    { "name": "output.patch_projection", "values": [0.7310586, -0.26894143] }
+  ],
+  "patches": [{
+    "identifier": "lumina2-input-bias",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{
+      "key": "native.x_embedder.bias",
+      "expected_shape": [2],
+      "values": [1.0, 1.0],
+      "application": "add"
+    }]
+  }],
+  "patched_checkpoints": [
+    { "name": "input.patch_projection", "values": [2.0, 0.0] },
+    { "name": "caption.projection", "values": [2.0, 0.0] },
+    { "name": "transformer.activation", "values": [1.7615942, 0.0] },
+    { "name": "output.patch_projection", "values": [1.7615942, 0.0] }
+  ]
+}

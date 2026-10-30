@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Reject development signatures and verify production application/DMG trust."""
+import argparse
+import os
+import plistlib
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+MACHO = {bytes.fromhex(value) for value in (
+    "feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca",
+)}
+
+
+def run(*arguments):
+    result = subprocess.run(arguments, capture_output=True, check=True)
+    return result.stdout + result.stderr
+
+
+def field(text, name):
+    match = re.search(r"^" + re.escape(name) + r"=(.*)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
+def verify_code(path, team=None, runtime=True):
+    run("/usr/bin/codesign", "--verify", "--strict", "--verbose=4", str(path))
+    signature = run("/usr/bin/codesign", "--display", "--verbose=4", str(path)).decode()
+    authority = field(signature, "Authority")
+    if not authority.startswith("Developer ID Application:") or "Signature=adhoc" in signature:
+        raise ValueError(f"Production Developer ID Application signature required: {path}")
+    run("/usr/bin/codesign", "--verify", "--strict", "-R", "anchor apple generic", str(path))
+    expected_identity = os.environ.get("MACOS_SIGNING_IDENTITY")
+    if expected_identity and authority != expected_identity:
+        raise ValueError(f"Signing identity differs from MACOS_SIGNING_IDENTITY: {path}")
+    actual_team = field(signature, "TeamIdentifier")
+    if not re.fullmatch(r"[A-Z0-9]{10}", actual_team) or (team is not None and team != actual_team):
+        raise ValueError(f"Missing or mismatched signing Team: {path}")
+    if not field(signature, "Timestamp"):
+        raise ValueError(f"Secure signing timestamp required: {path}")
+    if runtime:
+        flags = re.search(r"\bflags=(0x[0-9a-fA-F]+)", signature)
+        if flags is None or not int(flags.group(1), 16) & 0x10000:
+            raise ValueError(f"Hardened runtime required: {path}")
+    return actual_team
+
+
+def verify(path, entitlements=None, notarized=False):
+    application = path.is_dir() and path.suffix == ".app"
+    team = verify_code(path, runtime=application)
+    count = 0
+    if application:
+        run("/usr/bin/codesign", "--verify", "--deep", "--strict", str(path))
+        for entry in sorted(path.rglob("*")):
+            if not entry.is_file() or entry.is_symlink():
+                continue
+            with entry.open("rb") as source:
+                native = source.read(4) in MACHO
+            if native:
+                verify_code(entry, team)
+                count += 1
+        if not count:
+            raise ValueError("Application has no native executable")
+        if entitlements is None:
+            raise ValueError("Application verification requires its authoritative entitlement file")
+        actual = subprocess.run(
+            ("/usr/bin/codesign", "--display", "--entitlements", "-", "--xml", str(path)),
+            capture_output=True, check=True,
+        ).stdout
+        if plistlib.loads(actual) != plistlib.loads(entitlements.read_bytes()):
+            raise ValueError("Application entitlements differ from the reviewed source")
+    if notarized:
+        run("xcrun", "stapler", "validate", str(path))
+        if application:
+            run("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(path))
+        else:
+            run("/usr/sbin/spctl", "--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=4", str(path))
+    print(f"Verified production signature: {path}; Team={team}; nested native files={count}; notarized={notarized}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("path", type=Path)
+    parser.add_argument("--entitlements", type=Path)
+    parser.add_argument("--notarized", action="store_true")
+    arguments = parser.parse_args()
+    try:
+        verify(arguments.path, arguments.entitlements, arguments.notarized)
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        print(f"Production signature verification failed: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

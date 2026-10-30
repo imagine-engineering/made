@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-qwen-vision-projection-foundation",
+  "source_mode": "code_inferred_reduced_exact_weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "files": [
+      {
+        "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen3vl.py",
+        "sha256": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06",
+        "symbols": ["Qwen3VLVisionModel", "Qwen3VLDeepstackMerger"]
+      },
+      {
+        "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+        "symbols": ["Qwen35VisionModel", "Qwen35VisionAttention", "Qwen35VisionPatchMerger"]
+      },
+      {
+        "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen_vl.py",
+        "sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+        "symbols": ["process_qwen2vl_images"]
+      }
+    ]
+  },
+  "profiles": {
+    "qwen3_vl": {
+      "marker_id": 151655,
+      "rgb_mean": [0.5, 0.5, 0.5],
+      "rgb_standard_deviation": [0.5, 0.5, 0.5],
+      "deepstack_capture_layers": {
+        "4b": [5, 11, 17],
+        "8b": [8, 16, 24]
+      }
+    },
+    "qwen3_5": {
+      "marker_id": 248056,
+      "rgb_mean": [0.48145466, 0.4578275, 0.40821073],
+      "rgb_standard_deviation": [0.26862954, 0.26130258, 0.27577711],
+      "deepstack_capture_layers": []
+    }
+  },
+  "reduced_fixture": {
+    "input": {
+      "shape": [1, 32, 32, 3],
+      "dtype": "f32",
+      "layout": "bhwc",
+      "value": 0.5
+    },
+    "prepared_patch_shape": [16, 3, 2, 16, 16],
+    "grid_thw": [1, 4, 4],
+    "merged_tokens": 4,
+    "qwen35_configuration": {
+      "hidden_size": 4,
+      "intermediate_size": 8,
+      "layer_count": 2,
+      "attention_heads": 1,
+      "output_hidden_size": 6,
+      "position_embeddings": 2304,
+      "spatial_merge_size": 2
+    },
+    "qwen35_output_shape": [4, 6],
+    "qwen35_output_f32le_sha256": "16a13ffa41fb0a5f742f0e8c3b2364fa4020dd2cb9a71e1309e62d6e143cb8ed",
+    "qwen3_vl_configuration": {
+      "hidden_size": 4,
+      "intermediate_size": 8,
+      "layer_count": 18,
+      "attention_heads": 1,
+      "output_hidden_size": 6,
+      "position_embeddings": 2304,
+      "spatial_merge_size": 2,
+      "deepstack_capture_layers": [5, 11, 17]
+    },
+    "qwen3_vl_output_shape": [4, 6],
+    "qwen3_vl_deepstack_shapes": [[4, 6], [4, 6], [4, 6]],
+    "backend": "cpu",
+    "tolerance": {
+      "absolute": 0.000001,
+      "relative": 0.000001
+    }
+  },
+  "limitations": [
+    "No licensed full checkpoint weights are stored or executed by this fixture.",
+    "No upstream Python runtime or accelerator numerical oracle is claimed.",
+    "The fixture validates the source graph and tensor ordering with deterministic reduced exact weights."
+  ]
+}

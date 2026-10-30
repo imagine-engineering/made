@@ -1,0 +1,41 @@
+[
+  {
+    "context": "SimGraph && !SimTextInput",
+    "bindings": {
+      "ctrl-enter": "sim_shell::QueuePrompt",
+      "ctrl-shift-enter": "sim_shell::QueuePromptFront",
+      "ctrl-alt-enter": "sim_shell::Interrupt",
+      "r": "sim_shell::RefreshNodeDefinitions",
+      "w": "sim_shell::ToggleWorkflowsSidebar",
+      "n": "sim_shell::ToggleNodeLibrarySidebar",
+      "m": "sim_shell::ToggleModelLibrarySidebar",
+      "a": "sim_shell::ToggleAssetsSidebar",
+      "alt-m": "sim_shell::ToggleLinear",
+      "alt-µ": "sim_shell::ToggleLinear",
+      "ctrl-s": "sim_shell::SaveWorkflow",
+      "ctrl-o": "sim_shell::OpenWorkflow",
+      "ctrl-g": "sim_shell::GroupSelectedNodes",
+      "ctrl-,": "sim_shell::ShowSettings",
+      "alt-=": "sim_graph::GraphZoomIn",
+      "alt-shift-+": "sim_graph::GraphZoomIn",
+      "alt-+": "sim_graph::GraphZoomIn",
+      "alt--": "sim_graph::GraphZoomOut",
+      ".": "sim_graph::GraphFitView",
+      "p": "sim_shell::ToggleSelectedItemsPin",
+      "alt-c": "sim_shell::ToggleSelectedCollapse",
+      "ctrl-b": "sim_shell::ToggleSelectedBypass",
+      "ctrl-m": "sim_shell::ToggleSelectedMute",
+      "ctrl-`": "sim_shell::ToggleLogsPanel",
+      "ctrl-shift-e": "sim_shell::ConvertToSubgraph",
+      "alt-shift-m": "sim_shell::ToggleMinimap",
+      "ctrl-shift-k": "sim_shell::ShowKeybindings",
+      "v": "sim_shell::UnlockCanvas",
+      "h": "sim_shell::LockCanvas",
+      "escape": "sim_shell::ExitSubgraph",
+      "ctrl-a": "sim_graph::GraphSelectAll",
+      "ctrl-shift-v": "sim_shell::PasteWithConnect",
+      "delete": "sim_graph::GraphDelete",
+      "backspace": "sim_graph::GraphDelete"
+    }
+  }
+]

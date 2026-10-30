@@ -1,0 +1,205 @@
+{
+  "canonical_target": "comfy.ops.disable_weight_init",
+  "consumer_output_expectations": [],
+  "definition_call_reconciliation": [],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-6bea6c96d82d-v1",
+  "inventory_kind": "type-reference",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-6BEA6C96D82D",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "9e63e9f26484d1ffa80601a5424a300d0ee6bdff7da4f0780a3ca3fb3de36603",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/cldm/cldm.py",
+        "sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d"
+      },
+      {
+        "path": "comfy/controlnet.py",
+        "sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/audio/autoencoder.py",
+        "sha256": "4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8"
+      },
+      {
+        "path": "comfy/ldm/audio/vae_sa3.py",
+        "sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_c_coder.py",
+        "sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/vae.py",
+        "sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7"
+      },
+      {
+        "path": "comfy/ldm/cosmos/cosmos_tokenizer/layers3d.py",
+        "sha256": "c4829d538352aa750518f8c1a08e636925cf15067f02aa28eae5aa87d5c26805"
+      },
+      {
+        "path": "comfy/ldm/cosmos/cosmos_tokenizer/utils.py",
+        "sha256": "1ad10120d40c9bf16a0377c14ae69827fc803f449f67add26fa799adcaa723e4"
+      },
+      {
+        "path": "comfy/ldm/genmo/vae/model.py",
+        "sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/vae.py",
+        "sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+        "sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+        "sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_conv3d.py",
+        "sha256": "dc6f748e9d559009800c46e2fa44796ecab45533d30d8adbb72432ac70d3faea"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+        "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/conv_nd_factory.py",
+        "sha256": "8433bd731dd379223d58a4fd84518ae9a618e1b067771878c8f2d51339c9a99a"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+        "sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+        "sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/vae.py",
+        "sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+        "sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78"
+      },
+      {
+        "path": "comfy/ldm/modules/attention.py",
+        "sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+        "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"
+      },
+      {
+        "path": "comfy/ldm/modules/temporal_ae.py",
+        "sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d"
+      },
+      {
+        "path": "comfy/ldm/triposplat/vae.py",
+        "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+      },
+      {
+        "path": "comfy/ldm/wan/vae.py",
+        "sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4"
+      },
+      {
+        "path": "comfy/ldm/wan/vae2_2.py",
+        "sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/taesd/taehv.py",
+        "sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+      },
+      {
+        "path": "tests-unit/comfy_quant/test_mixed_precision.py",
+        "sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "type-marker",
+    "value": "comfy.ops.disable_weight_init"
+  },
+  "resolution": {
+    "blocker_reason": "",
+    "expected_resolution_module": "type_contract_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": false,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-type-contract-comfy-tensor-op-0aa720652f2f",
+    "state": "resolved_reference"
+  },
+  "schema_version": 1,
+  "static_call_sites": [],
+  "static_definition": {
+    "definition_kind": "ClassDef",
+    "definition_line": 411,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "inherited-or-dynamic-constructor",
+    "parameters": [],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        {
+          "kind": "class-instance",
+          "name": "disable_weight_init"
+        }
+      ]
+    }
+  }
+}

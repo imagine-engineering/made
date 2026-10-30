@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/xpu/ffi-contracts-v1.schema.json",
+  "title": "Zed Intel XPU native library contracts v1",
+  "$comment": "The runtime additionally enforces exact target-specific filenames, ABI-manifest symbol order, sorted unique identities and symbols, compiled policy digests, and signed package coverage before constructing NativeFfiRegistry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "backend", "abi_floor", "target", "abi_manifest_sha256", "package_policy_sha256", "libraries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "backend": { "const": "xpu" },
+    "abi_floor": { "const": "level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0" },
+    "target": { "enum": ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"] },
+    "abi_manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "package_policy_sha256": { "$ref": "#/$defs/sha256" },
+    "libraries": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "prefixItems": [
+        { "$ref": "#/$defs/level_zero" },
+        { "$ref": "#/$defs/onednn" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "symbols": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
+    },
+    "level_zero": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "level_zero" },
+        "filename": { "enum": ["libze_loader.so.1", "ze_loader.dll"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_xpu::loader" }
+      }
+    },
+    "onednn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "onednn" },
+        "filename": { "enum": ["dnnl.dll", "libdnnl.so.3"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_xpu::loader" }
+      }
+    }
+  }
+}

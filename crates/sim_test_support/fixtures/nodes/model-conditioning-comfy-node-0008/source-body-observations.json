@@ -1,0 +1,143 @@
+{
+  "source_sha256": "9a4d0cc1f60bd7e29413c610cd300bd86c2f7426431d81a3546275b3804d8d48",
+  "actual_original_ast": true,
+  "proof_scope": "unchanged execute method AST with genuine original NodeOutput classes; CPU device selection supplied by bounded harness; full V3 API bootstrap/schema/native unverified",
+  "full_v3_bootstrap": false,
+  "original_node_output_classes": true,
+  "python": "3.12.14",
+  "torch": "2.8.0+cpu",
+  "torch_default_dtype": "torch.float32",
+  "cases": [
+    {
+      "inputs": [
+        16,
+        16,
+        1,
+        1
+      ],
+      "shape": [
+        1,
+        16,
+        1,
+        2,
+        2
+      ],
+      "dtype": "torch.float32",
+      "all_exact_positive_zero": true,
+      "f32_bytes_sha256": "5341e6b2646979a70e57653007a1f310169421ec9bdd9f1a5648f75ade005af1",
+      "positive_same_object": true,
+      "negative_same_object": true,
+      "metadata": [
+        "samples"
+      ]
+    },
+    {
+      "inputs": [
+        16,
+        24,
+        4,
+        2
+      ],
+      "shape": [
+        2,
+        16,
+        1,
+        3,
+        2
+      ],
+      "dtype": "torch.float32",
+      "all_exact_positive_zero": true,
+      "f32_bytes_sha256": "ef115a0e0c15cdc41958ca46b5b14b456115f4baec5e3ca68599d2a8f435e3b8",
+      "positive_same_object": true,
+      "negative_same_object": true,
+      "metadata": [
+        "samples"
+      ]
+    },
+    {
+      "inputs": [
+        16,
+        24,
+        5,
+        2
+      ],
+      "shape": [
+        2,
+        16,
+        2,
+        3,
+        2
+      ],
+      "dtype": "torch.float32",
+      "all_exact_positive_zero": true,
+      "f32_bytes_sha256": "80422bc3d307b4a25bdafcc84ac7fb01cb55a09810e8b0f37bb12e0edb5c48ca",
+      "positive_same_object": true,
+      "negative_same_object": true,
+      "metadata": [
+        "samples"
+      ]
+    },
+    {
+      "inputs": [
+        16,
+        24,
+        6,
+        2
+      ],
+      "shape": [
+        2,
+        16,
+        2,
+        3,
+        2
+      ],
+      "dtype": "torch.float32",
+      "all_exact_positive_zero": true,
+      "f32_bytes_sha256": "80422bc3d307b4a25bdafcc84ac7fb01cb55a09810e8b0f37bb12e0edb5c48ca",
+      "positive_same_object": true,
+      "negative_same_object": true,
+      "metadata": [
+        "samples"
+      ]
+    },
+    {
+      "inputs": [
+        32,
+        16,
+        81,
+        1
+      ],
+      "shape": [
+        1,
+        16,
+        21,
+        2,
+        4
+      ],
+      "dtype": "torch.float32",
+      "all_exact_positive_zero": true,
+      "f32_bytes_sha256": "ee0d534dd385f4c26c52ee121654897b783c0754c6512886e53578dce4b24735",
+      "positive_same_object": true,
+      "negative_same_object": true,
+      "metadata": [
+        "samples"
+      ]
+    }
+  ],
+  "audio_source_call_trace": {
+    "source_sha256": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a",
+    "actual_original_ast": true,
+    "proof_scope": "unchanged execute method call trace only; injected encoder sentinel is not learned inference",
+    "calls": 2,
+    "sample_rates": [
+      44100,
+      48000
+    ],
+    "waveform_passed_same_object": true,
+    "result_passed_same_object": true,
+    "owner_error_preserved_same_object": true,
+    "missing_field_original_error": "sample_rate",
+    "learned_model_inference": false,
+    "numerical_output_generated": false
+  }
+}

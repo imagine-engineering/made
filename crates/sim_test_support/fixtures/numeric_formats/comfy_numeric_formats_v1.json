@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "classification": "Deterministic development-time ComfyUI conformance fixture. Production Rust must not import or execute ComfyUI, PyTorch, sim-kitchen, xFormers, SageAttention, Python, or JavaScript.",
+  "sources": {
+    "projects/sim/ComfyUI/sim/quant_ops.py": "aba7417553f4f25324b5397339ec25708e727b5f4fa7662de66a6554a3d45d6a",
+    "projects/sim/ComfyUI/sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/sim/ComfyUI/sim/ldm/modules/sub_quadratic_attention.py": "c804fbbda0fbc6404999be734d3c33b868375959736f8e21ad417782ab0638a0",
+    ".agents/specs/sim-parity/catalogs/backend-models.csv": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4"
+  },
+  "catalog_feature_ids": [
+    "COMFY-MODEL-0001",
+    "COMFY-MODEL-0002",
+    "COMFY-MODEL-0003",
+    "COMFY-MODEL-0004",
+    "COMFY-MODEL-0005",
+    "COMFY-MODEL-0006",
+    "COMFY-MODEL-0007",
+    "COMFY-MODEL-0008",
+    "COMFY-MODEL-0009",
+    "COMFY-MODEL-0010",
+    "COMFY-MODEL-0011",
+    "COMFY-MODEL-0012",
+    "COMFY-MODEL-0013",
+    "COMFY-MODEL-0155",
+    "COMFY-MODEL-0156",
+    "COMFY-MODEL-0157",
+    "COMFY-MODEL-0158"
+  ],
+  "float8_boundaries": {
+    "float8_e4m3fn_max_bits": 126,
+    "float8_e4m3fn_max": 448.0,
+    "float8_e4m3fnuz_max_bits": 127,
+    "float8_e4m3fnuz_max": 240.0,
+    "float8_e5m2_max_bits": 123,
+    "float8_e5m2_max": 57344.0,
+    "float8_e5m2fnuz_max_bits": 127,
+    "float8_e5m2fnuz_max": 57344.0,
+    "float8_e8m0fnu_one_bits": 127
+  },
+  "promotion_cases": [
+    ["uint8", "int8", "int16"],
+    ["uint32", "int32", "int64"],
+    ["uint64", "int64", "float64"],
+    ["float16", "bfloat16", "float32"],
+    ["float32", "complex64", "complex64"]
+  ],
+  "quantization": {
+    "shape": [2, 3],
+    "values": [-6.0, -1.0, 0.0, 1.0, 6.0, 12.0],
+    "maximum_absolute_error": {
+      "int8_tensorwise": 0.05,
+      "mxfp8": 0.5,
+      "nvfp4": 1.0
+    }
+  },
+  "attention": {
+    "query": [1.0, 0.0, 0.0, 1.0],
+    "key": [1.0, 0.0, 0.0, 1.0],
+    "value": [2.0, 0.0, 0.0, 4.0],
+    "boolean_mask": [true, false, true, true],
+    "expected": [2.0, 0.0, 0.5378828, 2.9242344],
+    "tolerance": 0.000001
+  }
+}

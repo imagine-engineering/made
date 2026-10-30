@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-vp9-webm-owned-tensor-thread-bridge-v1",
+  "truth_mode": "synthetic-retained-vp9-webm-owned-tensor-thread-bridge",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d"
+  },
+  "dependencies": {
+    "codec_ltxv_thread_service_manifest_sha256": "d555cfc0b1b7472cee1cef4a50cd1ab79ec99a40393781b3f90cfa0d06f83ed9",
+    "codec_suite_admission_manifest_sha256": "fa7e0f02c2e977518205b6025d28e47eeaa9eb10401a250e5cf7fb8f7c83bcc3",
+    "codec_vp9_webm_sequence_encode_manifest_sha256": "4d5c73e21827ca63445771308876f40b8dca095e5d38c6b43a976ca09ea3682d"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_service::NativeLtxvCodecRequestProxy::encode_vp9_webm_batch",
+    "actor": "the existing single retained native video codec thread and capacity-one request channel",
+    "input": "shallow-cloned canonical IMAGE plus reduced frame rate, CRF, exact caller stream, scratch, and cancellation",
+    "native_lifetime": "the VP9 WebM session, AVIO output, suite borrow, and every FFmpeg pointer remain on and drop on the actor thread",
+    "portable_output": "one exact-length contiguous rank-one CPU U8 Tensor plus dimensions, reduced frame rate, frame count, and SHA-256",
+    "post_encode_copy_count": 1,
+    "successful_response_retains_scratch_lease": false,
+    "successful_response_backend_accounts_actual_encoded_length": true,
+    "mixed_ltxv_and_vp9_requests_share_one_actor": true,
+    "bounded_busy_cancellation_shutdown_and_retry": true
+  },
+  "synthetic_fixture": {
+    "encoded_bytes": "HPPPT",
+    "dimensions": [2, 2],
+    "frame_rate": [125, 2997],
+    "frame_count": 3,
+    "test_cases": [
+      "LTXV preprocessing and VP9 owned-byte materialization execute serially on one non-caller actor thread",
+      "the returned Tensor is Send plus Sync, CPU U8 contiguous, exact length, and content-digest bound",
+      "scratch is zero before the successful response while backend resident bytes remain until Tensor drop",
+      "pre-materialization cancellation and backend allocation exhaustion return no output and converge accounting",
+      "the same actor and backend accept a clean retry after a request-local failure"
+    ]
+  },
+  "claims": {
+    "synthetic_actor_and_owned_tensor_choreography_executed": true,
+    "one_deliberate_post_encode_copy_observed": true,
+    "native_or_workspace_owner_crosses_thread_response": false,
+    "licensed_or_installed_ffmpeg_or_libvpx_package": false,
+    "production_codec_availability": false,
+    "synthetic_bytes_are_valid_playable_webm": false,
+    "numeric_vp9_swscale_or_byte_identity_oracle": false,
+    "prompt_or_extra_metadata_supported": false,
+    "alpha_av1_aac_or_audio_supported": false,
+    "native_video_encode_plan_consumed": false,
+    "node_effect_path_or_output_committer_reachable": false,
+    "media_payload_or_handle_published": false,
+    "cache_persistence_recovery_or_restart_owned": false,
+    "all_native_heap_allocations_intercepted": false
+  }
+}

@@ -1,0 +1,3890 @@
+{
+  "canonical_target": "comfy.ops.disable_weight_init.Conv2d",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:100:25 (SanaMultiscaleAttentionProjection.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:268:30 (GLUMBConv.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:269:27 (GLUMBConv.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:270:27 (GLUMBConv.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:338:21 (DCDownBlock2d.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:383:21 (DCUpBlock2d.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:424:28 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:468:25 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:515:24 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:557:29 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:64:22 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:65:22 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:92:24 (SanaMultiscaleAttentionProjection.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:128:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:169:13 (StageA.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:174:36 (StageA.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:178:13 (StageA.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:189:13 (StageA.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:201:13 (StageA.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:230:36 (Discriminator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:236:50 (Discriminator.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:240:24 (Discriminator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:32:13 (EfficientNetEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:50:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:54:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:62:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:70:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:78:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_c_coder.py:82:13 (Previewer.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:170:21 (Downsample3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:200:21 (Upsample3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:124:25 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:43:24 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:69:25 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae.py:99:24 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:145:21 (CausalConv2d.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:200:16 (make_conv2d)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:271:25 (Downsample.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:366:18 (AttnBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:367:18 (AttnBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:368:18 (AttnBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:369:25 (AttnBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lightricks/vae/conv_nd_factory.py:26:16 (make_conv_nd)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lightricks/vae/conv_nd_factory.py:82:16 (make_linear_nd)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:411:24 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:480:25 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/vae.py:195:23 (AttentionBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/vae.py:196:21 (AttentionBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:80:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:84:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:91:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:95:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:34:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:39:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:47:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:51:17 (Resample.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/taesd/taehv.py:17:12 (conv)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taehv.py:27:21 (MemBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/taesd/taehv.py:36:21 (TPool.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/taesd/taehv.py:45:21 (TGrow.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/taesd/taesd.py:13:12 (conv)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taesd.py:23:21 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taesd.py:30:13 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/taesd/taesd.py:33:13 (Block.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:100:25 (SanaMultiscaleAttentionProjection.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:268:30 (GLUMBConv.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:269:27 (GLUMBConv.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:270:27 (GLUMBConv.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:338:21 (DCDownBlock2d.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:383:21 (DCUpBlock2d.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:424:28 (Encoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:468:25 (Encoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:515:24 (Decoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:557:29 (Decoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:64:22 (ResBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:65:22 (ResBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:92:24 (SanaMultiscaleAttentionProjection.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:128:13 (ResBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:169:13 (StageA.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:174:36 (StageA.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:178:13 (StageA.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:189:13 (StageA.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:201:13 (StageA.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:230:36 (Discriminator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:236:50 (Discriminator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:240:24 (Discriminator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:32:13 (EfficientNetEncoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:50:13 (Previewer.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:54:13 (Previewer.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:62:13 (Previewer.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:70:13 (Previewer.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:78:13 (Previewer.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_c_coder.py:82:13 (Previewer.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:170:21 (Downsample3D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:200:21 (Upsample3D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:124:25 (Decoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:43:24 (Encoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:69:25 (Encoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae.py:99:24 (Decoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:145:21 (CausalConv2d.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:200:16 (make_conv2d)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:271:25 (Downsample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:366:18 (AttnBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:367:18 (AttnBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:368:18 (AttnBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:369:25 (AttnBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/conv_nd_factory.py:26:16 (make_conv_nd)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/conv_nd_factory.py:82:16 (make_linear_nd)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:411:24 (Model.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:480:25 (Model.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:195:23 (AttentionBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:196:21 (AttentionBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:80:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:84:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:91:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:95:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:34:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:39:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:47:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:51:17 (Resample.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:17:12 (conv)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:27:21 (MemBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:36:21 (TPool.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taehv.py:45:21 (TGrow.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:13:12 (conv)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:23:21 (Block.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:30:13 (Block.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:33:13 (Block.__init__)",
+      "status": "definition-call-signature-not-declared"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-4b62764dcd01-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_3",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_4",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_5",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_6",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_7",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "bias",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dilation",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "groups",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "in_channels",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "kernel_size",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "out_channels",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "padding",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "padding_mode",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "stride",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-4B62764DCD01",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "dfaac047dab7e7636b85213bd50061e4f925c48275d5b724b6aef6dc4e1ba404",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_c_coder.py",
+        "sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/vae.py",
+        "sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/vae.py",
+        "sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+        "sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/conv_nd_factory.py",
+        "sha256": "8433bd731dd379223d58a4fd84518ae9a618e1b067771878c8f2d51339c9a99a"
+      },
+      {
+        "path": "comfy/ldm/models/autoencoder.py",
+        "sha256": "24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/ldm/modules/temporal_ae.py",
+        "sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d"
+      },
+      {
+        "path": "comfy/ldm/wan/vae.py",
+        "sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4"
+      },
+      {
+        "path": "comfy/ldm/wan/vae2_2.py",
+        "sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/taesd/taehv.py",
+        "sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9"
+      },
+      {
+        "path": "comfy/taesd/taesd.py",
+        "sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.disable_weight_init.Conv2d"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-227f5d04687a",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "3 * num_attention_heads",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 100,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "SanaMultiscaleAttentionProjection.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:100:25 (SanaMultiscaleAttentionProjection.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 268,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "hidden_channels * 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "GLUMBConv.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:268:30 (GLUMBConv.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "hidden_channels * 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "line": 269,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hidden_channels * 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "hidden_channels * 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "GLUMBConv.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:269:27 (GLUMBConv.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 270,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hidden_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "GLUMBConv.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:270:27 (GLUMBConv.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "self.stride",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 338,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DCDownBlock2d.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:338:21 (DCDownBlock2d.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 383,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "DCUpBlock2d.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:383:21 (DCUpBlock2d.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 424,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "block_out_channels[0] if layers_per_block[0] > 0 else block_out_channels[1]",
+          "syntax_kind": "IfExp"
+        }
+      ],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:424:28 (Encoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 468,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "block_out_channels[-1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "latent_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:468:25 (Encoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 515,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "latent_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "block_out_channels[-1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:515:24 (Decoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 557,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:557:29 (Decoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 64,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:64:22 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 65,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:65:22 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 92,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleAttentionProjection.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:92:24 (SanaMultiscaleAttentionProjection.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "c",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 128,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:128:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 169,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "3 * 4",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_levels[0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "StageA.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:169:13 (StageA.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "4",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 174,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_levels[i - 1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_levels[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "StageA.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:174:36 (StageA.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 178,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_levels[-1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_latent",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "StageA.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:178:13 (StageA.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 189,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_latent",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_levels[-1]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "StageA.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:189:13 (StageA.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 201,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_levels[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "3 * 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "StageA.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:201:13 (StageA.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 230,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden // 2 ** d",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Discriminator.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:230:36 (Discriminator.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 50,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 236,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_out",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Discriminator.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:236:50 (Discriminator.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 240,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden + c_cond if c_cond > 0 else c_hidden",
+          "syntax_kind": "IfExp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Discriminator.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:240:24 (Discriminator.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 32,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1280",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_latent",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "EfficientNetEncoder.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:32:13 (EfficientNetEncoder.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 50,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:50:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 54,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:54:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 62,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:62:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 70,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:70:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 78,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:78:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 82,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden // 4",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_out",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Previewer.__init__",
+      "site": "comfy/ldm/cascade/stage_c_coder.py:82:13 (Previewer.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_c_coder.py",
+      "source_sha256": "158834cc63866e3d39364b62c92c12897f1f1692df61b07e9cf44fd14a210cb8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "stride",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "padding",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 170,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Downsample3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:170:21 (Downsample3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "stride",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "padding",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 200,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Upsample3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:200:21 (Upsample3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 124,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "ch",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:124:25 (Decoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 43,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "block_out_channels[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:43:24 (Encoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 69,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "ch",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "z_channels << 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:69:25 (Encoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 99,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "z_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "ch",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/hunyuan_video/vae.py:99:24 (Decoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/vae.py",
+      "source_sha256": "1798354ab2c572a5496ab599eb42ca6db53c21ec497ac5cd76c77c902d589a78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "stride",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "groups",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "bias",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 145,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CausalConv2d.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:145:21 (CausalConv2d.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 200,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "stride",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "padding",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 5,
+          "starred": false,
+          "syntax": "dilation",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 6,
+          "starred": false,
+          "syntax": "groups",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 7,
+          "starred": false,
+          "syntax": "bias",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "make_conv2d",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:200:16 (make_conv2d)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 271,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Downsample.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:271:25 (Downsample.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 366,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AttnBlock.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:366:18 (AttnBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 367,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AttnBlock.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:367:18 (AttnBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 368,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AttnBlock.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:368:18 (AttnBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 369,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AttnBlock.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:369:25 (AttnBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "in_channels",
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "out_channels",
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "stride",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "padding",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "groups",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "bias",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "spatial_padding_mode",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 26,
+      "positional_arguments": [],
+      "scope": "make_conv_nd",
+      "site": "comfy/ldm/lightricks/vae/conv_nd_factory.py:26:16 (make_conv_nd)",
+      "source_path": "comfy/ldm/lightricks/vae/conv_nd_factory.py",
+      "source_sha256": "8433bd731dd379223d58a4fd84518ae9a618e1b067771878c8f2d51339c9a99a",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "in_channels",
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "out_channels",
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "bias",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 82,
+      "positional_arguments": [],
+      "scope": "make_linear_nd",
+      "site": "comfy/ldm/lightricks/vae/conv_nd_factory.py:82:16 (make_linear_nd)",
+      "source_path": "comfy/ldm/lightricks/vae/conv_nd_factory.py",
+      "source_sha256": "8433bd731dd379223d58a4fd84518ae9a618e1b067771878c8f2d51339c9a99a",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 411,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.ch",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:411:24 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 480,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "block_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_ch",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:480:25 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 195,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim * 3",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AttentionBlock.__init__",
+      "site": "comfy/ldm/wan/vae.py:195:23 (AttentionBlock.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 196,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AttentionBlock.__init__",
+      "site": "comfy/ldm/wan/vae.py:196:21 (AttentionBlock.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 80,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae.py:80:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 84,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae.py:84:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "(2, 2)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "line": 91,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae.py:91:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "(2, 2)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "line": 95,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae.py:95:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 34,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:34:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 39,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:39:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "(2, 2)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "line": 47,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:47:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "(2, 2)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "line": 51,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Resample.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:51:17 (Resample.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": true,
+          "name": null,
+          "syntax": "kwargs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 17,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_out",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "conv",
+      "site": "comfy/taesd/taehv.py:17:12 (conv)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "operations.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 27,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_out",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "MemBlock.__init__",
+      "site": "comfy/taesd/taehv.py:27:21 (MemBlock.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "operations.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 36,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_f * stride",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_f",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TPool.__init__",
+      "site": "comfy/taesd/taehv.py:36:21 (TPool.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "operations.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 45,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_f",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_f * stride",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TGrow.__init__",
+      "site": "comfy/taesd/taehv.py:45:21 (TGrow.__init__)",
+      "source_path": "comfy/taesd/taehv.py",
+      "source_sha256": "4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9",
+      "status": "static-call-observed",
+      "target_syntax": "operations.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": true,
+          "name": null,
+          "syntax": "kwargs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 13,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_out",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "conv",
+      "site": "comfy/taesd/taesd.py:13:12 (conv)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.disable_weight_init.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 23,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_out",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Block.__init__",
+      "site": "comfy/taesd/taesd.py:23:21 (Block.__init__)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.disable_weight_init.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 30,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_gn",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Block.__init__",
+      "site": "comfy/taesd/taesd.py:30:13 (Block.__init__)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.disable_weight_init.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 33,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "n_gn",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Block.__init__",
+      "site": "comfy/taesd/taesd.py:33:13 (Block.__init__)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.disable_weight_init.Conv2d"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "ClassDef",
+    "definition_line": 522,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "inherited-or-dynamic-constructor",
+    "parameters": [],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        {
+          "kind": "class-instance",
+          "name": "Conv2d"
+        }
+      ]
+    }
+  }
+}

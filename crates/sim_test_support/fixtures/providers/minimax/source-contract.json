@@ -1,0 +1,5713 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.minimax",
+  "scope": "Pinned registered source AST/Pydantic request/poll/file/download branches; native uploads and VideoFromFile are injected structural probes, not native allocation. Source backup catches construction or download exceptions; real cancellation/worker-loss are terminal owner boundaries.",
+  "source_sha256": {
+    "sim_api_nodes/nodes_minimax.py": "33cbc7389f0c5c0f79431ed677b7aa750d4204ab47b9f73549d7d168cddb8a3c",
+    "sim_api_nodes/apis/minimax.py": "30b06dee64de0444a8432248b14edeb8b15065d7574732edb4d20db5f2ebdfc9",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+  },
+  "registered_symbols": [
+    "MinimaxTextToVideoNode",
+    "MinimaxImageToVideoNode",
+    "MinimaxHailuoVideoNode"
+  ],
+  "excluded_symbols": {
+    "MinimaxSubjectToVideoNode": "explicitly commented out of MinimaxExtension.get_node_list; no executable claim"
+  },
+  "contracts": {
+    "MinimaxTextToVideoNode": {
+      "symbol": "MinimaxTextToVideoNode",
+      "arguments": [
+        "prompt_text",
+        "model",
+        "seed"
+      ],
+      "defaults": {
+        "model": "T2V-01",
+        "seed": 0
+      },
+      "schema": "IO.Schema(node_id='MinimaxTextToVideoNode', display_name='MiniMax Text to Video', category='partner/video/MiniMax', description='Generates videos synchronously based on a prompt, and optional parameters.', inputs=[IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation'), IO.Combo.Input('model', options=['T2V-01', 'T2V-01-Director'], default='T2V-01', tooltip='Model to use for video generation'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.43}'))",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Video.Output()]"
+    },
+    "MinimaxImageToVideoNode": {
+      "symbol": "MinimaxImageToVideoNode",
+      "arguments": [
+        "image",
+        "prompt_text",
+        "model",
+        "seed"
+      ],
+      "defaults": {
+        "model": "I2V-01",
+        "seed": 0
+      },
+      "schema": "IO.Schema(node_id='MinimaxImageToVideoNode', display_name='MiniMax Image to Video', category='partner/video/MiniMax', description='Generates videos synchronously based on an image and prompt, and optional parameters.', inputs=[IO.Image.Input('image', tooltip='Image to use as first frame of video generation'), IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation'), IO.Combo.Input('model', options=['I2V-01-Director', 'I2V-01', 'I2V-01-live'], default='I2V-01', tooltip='Model to use for video generation'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.43}'))",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Video.Output()]"
+    },
+    "MinimaxHailuoVideoNode": {
+      "symbol": "MinimaxHailuoVideoNode",
+      "arguments": [
+        "prompt_text",
+        "seed",
+        "first_frame_image",
+        "prompt_optimizer",
+        "duration",
+        "resolution",
+        "model"
+      ],
+      "defaults": {
+        "seed": 0,
+        "first_frame_image": null,
+        "prompt_optimizer": true,
+        "duration": 6,
+        "resolution": "768P",
+        "model": "MiniMax-Hailuo-02"
+      },
+      "schema": "IO.Schema(node_id='MinimaxHailuoVideoNode', display_name='MiniMax Hailuo Video', category='partner/video/MiniMax', description='Generates videos from prompt, with optional start frame using the new MiniMax Hailuo-02 model.', inputs=[IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True), IO.Image.Input('first_frame_image', tooltip='Optional image to use as the first frame to generate a video.', optional=True), IO.Boolean.Input('prompt_optimizer', default=True, tooltip='Optimize prompt to improve generation quality when needed.', optional=True), IO.Combo.Input('duration', options=[6, 10], default=6, tooltip='The length of the output video in seconds.', optional=True), IO.Combo.Input('resolution', options=['768P', '1080P'], default='768P', tooltip='The dimensions of the video display. 1080p is 1920x1080, 768p is 1366x768.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['resolution', 'duration']), expr='\\n                (\\n                  $prices := {\\n                    \"768p\": {\"6\": 0.28, \"10\": 0.56},\\n                    \"1080p\": {\"6\": 0.49}\\n                  };\\n                  $resPrices := $lookup($prices, $lowercase(widgets.resolution));\\n                  $price := $lookup($resPrices, $string(widgets.duration));\\n                  {\"type\":\"usd\",\"usd\": $price ? $price : 0.43}\\n                )\\n                '))",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Video.Output()]"
+    }
+  },
+  "cases": [
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "",
+          "model": "T2V-01",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": ""
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": " ",
+          "model": "T2V-01",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": " "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "model": "T2V-01",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "",
+          "model": "T2V-01-Director",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01-Director",
+            "prompt": ""
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": " ",
+          "model": "T2V-01-Director",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01-Director",
+            "prompt": " "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "model": "T2V-01-Director",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01-Director",
+            "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01-Director",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01-Director",
+            "prompt": ""
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": " ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01-Director",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01-Director",
+            "prompt": " "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01-Director",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01-Director",
+            "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": ""
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": " ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": " "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01-live",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01-live",
+            "prompt": ""
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": " ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01-live",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01-live",
+            "prompt": " "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "I2V-01-live",
+          "seed": 18446744073709551615
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01-live",
+            "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 10,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 10,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 10,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768P",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 10,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "1080P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "1080P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "1080P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "1080P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 10,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 10,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 10,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "768p",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 10,
+            "resolution": "768p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "1080p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 6,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": false,
+            "duration": 6,
+            "resolution": "1080p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "1080p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 6,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "1080p"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": 10,
+          "max_retries": 2
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": "https://media.fixture.invalid/primary.mp4",
+            "backup_download_url": "https://media.fixture.invalid/backup.mp4"
+          }
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": 10,
+          "max_retries": 2
+        },
+        {
+          "url": "https://media.fixture.invalid/backup.mp4",
+          "timeout": null,
+          "max_retries": 3
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/backup.mp4"
+        }
+      ],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": "https://media.fixture.invalid/primary.mp4",
+            "backup_download_url": "https://media.fixture.invalid/backup.mp4"
+          }
+        },
+        "download_failures": {
+          "https://media.fixture.invalid/primary.mp4": true
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": null,
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": 10,
+          "max_retries": 2
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": "https://media.fixture.invalid/primary.mp4",
+            "backup_download_url": "https://media.fixture.invalid/backup.mp4"
+          }
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": 10,
+          "max_retries": 2
+        },
+        {
+          "url": "https://media.fixture.invalid/backup.mp4",
+          "timeout": null,
+          "max_retries": 3
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/backup.mp4"
+        }
+      ],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": "https://media.fixture.invalid/primary.mp4",
+            "backup_download_url": "https://media.fixture.invalid/backup.mp4"
+          }
+        },
+        "download_failures": {
+          "https://media.fixture.invalid/primary.mp4": true
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": 10,
+          "max_retries": 2
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": "https://media.fixture.invalid/primary.mp4",
+            "backup_download_url": "https://media.fixture.invalid/backup.mp4"
+          }
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": 10,
+          "max_retries": 2
+        },
+        {
+          "url": "https://media.fixture.invalid/backup.mp4",
+          "timeout": null,
+          "max_retries": 3
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/backup.mp4"
+        }
+      ],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": "https://media.fixture.invalid/primary.mp4",
+            "backup_download_url": "https://media.fixture.invalid/backup.mp4"
+          }
+        },
+        "download_failures": {
+          "https://media.fixture.invalid/primary.mp4": true
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": null,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "MiniMax-Hailuo-02",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "",
+          "resolution": "other",
+          "model": "T2V-01",
+          "duration": null,
+          "prompt_optimizer": null
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "",
+            "resolution": "other"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 240,
+          "status": "Success"
+        }
+      ],
+      "downloads": [
+        {
+          "url": "https://media.fixture.invalid/primary.mp4",
+          "timeout": null,
+          "max_retries": 5
+        }
+      ],
+      "outputs": [
+        {
+          "canonical_video_from_file": "https://media.fixture.invalid/primary.mp4"
+        }
+      ]
+    }
+  ],
+  "preflight_errors": [
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080P",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": null
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 10,
+          "prompt_optimizer": false,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": null
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "resolution": "1080p",
+          "duration": 10,
+          "prompt_optimizer": true,
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "When model is MiniMax-Hailuo-02 and resolution is 1080P, duration is limited to 6 seconds.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      },
+      "message": "1 validation error for MinimaxVideoGenerationRequest\nprompt\n  String should have at most 2000 characters [type=string_too_long, input_value='xxxxxxxxxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxxxxxx', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_long",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": null
+        }
+      },
+      "message": "Field 'prompt_text' cannot be empty.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "model": "unknown"
+        }
+      },
+      "message": "'unknown' is not a valid MiniMaxModel",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "1 validation error for MinimaxVideoGenerationRequest\nprompt\n  String should have at most 2000 characters [type=string_too_long, input_value='xxxxxxxxxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxxxxxx', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_long",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "model": "unknown"
+        }
+      },
+      "message": "'unknown' is not a valid MiniMaxModel",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      },
+      "message": "1 validation error for MinimaxVideoGenerationRequest\nprompt\n  String should have at most 2000 characters [type=string_too_long, input_value='xxxxxxxxxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxxxxxx', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_long",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": null
+        }
+      },
+      "message": "Field 'prompt_text' cannot be empty.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "model": "unknown"
+        }
+      },
+      "message": "'unknown' is not a valid MiniMaxModel",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": null,
+          "image": null
+        }
+      },
+      "message": "Field 'prompt_text' cannot be empty.",
+      "requests": [],
+      "media": [],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "source",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "list index out of range",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": []
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "source",
+          "first_frame_image": {
+            "native_slot": "image",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "list index out of range",
+      "requests": [],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              0,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": []
+    }
+  ],
+  "response_errors": [
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "MiniMax generation failed: status_code=0 status_msg='source'",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "initial": {
+          "task_id": ""
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "Request was not successful. Missing file ID.",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "file_id": null
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "invalid literal for int() with base 10: 'not-an-integer'",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "file_id": "not-an-integer"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "No video was found in the response. Full response: {'base_resp': {'status_code': 0, 'status_msg': 'source'}, 'file': {'bytes': None, 'created_at': None, 'download_url': None, 'backup_download_url': None, 'file_id': None, 'filename': None, 'purpose': None}}",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 234,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": null
+          }
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "1 validation error for MinimaxVideoGenerationResponse\ntask_id\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "initial": {
+          "task_id": null
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxTextToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "1 validation error for MinimaxTaskResultResponse\nstatus\n  Input should be 'Queueing', 'Preparing', 'Processing', 'Success' or 'Fail' [type=enum, input_value='unknown', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/enum",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "T2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "status": "unknown"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "MiniMax generation failed: status_code=0 status_msg='source'",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "initial": {
+          "task_id": ""
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "Request was not successful. Missing file ID.",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "file_id": null
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "invalid literal for int() with base 10: 'not-an-integer'",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "file_id": "not-an-integer"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "No video was found in the response. Full response: {'base_resp': {'status_code': 0, 'status_msg': 'source'}, 'file': {'bytes': None, 'created_at': None, 'download_url': None, 'backup_download_url': None, 'file_id': None, 'filename': None, 'purpose': None}}",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 114,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": null
+          }
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "1 validation error for MinimaxVideoGenerationResponse\ntask_id\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "initial": {
+          "task_id": null
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxImageToVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  ",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          }
+        }
+      },
+      "message": "1 validation error for MinimaxTaskResultResponse\nstatus\n  Input should be 'Queueing', 'Preparing', 'Processing', 'Success' or 'Fail' [type=enum, input_value='unknown', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/enum",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "first_frame_image": "https://storage.fixture.invalid/image-0.png",
+            "model": "I2V-01",
+            "prompt": "  source prompt  "
+          },
+          "options": {}
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "image": {
+            "native_slot": "image",
+            "shape": [
+              1,
+              720,
+              720,
+              3
+            ]
+          },
+          "max_images": 1,
+          "mime_type": null,
+          "total_pixels": 4194304,
+          "wait_label": "Uploading",
+          "show_batch_index": true
+        }
+      ],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "status": "unknown"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "MiniMax generation failed: status_code=0 status_msg='source'",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "initial": {
+          "task_id": ""
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "Request was not successful. Missing file ID.",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "file_id": null
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "invalid literal for int() with base 10: 'not-an-integer'",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "file_id": "not-an-integer"
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "No video was found in the response. Full response: {'base_resp': {'status_code': 0, 'status_msg': 'source'}, 'file': {'bytes': None, 'created_at': None, 'download_url': None, 'backup_download_url': None, 'file_id': None, 'filename': None, 'purpose': None}}",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        },
+        {
+          "path": "/proxy/minimax/files/retrieve",
+          "method": "GET",
+          "query_params": {
+            "file_id": 42
+          },
+          "body": null,
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [
+        {
+          "path": "/proxy/minimax/query/video_generation",
+          "method": "GET",
+          "query_params": {
+            "task_id": "source-id"
+          },
+          "estimated_duration": 120,
+          "status": "Success"
+        }
+      ],
+      "downloads": [],
+      "response_override": {
+        "file": {
+          "file": {
+            "download_url": null
+          }
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "1 validation error for MinimaxVideoGenerationResponse\ntask_id\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "initial": {
+          "task_id": null
+        }
+      }
+    },
+    {
+      "input": {
+        "node": "MinimaxHailuoVideoNode",
+        "arguments": {
+          "prompt_text": "  source prompt  "
+        }
+      },
+      "message": "1 validation error for MinimaxTaskResultResponse\nstatus\n  Input should be 'Queueing', 'Preparing', 'Processing', 'Success' or 'Fail' [type=enum, input_value='unknown', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/enum",
+      "requests": [
+        {
+          "path": "/proxy/minimax/video_generation",
+          "method": "POST",
+          "query_params": null,
+          "body": {
+            "model": "MiniMax-Hailuo-02",
+            "prompt": "  source prompt  ",
+            "prompt_optimizer": true,
+            "duration": 6,
+            "resolution": "768P"
+          },
+          "options": {}
+        }
+      ],
+      "media": [],
+      "polls": [],
+      "downloads": [],
+      "response_override": {
+        "poll": {
+          "status": "unknown"
+        }
+      }
+    }
+  ],
+  "price_expressions": {
+    "MinimaxTextToVideoNode": "{\"type\":\"usd\",\"usd\":0.43}",
+    "MinimaxImageToVideoNode": "{\"type\":\"usd\",\"usd\":0.43}",
+    "MinimaxHailuoVideoNode": "\n                (\n                  $prices := {\n                    \"768p\": {\"6\": 0.28, \"10\": 0.56},\n                    \"1080p\": {\"6\": 0.49}\n                  };\n                  $resPrices := $lookup($prices, $lowercase(widgets.resolution));\n                  $price := $lookup($resPrices, $string(widgets.duration));\n                  {\"type\":\"usd\",\"usd\": $price ? $price : 0.43}\n                )\n                "
+  },
+  "price_rates": {
+    "768p": {
+      "6": 0.28,
+      "10": 0.56
+    },
+    "1080p": {
+      "6": 0.49
+    }
+  },
+  "price_cases": [
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "768P",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "768P",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "768P",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "1080P",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "1080P",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "1080P",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "768p",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "768p",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "768p",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "other",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "other",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxTextToVideoNode",
+      "resolution": "other",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "768P",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "768P",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "768P",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "1080P",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "1080P",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "1080P",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "768p",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "768p",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "768p",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "other",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "other",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxImageToVideoNode",
+      "resolution": "other",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "768P",
+      "duration": 6,
+      "maximum_microunits": 280000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "768P",
+      "duration": 10,
+      "maximum_microunits": 560000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "768P",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "1080P",
+      "duration": 6,
+      "maximum_microunits": 490000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "1080P",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "1080P",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "768p",
+      "duration": 6,
+      "maximum_microunits": 280000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "768p",
+      "duration": 10,
+      "maximum_microunits": 560000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "768p",
+      "duration": 12,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "other",
+      "duration": 6,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "other",
+      "duration": 10,
+      "maximum_microunits": 430000
+    },
+    {
+      "node": "MinimaxHailuoVideoNode",
+      "resolution": "other",
+      "duration": 12,
+      "maximum_microunits": 430000
+    }
+  ],
+  "polling": {
+    "COMPLETED_STATUSES": [
+      "complete",
+      "completed",
+      "done",
+      "finished",
+      "succeed",
+      "succeeded",
+      "success"
+    ],
+    "FAILED_STATUSES": [
+      "canceled",
+      "canceling",
+      "cancelled",
+      "error",
+      "fail",
+      "failed"
+    ],
+    "QUEUED_STATUSES": [
+      "created",
+      "in_queue",
+      "initializing",
+      "queued",
+      "queueing",
+      "submitted",
+      "wait"
+    ]
+  },
+  "api_schemas": {
+    "MinimaxVideoGenerationRequest": {
+      "$defs": {
+        "MiniMaxModel": {
+          "enum": [
+            "T2V-01-Director",
+            "I2V-01-Director",
+            "S2V-01",
+            "I2V-01",
+            "I2V-01-live",
+            "T2V-01",
+            "MiniMax-Hailuo-02"
+          ],
+          "title": "MiniMaxModel",
+          "type": "string"
+        },
+        "SubjectReferenceItem": {
+          "properties": {
+            "image": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "URL or base64 encoding of the subject reference image.",
+              "title": "Image"
+            },
+            "mask": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "URL or base64 encoding of the mask for the subject reference image.",
+              "title": "Mask"
+            }
+          },
+          "title": "SubjectReferenceItem",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "callback_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional. URL to receive real-time status updates about the video generation task.",
+          "title": "Callback Url"
+        },
+        "first_frame_image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "URL or base64 encoding of the first frame image. Required when model is I2V-01, I2V-01-Director, or I2V-01-live.",
+          "title": "First Frame Image"
+        },
+        "model": {
+          "$ref": "#/$defs/MiniMaxModel",
+          "description": "Required. ID of model. Options: T2V-01-Director, I2V-01-Director, S2V-01, I2V-01, I2V-01-live, T2V-01"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Description of the video. Should be less than 2000 characters. Supports camera movement instructions in [brackets].",
+          "title": "Prompt"
+        },
+        "prompt_optimizer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "description": "If true (default), the model will automatically optimize the prompt. Set to false for more precise control.",
+          "title": "Prompt Optimizer"
+        },
+        "subject_reference": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SubjectReferenceItem"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only available when model is S2V-01. The model will generate a video based on the subject uploaded through this parameter.",
+          "title": "Subject Reference"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The length of the output video in seconds.",
+          "title": "Duration"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The dimensions of the video display. 1080p corresponds to 1920 x 1080 pixels, 768p corresponds to 1366 x 768 pixels.",
+          "title": "Resolution"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "MinimaxVideoGenerationRequest",
+      "type": "object"
+    },
+    "MinimaxVideoGenerationResponse": {
+      "$defs": {
+        "MinimaxBaseResponse": {
+          "properties": {
+            "status_code": {
+              "description": "Status code. 0 indicates success, other values indicate errors.",
+              "title": "Status Code",
+              "type": "integer"
+            },
+            "status_msg": {
+              "description": "Specific error details or success message.",
+              "title": "Status Msg",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status_code",
+            "status_msg"
+          ],
+          "title": "MinimaxBaseResponse",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "base_resp": {
+          "$ref": "#/$defs/MinimaxBaseResponse"
+        },
+        "task_id": {
+          "description": "The task ID for the asynchronous video generation task.",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_resp",
+        "task_id"
+      ],
+      "title": "MinimaxVideoGenerationResponse",
+      "type": "object"
+    },
+    "MinimaxTaskResultResponse": {
+      "$defs": {
+        "MinimaxBaseResponse": {
+          "properties": {
+            "status_code": {
+              "description": "Status code. 0 indicates success, other values indicate errors.",
+              "title": "Status Code",
+              "type": "integer"
+            },
+            "status_msg": {
+              "description": "Specific error details or success message.",
+              "title": "Status Msg",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status_code",
+            "status_msg"
+          ],
+          "title": "MinimaxBaseResponse",
+          "type": "object"
+        },
+        "Status6": {
+          "enum": [
+            "Queueing",
+            "Preparing",
+            "Processing",
+            "Success",
+            "Fail"
+          ],
+          "title": "Status6",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "base_resp": {
+          "$ref": "#/$defs/MinimaxBaseResponse"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "After the task status changes to Success, this field returns the file ID corresponding to the generated video.",
+          "title": "File Id"
+        },
+        "status": {
+          "$ref": "#/$defs/Status6",
+          "description": "Task status: 'Queueing' (in queue), 'Preparing' (task is preparing), 'Processing' (generating), 'Success' (task completed successfully), or 'Fail' (task failed)."
+        },
+        "task_id": {
+          "description": "The task ID being queried.",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_resp",
+        "status",
+        "task_id"
+      ],
+      "title": "MinimaxTaskResultResponse",
+      "type": "object"
+    },
+    "MinimaxFileRetrieveResponse": {
+      "$defs": {
+        "File": {
+          "properties": {
+            "bytes": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "File size in bytes",
+              "title": "Bytes"
+            },
+            "created_at": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Unix timestamp when the file was created, in seconds",
+              "title": "Created At"
+            },
+            "download_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The URL to download the video",
+              "title": "Download Url"
+            },
+            "backup_download_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The backup URL to download the video",
+              "title": "Backup Download Url"
+            },
+            "file_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Unique identifier for the file",
+              "title": "File Id"
+            },
+            "filename": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The name of the file",
+              "title": "Filename"
+            },
+            "purpose": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The purpose of using the file",
+              "title": "Purpose"
+            }
+          },
+          "title": "File",
+          "type": "object"
+        },
+        "MinimaxBaseResponse": {
+          "properties": {
+            "status_code": {
+              "description": "Status code. 0 indicates success, other values indicate errors.",
+              "title": "Status Code",
+              "type": "integer"
+            },
+            "status_msg": {
+              "description": "Specific error details or success message.",
+              "title": "Status Msg",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status_code",
+            "status_msg"
+          ],
+          "title": "MinimaxBaseResponse",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "base_resp": {
+          "$ref": "#/$defs/MinimaxBaseResponse"
+        },
+        "file": {
+          "$ref": "#/$defs/File"
+        }
+      },
+      "required": [
+        "base_resp",
+        "file"
+      ],
+      "title": "MinimaxFileRetrieveResponse",
+      "type": "object"
+    }
+  },
+  "api_models": [
+    "T2V-01-Director",
+    "I2V-01-Director",
+    "S2V-01",
+    "I2V-01",
+    "I2V-01-live",
+    "T2V-01",
+    "MiniMax-Hailuo-02"
+  ]
+}

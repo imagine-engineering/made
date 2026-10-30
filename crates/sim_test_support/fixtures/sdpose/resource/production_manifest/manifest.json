@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-sdpose-model-resource-foundation",
+  "provenance_mode": "code-inferred-manifest-only",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source_sha256": {
+    "comfy/ldm/modules/sdpose.py": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a",
+    "comfy/model_detection.py": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072",
+    "comfy_extras/nodes_sdpose.py": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+    "comfy/ldm/modules/diffusionmodules/openaimodel.py": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"
+  },
+  "dependency_fixtures": {
+    "sd2_capture_production_manifest_sha256": "d08a427c86c6595b9c012b17be77229fac74823f69d25373160863c5af6e8c24",
+    "sd2_capture_reduced_numeric_sha256": "db7726ed977259a6423489f125d47a6e58f25e563b9eccd3853f9acbced94124",
+    "heatmap_projection_manifest_sha256": "e2d3b036c064ce263f893e110a5e8f35a4a0892c154a473031443454c23312fa"
+  },
+  "resource_contract": {
+    "role": "MODEL",
+    "format": "zed-native-sdpose-model-v1",
+    "denoiser_tensor_count": 690,
+    "head_tensor_count": 5,
+    "combined_tensor_count": 695,
+    "denoiser_scalar_count": 867556804,
+    "head_scalar_count": 7049093,
+    "combined_scalar_count": 874605897,
+    "f16_or_bf16_tensor_bytes": 1749211794,
+    "f32_tensor_bytes": 3498423588,
+    "capture_shape": [1, 640, 128, 96],
+    "heatmap_shape": [1, 133, 256, 192],
+    "reduced_fixtures_are_not_publishable_by_the_production_constructor": true,
+    "invocation_state_is_retained": false
+  },
+  "head_state": [
+    {"key": "native.heatmap_head.deconv_layers.0.weight", "shape": [640, 640, 4, 4]},
+    {"key": "native.heatmap_head.conv_layers.0.weight", "shape": [640, 640, 1, 1]},
+    {"key": "native.heatmap_head.conv_layers.0.bias", "shape": [640]},
+    {"key": "native.heatmap_head.final_layer.weight", "shape": [133, 640, 1, 1]},
+    {"key": "native.heatmap_head.final_layer.bias", "shape": [133]}
+  ],
+  "licensed_checkpoint_oracle": null,
+  "upstream_runtime_oracle": null,
+  "accelerator_numeric_oracle": null
+}

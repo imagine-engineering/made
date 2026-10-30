@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-h264-mp4-sequence-encode-v1",
+  "truth_mode": "synthetic-source-compatible-component-h264-mp4-sequence-execution",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+    "observable": "VideoFromComponents writes source-order RGB frames to an H.264 MP4 stream at the source millisecond-rounded rational rate and discards a fourth alpha channel"
+  },
+  "dependencies": {
+    "codec_plan_manifest_sha256": "9ff5dde7b0d4fdde599fc377031e88c455e00afcf428e190069569b0c548704f",
+    "codec_suite_admission_manifest_sha256": "fa7e0f02c2e977518205b6025d28e47eeaa9eb10401a250e5cf7fb8f7c83bcc3",
+    "bounded_avio_manifest_sha256": "6d60aaf8e7524bdef8511fcd6036d7f17a9a2f1938ba21b69f30747fc48c0323",
+    "ltxv_h264_encode_manifest_sha256": "7d01cd5960a7ad08df8f9fe331d17fa732252f7f8eeef944e6140d2c90f7a4d9",
+    "vp9_sequence_manifest_sha256": "4d5c73e21827ca63445771308876f40b8dca095e5d38c6b43a976ca09ea3682d"
+  },
+  "contract": {
+    "profile": "MP4 with the retained provider-proved libx264 descriptor, RGB24 source, YUV420P destination, checked rational frame rate and global-header policy",
+    "options": "ordinary component encoding supplies no CRF or preset option; the distinct LTXV profile retains its checked CRF and veryfast preset",
+    "quantization": "multiply the first three source channels by 255, clamp to [0,255], truncate to packed U8 RGB, and discard a fourth alpha channel",
+    "batch_lifecycle": "one bounded retained session, increasing frame PTS, per-frame packet draining, one terminal flush, one trailer, and final-only attempt-local bytes"
+  },
+  "claims": {
+    "reviewed_54_symbol_abi_is_unchanged": true,
+    "provider_proved_libx264_reaches_the_shared_retained_sequence_loop": true,
+    "source_rgb_quantization_alpha_discard_rate_pts_flush_and_cleanup_are_exact_signature_tested": true,
+    "ordinary_profile_has_no_ltxv_crf_or_preset": true,
+    "bounded_later_frame_failure_cancellation_zero_scratch_and_retry_are_tested": true,
+    "licensed_or_installed_ffmpeg_or_libx264_package": false,
+    "production_codec_availability": false,
+    "playable_mp4_or_decoded_numeric_h264_color_oracle": false,
+    "python_pyav_default_encoder_or_byte_identity": false,
+    "ten_bit_rgb48le_yuv420p10le": false,
+    "aac_audio_or_dual_stream_mux": false,
+    "container_metadata_actor_node_effect_path_or_output_committer_reachable": false,
+    "encoded_backing_trim_load_video_handle_cache_persistence_recovery_or_publication_owned": false,
+    "complete_native_heap_interception_or_measurement": false
+  }
+}

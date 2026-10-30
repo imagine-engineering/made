@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "approval": {
+    "basis": "user-provided reference artifacts",
+    "scope": "structure, density, hierarchy, resizable pane geometry, and interaction state",
+    "theme_policy": "native Zed theme tokens; reference colors are not pixel baselines"
+  },
+  "cases": [
+    {
+      "id": "expanded",
+      "viewport": { "width": 1930, "height": 1262 },
+      "reference": {
+        "path": ".agents/specs/collaborative-workspace/screenshots/screenshot-1.png",
+        "sha256": "31f179f12708d571c5e3f12ae1c873b96b7733b433bae78aaf691ca247768e71"
+      },
+      "review_visible": true,
+      "required_selectors": [
+        "COLLABORATIVE-RAIL",
+        "COLLABORATIVE-TOP-BAR",
+        "COLLABORATIVE-TIMELINE-REGION",
+        "COLLABORATIVE-REVIEW-REGION",
+        "COLLABORATIVE-COMPOSER",
+        "COLLABORATIVE-PARTICIPANT-STATUS"
+      ],
+      "absent_selectors": []
+    },
+    {
+      "id": "collapsed",
+      "viewport": { "width": 1928, "height": 1298 },
+      "reference": {
+        "path": ".agents/specs/collaborative-workspace/screenshots/screenshot-2.png",
+        "sha256": "1854c0e39d0e0fbe940dcf103e0caf5ede3aecf7ddd57758fdd14f5419572f60"
+      },
+      "review_visible": false,
+      "required_selectors": [
+        "COLLABORATIVE-RAIL",
+        "COLLABORATIVE-TOP-BAR",
+        "COLLABORATIVE-TIMELINE-REGION",
+        "COLLABORATIVE-COMPOSER",
+        "COLLABORATIVE-PARTICIPANT-STATUS"
+      ],
+      "absent_selectors": ["COLLABORATIVE-REVIEW-REGION"]
+    }
+  ]
+}

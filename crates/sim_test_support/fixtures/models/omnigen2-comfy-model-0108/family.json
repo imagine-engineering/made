@@ -1,0 +1,50 @@
+{
+  "fixture_id": "omnigen2-sim-model-0108",
+  "feature_id": "COMFY-MODEL-0108",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.time_caption_embed.timestep_embedder.linear_1.bias": [2520]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0108010801080108010801080108010801080108010801080108010801080108",
+  "source_weights": [
+    { "key": "model.diffusion_model.x_embedder.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.x_embedder.bias", "shape": [2], "values": [0.0, 0.0] },
+    { "key": "model.diffusion_model.time_caption_embed.timestep_embedder.linear_1.bias", "shape": [2], "values": [0.0, 0.0] },
+    { "key": "model.diffusion_model.layers.0.attn.to_q.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.norm_out.linear_2.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.norm_out.linear_2.bias", "shape": [2], "values": [0.0, 0.0] }
+  ],
+  "input": { "key": "input", "shape": [1, 2], "values": [1.0, -1.0] },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 88,
+  "expected_memory_bytes": 88,
+  "checkpoints": [
+    { "name": "patch_embedding", "values": [1.0, -1.0] },
+    { "name": "single_stream_query", "values": [1.0, -1.0] },
+    { "name": "single_stream_activation", "values": [0.7310586, -0.26894143] },
+    { "name": "output_projection", "values": [0.7310586, -0.26894143] },
+    { "name": "negated_output", "values": [-0.7310586, 0.26894143] }
+  ],
+  "patches": [{
+    "identifier": "omnigen2-input-bias",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{
+      "key": "native.x_embedder.bias",
+      "expected_shape": [2],
+      "values": [1.0, 1.0],
+      "application": "add"
+    }]
+  }],
+  "patched_checkpoints": [
+    { "name": "patch_embedding", "values": [2.0, 0.0] },
+    { "name": "single_stream_query", "values": [2.0, 0.0] },
+    { "name": "single_stream_activation", "values": [1.7615942, 0.0] },
+    { "name": "output_projection", "values": [1.7615942, 0.0] },
+    { "name": "negated_output", "values": [-1.7615942, 0.0] }
+  ]
+}

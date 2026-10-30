@@ -1,0 +1,1618 @@
+{
+  "canonical_target": "torch.Tensor.narrow",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/conds.py:60:24 (CONDNoiseShape.process_cond)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:286:49 (WindowingState.strip_guide_frames)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/context_windows.py:408:29 (IndexListContextHandler._apply_freenoise)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/context_windows.py:418:25 (IndexListContextHandler._apply_freenoise)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:441:44 (IndexListContextHandler._build_window_state)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:442:41 (IndexListContextHandler._build_window_state)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:702:47 (IndexListContextHandler.evaluate_context_windows)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/lora.py:451:22 (calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_base.py:1262:30 (LTXAV.resize_cond_for_context_window)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_base.py:1263:30 (LTXAV.resize_cond_for_context_window)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_detection.py:1420:25 (convert_diffusers_mmdit)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:180:41 (finalize_default_conds)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:347:33 (_calc_cond_batch)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:348:35 (_calc_cond_batch)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:577:29 (_calc_cond_batch_multigpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:578:31 (_calc_cond_batch_multigpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:58:23 (get_area_and_mult)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:72:24 (get_area_and_mult)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:86:25 (get_area_and_mult)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:90:25 (get_area_and_mult)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/sd.py:965:30 (VAE.vae_encode_crop_pixels)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/utils.py:1189:24 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "attribute": "mul_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/utils.py:1201:21 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "attribute": "mul_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/utils.py:1202:21 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/utils.py:1210:21 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/utils.py:1211:23 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/utils.py:1213:31 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/utils.py:1214:33 (tiled_scale_multidim)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/utils.py:861:16 (repeat_to_batch_size)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/utils.py:863:16 (repeat_to_batch_size)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_fresca.py:38:13 (Fourier_filter)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/conds.py:60:24 (CONDNoiseShape.process_cond)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:286:49 (WindowingState.strip_guide_frames)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:408:29 (IndexListContextHandler._apply_freenoise)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:418:25 (IndexListContextHandler._apply_freenoise)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:441:44 (IndexListContextHandler._build_window_state)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:442:41 (IndexListContextHandler._build_window_state)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:702:47 (IndexListContextHandler.evaluate_context_windows)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/lora.py:451:22 (calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:1262:30 (LTXAV.resize_cond_for_context_window)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:1263:30 (LTXAV.resize_cond_for_context_window)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_detection.py:1420:25 (convert_diffusers_mmdit)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:180:41 (finalize_default_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:347:33 (_calc_cond_batch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:348:35 (_calc_cond_batch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:577:29 (_calc_cond_batch_multigpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:578:31 (_calc_cond_batch_multigpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:58:23 (get_area_and_mult)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:72:24 (get_area_and_mult)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:86:25 (get_area_and_mult)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:90:25 (get_area_and_mult)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/sd.py:965:30 (VAE.vae_encode_crop_pixels)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1086:17 (common_upscale)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1189:24 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1201:21 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1202:21 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1210:21 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1211:23 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1213:31 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:1214:33 (tiled_scale_multidim)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:861:16 (repeat_to_batch_size)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/utils.py:863:16 (repeat_to_batch_size)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_fresca.py:38:13 (Fourier_filter)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-006e05c5daaf-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match index bounds, negative indices, mask broadcasting, repeated-index behavior, output shape, and invalid-index failures.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-006E05C5DAAF",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "dd2153919a94e212c7e417fde98610654d578cf5ec80c4c4325e07818e8459f1",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/conds.py",
+        "sha256": "72058e9a22c972a9c875819e59d432d30d367fd2f7092ee6c6c45e5a60c959b0"
+      },
+      {
+        "path": "comfy/context_windows.py",
+        "sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef"
+      },
+      {
+        "path": "comfy/lora.py",
+        "sha256": "8f75c95ddc8ab0144919fe5277c4e6b4fa4f4f45aa64aa3de5d2d3b1b4a927d8"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy/model_detection.py",
+        "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+      },
+      {
+        "path": "comfy/samplers.py",
+        "sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649"
+      },
+      {
+        "path": "comfy/sd.py",
+        "sha256": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42"
+      },
+      {
+        "path": "comfy/utils.py",
+        "sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"
+      },
+      {
+        "path": "comfy_extras/nodes_fresca.py",
+        "sha256": "a1a7d14a871fbc0993a5de0830a50673a00203e844e42313456ef1c79f578ff0"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.narrow"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "indexing_masking_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-indexing-masking-comfy-tensor-op-006e05c5daaf",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 60,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "area[i + dims]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "area[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "CONDNoiseShape.process_cond",
+      "site": "comfy/conds.py:60:24 (CONDNoiseShape.process_cond)",
+      "source_path": "comfy/conds.py",
+      "source_sha256": "72058e9a22c972a9c875819e59d432d30d367fd2f7092ee6c6c45e5a60c959b0",
+      "status": "static-call-observed",
+      "target_syntax": "data.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 49,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 286,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "window_len",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "WindowingState.strip_guide_frames",
+      "site": "comfy/context_windows.py:286:49 (WindowingState.strip_guide_frames)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "out_per_modality[ci][idx].narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 408,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "primary_video_count",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IndexListContextHandler._apply_freenoise",
+      "site": "comfy/context_windows.py:408:29 (IndexListContextHandler._apply_freenoise)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "modalities[0].narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 418,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "video_count",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IndexListContextHandler._apply_freenoise",
+      "site": "comfy/context_windows.py:418:25 (IndexListContextHandler._apply_freenoise)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "noise.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 441,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "latent_count",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IndexListContextHandler._build_window_state",
+      "site": "comfy/context_windows.py:441:44 (IndexListContextHandler._build_window_state)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "x.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 442,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "latent_count",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "guide_count",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IndexListContextHandler._build_window_state",
+      "site": "comfy/context_windows.py:442:41 (IndexListContextHandler._build_window_state)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "x.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 702,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "t.shape[self.dim] - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "IndexListContextHandler.evaluate_context_windows",
+      "site": "comfy/context_windows.py:702:47 (IndexListContextHandler.evaluate_context_windows)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "t.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 451,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "offset[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "offset[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "offset[2]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "calculate_weight",
+      "site": "comfy/lora.py:451:22 (calculate_weight)",
+      "source_path": "comfy/lora.py",
+      "source_sha256": "8f75c95ddc8ab0144919fe5277c4e6b4fa4f4f45aa64aa3de5d2d3b1b4a927d8",
+      "status": "static-call-observed",
+      "target_syntax": "weight.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1262,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "window.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "T_video",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LTXAV.resize_cond_for_context_window",
+      "site": "comfy/model_base.py:1262:30 (LTXAV.resize_cond_for_context_window)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "cond_tensor.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1263,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "window.dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "T_video",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "guide_count",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LTXAV.resize_cond_for_context_window",
+      "site": "comfy/model_base.py:1263:30 (LTXAV.resize_cond_for_context_window)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "cond_tensor.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1420,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "offset[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "offset[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "offset[2]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "convert_diffusers_mmdit",
+      "site": "comfy/model_detection.py:1420:25 (convert_diffusers_mmdit)",
+      "source_path": "comfy/model_detection.py",
+      "source_sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072",
+      "status": "static-call-observed",
+      "target_syntax": "old_weight.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 180,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "area[i + dims]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "area[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "finalize_default_conds",
+      "site": "comfy/samplers.py:180:41 (finalize_default_conds)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "curr_default_mult.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 347,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a[i + dims]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "a[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "_calc_cond_batch",
+      "site": "comfy/samplers.py:347:33 (_calc_cond_batch)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "out_c.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 35,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 348,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a[i + dims]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "a[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "_calc_cond_batch",
+      "site": "comfy/samplers.py:348:35 (_calc_cond_batch)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "out_cts.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 577,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a[i + dims]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "a[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "_calc_cond_batch_multigpu",
+      "site": "comfy/samplers.py:577:29 (_calc_cond_batch_multigpu)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "out_c.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 578,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a[i + dims]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "a[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "_calc_cond_batch_multigpu",
+      "site": "comfy/samplers.py:578:31 (_calc_cond_batch_multigpu)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "out_cts.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 58,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "area[len(dims) + i]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "area[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "get_area_and_mult",
+      "site": "comfy/samplers.py:58:23 (get_area_and_mult)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "input_x.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 72,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "area[len(dims) + i]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "area[i]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "get_area_and_mult",
+      "site": "comfy/samplers.py:72:24 (get_area_and_mult)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "mask.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 86,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "get_area_and_mult",
+      "site": "comfy/samplers.py:86:25 (get_area_and_mult)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "mult.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 90,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "i + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "area[i] - 1 - t",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "get_area_and_mult",
+      "site": "comfy/samplers.py:90:25 (get_area_and_mult)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "mult.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 965,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d + 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "VAE.vae_encode_crop_pixels",
+      "site": "comfy/sd.py:965:30 (VAE.vae_encode_crop_pixels)",
+      "source_path": "comfy/sd.py",
+      "source_sha256": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
+      "status": "static-call-observed",
+      "target_syntax": "pixels.narrow"
+    },
+    {
+      "candidate_calls": [
+        {
+          "keyword_arguments": [],
+          "positional_arguments": [
+            {
+              "index": 0,
+              "starred": false,
+              "syntax": "-1",
+              "syntax_kind": "UnaryOp"
+            },
+            {
+              "index": 1,
+              "starred": false,
+              "syntax": "x",
+              "syntax_kind": "Name"
+            },
+            {
+              "index": 2,
+              "starred": false,
+              "syntax": "old_width - x * 2",
+              "syntax_kind": "BinOp"
+            }
+          ],
+          "target_name": "narrow",
+          "target_syntax": "samples.narrow(-2, y, old_height - y * 2).narrow"
+        },
+        {
+          "keyword_arguments": [],
+          "positional_arguments": [
+            {
+              "index": 0,
+              "starred": false,
+              "syntax": "-2",
+              "syntax_kind": "UnaryOp"
+            },
+            {
+              "index": 1,
+              "starred": false,
+              "syntax": "y",
+              "syntax_kind": "Name"
+            },
+            {
+              "index": 2,
+              "starred": false,
+              "syntax": "old_height - y * 2",
+              "syntax_kind": "BinOp"
+            }
+          ],
+          "target_name": "narrow",
+          "target_syntax": "samples.narrow"
+        }
+      ],
+      "catalog_field": "production_call_sites",
+      "matching_call_nodes": 2,
+      "site": "comfy/utils.py:1086:17 (common_upscale)",
+      "status": "call-node-not-unique"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1189,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "l",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1189:24 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "s_in.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "mul_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1201,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1201:21 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "mask.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "mul_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1202,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "mask.shape[d] - 1 - t",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1202:21 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "mask.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1210,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "upscaled[d]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "l",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1210:21 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "o.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1211,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "upscaled[d]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "l",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1211:23 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "o_d.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1213,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "l",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1213:31 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "ps_view.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1214,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "d + 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "l",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "tiled_scale_multidim",
+      "site": "comfy/utils.py:1214:33 (tiled_scale_multidim)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "mask_view.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 861,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "batch_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "repeat_to_batch_size",
+      "site": "comfy/utils.py:861:16 (repeat_to_batch_size)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "tensor.narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 863,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "batch_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "repeat_to_batch_size",
+      "site": "comfy/utils.py:863:16 (repeat_to_batch_size)",
+      "source_path": "comfy/utils.py",
+      "source_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "status": "static-call-observed",
+      "target_syntax": "tensor.repeat(dim * [1] + [math.ceil(batch_size / tensor.shape[dim])] + [1] * (len(tensor.shape) - 1 - dim)).narrow"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 38,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "cc - f_c",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "f_c * 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Fourier_filter",
+      "site": "comfy_extras/nodes_fresca.py:38:13 (Fourier_filter)",
+      "source_path": "comfy_extras/nodes_fresca.py",
+      "source_sha256": "a1a7d14a871fbc0993a5de0830a50673a00203e844e42313456ef1c79f578ff0",
+      "status": "static-call-observed",
+      "target_syntax": "m.narrow"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "truth_classification": "code-inferred-codec-plan-contract",
+  "source_snapshot": {
+    "project": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source_files": {
+    "comfy_extras/nodes_video.py": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "comfy_api/latest/_input/video_types.py": "6cba96f1f254094436de6c3e64c0a7b469e7cbaf3578c234c18eea88cf93926d",
+    "comfy_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+    "comfy_api/latest/_util/video_types.py": "5d2f7dd2b82aecec3c05f8f5bd9519530736825d33590207ea0aa32b8cc8627f"
+  },
+  "cases": {
+    "component_h264_10_bit": {
+      "source_rate": [1054475631502295, 35184372088832],
+      "encode_rate": [2997, 100],
+      "pixel_format": "yuv420p10le",
+      "alpha": "discard",
+      "audio_layouts": ["mono", "stereo", "5.1", "other-to-stereo"]
+    },
+    "webm_vp9_alpha": {
+      "source_rate": [210895126300459, 8796093022208],
+      "encode_rate": [2997, 125],
+      "pixel_format": "yuva420p",
+      "output_bit_depth": 8,
+      "alpha": "preserve"
+    },
+    "webm_av1": {
+      "pixel_format": "yuv420p10le",
+      "output_bit_depth": 10,
+      "alpha": "discard",
+      "preset": 6
+    }
+  },
+  "claims": {
+    "codec_execution": false,
+    "native_library_loaded": false,
+    "licensed_checkpoint": false,
+    "upstream_runtime_numeric_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "plan_is_allocation_free": true,
+    "input_contract": "sealed checked NativeVideoPayload"
+  }
+}

@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCCACHE_VERSION="v0.16.0"
+# Use absolute path to avoid issues with working directory changes between steps
+SCCACHE_BIN_DIR="$(pwd)/target/sccache"
+
+install_sccache() {
+    mkdir -p "$SCCACHE_BIN_DIR"
+
+    local expected_version="sccache ${SCCACHE_VERSION#v}"
+    local installed_version=""
+    if [[ -x "${SCCACHE_BIN_DIR}/sccache" ]]; then
+        if ! installed_version="$("${SCCACHE_BIN_DIR}/sccache" --version 2>/dev/null)"; then
+            echo "Cached sccache binary is invalid; reinstalling"
+            installed_version=""
+        fi
+    fi
+
+    if [[ "${installed_version}" == "${expected_version}" ]]; then
+        echo "sccache already cached: ${installed_version}"
+    else
+        if [[ -n "${installed_version}" ]]; then
+            echo "Stopping cached ${installed_version} server before upgrading..."
+            if ! "${SCCACHE_BIN_DIR}/sccache" --stop-server &>/dev/null; then
+                echo "No running sccache server to stop"
+            fi
+        fi
+
+        echo "Installing sccache ${SCCACHE_VERSION} from GitHub releases..."
+
+        local os arch archive basename
+        os="$(uname -s)"
+        arch="$(uname -m)"
+
+        case "${os}-${arch}" in
+            Darwin-arm64)
+                archive="sccache-${SCCACHE_VERSION}-aarch64-apple-darwin.tar.gz"
+                ;;
+            Darwin-x86_64)
+                archive="sccache-${SCCACHE_VERSION}-x86_64-apple-darwin.tar.gz"
+                ;;
+            Linux-x86_64)
+                archive="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+                ;;
+            Linux-aarch64)
+                archive="sccache-${SCCACHE_VERSION}-aarch64-unknown-linux-musl.tar.gz"
+                ;;
+            *)
+                echo "Unsupported platform: ${os}-${arch}"
+                exit 1
+                ;;
+        esac
+
+        basename="${archive%.tar.gz}"
+        curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}" | tar xz
+        mv "${basename}/sccache" "${SCCACHE_BIN_DIR}/"
+        rm -rf "${basename}"
+        echo "Installed sccache: $("${SCCACHE_BIN_DIR}/sccache" --version)"
+    fi
+
+    # Verify the binary works before adding to path
+    if ! "${SCCACHE_BIN_DIR}/sccache" --version &>/dev/null; then
+        echo "ERROR: sccache binary at ${SCCACHE_BIN_DIR}/sccache is not executable or corrupted"
+        rm -f "${SCCACHE_BIN_DIR}/sccache"
+        exit 1
+    fi
+
+    if [[ -n "${GITHUB_PATH:-}" ]]; then
+        echo "${SCCACHE_BIN_DIR}" >> "$GITHUB_PATH"
+    fi
+    export PATH="${SCCACHE_BIN_DIR}:${PATH}"
+}
+
+configure_sccache() {
+    if [[ -z "${R2_ACCOUNT_ID:-}" && -z "${SCCACHE_LOCAL_CACHE_DIR:-}" ]]; then
+        echo "No remote or local cache backend configured, skipping sccache configuration"
+        return
+    fi
+
+    local base_dir="${GITHUB_WORKSPACE:-$(pwd)}"
+    local sccache_bin="${SCCACHE_BIN_DIR}/sccache"
+
+    export SCCACHE_BASEDIRS="${base_dir}"
+    export RUSTC_WRAPPER="${sccache_bin}"
+
+    if [[ -n "${R2_ACCOUNT_ID:-}" ]]; then
+        echo "Configuring sccache with Cloudflare R2..."
+        export SCCACHE_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+        export SCCACHE_BUCKET="${SCCACHE_BUCKET:-sccache-zed}"
+        export SCCACHE_REGION="auto"
+        export SCCACHE_S3_KEY_PREFIX="${SCCACHE_KEY_PREFIX:-sccache/}"
+        export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
+        export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+        echo "✓ sccache configured with Cloudflare R2 (bucket: ${SCCACHE_BUCKET})"
+    else
+        echo "Configuring sccache with a local disk cache..."
+        mkdir -p "${SCCACHE_LOCAL_CACHE_DIR}"
+        export SCCACHE_DIR="${SCCACHE_LOCAL_CACHE_DIR}"
+        export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-3G}"
+        export SCCACHE_IDLE_TIMEOUT="${SCCACHE_IDLE_TIMEOUT:-0}"
+        echo "✓ sccache configured with local cache: ${SCCACHE_DIR}"
+    fi
+
+    if [[ -n "${GITHUB_ENV:-}" ]]; then
+        {
+            echo "SCCACHE_BASEDIRS=${SCCACHE_BASEDIRS}"
+            echo "RUSTC_WRAPPER=${RUSTC_WRAPPER}"
+            if [[ -n "${R2_ACCOUNT_ID:-}" ]]; then
+                echo "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"
+                echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+                echo "SCCACHE_REGION=${SCCACHE_REGION}"
+                echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
+                echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+                echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
+            else
+                echo "SCCACHE_DIR=${SCCACHE_DIR}"
+                echo "SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE}"
+                echo "SCCACHE_IDLE_TIMEOUT=${SCCACHE_IDLE_TIMEOUT}"
+            fi
+        } >> "$GITHUB_ENV"
+    fi
+}
+
+show_config() {
+    echo "=== sccache configuration ==="
+    echo "sccache version: $(sccache --version)"
+    echo "RUSTC_WRAPPER: ${RUSTC_WRAPPER:-<not set>}"
+    echo "SCCACHE_BUCKET: ${SCCACHE_BUCKET:-<not set>}"
+    echo "SCCACHE_ENDPOINT: ${SCCACHE_ENDPOINT:-<not set>}"
+    echo "SCCACHE_REGION: ${SCCACHE_REGION:-<not set>}"
+    echo "SCCACHE_S3_KEY_PREFIX: ${SCCACHE_S3_KEY_PREFIX:-<not set>}"
+    echo "SCCACHE_DIR: ${SCCACHE_DIR:-<not set>}"
+    echo "SCCACHE_CACHE_SIZE: ${SCCACHE_CACHE_SIZE:-<not set>}"
+    echo "SCCACHE_IDLE_TIMEOUT: ${SCCACHE_IDLE_TIMEOUT:-<not set>}"
+    echo "SCCACHE_BASEDIRS: ${SCCACHE_BASEDIRS:-<not set>}"
+    if [[ -n "${AWS_ACCESS_KEY_ID:-}" ]]; then
+        echo "AWS_ACCESS_KEY_ID: <set, length=${#AWS_ACCESS_KEY_ID}>"
+    else
+        echo "AWS_ACCESS_KEY_ID: <not set>"
+    fi
+    if [[ -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+        echo "AWS_SECRET_ACCESS_KEY: <set>"
+    else
+        echo "AWS_SECRET_ACCESS_KEY: <not set>"
+    fi
+    echo "=== sccache stats ==="
+    sccache --show-stats || true
+}
+
+install_sccache
+configure_sccache
+show_config

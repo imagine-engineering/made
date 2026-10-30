@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "source_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+  "cases": [
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        30000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 1,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2997,
+          100
+        ],
+        "sample_rate": 48000,
+        "layout": "mono",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        30000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 1,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2997,
+          100
+        ],
+        "sample_rate": 48000,
+        "layout": "mono",
+        "sample_count": 384385
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        30000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 2,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2997,
+          100
+        ],
+        "sample_rate": 48000,
+        "layout": "stereo",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        30000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 2,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2997,
+          100
+        ],
+        "sample_rate": 48000,
+        "layout": "stereo",
+        "sample_count": 384385
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        30000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 6,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2997,
+          100
+        ],
+        "sample_rate": 48000,
+        "layout": "5.1",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        30000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 6,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2997,
+          100
+        ],
+        "sample_rate": 48000,
+        "layout": "5.1",
+        "sample_count": 384385
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        60000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 1,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2997,
+          50
+        ],
+        "sample_rate": 48000,
+        "layout": "mono",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        60000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 1,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2997,
+          50
+        ],
+        "sample_rate": 48000,
+        "layout": "mono",
+        "sample_count": 192193
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        60000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 2,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2997,
+          50
+        ],
+        "sample_rate": 48000,
+        "layout": "stereo",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        60000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 2,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2997,
+          50
+        ],
+        "sample_rate": 48000,
+        "layout": "stereo",
+        "sample_count": 192193
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        60000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 6,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2997,
+          50
+        ],
+        "sample_rate": 48000,
+        "layout": "5.1",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 240,
+      "frame_rate": [
+        60000,
+        1001
+      ],
+      "sample_rate": 48000,
+      "channels": 6,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2997,
+          50
+        ],
+        "sample_rate": 48000,
+        "layout": "5.1",
+        "sample_count": 192193
+      }
+    },
+    {
+      "frame_count": 3,
+      "frame_rate": [
+        4001,
+        2000
+      ],
+      "sample_rate": 48000,
+      "channels": 1,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2,
+          1
+        ],
+        "sample_rate": 48000,
+        "layout": "mono",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 3,
+      "frame_rate": [
+        4001,
+        2000
+      ],
+      "sample_rate": 48000,
+      "channels": 1,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2,
+          1
+        ],
+        "sample_rate": 48000,
+        "layout": "mono",
+        "sample_count": 72000
+      }
+    },
+    {
+      "frame_count": 3,
+      "frame_rate": [
+        4001,
+        2000
+      ],
+      "sample_rate": 48000,
+      "channels": 2,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2,
+          1
+        ],
+        "sample_rate": 48000,
+        "layout": "stereo",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 3,
+      "frame_rate": [
+        4001,
+        2000
+      ],
+      "sample_rate": 48000,
+      "channels": 2,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2,
+          1
+        ],
+        "sample_rate": 48000,
+        "layout": "stereo",
+        "sample_count": 72000
+      }
+    },
+    {
+      "frame_count": 3,
+      "frame_rate": [
+        4001,
+        2000
+      ],
+      "sample_rate": 48000,
+      "channels": 6,
+      "available_samples": 100,
+      "output": {
+        "frame_rate": [
+          2,
+          1
+        ],
+        "sample_rate": 48000,
+        "layout": "5.1",
+        "sample_count": 100
+      }
+    },
+    {
+      "frame_count": 3,
+      "frame_rate": [
+        4001,
+        2000
+      ],
+      "sample_rate": 48000,
+      "channels": 6,
+      "available_samples": 400000,
+      "output": {
+        "frame_rate": [
+          2,
+          1
+        ],
+        "sample_rate": 48000,
+        "layout": "5.1",
+        "sample_count": 72000
+      }
+    }
+  ]
+}

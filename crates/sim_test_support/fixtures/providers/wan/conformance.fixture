@@ -1,0 +1,95 @@
+{
+  "namespace": "zed.sim.provider.wan",
+  "aliases": [],
+  "source_sha256": "2c6f0c74dde9e2000b1c49635d9abe7144f2bb52841d3a2c00a46616ce8bbacb",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0220",
+      "node_identifier": "HappyHorseImageToVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0221",
+      "node_identifier": "HappyHorseReferenceVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0222",
+      "node_identifier": "HappyHorseTextToVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0223",
+      "node_identifier": "HappyHorseVideoEditApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0751",
+      "node_identifier": "Wan2ImageToVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0752",
+      "node_identifier": "Wan2ReferenceVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0753",
+      "node_identifier": "Wan2TextToVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0754",
+      "node_identifier": "Wan2VideoContinuationApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0755",
+      "node_identifier": "Wan2VideoEditApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0769",
+      "node_identifier": "WanImageToImageApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0771",
+      "node_identifier": "WanImageToVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0778",
+      "node_identifier": "WanReferenceVideoApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0782",
+      "node_identifier": "WanTextToImageApi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0783",
+      "node_identifier": "WanTextToVideoApi"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0201",
+      "method": "POST",
+      "path": "/proxy/wan/api/v1/services/aigc/image2image/image-synthesis",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0202",
+      "method": "POST",
+      "path": "/proxy/wan/api/v1/services/aigc/text2image/image-synthesis",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0203",
+      "method": "POST",
+      "path": "/proxy/wan/api/v1/services/aigc/video-generation/video-synthesis",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0204",
+      "method": "GET",
+      "path": "/proxy/wan/api/v1/tasks/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0205",
+      "method": "GET",
+      "path": "/proxy/wan/api/v1/tasks/{initial_response.output.task_id}",
+      "disposition": "executable"
+    }
+  ]
+}

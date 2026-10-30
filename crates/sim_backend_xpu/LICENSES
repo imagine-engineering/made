@@ -1,0 +1,18 @@
+Zed Intel XPU adapter metadata
+
+Zed adapter source, checked declarations, package tooling, and metadata are licensed
+GPL-3.0-or-later.
+
+The reviewed oneAPI Level Zero headers are licensed under MIT. The reviewed oneDNN
+headers are licensed under Apache-2.0. This package contains only Zed-owned metadata,
+header digests, and notices; it does not redistribute Intel drivers, Level Zero loader,
+oneDNN libraries, firmware, or kernels. A release may add vendor payloads only after a
+separately recorded license approval and a new reviewed package-policy revision.
+
+Reviewed ABI provenance:
+- oneapi-src/level-zero tag v1.11.0, commit f35123bead54a471a7e5f3bf8d439a4a44527d8e
+- oneapi-src/oneDNN tag v3.5, commit 6860e98e71c748f956150f72cdbe14efe6fc2ac2
+
+The package signature covers the Zed ABI manifest, policy, notices, and adapter
+metadata. It does not certify or authorize separately installed library bytes;
+sim_runtime::NativeFfiRegistry remains the sole runtime certificate issuer.

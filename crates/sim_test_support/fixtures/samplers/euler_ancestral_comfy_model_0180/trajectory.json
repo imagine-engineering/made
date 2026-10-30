@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "identity": "euler_ancestral",
+  "feature_id": "COMFY-MODEL-0180",
+  "source_ordinal": 2,
+  "source": {
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "standard_lines": [216, 237],
+    "flow_lines": [240, 270],
+    "ancestral_lines": [68, 75],
+    "noise_lines": [78, 89],
+    "registry_line": 970,
+    "catalog_line": 181
+  },
+  "rng_contract_id": "COMFY-RNG-B35F0F617BFA",
+  "seed": 160,
+  "initial": [0.75, -1.25, 0.5, -0.125],
+  "denoised": [
+    [0.2, -0.4, 0.1, 0.0],
+    [-0.1, 0.25, 0.2, -0.05],
+    [0.15, -0.15, 0.05, 0.1]
+  ],
+  "standard": {
+    "profile": "euler-ancestral-standard-v1",
+    "prediction": "epsilon",
+    "eta": 1.0,
+    "noise_scale": 1.0,
+    "sigmas": [2.0, 1.25, 0.5, 0.0],
+    "latents": [
+      [0.75, -1.25, 0.5, -0.125],
+      [1.3681436, -1.0928818, 0.86806166, -0.46153522],
+      [-0.12847361, 0.6866354, 0.67105854, -0.24921858],
+      [0.15, -0.15, 0.05, 0.1]
+    ],
+    "steps": [
+      {
+        "sigma_down": 0.78124994,
+        "sigma_up": 0.97578096,
+        "derivative": [0.275, -0.425, 0.2, -0.0625],
+        "noise": [0.97696096, -0.36980698, 0.62699693, -0.42295054],
+        "next": [1.3681436, -1.0928818, 0.86806166, -0.46153522]
+      },
+      {
+        "sigma_down": 0.20000002,
+        "sigma_up": 0.45825756,
+        "derivative": [1.1745149, -1.0743054, 0.53444934, -0.32922816],
+        "noise": [-0.57473487, 1.421682, 0.79468113, -0.29104358],
+        "next": [-0.12847361, 0.6866354, 0.67105854, -0.24921858]
+      },
+      {
+        "sigma_down": 0.0,
+        "sigma_up": 0.0,
+        "derivative": [-0.55694723, 1.6732707, 1.242117, -0.69843715],
+        "noise": null,
+        "next": [0.15, -0.15, 0.05, 0.1]
+      }
+    ]
+  },
+  "flow": {
+    "profile": "euler-ancestral-flow-v1",
+    "prediction": "flow",
+    "eta": 1.0,
+    "noise_scale": 1.0,
+    "sigmas": [0.8, 0.5, 0.2, 0.0],
+    "latents": [
+      [0.75, -1.25, 0.5, -0.125],
+      [0.7368056, -0.69708425, 0.4656041, -0.22387736],
+      [-0.07830098, 0.35220522, 0.35987878, -0.122244],
+      [0.15, -0.15, 0.05, 0.1]
+    ],
+    "steps": [
+      {
+        "sigma_down": 0.3125,
+        "sigma_up": 0.44536176,
+        "derivative": [0.6875, -1.0625, 0.5, -0.15625],
+        "noise": [0.97696096, -0.36980698, 0.62699693, -0.42295054],
+        "next": [0.7368056, -0.69708425, 0.4656041, -0.22387736]
+      },
+      {
+        "sigma_down": 0.08,
+        "sigma_up": 0.18751182,
+        "derivative": [1.6736113, -1.8941685, 0.53120816, -0.34775472],
+        "noise": [-0.57473487, 1.421682, 0.79468113, -0.29104358],
+        "next": [-0.07830098, 0.35220522, 0.35987878, -0.122244]
+      },
+      {
+        "sigma_down": 0.0,
+        "sigma_up": 0.0,
+        "derivative": [-1.1415049, 2.5110261, 1.5493938, -1.11122],
+        "noise": null,
+        "next": [0.15, -0.15, 0.05, 0.1]
+      }
+    ]
+  },
+  "signed_controls": {
+    "negative_eta": -0.5,
+    "negative_noise_scale": -1.0
+  },
+  "tolerance": 0.000002
+}

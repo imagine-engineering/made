@@ -1,0 +1,377 @@
+{
+  "canonical_target": "torch.min",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "clamp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:80:26 (_compute_mask_overlap)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:753:32 (get_mask_aabb)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:754:32 (get_mask_aabb)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/t5.py:116:34 (T5Attention._relative_position_bucket)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/t5.py:129:38 (T5Attention._relative_position_bucket)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_compositing.py:49:81 (porter_duff_composite)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_freelunch.py:104:33 (FreeU_V2.execute.output_block_patch)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/sam3/tracker.py:80:26 (_compute_mask_overlap)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:753:32 (get_mask_aabb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:754:32 (get_mask_aabb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/t5.py:116:34 (T5Attention._relative_position_bucket)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/t5.py:129:38 (T5Attention._relative_position_bucket)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_compositing.py:49:81 (porter_duff_composite)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_freelunch.py:104:33 (FreeU_V2.execute.output_block_patch)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-e430c5e4dfe8-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match reduced axes, keep-dimension behavior, empty-domain behavior, output rank, and scalar-versus-tensor results.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-E430C5E4DFE8",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "4febf2ad5d1e89ef9a47df09326c1e5943921604a1c53054aa7a3ffa5052c337",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/sam3/tracker.py",
+        "sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e"
+      },
+      {
+        "path": "comfy/samplers.py",
+        "sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649"
+      },
+      {
+        "path": "comfy/text_encoders/t5.py",
+        "sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc"
+      },
+      {
+        "path": "comfy_extras/nodes_compositing.py",
+        "sha256": "e001e2963baaa5ea9f031e6b7920e4d70dae248588a70ed31ab595706a29efae"
+      },
+      {
+        "path": "comfy_extras/nodes_freelunch.py",
+        "sha256": "f65d2f896e38a5a3baf17deeec0941b418e76ceb5d611147558c211a209ec6e5"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.min"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "reduction_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-reduction-comfy-tensor-op-9f681b3616f6",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "clamp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 80,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "area_a.expand_as(iou)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "area_b.expand_as(iou)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_compute_mask_overlap",
+      "site": "comfy/ldm/sam3/tracker.py:80:26 (_compute_mask_overlap)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 753,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_mask_aabb",
+      "site": "comfy/samplers.py:753:32 (get_mask_aabb)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 754,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "y",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_mask_aabb",
+      "site": "comfy/samplers.py:754:32 (get_mask_aabb)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 34,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 116,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "relative_position",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.zeros_like(relative_position)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "T5Attention._relative_position_bucket",
+      "site": "comfy/text_encoders/t5.py:116:34 (T5Attention._relative_position_bucket)",
+      "source_path": "comfy/text_encoders/t5.py",
+      "source_sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 129,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "relative_position_if_large",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.full_like(relative_position_if_large, num_buckets - 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "T5Attention._relative_position_bucket",
+      "site": "comfy/text_encoders/t5.py:129:38 (T5Attention._relative_position_bucket)",
+      "source_path": "comfy/text_encoders/t5.py",
+      "source_sha256": "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 81,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 49,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "src_image",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dst_image",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "porter_duff_composite",
+      "site": "comfy_extras/nodes_compositing.py:49:81 (porter_duff_composite)",
+      "source_path": "comfy_extras/nodes_compositing.py",
+      "source_sha256": "e001e2963baaa5ea9f031e6b7920e4d70dae248588a70ed31ab595706a29efae",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 104,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hidden_mean.view(B, -1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "FreeU_V2.execute.output_block_patch",
+      "site": "comfy_extras/nodes_freelunch.py:104:33 (FreeU_V2.execute.output_block_patch)",
+      "source_path": "comfy_extras/nodes_freelunch.py",
+      "source_sha256": "f65d2f896e38a5a3baf17deeec0941b418e76ceb5d611147558c211a209ec6e5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.min"
+    }
+  ],
+  "static_definition": null
+}

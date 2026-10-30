@@ -1,0 +1,18 @@
+{
+  "source-response.webp": {
+    "producer": "Actual PIL PNG helper and PIL lossless RGBA WebP; input tensor preparation injected, output decoder NumPy probe substitutes Torch allocation",
+    "source_function": "bytesio_to_image_tensor RGBA default",
+    "source_sha256": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "bytes": 38,
+    "sha256": "c3886494e76122b980653090136f7c76481c860c3ab5ac31ca651075aba87c31",
+    "scope": "Actual encoded PIL bytes and actual source PIL/NumPy output probe; no real Torch/native ABI allocation or publication"
+  },
+  "source-encode.png": {
+    "producer": "Actual PIL PNG helper and PIL lossless RGBA WebP; input tensor preparation injected, output decoder NumPy probe substitutes Torch allocation",
+    "source_function": "pil_to_bytesio PNG default",
+    "source_sha256": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "bytes": 69,
+    "sha256": "f84c41a85b0f9813b5863d7e3846d64c4d273a5aa86ea0591817d9841c5573ce",
+    "scope": "Actual encoded PIL bytes and actual source PIL/NumPy output probe; no real Torch/native ABI allocation or publication"
+  }
+}

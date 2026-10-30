@@ -1,0 +1,61 @@
+{
+  "fixture_id": "sd15-sim-model-0117",
+  "feature_id": "COMFY-MODEL-0117",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.input_blocks.0.0.weight": [320, 4, 3, 3],
+      "model.diffusion_model.time_embed.0.weight": [2, 2],
+      "model.diffusion_model.input_blocks.1.1.transformer_blocks.0.attn1.to_q.weight": [2, 2],
+      "model.diffusion_model.input_blocks.1.1.transformer_blocks.0.attn2.to_k.weight": [2, 768],
+      "model.diffusion_model.middle_block.1.transformer_blocks.0.attn2.to_q.weight": [2, 2],
+      "model.diffusion_model.out.2.weight": [4, 320, 3, 3]
+    },
+    "metadata": {
+      "model_layout": "diffusers",
+      "model_family": "misleading"
+    }
+  },
+  "base_artifact_digest": "1171171171171171171171171171171171171171171171171171171171171171",
+  "source_weights": [
+    {"key": "model.diffusion_model.input_blocks.0.0.weight", "shape": [1], "values": [1.0]},
+    {"key": "model.diffusion_model.time_embed.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.input_blocks.1.1.transformer_blocks.0.attn1.to_q.weight", "shape": [2, 2], "values": [2.0, 0.0, 0.0, 0.5]},
+    {"key": "model.diffusion_model.middle_block.1.transformer_blocks.0.attn2.to_q.weight", "shape": [2, 2], "values": [1.0, 1.0, 1.0, -1.0]},
+    {"key": "model.diffusion_model.out.2.weight", "shape": [1], "values": [1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [1.0, 2.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 32,
+  "expected_memory_bytes": 32,
+  "checkpoints": [
+    {"name": "timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "unet_input_attention", "values": [2.0, 1.0]},
+    {"name": "cross_attention_conditioning", "values": [3.0, 1.0]},
+    {"name": "unet_residual_activation", "values": [2.8577223, 0.7310586]},
+    {"name": "epsilon_prediction", "values": [0.9934323, 0.6237125]}
+  ],
+  "patches": [
+    {
+      "identifier": "sd15-timestep-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.time_embed.0.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 0.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "timestep_embedding", "values": [2.0, 2.0]},
+    {"name": "unet_input_attention", "values": [4.0, 1.0]},
+    {"name": "cross_attention_conditioning", "values": [5.0, 3.0]},
+    {"name": "unet_residual_activation", "values": [4.966536, 2.8577223]},
+    {"name": "epsilon_prediction", "values": [0.9999032, 0.9934323]}
+  ]
+}

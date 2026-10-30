@@ -1,0 +1,31 @@
+[package]
+name = "sim_model"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+build = "build.rs"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_model.rs"
+[features]
+test-support = []
+[dependencies]
+anyhow.workspace = true
+cap-std.workspace = true
+sim_media.workspace = true
+sim_tensor.workspace = true
+sim_types.workspace = true
+fancy-regex.workspace = true
+libc.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+unicode-normalization.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows.workspace = true

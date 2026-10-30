@@ -1,0 +1,63 @@
+[package]
+name = "sim_test_support"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_test_support.rs"
+[[bin]]
+name = "sim_plugin_worker_fixture"
+path = "src/bin/sim_plugin_worker_fixture.rs"
+[features]
+default = ["cpu"]
+hardware-certification = []
+cpu = ["sim_tensor/cpu"]
+cuda = ["sim_tensor/cuda"]
+rocm = ["sim_tensor/rocm"]
+metal = ["sim_runtime/metal", "sim_tensor/metal"]
+directml = ["sim_tensor/directml"]
+xpu = ["sim_tensor/xpu"]
+npu = ["sim_tensor/npu"]
+mlu = ["sim_tensor/mlu"]
+corex = ["sim_tensor/corex"]
+
+[[test]]
+name = "device_cpu_sim_model_0016"
+path = "tests/device_cpu_sim_model_0016.rs"
+required-features = ["hardware-certification"]
+
+[dependencies]
+anyhow.workspace = true
+async-channel.workspace = true
+sim_media.workspace = true
+sim_model = { workspace = true, features = ["test-support"] }
+sim_runtime = { workspace = true, features = ["signing-tooling", "test-support"] }
+sim_sampler.workspace = true
+sim_tensor.workspace = true
+sim_types.workspace = true
+sim_worker.workspace = true
+gpui = { workspace = true, features = ["test-support"] }
+postcard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ring.workspace = true
+smol.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+clock.workspace = true
+sim_api.workspace = true
+sim_backend_metal = { workspace = true, features = ["test-support"] }
+sim_nodes.workspace = true
+sim_plugin_host = { workspace = true, features = ["test-support"] }
+sim_plugin_sdk = { workspace = true, features = ["signing-tooling"] }
+extension_host.workspace = true
+fs = { workspace = true, features = ["test-support"] }
+half.workspace = true
+libc.workspace = true
+tempfile.workspace = true

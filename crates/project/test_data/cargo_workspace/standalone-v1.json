@@ -1,0 +1,11 @@
+{
+  "packages": [{
+    "name":"standalone","version":"1.0.0","id":"path+file:///standalone#1.0.0","license":null,"license_file":null,"description":null,"source":null,"dependencies":[],
+    "targets":[{"kind":["bin"],"crate_types":["bin"],"name":"standalone","src_path":"/standalone/src/main.rs","edition":"2021","doc":true,"doctest":false,"test":true}],
+    "features":{},"manifest_path":"/standalone/Cargo.toml","metadata":null,"publish":null,"authors":[],"categories":[],"keywords":[],"readme":null,"repository":null,"homepage":null,"documentation":null,"edition":"2021","links":null,"default_run":null,"rust_version":null
+  }],
+  "workspace_members":["path+file:///standalone#1.0.0"],
+  "workspace_default_members":["path+file:///standalone#1.0.0"],
+  "resolve":{"root":"path+file:///standalone#1.0.0","nodes":[{"id":"path+file:///standalone#1.0.0","dependencies":[],"deps":[],"features":[]}]},
+  "target_directory":"/standalone/target","version":1,"workspace_root":"/standalone"
+}

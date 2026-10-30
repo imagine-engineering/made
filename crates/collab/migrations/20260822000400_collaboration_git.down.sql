@@ -1,0 +1,3 @@
+DROP TABLE public.collaboration_git_repository_grants;
+DROP TABLE public.collaboration_git_storage_handles;
+DROP TABLE public.collaboration_hosted_repositories;

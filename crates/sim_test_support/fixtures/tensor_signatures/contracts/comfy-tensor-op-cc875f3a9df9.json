@@ -1,0 +1,135 @@
+{
+  "canonical_target": "torch.Size",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:242:29 (WindowingState.prepare_window)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/gligen.py:194:30 (PositionNet.forward)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/context_windows.py:242:29 (WindowingState.prepare_window)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/gligen.py:194:30 (PositionNet.forward)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-cc875f3a9df9-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-CC875F3A9DF9",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "4b623cc63747f8a85063e6aaa3ada70d6be62091150140decfc909dbb37c3670",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/context_windows.py",
+        "sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef"
+      },
+      {
+        "path": "comfy/gligen.py",
+        "sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c"
+      },
+      {
+        "path": "comfy/ldm/cosmos/position_embedding.py",
+        "sha256": "ab27e03b9af1ecafba7062ef9e63d6092f71fa12c872e43ad8107df7b27b7fa0"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Size"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_19",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-c8ba6ce3159c",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 242,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "video_shape",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "WindowingState.prepare_window",
+      "site": "comfy/context_windows.py:242:29 (WindowingState.prepare_window)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "torch.Size"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 194,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[B, N, self.out_dim]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "PositionNet.forward",
+      "site": "comfy/gligen.py:194:30 (PositionNet.forward)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.Size"
+    }
+  ],
+  "static_definition": null
+}

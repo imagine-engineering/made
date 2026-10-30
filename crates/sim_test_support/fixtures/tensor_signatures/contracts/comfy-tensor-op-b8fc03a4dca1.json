@@ -1,0 +1,608 @@
+{
+  "canonical_target": "torch.nn.functional.layer_norm",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/image_encoders/dino3.py:254:31 (DINOv3ViTModel.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:79:20 (LayerNorm.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/audio/dit.py:56:16 (LayerNorm.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lens/model.py:291:13 (_AdaLayerNormContinuousNoAffine.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/triposplat/model.py:318:15 (LatentSeqMMFlowModel._forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/triposplat/model.py:319:17 (LatentSeqMMFlowModel._forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:199:13 (OctreeProbabilityFixedlenDecoder.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:353:13 (ElasticGaussianFixedlenDecoder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ops.py:614:17 (disable_weight_init.LayerNorm.forward_comfy_cast_weights)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_triposplat.py:123:20 (TripoSplatConditioning.execute)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/image_encoders/dino3.py:254:31 (DINOv3ViTModel.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:79:20 (LayerNorm.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:56:16 (LayerNorm.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lens/model.py:291:13 (_AdaLayerNormContinuousNoAffine.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:318:15 (LatentSeqMMFlowModel._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:319:17 (LatentSeqMMFlowModel._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:199:13 (OctreeProbabilityFixedlenDecoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:353:13 (ElasticGaussianFixedlenDecoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ops.py:614:17 (disable_weight_init.LayerNorm.forward_comfy_cast_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_triposplat.py:123:20 (TripoSplatConditioning.execute)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-b8fc03a4dca1-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_3",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_4",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "bias",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "weight",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-B8FC03A4DCA1",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "8d0bba1a7384620f47017c1c311289e81240096698befe79a43e678a4edec153",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/image_encoders/dino3.py",
+        "sha256": "8140f477c73fbdc8c94c005340809aa756d0c518964ff9404f9ba461f7a29df7"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/audio/dit.py",
+        "sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c"
+      },
+      {
+        "path": "comfy/ldm/lens/model.py",
+        "sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002"
+      },
+      {
+        "path": "comfy/ldm/triposplat/model.py",
+        "sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0"
+      },
+      {
+        "path": "comfy/ldm/triposplat/vae.py",
+        "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy_extras/nodes_triposplat.py",
+        "sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.functional.layer_norm"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "activation_normalization_functional_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-activation-normalization-functional-comfy-tensor-op-0538873a73b1",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 254,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hidden_states",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "hidden_states.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "DINOv3ViTModel.forward",
+      "site": "comfy/image_encoders/dino3.py:254:31 (DINOv3ViTModel.forward)",
+      "source_path": "comfy/image_encoders/dino3.py",
+      "source_sha256": "8140f477c73fbdc8c94c005340809aa756d0c518964ff9404f9ba461f7a29df7",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 79,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.normalized_shape",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to(self.weight, dtype=x.dtype, device=x.device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to(self.bias, dtype=x.dtype, device=x.device)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "self.eps",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "LayerNorm.forward",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:79:20 (LayerNorm.forward)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "weight",
+          "syntax": "comfy.ops.cast_to_input(self.gamma, x)",
+          "syntax_kind": "Call"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "beta",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 56,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LayerNorm.forward",
+      "site": "comfy/ldm/audio/dit.py:56:16 (LayerNorm.forward)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 291,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "(self.embedding_dim,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "None",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "None",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "self.eps",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "_AdaLayerNormContinuousNoAffine.forward",
+      "site": "comfy/ldm/lens/model.py:291:13 (_AdaLayerNormContinuousNoAffine.forward)",
+      "source_path": "comfy/ldm/lens/model.py",
+      "source_sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 318,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h[:, :z.shape[1]].float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LatentSeqMMFlowModel._forward",
+      "site": "comfy/ldm/triposplat/model.py:318:15 (LatentSeqMMFlowModel._forward)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 319,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h[:, -cam.shape[1]:].float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LatentSeqMMFlowModel._forward",
+      "site": "comfy/ldm/triposplat/model.py:319:17 (LatentSeqMMFlowModel._forward)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 199,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "OctreeProbabilityFixedlenDecoder.forward",
+      "site": "comfy/ldm/triposplat/vae.py:199:13 (OctreeProbabilityFixedlenDecoder.forward)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 353,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "ElasticGaussianFixedlenDecoder.forward",
+      "site": "comfy/ldm/triposplat/vae.py:353:13 (ElasticGaussianFixedlenDecoder.forward)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 614,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "input",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.normalized_shape",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "weight",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "bias",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "self.eps",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "disable_weight_init.LayerNorm.forward_comfy_cast_weights",
+      "site": "comfy/ops.py:614:17 (disable_weight_init.LayerNorm.forward_comfy_cast_weights)",
+      "source_path": "comfy/ops.py",
+      "source_sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.functional.layer_norm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 123,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "seq.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "seq.shape[-1:]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "TripoSplatConditioning.execute",
+      "site": "comfy_extras/nodes_triposplat.py:123:20 (TripoSplatConditioning.execute)",
+      "source_path": "comfy_extras/nodes_triposplat.py",
+      "source_sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628",
+      "status": "static-call-observed",
+      "target_syntax": "F.layer_norm"
+    }
+  ],
+  "static_definition": null
+}

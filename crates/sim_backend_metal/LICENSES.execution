@@ -1,0 +1,13 @@
+Zed native Metal execution package notices
+
+Zed source and the checked Metal tensor kernel source are covered by the
+repository license. The packaged tensor_ops.metallib is generated from
+crates/sim_backend_metal/kernels/tensor_ops.metal with the locally installed,
+reviewed Xcode toolchain during development-time packaging.
+
+Apple Metal, Foundation, MetalPerformanceShaders, and
+MetalPerformanceShadersGraph frameworks and SDK headers are Apple system
+components. They are not copied, bundled, or redistributed by this package.
+
+The package command performs deterministic structural assembly only. It does
+not sign, certify, authorize, or grant production availability to the package.

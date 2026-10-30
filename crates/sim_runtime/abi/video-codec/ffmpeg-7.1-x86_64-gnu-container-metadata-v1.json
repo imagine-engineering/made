@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "target": "x86_64-unknown-linux-gnu",
+  "source": {
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "header": {
+      "path": "libavformat/avformat.h",
+      "bytes": 119096,
+      "sha256": "6171ac10e35a67fe04aa8ddfbf84263def2d7ae9159019dd71e5597be5dd3944"
+    }
+  },
+  "contract": {
+    "symbol_count": 54,
+    "new_symbols": 0
+  },
+  "projection": {
+    "type": "AVFormatContext",
+    "size": 200,
+    "alignment": 8,
+    "metadata_offset": 192,
+    "historical_prefix_size": 56
+  }
+}

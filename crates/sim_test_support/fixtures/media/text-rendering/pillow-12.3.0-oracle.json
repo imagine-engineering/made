@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "source": "projects/sim/ComfyUI/sim_extras/nodes_bounding_boxes.py",
+  "source_sha256": "9352fd01817cbb7ef876fc5d0f77a4f4d7d7281d30431fa40a7edf4430154984",
+  "pillow_version": "12.3.0",
+  "layout_engine": "BASIC",
+  "font": "ImageFont.load_default",
+  "font_sha256": "69853909b940023570964e29cffe30da95aea8de3627736b5cd15ab30143169f",
+  "metrics": {
+    "text": "Aileron café — 01",
+    "size_10_advance": 75.0,
+    "size_20_advance": 147.0
+  },
+  "pair_kerning": {
+    "text": "AV",
+    "size": 40,
+    "pair_advance": 51.0,
+    "separate_advance": 51.0,
+    "legacy_pair_adjustment": 0.0
+  },
+  "wrap": {
+    "text": "alpha beta gamma\n\nUnicode café",
+    "size": 12,
+    "maximum_width": 59.0,
+    "lines": ["alpha beta", "gamma", "", "Unicode", "café"]
+  },
+  "render": {
+    "width": 64,
+    "height": 24,
+    "background_rgba": [32, 32, 32, 255],
+    "text": "01 café",
+    "position": [3, 2],
+    "size": 12,
+    "foreground_rgba": [240, 80, 40, 255],
+    "rgb_fixture": "pillow-12.3.0-64x24.rgb",
+    "rgb_sha256": "a30f46a61f5e2c4c91ecbdf50f1c3b138c26c3bf5da4a63f7eee6b27ad27e075"
+  },
+  "alpha_composite": {
+    "background_rgba": [10, 20, 30, 128],
+    "foreground_rgba": [200, 100, 50, 64],
+    "expected_rgba": [86, 52, 38, 160]
+  }
+}

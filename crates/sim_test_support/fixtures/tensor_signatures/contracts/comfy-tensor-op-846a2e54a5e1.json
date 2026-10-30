@@ -1,0 +1,55 @@
+{
+  "canonical_target": "torch.LongTensor",
+  "consumer_output_expectations": [],
+  "definition_call_reconciliation": [],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-846a2e54a5e1-v1",
+  "inventory_kind": "type-reference",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-846A2E54A5E1",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "a7e5883febf41260297aae89f7b97a475dceb1f83f493e5a73a5cda2926a85ad",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/model.py",
+        "sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708"
+      },
+      {
+        "path": "comfy/ldm/hidream_o1/utils.py",
+        "sha256": "5382588a09d04988c1894fbcf9b5f5d29f8bfa2db24d0b8a8933162709b472ae"
+      },
+      {
+        "path": "comfy/text_encoders/gpt_oss.py",
+        "sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "type-marker",
+    "value": "torch.LongTensor"
+  },
+  "resolution": {
+    "blocker_reason": "",
+    "expected_resolution_module": "type_contract_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": false,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-type-contract-comfy-tensor-op-0aa720652f2f",
+    "state": "resolved_reference"
+  },
+  "schema_version": 1,
+  "static_call_sites": [],
+  "static_definition": null
+}

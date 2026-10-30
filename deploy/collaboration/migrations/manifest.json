@@ -1,0 +1,380 @@
+{
+  "formatVersion": 1,
+  "schemaFloor": "0",
+  "schemaCeiling": "20261026000100",
+  "rollbackBoundary": "service-activation",
+  "migrations": [
+    {
+      "version": "20260815000100",
+      "name": "collaboration_identity_bindings",
+      "up": {
+        "file": "20260815000100_collaboration_identity_bindings.up.sql",
+        "sha256": "243830523b4c9719993e9e03085711c0e600e110ba8dcc17c4a02a4cc4735daf"
+      },
+      "down": {
+        "file": "20260815000100_collaboration_identity_bindings.down.sql",
+        "sha256": "b82f5fab549286d6c910c98ce48039e9ba41a7e6f8ab7af4c8c34cbf9631ae07"
+      }
+    },
+    {
+      "version": "20260820000100",
+      "name": "collaboration_events",
+      "up": {
+        "file": "20260820000100_collaboration_events.up.sql",
+        "sha256": "51f5f17691a9951ae77f833ab07617d0133b8bb84ca31c5d8cb6dd0e09535209"
+      },
+      "down": {
+        "file": "20260820000100_collaboration_events.down.sql",
+        "sha256": "3a6cf768aca3d9828177ee81fabbb741da31d8c57b9e284e3b1a2dfc56ec39e4"
+      }
+    },
+    {
+      "version": "20260820000200",
+      "name": "collaboration_event_heads",
+      "up": {
+        "file": "20260820000200_collaboration_event_heads.up.sql",
+        "sha256": "f37baea3ac766b611cb87fa1b7dafaa5d3dd5d9908c6887dadf2f5307f10300b"
+      },
+      "down": {
+        "file": "20260820000200_collaboration_event_heads.down.sql",
+        "sha256": "1b006141de01463e73e5083b3ee526ecd257d4b599a43228ec51c25351078968"
+      }
+    },
+    {
+      "version": "20260820000300",
+      "name": "collaboration_projections",
+      "up": {
+        "file": "20260820000300_collaboration_projections.up.sql",
+        "sha256": "26313b68b71859d01f31d6fc5bdf1898df3f5aa75a51ec21f60f02c955a716f0"
+      },
+      "down": {
+        "file": "20260820000300_collaboration_projections.down.sql",
+        "sha256": "61f97996d974ea96bcb6e19a8cd7148542ce7e02a9f4b0cb9151695cb55ad511"
+      }
+    },
+    {
+      "version": "20260820000400",
+      "name": "collaboration_outbox",
+      "up": {
+        "file": "20260820000400_collaboration_outbox.up.sql",
+        "sha256": "c823343ea874a93f81cd449d70029ad2a46cb7f07f7b73f0f121d321ef9dbcd0"
+      },
+      "down": {
+        "file": "20260820000400_collaboration_outbox.down.sql",
+        "sha256": "fea47a48c1f27f8cb25fb8d3309db7567462108d9d66653d1e93b19b161f21a8"
+      }
+    },
+    {
+      "version": "20260820000500",
+      "name": "collaboration_search",
+      "up": {
+        "file": "20260820000500_collaboration_search.up.sql",
+        "sha256": "64ac46d3c56457fca68dcecfd0abc38a356edbc4e054ad485d9388bbe4f34382"
+      },
+      "down": {
+        "file": "20260820000500_collaboration_search.down.sql",
+        "sha256": "47cc9639e9206d3529137217835dedcf2e4b315d71b30aec35743a0855331073"
+      }
+    },
+    {
+      "version": "20260820000600",
+      "name": "collaboration_migration_checkpoints",
+      "up": {
+        "file": "20260820000600_collaboration_migration_checkpoints.up.sql",
+        "sha256": "049f5501b46a7a57f63716e721066839df064613ec20247545e4966d10b7bba0"
+      },
+      "down": {
+        "file": "20260820000600_collaboration_migration_checkpoints.down.sql",
+        "sha256": "64007c412017476811479c8b9e07ab9b45e0412b00c546d138133e3f71b7fda6"
+      }
+    },
+    {
+      "version": "20260820000700",
+      "name": "collaboration_channels",
+      "up": {
+        "file": "20260820000700_collaboration_channels.up.sql",
+        "sha256": "a8ba95fc4424b3ff818fbd8867469dae39a7a542cc4502233fb39eff1e6c07ff"
+      },
+      "down": {
+        "file": "20260820000700_collaboration_channels.down.sql",
+        "sha256": "5e8967491268f2e4b8201d1242150757cb048d9c1f315927f5de808e155773c3"
+      }
+    },
+    {
+      "version": "20260820000800",
+      "name": "collaboration_messages",
+      "up": {
+        "file": "20260820000800_collaboration_messages.up.sql",
+        "sha256": "e97285737a015f3d11e14ead9ef5dee90696232e31a9347edb9aad615af1c4d4"
+      },
+      "down": {
+        "file": "20260820000800_collaboration_messages.down.sql",
+        "sha256": "8af6c3a2af80afbfdafeb3407f3f58add03cf1b109869672acba5ca82e4156e7"
+      }
+    },
+    {
+      "version": "20260822000100",
+      "name": "collaboration_search_channels",
+      "up": {
+        "file": "20260822000100_collaboration_search_channels.up.sql",
+        "sha256": "e13b800cb5ea8d7c0ebaa49bb9f30bd039ae39d453dbd48aa58e0f7e581b31da"
+      },
+      "down": {
+        "file": "20260822000100_collaboration_search_channels.down.sql",
+        "sha256": "89cb53b77b0fe0456f4a8e2e4f3ec5838fd88244bb0070f90f52cdc596194efb"
+      }
+    },
+    {
+      "version": "20260822000200",
+      "name": "collaboration_push",
+      "up": {
+        "file": "20260822000200_collaboration_push.up.sql",
+        "sha256": "c7ed2b66b89233fac5f41c36de0e06af49c0f42965d57d9f9a2e4b49482c4fbb"
+      },
+      "down": {
+        "file": "20260822000200_collaboration_push.down.sql",
+        "sha256": "389c734db747763601c2146399a8b55fb183e7a5e27fbf01de612e18e2334f20"
+      }
+    },
+    {
+      "version": "20260822000300",
+      "name": "collaboration_projects",
+      "up": {
+        "file": "20260822000300_collaboration_projects.up.sql",
+        "sha256": "a6331e5b811a15d226b5cd49ecc0e00df119a0a3d5b7f638e3115fc2179d2a0d"
+      },
+      "down": {
+        "file": "20260822000300_collaboration_projects.down.sql",
+        "sha256": "2157f06eaaa8192067f26cbdbfa86ac5b5f816509dde59d5edbb7a8017c644ce"
+      }
+    },
+    {
+      "version": "20260822000400",
+      "name": "collaboration_git",
+      "up": {
+        "file": "20260822000400_collaboration_git.up.sql",
+        "sha256": "f47bbe7a0a5a3906c1006582e131e2175863e96321e1ae7b1d56959e9a23b6f4"
+      },
+      "down": {
+        "file": "20260822000400_collaboration_git.down.sql",
+        "sha256": "752e8188ed43668555c33f2cfc7ad2c917d45a5dd3920282d4bbdf6ac38fc9d1"
+      }
+    },
+    {
+      "version": "20260823000100",
+      "name": "collaboration_git_review",
+      "up": {
+        "file": "20260823000100_collaboration_git_review.up.sql",
+        "sha256": "991d1127808e29e0fa378ea88f3a855e0aa332ef3f0e7fb185f5c4308be3d677"
+      },
+      "down": {
+        "file": "20260823000100_collaboration_git_review.down.sql",
+        "sha256": "088922483b5d28a31f324747c224cf52444fd9cc49cb6321a31ce1deb341d60a"
+      }
+    },
+    {
+      "version": "20260823000200",
+      "name": "collaboration_jobs",
+      "up": {
+        "file": "20260823000200_collaboration_jobs.up.sql",
+        "sha256": "0dd7a575d896930cfa89531b022f1fcbe219d3ae5172b368091f9e724c32b5e4"
+      },
+      "down": {
+        "file": "20260823000200_collaboration_jobs.down.sql",
+        "sha256": "e0468232991cee19af43c37fce52f599604d2a16ad397a2d101a4df8a8b756fe"
+      }
+    },
+    {
+      "version": "20260824000100",
+      "name": "collaboration_workflows",
+      "up": {
+        "file": "20260824000100_collaboration_workflows.up.sql",
+        "sha256": "a091be2e16aad1b682b958eb9906c6aaedf49d74a4582224f58072d708862726"
+      },
+      "down": {
+        "file": "20260824000100_collaboration_workflows.down.sql",
+        "sha256": "444c47b148dc0087f1c30ddcbfe5160e5904cf7a0f96fff4e1b6d008ce5467c2"
+      }
+    },
+    {
+      "version": "20260824000200",
+      "name": "collaboration_workflow_run_leases",
+      "up": {
+        "file": "20260824000200_collaboration_workflow_run_leases.up.sql",
+        "sha256": "51d039e41259398753fc64659cd2e9a3c82ea0329fbb8a4efe85b936b80238fc"
+      },
+      "down": {
+        "file": "20260824000200_collaboration_workflow_run_leases.down.sql",
+        "sha256": "1ca20eef7dfb2608755e7d707f1ec9f19bfb6ca7d991e31412e3ff38cb4cc970"
+      }
+    },
+    {
+      "version": "20260824000300",
+      "name": "collaboration_workflow_approvals",
+      "up": {
+        "file": "20260824000300_collaboration_workflow_approvals.up.sql",
+        "sha256": "d09921c7107d8ae357643f200aecd46db0d3d7fef2dbc0dd3a447ae0c441f7d9"
+      },
+      "down": {
+        "file": "20260824000300_collaboration_workflow_approvals.down.sql",
+        "sha256": "6fabd0010a97d1c61cba691c9eaddb875d1d4a568765f2530507eb4da371fe7f"
+      }
+    },
+    {
+      "version": "20260824000400",
+      "name": "collaboration_audit",
+      "up": {
+        "file": "20260824000400_collaboration_audit.up.sql",
+        "sha256": "99d9ecd902d338f46fd1bd322fd8cb370d1b6ef7e9baeea44ef6389468d1d214"
+      },
+      "down": {
+        "file": "20260824000400_collaboration_audit.down.sql",
+        "sha256": "cf2e6e254a9cb922478159d4e1a3f994c4d012d0e010c822635edbd14a1e373d"
+      }
+    },
+    {
+      "version": "20260824000500",
+      "name": "collaboration_moderation",
+      "up": {
+        "file": "20260824000500_collaboration_moderation.up.sql",
+        "sha256": "86929038c28347b619a42fbded8196c0702f7a87d5dc5179ec2e9ed7dce05658"
+      },
+      "down": {
+        "file": "20260824000500_collaboration_moderation.down.sql",
+        "sha256": "9ccf02ef725171211e706da8e813b70ae5102053c8af8ef4f1160dfc3e1576d7"
+      }
+    },
+    {
+      "version": "20260825000100",
+      "name": "collaboration_workflow_scheduler_admission",
+      "up": {
+        "file": "20260825000100_collaboration_workflow_scheduler_admission.up.sql",
+        "sha256": "1452124d13a5cd26395e904bebd033c6201508ac570db397dd30abd1461dbf3f"
+      },
+      "down": {
+        "file": "20260825000100_collaboration_workflow_scheduler_admission.down.sql",
+        "sha256": "a7b1e2116cb17c9c4b94930fbdec4348dc8e06ea11f274a4011cd369aabfcf1f"
+      }
+    },
+    {
+      "version": "20260826000100",
+      "name": "collaborative_message_transport",
+      "up": {
+        "file": "20260826000100_collaborative_message_transport.up.sql",
+        "sha256": "22ba23b66d56d3912c6369bdbe5f45748c59fcf2f280a8df07fd2bc9882d0206"
+      },
+      "down": {
+        "file": "20260826000100_collaborative_message_transport.down.sql",
+        "sha256": "163da6200d2b3e33e8d7af32d44d2bfb9c24dd305cdfdd14b74eb74277304d44"
+      }
+    },
+    {
+      "version": "20260930000100",
+      "name": "room_authorization_generation",
+      "up": {
+        "file": "20260930000100_room_authorization_generation.up.sql",
+        "sha256": "fcabb6b11eb4e7ffff3ee570ad0017b3cc2cf607d4d9ecb4dae9b68e936263b8"
+      },
+      "down": {
+        "file": "20260930000100_room_authorization_generation.down.sql",
+        "sha256": "bdfb92d8b2aa94c8da96120f5a680f0f3adbb1972c9eae8f8a7de0718734ccfb"
+      }
+    },
+    {
+      "version": "20261009000100",
+      "name": "collaboration_identity_profiles",
+      "up": {
+        "file": "20261009000100_collaboration_identity_profiles.up.sql",
+        "sha256": "4477b9a86d57f5b60596364438e5cc4625affbbfd9a198a3d822546898fe0aef"
+      },
+      "down": {
+        "file": "20261009000100_collaboration_identity_profiles.down.sql",
+        "sha256": "9cfb3a97d220dfe58d5aee8cf0964f35a342f33d696f0f439c0ab4036fe5e262"
+      }
+    },
+    {
+      "version": "20261010000100",
+      "name": "collaboration_identity_registration",
+      "up": {
+        "file": "20261010000100_collaboration_identity_registration.up.sql",
+        "sha256": "f15a7ce140fd2db1091369090ec15ea5f483444e39c484d6a89f3690a6184219"
+      },
+      "down": {
+        "file": "20261010000100_collaboration_identity_registration.down.sql",
+        "sha256": "28018cd60134bc76f720f3209368f46158ed66b0376f91ff28c38b9c64f366b5"
+      }
+    },
+    {
+      "version": "20261010000200",
+      "name": "collaboration_identity_observation",
+      "up": {
+        "file": "20261010000200_collaboration_identity_observation.up.sql",
+        "sha256": "e52b2b62d8af59096d50e2945df3248af50699b9d3935a49406404bd8e36da47"
+      },
+      "down": {
+        "file": "20261010000200_collaboration_identity_observation.down.sql",
+        "sha256": "a97af9016dd05663bc2f49b87f6b238e59589446744f6b7b0b783f7cb873389d"
+      }
+    },
+    {
+      "version": "20261010000300",
+      "name": "collaboration_moderation_subject_targets",
+      "up": {
+        "file": "20261010000300_collaboration_moderation_subject_targets.up.sql",
+        "sha256": "24835ecdf37639e272289af840f854e8f742ffd14f7aa48926b4bfe97a9da1ae"
+      },
+      "down": {
+        "file": "20261010000300_collaboration_moderation_subject_targets.down.sql",
+        "sha256": "46a05fbb31d359d82086d428bd350ae67d2e052bd42b49dcfb4ff74aee22376f"
+      }
+    },
+    {
+      "version": "20261010000400",
+      "name": "collaboration_identity_accepted_names",
+      "up": {
+        "file": "20261010000400_collaboration_identity_accepted_names.up.sql",
+        "sha256": "3d8a1bad742c3be24eed5593c8a57e537e7a9c9ae93466fc5b59179275c4c53a"
+      },
+      "down": {
+        "file": "20261010000400_collaboration_identity_accepted_names.down.sql",
+        "sha256": "981430ad439a4a4df31bfc52fd5568d51cc4c14790af22e4af70f55400d4d31c"
+      }
+    },
+    {
+      "version": "20261010000500",
+      "name": "collaboration_moderation_signed_reasons",
+      "up": {
+        "file": "20261010000500_collaboration_moderation_signed_reasons.up.sql",
+        "sha256": "8e7892e2f60d609e206104f3b1a82911f84119fa4a6eebb97107557c59697475"
+      },
+      "down": {
+        "file": "20261010000500_collaboration_moderation_signed_reasons.down.sql",
+        "sha256": "36b6123a1c87b418092e55d96e62f2f2651a8b9851a7896d7494edc0c10da092"
+      }
+    },
+    {
+      "version": "20261010000600",
+      "name": "collaboration_virtual_agent_message_authors",
+      "up": {
+        "file": "20261010000600_collaboration_virtual_agent_message_authors.up.sql",
+        "sha256": "675fcf8696b29db7833fdb96ae3c5ad517980bc1feb59cd3acfb7a1868f93ae9"
+      },
+      "down": {
+        "file": "20261010000600_collaboration_virtual_agent_message_authors.down.sql",
+        "sha256": "670db99d0dd686b215de5efb5fc481a2b3a1efa06ba1225fdf036e8cdc3ebeb0"
+      }
+    },
+    {
+      "version": "20261026000100",
+      "name": "collaboration_moderation_generated_retirement",
+      "up": {
+        "file": "20261026000100_collaboration_moderation_generated_retirement.up.sql",
+        "sha256": "ed9420f8a12ea2c6cb58fdbb874d58ff8415741165942945a011032c4da701ee"
+      },
+      "down": {
+        "file": "20261026000100_collaboration_moderation_generated_retirement.down.sql",
+        "sha256": "0b9dd2e757520abc5422cfdc25105cf6844d988eecd55e7db97c01d355c1ebad"
+      }
+    }
+  ]
+}

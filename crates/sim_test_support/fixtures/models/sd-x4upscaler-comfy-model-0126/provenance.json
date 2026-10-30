@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sd-x4upscaler-sim-model-0126",
+  "feature_id": "COMFY-MODEL-0126",
+  "source_symbol": "SD_X4Upscaler",
+  "source_ordinal": 14,
+  "source_architecture": "model_base.SD_X4Upscaler",
+  "latent_feature_id": "COMFY-MODEL-0049",
+  "latent_identifier": "SD_X4",
+  "catalog_projection_sha256": "c32bbf1e1ce2a8442b4007bac0dc7c24d4472502bcaa2a757ab1b5fdadb75874",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/openaimodel.py", "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/sd2_clip.py", "sha256": "f271a816164925da14895a742a323cd3149d651a8600c916d6ee71080fde4f6e"}
+  ],
+  "source_projection": "source_symbol=SD_X4Upscaler\nsource_ordinal=14\ninheritance=SD_X4Upscaler,SD20,supported_models_base.BASE\nunet_config.model_channels=256\nunet_config.in_channels=7\nunet_config.context_dim=1024\nunet_config.use_linear_in_transformer=true\nunet_config.adm_in_channels=None\nunet_config.use_temporal_attention=false\nunet_extra_config.disable_self_attentions=true,true,true,false\nunet_extra_config.num_classes=1000\nunet_extra_config.num_heads=8\nlatent_format=sim.latent_formats.SD_X4\nmemory_usage_factor=1.0\nsampling_settings.linear_start=0.0001\nsampling_settings.linear_end=0.02\narchitecture=model_base.SD_X4Upscaler\nclip_tokenizer=sim.text_encoders.sd2_clip.SD2Tokenizer\nclip_model=sim.text_encoders.sd2_clip.SD2ClipModel\nvae_key_prefix=first_stage_model.\ntext_encoder_key_prefix=cond_stage_model.\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "cb23fd9cf76066c99bac8b0379298925a4593f19d318d63bdccaf828cdf3dd0f",
+  "alternate_layout": "The pinned ComfyUI diffusers detector table has no SD_X4Upscaler configuration; fail closed instead of misclassifying a generic Diffusers UNet.",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI SD_X4Upscaler sources; no production Python dependency"
+}

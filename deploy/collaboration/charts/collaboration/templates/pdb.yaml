@@ -1,0 +1,11 @@
+{{- if and .Values.deployment.enabled .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "collaboration.name" . }}
+  labels: {{- include "collaboration.runtimeLabels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels: {{- include "collaboration.runtimeLabels" . | nindent 6 }}
+{{- end }}

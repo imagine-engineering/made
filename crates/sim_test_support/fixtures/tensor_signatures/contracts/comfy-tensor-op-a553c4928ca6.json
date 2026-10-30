@@ -1,0 +1,3423 @@
+{
+  "canonical_target": "comfy.ops.disable_weight_init.Conv1d",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:116:23 (ConvNeXtBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:191:13 (ConvNeXtEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:205:17 (ConvNeXtEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:259:21 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:269:21 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:279:21 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:294:21 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:304:21 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:314:21 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:366:13 (HiFiGANGenerator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:402:21 (HiFiGANGenerator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:411:41 (HiFiGANGenerator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:421:13 (HiFiGANGenerator.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/autoencoder.py:78:56 (WNConv1d)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:240:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:248:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:256:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:269:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:277:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:285:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:323:17 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:331:17 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:339:17 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:352:17 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:360:17 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:368:17 (ResBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:394:17 (ResBlock2.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:402:17 (ResBlock2.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:458:25 (Vocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:497:26 (Vocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:104:17 (AMPBlock2.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:110:17 (AMPBlock2.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:158:25 (BigVGANVocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:194:26 (BigVGANVocoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:25:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:31:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:37:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:46:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:52:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:58:17 (AMPBlock1.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:191:24 (Encoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:231:25 (Encoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:289:24 (Decoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae.py:316:25 (Decoder1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:108:26 (Downsample1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:109:26 (Downsample1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:33:22 (ResnetBlock1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:34:22 (ResnetBlock1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:37:38 (ResnetBlock1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:39:37 (ResnetBlock1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:70:20 (AttnBlock1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:71:25 (AttnBlock1D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:92:25 (Upsample1D.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:116:23 (ConvNeXtBlock.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:191:13 (ConvNeXtEncoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:205:17 (ConvNeXtEncoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:259:21 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:269:21 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:279:21 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:294:21 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:304:21 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:314:21 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:366:13 (HiFiGANGenerator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:402:21 (HiFiGANGenerator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:411:41 (HiFiGANGenerator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:421:13 (HiFiGANGenerator.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/audio/autoencoder.py:78:56 (WNConv1d)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:240:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:248:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:256:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:269:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:277:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:285:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:323:17 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:331:17 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:339:17 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:352:17 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:360:17 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:368:17 (ResBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:394:17 (ResBlock2.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:402:17 (ResBlock2.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:458:25 (Vocoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:497:26 (Vocoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:104:17 (AMPBlock2.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:110:17 (AMPBlock2.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:158:25 (BigVGANVocoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:194:26 (BigVGANVocoder.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:25:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:31:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:37:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:46:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:52:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:58:17 (AMPBlock1.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:191:24 (Encoder1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:231:25 (Encoder1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:289:24 (Decoder1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae.py:316:25 (Decoder1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:108:26 (Downsample1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:109:26 (Downsample1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:33:22 (ResnetBlock1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:34:22 (ResnetBlock1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:37:38 (ResnetBlock1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:39:37 (ResnetBlock1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:70:20 (AttnBlock1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:71:25 (AttnBlock1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:92:25 (Upsample1D.__init__)",
+      "status": "definition-call-signature-not-declared"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-a553c4928ca6-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_3",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "bias",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dilation",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "groups",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "kernel_size",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "padding",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "padding_mode",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "stride",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-A553C4928CA6",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "4154d82e36e026b8d627a83dd1f2d7d17041ad2190f46b001199f469ef5774db",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/audio/autoencoder.py",
+        "sha256": "4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+        "sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+        "sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/vae.py",
+        "sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+        "sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.disable_weight_init.Conv1d"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-a0bd98dda517",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "int(dilation * (kernel_size - 1) / 2)",
+          "syntax_kind": "Call"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "groups",
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 116,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ConvNeXtBlock.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:116:23 (ConvNeXtBlock.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "7",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'replicate'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 191,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "input_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dims[0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "ConvNeXtEncoder.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:191:13 (ConvNeXtEncoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 205,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dims[i]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dims[i + 1]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "ConvNeXtEncoder.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:205:17 (ConvNeXtEncoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[0])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 259,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:259:21 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[1])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 269,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:269:21 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[2]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[2])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 279,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:279:21 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 294,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:294:21 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 304,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:304:21 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 314,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:314:21 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(pre_conv_kernel_size)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 366,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "num_mels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "upsample_initial_channel",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "pre_conv_kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "HiFiGANGenerator.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:366:13 (HiFiGANGenerator.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "stride_f0 * 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "stride",
+          "syntax": "stride_f0",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "stride_f0 // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "line": 402,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_cur",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HiFiGANGenerator.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:402:21 (HiFiGANGenerator.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 411,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_cur",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "HiFiGANGenerator.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:411:41 (HiFiGANGenerator.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(post_conv_kernel_size)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 421,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "ch",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "post_conv_kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "HiFiGANGenerator.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:421:13 (HiFiGANGenerator.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 56,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": true,
+          "name": null,
+          "syntax": "kwargs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 78,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": true,
+          "syntax": "args",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "WNConv1d",
+      "site": "comfy/ldm/audio/autoencoder.py:78:56 (WNConv1d)",
+      "source_path": "comfy/ldm/audio/autoencoder.py",
+      "source_sha256": "4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[0])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 240,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:240:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[1])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 248,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:248:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[2]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[2])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 256,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:256:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 269,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:269:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 277,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:277:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 285,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:285:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[0])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 323,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:323:17 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[1])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 331,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:331:17 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[2]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[2])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 339,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:339:17 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 352,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:352:17 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 360,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:360:17 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 368,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock1.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:368:17 (ResBlock1.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[0])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 394,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock2.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:394:17 (ResBlock2.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[1])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 402,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResBlock2.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:402:17 (ResBlock2.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 458,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "upsample_initial_channel",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "7",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Vocoder.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:458:25 (Vocoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "use_bias_at_final",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 497,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "ch",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "7",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Vocoder.__init__",
+      "site": "comfy/ldm/lightricks/vocoders/vocoder.py:497:26 (Vocoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vocoders/vocoder.py",
+      "source_sha256": "d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[0])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 104,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock2.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:104:17 (AMPBlock2.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[1])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 110,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock2.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:110:17 (AMPBlock2.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 158,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h.num_mels",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h.upsample_initial_channel",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "7",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "BigVGANVocoder.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:158:25 (BigVGANVocoder.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 194,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "ch",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "7",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "BigVGANVocoder.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:194:26 (BigVGANVocoder.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[0])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 25,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:25:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[1])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 31,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:31:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "dilation[2]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, dilation[2])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 37,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:37:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 46,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:46:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 52,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:52:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dilation",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "get_padding(kernel_size, 1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 58,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "AMPBlock1.__init__",
+      "site": "comfy/ldm/mmaudio/vae/bigvgan.py:58:17 (AMPBlock1.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/bigvgan.py",
+      "source_sha256": "cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 191,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.dim",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "Encoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:191:24 (Encoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 231,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "block_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2 * embed_dim if double_z else embed_dim",
+          "syntax_kind": "IfExp"
+        }
+      ],
+      "scope": "Encoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:231:25 (Encoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 289,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "embed_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "block_in",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Decoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:289:24 (Decoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 316,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "block_in",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Decoder1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae.py:316:25 (Decoder1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae.py",
+      "source_sha256": "44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 108,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Downsample1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:108:26 (Downsample1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 109,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Downsample1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:109:26 (Downsample1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 33,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:33:22 (ResnetBlock1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 34,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:34:22 (ResnetBlock1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "kernel_size // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 37,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:37:38 (ResnetBlock1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 39,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:39:37 (ResnetBlock1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 70,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels * 3",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "AttnBlock1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:70:20 (AttnBlock1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 71,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AttnBlock1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:71:25 (AttnBlock1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 92,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Upsample1D.__init__",
+      "site": "comfy/ldm/mmaudio/vae/vae_modules.py:92:25 (Upsample1D.__init__)",
+      "source_path": "comfy/ldm/mmaudio/vae/vae_modules.py",
+      "source_sha256": "7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Conv1d"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "ClassDef",
+    "definition_line": 505,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "inherited-or-dynamic-constructor",
+    "parameters": [],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        {
+          "kind": "class-instance",
+          "name": "Conv1d"
+        }
+      ]
+    }
+  }
+}

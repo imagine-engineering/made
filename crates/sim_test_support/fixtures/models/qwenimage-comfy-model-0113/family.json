@@ -1,0 +1,105 @@
+{
+  "fixture_id": "qwenimage-sim-model-0113",
+  "feature_id": "COMFY-MODEL-0113",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.txt_norm.weight": [3584],
+      "model.diffusion_model.img_in.weight": [3072, 64],
+      "model.diffusion_model.txt_in.weight": [3072, 3584],
+      "model.diffusion_model.proj_out.weight": [64, 3072],
+      "model.diffusion_model.transformer_blocks.0.img_mod.1.weight": [18432, 3072],
+      "model.diffusion_model.transformer_blocks.0.txt_mod.1.weight": [18432, 3072],
+      "model.diffusion_model.transformer_blocks.0.attn.to_q.weight": [3072, 3072],
+      "model.diffusion_model.transformer_blocks.0.attn.norm_q.weight": [128]
+    },
+    "metadata": {
+      "image_model": "qwen_image",
+      "model_layout": "native"
+    }
+  },
+  "base_artifact_digest": "0113011301130113011301130113011301130113011301130113011301130113",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.txt_norm.weight",
+      "shape": [2],
+      "values": [1.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.img_in.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.txt_in.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.img_mod.1.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.txt_mod.1.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.transformer_blocks.0.attn.to_q.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.proj_out.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [1.0, -1.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 112,
+  "expected_memory_bytes": 112,
+  "checkpoints": [
+    {"name": "image_patch_projection", "values": [1.0, -1.0]},
+    {"name": "text_conditioning_normalization", "values": [0.9999995, -0.9999995]},
+    {"name": "text_conditioning_projection", "values": [0.9999995, -0.9999995]},
+    {"name": "text_stream_modulation", "values": [0.9999995, -0.9999995]},
+    {"name": "reference_image_modulation", "values": [0.9999995, -0.9999995]},
+    {"name": "joint_attention_query", "values": [0.9999995, -0.9999995]},
+    {"name": "joint_attention", "values": [0.9999995, -0.9999995]},
+    {"name": "image_output_projection", "values": [0.9999995, -0.9999995]},
+    {"name": "image_output", "values": [0.76159394, -0.76159394]}
+  ],
+  "patches": [
+    {
+      "identifier": "qwen-reference-modulation-scale",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.transformer_blocks.0.img_mod.1.weight",
+          "expected_shape": [2, 2],
+          "values": [0.5, 0.0, 0.0, 0.5],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "image_patch_projection", "values": [1.0, -1.0]},
+    {"name": "text_conditioning_normalization", "values": [0.9999995, -0.9999995]},
+    {"name": "text_conditioning_projection", "values": [0.9999995, -0.9999995]},
+    {"name": "text_stream_modulation", "values": [0.9999995, -0.9999995]},
+    {"name": "reference_image_modulation", "values": [1.4999993, -1.4999993]},
+    {"name": "joint_attention_query", "values": [1.4999993, -1.4999993]},
+    {"name": "joint_attention", "values": [1.4999993, -1.4999993]},
+    {"name": "image_output_projection", "values": [1.4999993, -1.4999993]},
+    {"name": "image_output", "values": [0.90514815, -0.90514815]}
+  ]
+}

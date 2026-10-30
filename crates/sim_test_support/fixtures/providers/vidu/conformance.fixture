@@ -1,0 +1,103 @@
+{
+  "namespace": "zed.sim.provider.vidu",
+  "source_sha256": "3bb3620fdd499270119770f78bbd6eaf70376c9d73dcf64ce764311f5c915998",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0728",
+      "node_identifier": "Vidu2ImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0729",
+      "node_identifier": "Vidu2ReferenceVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0730",
+      "node_identifier": "Vidu2StartEndToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0731",
+      "node_identifier": "Vidu2TextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0732",
+      "node_identifier": "Vidu3ImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0733",
+      "node_identifier": "Vidu3StartEndToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0734",
+      "node_identifier": "Vidu3TextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0735",
+      "node_identifier": "ViduExtendVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0736",
+      "node_identifier": "ViduImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0737",
+      "node_identifier": "ViduMultiFrameVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0738",
+      "node_identifier": "ViduReferenceVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0739",
+      "node_identifier": "ViduStartEndToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0740",
+      "node_identifier": "ViduTextToVideoNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0194",
+      "method": "POST",
+      "path": "/proxy/vidu/extend",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0195",
+      "method": "POST",
+      "path": "/proxy/vidu/img2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0196",
+      "method": "POST",
+      "path": "/proxy/vidu/multiframe",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0197",
+      "method": "POST",
+      "path": "/proxy/vidu/reference2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0198",
+      "method": "POST",
+      "path": "/proxy/vidu/start-end2video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0199",
+      "method": "GET",
+      "path": "/proxy/vidu/tasks/%s/creations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0200",
+      "method": "POST",
+      "path": "/proxy/vidu/text2video",
+      "disposition": "executable"
+    }
+  ],
+  "aliases": []
+}

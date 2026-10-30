@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sd3-sim-model-0122",
+  "feature_id": "COMFY-MODEL-0122",
+  "source_symbol": "SD3",
+  "source_ordinal": 19,
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/utils.py", "sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/sd3_clip.py", "sha256": "61bde2b4a428779469a01f342a9195d115f2a207c7a3d2c0d6c0a5715fdc03ed"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/mmdit.py", "sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5"}
+  ],
+  "source_projection": "source_symbol=SD3\nsource_ordinal=19\nunet_config.in_channels=16\nunet_config.pos_embed_scaling_factor=None\nsampling_settings.shift=3.0\nlatent_format=SD3\nmemory_usage_factor=1.6\ntext_encoder_key_prefix=text_encoders.\nsupported_inference_dtypes=f16,bf16,f32\narchitecture=model_base.SD3\nclip_tokenizer=sim.text_encoders.sd3_clip.SD3Tokenizer\nclip_model=sim.text_encoders.sd3_clip.sd3_clip\n",
+  "source_projection_sha256": "3a756043942115b4b97dca9d4640e18701f8cc94199fb2d575c9862fd5491598",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI SD3 sources; no production Python dependency"
+}

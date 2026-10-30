@@ -1,0 +1,814 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sim-native-image-vae-source-checkpoints-v1",
+  "oracle_kind": "immutable-source-derived-checkpoints",
+  "production_dependency": false,
+  "provenance_sha256": "d90cc80730950d8c11644542d9742c8b475104e4689291eee76784aee1bfda5c",
+  "cases": [
+    {
+      "id": "temporal-autoencoding-engine-image",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-5bca3e44"
+      ],
+      "profile": "TemporalAutoencodingEngineV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencodingEngine.temporal.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 8,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "decoder.mid.block_1.mix_factor",
+          "shape": [
+            1
+          ]
+        },
+        {
+          "name": "decoder.conv_out.time_mix_conv.weight",
+          "shape": [
+            3,
+            3,
+            3,
+            1,
+            1
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "frame_batch_to_temporal_sequence",
+        "temporal_residual_alpha_mix"
+      ]
+    },
+    {
+      "id": "taesd-sd15",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taesd-taesd-d0ccd20f"
+      ],
+      "profile": "TaesdV1",
+      "loader_configuration": {
+        "kind": "taesd",
+        "latent_channels": 4,
+        "metadata_override": false
+      },
+      "architecture": "sim.taesd.TAESD.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 8,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "taesd_encoder.0.weight",
+          "shape": [
+            64,
+            3,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "taesd_encoder.14.weight",
+          "shape": [
+            4,
+            64,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "taesd_decoder.1.weight",
+          "shape": [
+            64,
+            4,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "taesd_decoder.19.weight",
+          "shape": [
+            3,
+            64,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "encoder_block_residual",
+        "decoder_tanh_bound",
+        "latent_scale_shift"
+      ]
+    },
+    {
+      "id": "taesd-flux2-128",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taesd-taesd-d0ccd20f"
+      ],
+      "profile": "TaesdV1",
+      "loader_configuration": {
+        "kind": "taesd",
+        "latent_channels": 128,
+        "metadata_override": true
+      },
+      "architecture": "sim.taesd.TAESD.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 16,
+        "decode": 16
+      },
+      "state_checkpoints": [
+        {
+          "name": "taesd_encoder.14.weight",
+          "shape": [
+            32,
+            64,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "taesd_encoder.11.pool.0.weight",
+          "shape": [
+            256,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "taesd_decoder.1.weight",
+          "shape": [
+            64,
+            32,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "flux2_pixel_unshuffle_encode",
+        "flux2_pixel_shuffle_decode"
+      ]
+    },
+    {
+      "id": "stable-cascade-stage-a",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-stagea-1b767df0"
+      ],
+      "profile": "StableCascadeStageAV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.ldm.cascade.stage_a.StageA.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 4,
+        "decode": 4
+      },
+      "state_checkpoints": [
+        {
+          "name": "down_blocks.0.depthwise.1.weight",
+          "shape": [
+            192,
+            1,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "down_blocks.0.channelwise.0.weight",
+          "shape": [
+            768,
+            192
+          ]
+        },
+        {
+          "name": "vquantizer.codebook.weight",
+          "shape": [
+            8192,
+            4
+          ]
+        },
+        {
+          "name": "up_blocks.13.weight",
+          "shape": [
+            384,
+            192,
+            4,
+            4
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "pixel_unshuffle_encode",
+        "depthwise_replication_pad",
+        "gelu_exact",
+        "pixel_shuffle_decode"
+      ]
+    },
+    {
+      "id": "stable-cascade-stage-c-encoder",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-stagec-coder-94678b59"
+      ],
+      "profile": "StableCascadeStageCEncoderV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.ldm.cascade.stage_c.StageCEncoder.v1",
+      "encode": "available",
+      "decode": "typed_unavailable",
+      "spatial_ratios": {
+        "encode": 32,
+        "decode": 1
+      },
+      "state_checkpoints": [
+        {
+          "name": "mapper.0.weight",
+          "shape": [
+            16,
+            1280,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "mapper.1.running_mean",
+          "shape": [
+            16
+          ]
+        },
+        {
+          "name": "mean",
+          "shape": [
+            3
+          ]
+        },
+        {
+          "name": "std",
+          "shape": [
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "channel_standardization",
+        "efficientnet_v2_s_features",
+        "mapper_batch_norm"
+      ]
+    },
+    {
+      "id": "stable-cascade-stage-c-previewer",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-stagec-coder-84281997"
+      ],
+      "profile": "StableCascadeStageCPreviewerV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.ldm.cascade.stage_c.StageCPreviewer.v1",
+      "encode": "typed_unavailable",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 1,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "blocks.0.weight",
+          "shape": [
+            512,
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "blocks.6.weight",
+          "shape": [
+            512,
+            256,
+            2,
+            2
+          ]
+        },
+        {
+          "name": "blocks.24.weight",
+          "shape": [
+            3,
+            128,
+            1,
+            1
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "conv_transpose_upsample",
+        "gelu_exact",
+        "batch_norm_inference"
+      ]
+    },
+    {
+      "id": "stable-cascade-stage-c-combined",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-stagec-coder-4801dafb"
+      ],
+      "profile": "StableCascadeStageCCombinedV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.ldm.cascade.stage_c.StageCCombined.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 32,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "encoder.mapper.0.weight",
+          "shape": [
+            16,
+            1280,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "previewer.blocks.24.weight",
+          "shape": [
+            3,
+            128,
+            1,
+            1
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "prefixed_encoder_state",
+        "prefixed_previewer_state"
+      ]
+    },
+    {
+      "id": "hunyuan-image",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-b7150e80"
+      ],
+      "profile": "HunyuanImageV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.ldm.hunyuan_video.vae.AutoencodingEngine.image.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 32,
+        "decode": 32
+      },
+      "state_checkpoints": [
+        {
+          "name": "encoder.conv_in.weight",
+          "shape": [
+            128,
+            3,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "encoder.down.0.downsample.conv.weight",
+          "shape": [
+            64,
+            128,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "decoder.conv_in.weight",
+          "shape": [
+            1024,
+            64,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "downsample_pixel_unshuffle_residual",
+        "channel_group_mean",
+        "upsample_pixel_shuffle_residual"
+      ]
+    },
+    {
+      "id": "autoencoder-kl-standard",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencoderkl-69aa0015"
+      ],
+      "profile": "AutoencoderKlV1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": false,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": false,
+        "asymmetric_decoder_channels": null,
+        "embed_dim": 4
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 8,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "encoder.conv_in.weight",
+          "shape": [
+            128,
+            3,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "quant_conv.weight",
+          "shape": [
+            8,
+            8,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "post_quant_conv.weight",
+          "shape": [
+            4,
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "decoder.conv_out.weight",
+          "shape": [
+            3,
+            128,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "bottom_right_downsample_pad",
+        "diagonal_gaussian_mode",
+        "nearest_upsample",
+        "unit_interval_process_output"
+      ]
+    },
+    {
+      "id": "autoencoder-kl-x4",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencoderkl-69aa0015"
+      ],
+      "profile": "AutoencoderKlX4V1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": true,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": false,
+        "asymmetric_decoder_channels": null,
+        "embed_dim": 4
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 4,
+        "decode": 4
+      },
+      "state_checkpoints": [
+        {
+          "name": "encoder.down.1.downsample.conv.weight",
+          "shape": [
+            256,
+            256,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "decoder.up.2.upsample.conv.weight",
+          "shape": [
+            512,
+            512,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "x4_spatial_geometry"
+      ]
+    },
+    {
+      "id": "autoencoder-kl-batch-normalized",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencoderkl-69aa0015"
+      ],
+      "profile": "AutoencoderKlBatchNormV1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": false,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": true,
+        "asymmetric_decoder_channels": null,
+        "embed_dim": 4
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 16,
+        "decode": 16
+      },
+      "state_checkpoints": [
+        {
+          "name": "bn.running_mean",
+          "shape": [
+            16
+          ]
+        },
+        {
+          "name": "bn.num_batches_tracked",
+          "shape": []
+        }
+      ],
+      "equation_checkpoints": [
+        "latent_pixel_unshuffle",
+        "batch_norm_latent",
+        "latent_pixel_shuffle"
+      ]
+    },
+    {
+      "id": "autoencoder-kl-asymmetric-decoder",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencoderkl-69aa0015"
+      ],
+      "profile": "AutoencoderKlV1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": false,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": false,
+        "asymmetric_decoder_channels": 96,
+        "embed_dim": 6
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 8,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "quant_conv.weight",
+          "shape": [
+            12,
+            8,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "post_quant_conv.weight",
+          "shape": [
+            4,
+            6,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "decoder.conv_in.weight",
+          "shape": [
+            384,
+            4,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "separate_decoder_base_channels",
+        "embed_dimension_projection"
+      ]
+    },
+    {
+      "id": "autoencoding-engine-standard",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-9f13006f"
+      ],
+      "profile": "AutoencodingEngineV1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": false,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": false,
+        "asymmetric_decoder_channels": null,
+        "embed_dim": null
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 8,
+        "decode": 8
+      },
+      "state_checkpoints": [
+        {
+          "name": "encoder.conv_out.weight",
+          "shape": [
+            8,
+            512,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "decoder.conv_in.weight",
+          "shape": [
+            512,
+            4,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "diagonal_gaussian_regularizer_mode",
+        "no_quant_projection"
+      ]
+    },
+    {
+      "id": "autoencoding-engine-x4",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-9f13006f"
+      ],
+      "profile": "AutoencodingEngineX4V1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": true,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": false,
+        "asymmetric_decoder_channels": null,
+        "embed_dim": null
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 4,
+        "decode": 4
+      },
+      "state_checkpoints": [
+        {
+          "name": "decoder.up.2.upsample.conv.weight",
+          "shape": [
+            512,
+            512,
+            3,
+            3
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "x4_spatial_geometry",
+        "no_quant_projection"
+      ]
+    },
+    {
+      "id": "autoencoding-engine-batch-normalized",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-9f13006f"
+      ],
+      "profile": "AutoencodingEngineBatchNormV1",
+      "loader_configuration": {
+        "kind": "default_kl",
+        "x4": false,
+        "legacy_prefix_rewrite": true,
+        "batch_norm_latent": true,
+        "asymmetric_decoder_channels": null,
+        "embed_dim": null
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 16,
+        "decode": 16
+      },
+      "state_checkpoints": [
+        {
+          "name": "bn.running_var",
+          "shape": [
+            16
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "latent_pixel_unshuffle",
+        "batch_norm_latent",
+        "no_quant_projection"
+      ]
+    },
+    {
+      "id": "pixel-space",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-pixel-space-convert-pixelspaceconversionvae-3ec12255"
+      ],
+      "profile": "PixelSpaceV1",
+      "loader_configuration": {
+        "kind": "automatic"
+      },
+      "architecture": "sim.pixel_space_convert.PixelspaceConversionVAE.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 1,
+        "decode": 1
+      },
+      "state_checkpoints": [
+        {
+          "name": "pixel_space_vae",
+          "shape": []
+        }
+      ],
+      "equation_checkpoints": [
+        "unit_to_signed_encode",
+        "signed_to_unit_decode"
+      ]
+    },
+    {
+      "id": "explicit-autoencoder-kl",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencoderkl-61f06f31"
+      ],
+      "profile": "ExplicitAutoencoderKlV1",
+      "loader_configuration": {
+        "kind": "explicit_autoencoder_kl",
+        "params_sha256": "7b371731004a7cc1d6cbe858b6da44d6d87dd124fa5285756c42cdd2a249d052",
+        "params_json": "{\"ddconfig\":{\"attn_resolutions\":[4],\"batch_norm_latent\":true,\"ch\":32,\"ch_mult\":[1,2],\"double_z\":true,\"in_channels\":3,\"num_res_blocks\":1,\"out_ch\":3,\"resamp_with_conv\":false,\"resolution\":8,\"z_channels\":4},\"decoder_ddconfig\":{\"attn_resolutions\":[],\"ch\":64,\"ch_mult\":[1,2],\"double_z\":true,\"in_channels\":3,\"num_res_blocks\":1,\"out_ch\":3,\"resamp_with_conv\":false,\"resolution\":8,\"tanh_out\":true,\"z_channels\":4},\"embed_dim\":4}"
+      },
+      "architecture": "sim.ldm.models.autoencoder.AutoencoderKL.v1",
+      "encode": "available",
+      "decode": "available",
+      "spatial_ratios": {
+        "encode": 2,
+        "decode": 2
+      },
+      "state_checkpoints": [
+        {
+          "name": "encoder.conv_in.weight",
+          "shape": [
+            32,
+            3,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "decoder.conv_in.weight",
+          "shape": [
+            128,
+            4,
+            3,
+            3
+          ]
+        },
+        {
+          "name": "bn.running_mean",
+          "shape": [
+            16
+          ]
+        }
+      ],
+      "equation_checkpoints": [
+        "average_pool_without_convolution",
+        "nearest_upsample_without_convolution",
+        "decoder_tanh",
+        "attention_resolution"
+      ]
+    }
+  ]
+}

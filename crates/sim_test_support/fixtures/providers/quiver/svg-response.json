@@ -1,0 +1,15 @@
+{
+  "id": "source",
+  "data": [
+    {
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>source α 😀</text></svg>"
+    },
+    {
+      "svg": "",
+      "mime_type": "ignored/source"
+    }
+  ],
+  "usage": {
+    "total_tokens": 5
+  }
+}

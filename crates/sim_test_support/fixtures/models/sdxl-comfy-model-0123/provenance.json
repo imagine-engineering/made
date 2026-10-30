@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sdxl-sim-model-0123",
+  "feature_id": "COMFY-MODEL-0123",
+  "source_symbol": "SDXL",
+  "source_ordinal": 9,
+  "source_architecture": "model_base.SDXL",
+  "latent_feature_id": "COMFY-MODEL-0047",
+  "latent_identifier": "SDXL",
+  "catalog_projection_sha256": "a70a1442584f776383fd10f3eb134e0b5e9b66e953e4d390368083ddea79074d",
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models_base.py",
+      "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/diffusers_convert.py",
+      "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/sdxl_clip.py",
+      "sha256": "dd3c01e1c302876612897c0051baa6e108751e36abcba7327490b25a571f97fd"
+    },
+    {
+      "path": "crates/sim_model/src/sdxl_family.rs",
+      "sha256": "0a891f6ee1e08403089116571512ffe860753fc3b81fd8ba2d1e2a84db8727d9"
+    },
+    {
+      "path": "crates/sim_model/src/latent_formats/sdxl_sim_model_0047.rs",
+      "sha256": "b43c21bbd0b2d2ffe921d02a3a5c552afac5a9e517df275005b1635948d0b787"
+    }
+  ],
+  "source_projection": "source_symbol=SDXL\nsource_ordinal=9\ninheritance=SDXL,supported_models_base.BASE\nunet_config.model_channels=320\nunet_config.in_channels=4\nunet_config.context_dim=2048\nunet_config.adm_in_channels=2816\nunet_config.transformer_depth=0,0,2,2,10,10\nunet_config.transformer_depth_output=0,0,0,2,2,2,10,10,10\nunet_config.transformer_depth_middle=10\nunet_config.use_linear_in_transformer=true\nunet_config.use_temporal_attention=false\nlatent_format=sim.latent_formats.SDXL\nmemory_usage_factor=0.8\narchitecture=model_base.SDXL\nclip_tokenizer=sim.sdxl_clip.SDXLTokenizer\nclip_model=sim.sdxl_clip.SDXLClipModel\nnative_detection=input_channels:4,deep_transformer_depth:10\ndiffusers_detection=SDXL_diffusers,input_channels:4,deep_transformer_depth:10\nstate_owner=sim_model::sdxl_family\n",
+  "source_projection_sha256": "f71ac8a6cec0e200d312f18243eaec06b4676cecdcacd34ea717b19492e6690c",
+  "alternate_layout": "Pinned ComfyUI native, standalone-native, and SDXL Diffusers base layouts share one checked Rust state-plan owner.",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned SDXL base sources; no production Python dependency"
+}

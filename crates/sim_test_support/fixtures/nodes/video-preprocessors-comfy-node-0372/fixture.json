@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-video-codec-ltxv-node-adapter-foundation",
+  "feature_id": "COMFY-NODE-0372",
+  "source": {
+    "path": "sim_extras/nodes_lt.py",
+    "sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "byte_length": 38576,
+    "class_type": "LTXVPreprocess",
+    "class_line": 715,
+    "execute_line": 734,
+    "definition_sha256": "d14fe0682c2f1bbad85a0a5e28ed82b7104ac6b12f8955949e5ee6bb186184f8"
+  },
+  "prerequisite": {
+    "path": "fixtures/video/codec-ltxv-node-service/manifest.json",
+    "sha256": "e8fb078ace39ce389b206cc7d6add8b5878fd4add50fffdc7797dc152d62c78d"
+  },
+  "contract": {
+    "category": "video/preprocessors",
+    "display_name": "LTXV Preprocess",
+    "inputs": {
+      "image": "IMAGE",
+      "img_compression": {
+        "type": "INT",
+        "default": 35,
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+    "outputs": ["IMAGE"],
+    "output_names": ["output_image"],
+    "input_is_list": false,
+    "output_is_list": [false],
+    "effect": "pure",
+    "cache": "input_identity_plus_ltxv_service_configuration_sha256"
+  },
+  "behavior": {
+    "service_calls_per_execution": 1,
+    "success": "publish_one_fresh_IMAGE_handle_after_service_and_cancellation_checks",
+    "busy": "retryable_failure_without_publication",
+    "unavailable": "retryable_failure_without_publication",
+    "resource_exhausted": "retryable_failure_without_publication",
+    "cancelled": "execution_interrupted_without_publication",
+    "invalid_request": "non_retryable_failure_without_publication",
+    "recovery": "fresh_execution_reuses_the_injected_service_after_request_local_failure"
+  },
+  "evidence_claims": {
+    "native_node_descriptor_and_execution": true,
+    "typed_injected_service_delegation": true,
+    "installed_or_licensed_ffmpeg_package": false,
+    "worker_codec_package_provisioning": false,
+    "real_h264_numeric_oracle": false,
+    "general_video_execution": false,
+    "media_handle_or_effect": false,
+    "persistence_or_recovery_owner": false,
+    "external_output_publication": false
+  }
+}

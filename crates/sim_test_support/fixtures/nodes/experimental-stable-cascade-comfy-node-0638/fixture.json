@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-experimental-stable-cascade-sim-node-0638",
+  "feature_id": "COMFY-NODE-0638",
+  "source": {
+    "catalog_path": "sim_extras/nodes_stable_cascade.py",
+    "oracle_path": "ComfyUI/sim_extras/nodes_stable_cascade.py",
+    "sha256": "c11f471ef730405e43e66fbadca3adcf4bc503b3fb5997ea262fca9da7aaa09a",
+    "byte_length": 5585,
+    "class_line": 117,
+    "execute_line": 136,
+    "definition_sha256": "0e5ac9c65dee743090b5761ceedfb1a3d331d984d6790e8e72d14724abc69056"
+  },
+  "contract": {
+    "class_type": "StableCascade_SuperResolutionControlnet",
+    "display_name": "StableCascade_SuperResolutionControlnet",
+    "category": "experimental/stable cascade",
+    "experimental": true,
+    "inputs": {
+      "image": "IMAGE",
+      "vae": "VAE"
+    },
+    "outputs": ["IMAGE", "LATENT", "LATENT"],
+    "output_names": ["controlnet_input", "stage_c", "stage_b"],
+    "input_is_list": false,
+    "output_is_list": [false, false, false],
+    "lazy_inputs": false,
+    "effect": "pure",
+    "cache": "input_identity_plus_vae_artifact_and_execution_identity"
+  },
+  "behavior": {
+    "controlnet_input": {
+      "equation": "vae.encode(image[:, :, :, :3]).movedim(1, -1)",
+      "publication": "fresh canonical IMAGE handle"
+    },
+    "stage_c": {
+      "shape": ["batch", 16, "height // 16", "width // 16"],
+      "values": "all zero",
+      "publication": "fresh canonical LATENT handle"
+    },
+    "stage_b": {
+      "shape": ["batch", 4, "height // 2", "width // 2"],
+      "values": "all zero",
+      "publication": "fresh canonical LATENT handle"
+    },
+    "invalid_inputs": [
+      "missing_image",
+      "missing_vae",
+      "extra_input",
+      "literal_image",
+      "literal_vae",
+      "wrong_image_handle_type",
+      "wrong_vae_handle_type",
+      "wrong_store",
+      "wrong_generation",
+      "digest_mismatch",
+      "image_fewer_than_three_channels",
+      "image_spatial_dimension_below_sixteen",
+      "vae_without_canonical_native_resource"
+    ],
+    "cancellation": "interrupted_without_committed_output_handles",
+    "persistence": {
+      "class_type": "StableCascade_SuperResolutionControlnet",
+      "inputs": {
+        "image": [7, 0],
+        "vae": [8, 0]
+      },
+      "unknown_data": {
+        "preserve": true,
+        "source_extension": "nodes_stable_cascade"
+      }
+    },
+    "recovery": "stale worker handles fail and fresh IMAGE plus VAE handles may be retried"
+  },
+  "evidence_claims": {
+    "native_descriptor_and_execution": true,
+    "native_vae_delegation": true,
+    "source_exact_latent_geometry": true,
+    "atomic_multi_output_publication": true,
+    "python_or_javascript_runtime_dependency": false,
+    "external_side_effect": false
+  }
+}

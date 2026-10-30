@@ -1,0 +1,993 @@
+{
+  "canonical_target": "torch.sum",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/deis.py:81:39 (get_deis_coeff_list)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1574:21 (sample_er_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1580:27 (sample_er_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:160:28 (SanaMultiscaleLinearAttention.apply_quadratic_attention)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:31:28 (vector_quantize.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:32:21 (vector_quantize.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:81:13 (VectorQuantize._laplace_smoothing)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:44:30 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:48:30 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:57:22 (DiagonalGaussianDistribution.nll)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/distributions/distributions.py:44:30 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/distributions/distributions.py:48:30 (DiagonalGaussianDistribution.kl)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/distributions/distributions.py:57:22 (DiagonalGaussianDistribution.nll)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/sub_quadratic_attention.py:177:18 (_get_attention_scores_no_kv_chunking)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:383:16 (Direction.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/model_base.py:1100:65 (GenmoMochi.extra_conds)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/model_base.py:1481:65 (Lumina2.extra_conds)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/model_base.py:2211:65 (Omnigen2.extra_conds)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/text_encoders/lt.py:167:26 (LTXAVTEModel.encode_token_weights)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_cfg.py:14:19 (optimized_scale)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_cfg.py:17:20 (optimized_scale)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wan.py:608:18 (merge_final)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/deis.py:81:39 (get_deis_coeff_list)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1574:21 (sample_er_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1580:27 (sample_er_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:160:28 (SanaMultiscaleLinearAttention.apply_quadratic_attention)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:31:28 (vector_quantize.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:32:21 (vector_quantize.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:81:13 (VectorQuantize._laplace_smoothing)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:44:30 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:48:30 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:57:22 (DiagonalGaussianDistribution.nll)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/distributions/distributions.py:44:30 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/distributions/distributions.py:48:30 (DiagonalGaussianDistribution.kl)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/distributions/distributions.py:57:22 (DiagonalGaussianDistribution.nll)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/sub_quadratic_attention.py:177:18 (_get_attention_scores_no_kv_chunking)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:383:16 (Direction.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:1100:65 (GenmoMochi.extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:1481:65 (Lumina2.extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:2211:65 (Omnigen2.extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/lt.py:167:26 (LTXAVTEModel.encode_token_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_cfg.py:14:19 (optimized_scale)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_cfg.py:17:20 (optimized_scale)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:608:18 (merge_final)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-ada87e1a44aa-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match reduced axes, keep-dimension behavior, empty-domain behavior, output rank, and scalar-versus-tensor results.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-ADA87E1A44AA",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "f89cd4397edfcbd5088a1279ee446b9bd0c3f21228619489003e5482a729e63d",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/deis.py",
+        "sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/mmaudio/vae/distributions.py",
+        "sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772"
+      },
+      {
+        "path": "comfy/ldm/modules/distributions/distributions.py",
+        "sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772"
+      },
+      {
+        "path": "comfy/ldm/modules/sub_quadratic_attention.py",
+        "sha256": "c804fbbda0fbc6404999be734d3c33b868375959736f8e21ad417782ab0638a0"
+      },
+      {
+        "path": "comfy/ldm/wan/model_animate.py",
+        "sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy/text_encoders/lt.py",
+        "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2"
+      },
+      {
+        "path": "comfy_extras/nodes_cfg.py",
+        "sha256": "688a73094509efcc81bf22bf0e77b2cd8c9f1726f455ed55f6f9747dec656e99"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.sum"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "reduction_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-reduction-comfy-tensor-op-9f681b3616f6",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 39,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 81,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "integrand * poly",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "get_deis_coeff_list",
+      "site": "comfy/k_diffusion/deis.py:81:39 (get_deis_coeff_list)",
+      "source_path": "comfy/k_diffusion/deis.py",
+      "source_sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1574,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1 / scaled_pos",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "sample_er_sde",
+      "site": "comfy/k_diffusion/sampling.py:1574:21 (sample_er_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1580,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(lambda_pos - er_lambda_s) / scaled_pos",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "sample_er_sde",
+      "site": "comfy/k_diffusion/sampling.py:1580:27 (sample_er_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 160,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "scores",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.apply_quadratic_attention",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:160:28 (SanaMultiscaleLinearAttention.apply_quadratic_attention)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 31,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "codebook ** 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "vector_quantize.forward",
+      "site": "comfy/ldm/cascade/stage_a.py:31:28 (vector_quantize.forward)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 32,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x ** 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "vector_quantize.forward",
+      "site": "comfy/ldm/cascade/stage_a.py:32:21 (vector_quantize.forward)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 81,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "VectorQuantize._laplace_smoothing",
+      "site": "comfy/ldm/cascade/stage_a.py:81:13 (VectorQuantize._laplace_smoothing)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "[1, 2, 3]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 44,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:44:30 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/mmaudio/vae/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "[1, 2, 3]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.pow(self.mean - other.mean, 2) / other.var + self.var / other.var - 1.0 - self.logvar + other.logvar",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:48:30 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/mmaudio/vae/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "dims",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 57,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "logtwopi + self.logvar + torch.pow(sample - self.mean, 2) / self.var",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.nll",
+      "site": "comfy/ldm/mmaudio/vae/distributions.py:57:22 (DiagonalGaussianDistribution.nll)",
+      "source_path": "comfy/ldm/mmaudio/vae/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "[1, 2, 3]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 44,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/modules/distributions/distributions.py:44:30 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/modules/distributions/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "[1, 2, 3]",
+          "syntax_kind": "List"
+        }
+      ],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.pow(self.mean - other.mean, 2) / other.var + self.var / other.var - 1.0 - self.logvar + other.logvar",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.kl",
+      "site": "comfy/ldm/modules/distributions/distributions.py:48:30 (DiagonalGaussianDistribution.kl)",
+      "source_path": "comfy/ldm/modules/distributions/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "dims",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 57,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "logtwopi + self.logvar + torch.pow(sample - self.mean, 2) / self.var",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DiagonalGaussianDistribution.nll",
+      "site": "comfy/ldm/modules/distributions/distributions.py:57:22 (DiagonalGaussianDistribution.nll)",
+      "source_path": "comfy/ldm/modules/distributions/distributions.py",
+      "source_sha256": "3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 177,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "attn_scores",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_get_attention_scores_no_kv_chunking",
+      "site": "comfy/ldm/modules/sub_quadratic_attention.py:177:18 (_get_attention_scores_no_kv_chunking)",
+      "source_path": "comfy/ldm/modules/sub_quadratic_attention.py",
+      "source_sha256": "c804fbbda0fbc6404999be734d3c33b868375959736f8e21ad417782ab0638a0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 383,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "input.unsqueeze(-1) * Q.T.to(input.dtype)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Direction.forward",
+      "site": "comfy/ldm/wan/model_animate.py:383:16 (Direction.forward)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 65,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1100,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "attention_mask",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GenmoMochi.extra_conds",
+      "site": "comfy/model_base.py:1100:65 (GenmoMochi.extra_conds)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 65,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1481,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "attention_mask",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Lumina2.extra_conds",
+      "site": "comfy/model_base.py:1481:65 (Lumina2.extra_conds)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 65,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 2211,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "attention_mask",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Omnigen2.extra_conds",
+      "site": "comfy/model_base.py:2211:65 (Omnigen2.extra_conds)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 167,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "extra['attention_mask']",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LTXAVTEModel.encode_token_weights",
+      "site": "comfy/text_encoders/lt.py:167:26 (LTXAVTEModel.encode_token_weights)",
+      "source_path": "comfy/text_encoders/lt.py",
+      "source_sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 14,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "positive_flat * negative_flat",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "optimized_scale",
+      "site": "comfy_extras/nodes_cfg.py:14:19 (optimized_scale)",
+      "source_path": "comfy_extras/nodes_cfg.py",
+      "source_sha256": "688a73094509efcc81bf22bf0e77b2cd8c9f1726f455ed55f6f9747dec656e99",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 17,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "negative_flat ** 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "optimized_scale",
+      "site": "comfy_extras/nodes_cfg.py:17:20 (optimized_scale)",
+      "source_path": "comfy_extras/nodes_cfg.py",
+      "source_sha256": "688a73094509efcc81bf22bf0e77b2cd8c9f1726f455ed55f6f9747dec656e99",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-2",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 608,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sel_attr * weight.unsqueeze(-1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "merge_final",
+      "site": "comfy_extras/nodes_wan.py:608:18 (merge_final)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.sum"
+    }
+  ],
+  "static_definition": null
+}

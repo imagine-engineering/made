@@ -1,0 +1,1430 @@
+{
+  "canonical_target": "torch.split",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/background_removal/birefnet.py:628:25 (Decoder.get_patches_batch)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/background_removal/birefnet.py:631:55 (Decoder.get_patches_batch)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:320:38 (MultiHeadedAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:412:38 (RelPositionMultiHeadedAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py:162:18 (Patcher3D._haar)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py:169:18 (Patcher3D._arrange)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/flux/layers.py:325:20 (SingleStreamBlock.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hidream/model.py:140:48 (HiDreamAttnProcessor_flashattn.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:135:35 (PointCrossAttention.sample_points_and_latents)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:163:67 (PointCrossAttention.sample_points_and_latents)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:634:16 (QKVMultiheadCrossAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:741:19 (QKVMultiheadAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:332:16 (CrossAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:402:29 (Attention.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:191:23 (Encoder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:283:17 (Decoder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/lightricks/av_model.py:836:32 (LTXAVModel._prepare_context)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:29:12 (split2)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:302:29 (Encoder.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/ldm/lumina/model.py:141:22 (JointAttention.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:639:23 (Encoder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:794:17 (Decoder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:500:20 (Qwen35VisionAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:501:20 (Qwen35VisionAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:502:20 (Qwen35VisionAttention.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/qwen_vl.py:235:13 (VisionAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_wan.py:622:29 (_patch_motion_single)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/background_removal/birefnet.py:628:25 (Decoder.get_patches_batch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/background_removal/birefnet.py:631:55 (Decoder.get_patches_batch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:320:38 (MultiHeadedAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:412:38 (RelPositionMultiHeadedAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py:162:18 (Patcher3D._haar)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py:169:18 (Patcher3D._arrange)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:325:20 (SingleStreamBlock.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream/model.py:140:48 (HiDreamAttnProcessor_flashattn.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:135:35 (PointCrossAttention.sample_points_and_latents)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:163:67 (PointCrossAttention.sample_points_and_latents)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:634:16 (QKVMultiheadCrossAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:741:19 (QKVMultiheadAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:332:16 (CrossAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:402:29 (Attention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:191:23 (Encoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:283:17 (Decoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/av_model.py:836:32 (LTXAVModel._prepare_context)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:29:12 (split2)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:302:29 (Encoder.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:141:22 (JointAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:639:23 (Encoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:794:17 (Decoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:500:20 (Qwen35VisionAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:501:20 (Qwen35VisionAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:502:20 (Qwen35VisionAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen_vl.py:235:13 (VisionAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:622:29 (_patch_motion_single)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-d4bf78de58fc-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match rank, axis normalization, inferred dimensions, broadcasting, view-versus-copy behavior, and invalid-shape failures for every listed call.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "split_size_or_sections",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-D4BF78DE58FC",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "5b6c02461e3530b0276521b3a70bf6106bad1715479a3cea11a0884c51f46d01",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/background_removal/birefnet.py",
+        "sha256": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1"
+      },
+      {
+        "path": "comfy/ldm/ace/lyric_encoder.py",
+        "sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103"
+      },
+      {
+        "path": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py",
+        "sha256": "fc616c155fcf610a8436ca567f971d1bbe57e84a6eba7dfc5146a8b5c624802d"
+      },
+      {
+        "path": "comfy/ldm/flux/layers.py",
+        "sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc"
+      },
+      {
+        "path": "comfy/ldm/hidream/model.py",
+        "sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+        "sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+        "sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302"
+      },
+      {
+        "path": "comfy/ldm/lightricks/av_model.py",
+        "sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+        "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"
+      },
+      {
+        "path": "comfy/ldm/lumina/model.py",
+        "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929"
+      },
+      {
+        "path": "comfy/text_encoders/qwen_vl.py",
+        "sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.split"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "shape_layout_transform_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-shape-layout-transform-comfy-tensor-op-75596b7e1112",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "split_size_or_sections",
+          "syntax": "_size_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 628,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x[idx]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "Decoder.get_patches_batch",
+      "site": "comfy/background_removal/birefnet.py:628:25 (Decoder.get_patches_batch)",
+      "source_path": "comfy/background_removal/birefnet.py",
+      "source_sha256": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 55,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "split_size_or_sections",
+          "syntax": "_size_h",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-2",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 631,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "column_x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Decoder.get_patches_batch",
+      "site": "comfy/background_removal/birefnet.py:631:55 (Decoder.get_patches_batch)",
+      "source_path": "comfy/background_removal/birefnet.py",
+      "source_sha256": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 320,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "cache",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "cache.size(-1) // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "MultiHeadedAttention.forward",
+      "site": "comfy/ldm/ace/lyric_encoder.py:320:38 (MultiHeadedAttention.forward)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 412,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "cache",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "cache.size(-1) // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "RelPositionMultiHeadedAttention.forward",
+      "site": "comfy/ldm/ace/lyric_encoder.py:412:38 (RelPositionMultiHeadedAttention.forward)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 162,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[1, x.shape[2] - 1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "Patcher3D._haar",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py:162:18 (Patcher3D._haar)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py",
+      "source_sha256": "fc616c155fcf610a8436ca567f971d1bbe57e84a6eba7dfc5146a8b5c624802d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 169,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[1, x.shape[2] - 1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "Patcher3D._arrange",
+      "site": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py:169:18 (Patcher3D._arrange)",
+      "source_path": "comfy/ldm/cosmos/cosmos_tokenizer/patching.py",
+      "source_sha256": "fc616c155fcf610a8436ca567f971d1bbe57e84a6eba7dfc5146a8b5c624802d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 325,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.linear1(apply_mod(self.pre_norm(x), 1 + mod.scale, mod.shift, modulation_dims))",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[3 * self.hidden_size, self.mlp_hidden_dim_first]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "SingleStreamBlock.forward",
+      "site": "comfy/ldm/flux/layers.py:325:20 (SingleStreamBlock.forward)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 48,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 140,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hidden_states",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[num_image_tokens, num_text_tokens]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "HiDreamAttnProcessor_flashattn.__call__",
+      "site": "comfy/ldm/hidream/model.py:140:48 (HiDreamAttnProcessor_flashattn.__call__)",
+      "source_path": "comfy/ldm/hidream/model.py",
+      "source_sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 35,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 135,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "point_cloud",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[self.pc_size, self.pc_sharpedge_size]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "PointCrossAttention.sample_points_and_latents",
+      "site": "comfy/ldm/hunyuan3d/vae.py:135:35 (PointCrossAttention.sample_points_and_latents)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 67,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 163,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "features",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[self.pc_size, self.pc_sharpedge_size]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "PointCrossAttention.sample_points_and_latents",
+      "site": "comfy/ldm/hunyuan3d/vae.py:163:67 (PointCrossAttention.sample_points_and_latents)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 634,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "kv",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "attn_ch",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "QKVMultiheadCrossAttention.forward",
+      "site": "comfy/ldm/hunyuan3d/vae.py:634:16 (QKVMultiheadCrossAttention.forward)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 741,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "qkv",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "attn_ch",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "QKVMultiheadAttention.forward",
+      "site": "comfy/ldm/hunyuan3d/vae.py:741:19 (QKVMultiheadAttention.forward)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 332,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "kv",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "split_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CrossAttention.forward",
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:332:16 (CrossAttention.forward)",
+      "source_path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+      "source_sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 402,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "qkv",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "split_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Attention.forward",
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:402:29 (Attention.forward)",
+      "source_path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+      "source_sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 191,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x[:, :, 1:1 + (x.shape[2] - 1) // self.ffactor_temporal * self.ffactor_temporal, :, :]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.ffactor_temporal * 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Encoder.forward",
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:191:23 (Encoder.forward)",
+      "source_path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+      "source_sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 283,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Decoder.forward",
+      "site": "comfy/ldm/hunyuan_video/vae_refiner.py:283:17 (Decoder.forward)",
+      "source_path": "comfy/ldm/hunyuan_video/vae_refiner.py",
+      "source_sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [],
+      "line": 836,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "context",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[v_context_dim, a_context_dim]",
+          "syntax_kind": "List"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "len(context.shape) - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "LTXAVModel._prepare_context",
+      "site": "comfy/ldm/lightricks/av_model.py:836:32 (LTXAVModel._prepare_context)",
+      "source_path": "comfy/ldm/lightricks/av_model.py",
+      "source_sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 29,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "tensor",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[split_point, tensor.shape[dim] - split_point]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "split2",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:29:12 (split2)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 302,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "sample[:, :, 1:, :, :]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "chunk_t",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Encoder.forward_orig",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:302:29 (Encoder.forward_orig)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 141,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.qkv(x)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[self.n_local_heads * self.head_dim, self.n_local_kv_heads * self.head_dim, self.n_local_kv_heads * self.head_dim]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "JointAttention.forward",
+      "site": "comfy/ldm/lumina/model.py:141:22 (JointAttention.forward)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 639,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x[:, :, 1:1 + (x.shape[2] - 1) // tc * tc, :, :]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "tc * 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Encoder.forward",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:639:23 (Encoder.forward)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 794,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Decoder.forward",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:794:17 (Decoder.forward)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 500,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "query_states",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lengths",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Qwen35VisionAttention.forward",
+      "site": "comfy/text_encoders/qwen35.py:500:20 (Qwen35VisionAttention.forward)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 501,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "key_states",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lengths",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Qwen35VisionAttention.forward",
+      "site": "comfy/text_encoders/qwen35.py:501:20 (Qwen35VisionAttention.forward)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 502,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "value_states",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lengths",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Qwen35VisionAttention.forward",
+      "site": "comfy/text_encoders/qwen35.py:502:20 (Qwen35VisionAttention.forward)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 235,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "tensor",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lengths.tolist()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "VisionAttention.forward",
+      "site": "comfy/text_encoders/qwen_vl.py:235:13 (VisionAttention.forward)",
+      "source_path": "comfy/text_encoders/qwen_vl.py",
+      "source_sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 622,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "tracks",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "[1, 2, 1]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "_patch_motion_single",
+      "site": "comfy_extras/nodes_wan.py:622:29 (_patch_motion_single)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.split"
+    }
+  ],
+  "static_definition": null
+}

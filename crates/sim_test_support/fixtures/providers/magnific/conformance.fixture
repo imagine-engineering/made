@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.magnific",
+  "source_sha256": "316eddd16e8b8f9862e1f7ac95a355717c24a4f8be72eee5f2a0b2844dc731de",
+  "aliases": [
+    "freepik"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0391",
+      "node_identifier": "MagnificImageRelightNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0392",
+      "node_identifier": "MagnificImageSkinEnhancerNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0393",
+      "node_identifier": "MagnificImageStyleTransferNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0394",
+      "node_identifier": "MagnificImageUpscalerCreativeNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0395",
+      "node_identifier": "MagnificImageUpscalerPreciseV2Node"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0034",
+      "method": "POST",
+      "path": "/proxy/freepik/v1/ai/image-relight",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0035",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-relight/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0036",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-relight/{initial_res.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0037",
+      "method": "POST",
+      "path": "/proxy/freepik/v1/ai/image-style-transfer",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0038",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-style-transfer/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0039",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-style-transfer/{initial_res.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0040",
+      "method": "POST",
+      "path": "/proxy/freepik/v1/ai/image-upscaler",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0041",
+      "method": "POST",
+      "path": "/proxy/freepik/v1/ai/image-upscaler-precision-v2",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0042",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-upscaler-precision-v2/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0043",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-upscaler-precision-v2/{initial_res.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0044",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-upscaler/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0045",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/image-upscaler/{initial_res.task_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0046",
+      "method": "POST",
+      "path": "/proxy/freepik/v1/ai/skin-enhancer/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0047",
+      "method": "POST",
+      "path": "/proxy/freepik/v1/ai/skin-enhancer/{endpoint}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0048",
+      "method": "GET",
+      "path": "/proxy/freepik/v1/ai/skin-enhancer/{initial_res.task_id}",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request/prepare/bounded transport; canonical optional MIME/upload lineage/media/guest gates explicit"
+}

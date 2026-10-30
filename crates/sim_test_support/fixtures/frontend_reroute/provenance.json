@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixture_id": "simui-frontend-reroute-migrations-1.48.2",
+  "source": {
+    "product": "ComfyUI Frontend",
+    "declared_version": "1.48.2",
+    "tree_sha256": "aeb208b759effdacf2ea3b1929f0a3e583201f0b7b3cb006f36f1007364b8ca3"
+  },
+  "normalization": "byte_exact_copy",
+  "tolerance": "exact",
+  "inputs": [
+    {
+      "path": "legacy/branching.json",
+      "sha256": "efa2ae26cc088b2171b27a491f1c535c763dbc1ce1d9e3fbb63957f70734fcea"
+    },
+    {
+      "path": "legacy/floating.json",
+      "sha256": "cf7188a9bb03bb2b3277b0f83623458a0857935de13a165e92f66cdcd7ec5dfa"
+    },
+    {
+      "path": "legacy/floating_branch.json",
+      "sha256": "366c144029498b9fc98bbe89d90f7364e3234088323344fa27fa5ffae8a05688"
+    },
+    {
+      "path": "legacy/single_connected.json",
+      "sha256": "e8c59bad53073cdb30f5b96723a62f430a38983caffed2dc52813f4891b9749a"
+    },
+    {
+      "path": "native/branching.json",
+      "sha256": "9a58f6cf92a615f4d913d287a71f548ca6522667e02595375b3c8eeb1d02997c"
+    },
+    {
+      "path": "native/floating.json",
+      "sha256": "467c090e7fbcfe0d7662847fb25e9c96558b1651446a65695a3bf212afc2618c"
+    },
+    {
+      "path": "native/floating_branch.json",
+      "sha256": "6db1ce2c82f9d8eb0dcca5c13ec02b569aeed1f5be752a57e91c01a28b4b4862"
+    },
+    {
+      "path": "native/single_connected.json",
+      "sha256": "2cf810bfaff097ad9d3c093d8861c402a07290bf012c9c5f3672e486fe91bbe5"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "artifact": "zed-native-film-feature-pyramid-v1",
+  "evidence_kind": "source-fingerprinted reduced exact composition oracle",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": [
+      "FeatureExtractor.forward",
+      "ImagePyramid.forward",
+      "SubTreeExtractor.forward"
+    ]
+  },
+  "dependency": {
+    "fixture": "../film-subtree/manifest.json",
+    "sha256": "702ed136018d91fa261a471a4117895aeddb4d48a4ded452265992d4b0577289"
+  },
+  "production_contract": {
+    "image_pyramid_levels": 7,
+    "sublevels": 4,
+    "base_channels": 64,
+    "output_channels": [64, 192, 448, 960, 960, 960, 960],
+    "composition": "current subtree level zero followed by prior subtree diagonal levels one through three along channel dimension",
+    "release": "drop a sub-pyramid immediately after its final diagonal consumer"
+  },
+  "reduced_oracle": {
+    "image_pyramid_levels": 4,
+    "sublevels": 3,
+    "tensor_shape": [1, 1, 1, 1],
+    "subtree_tags": "10 * image_pyramid_index + subtree_level",
+    "expected_outputs": [
+      [0.0],
+      [10.0, 1.0],
+      [20.0, 11.0, 2.0],
+      [30.0, 21.0, 12.0]
+    ],
+    "level_zero_aliases_source": true,
+    "concatenated_levels_use_fresh_storage": true,
+    "source_tensors_are_immutable": true,
+    "pre_cancelled_result": "cancelled with no output",
+    "one_byte_backend_capacity_result": "typed execution failure with zero scratch residue"
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "production_dense_weight_numeric_parity": false,
+    "flow_estimator_execution": false,
+    "feature_warp_execution": false,
+    "fusion_execution": false,
+    "codec_or_container_execution": false,
+    "handle_or_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

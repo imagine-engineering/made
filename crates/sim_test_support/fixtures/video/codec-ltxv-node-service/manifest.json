@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "truth_mode": "synthetic-ltxv-node-service-injection",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d"
+  },
+  "prerequisites": {
+    "codec_ltxv_thread_service_manifest_sha256": "d555cfc0b1b7472cee1cef4a50cd1ab79ec99a40393781b3f90cfa0d06f83ed9"
+  },
+  "contract": {
+    "checked_configuration_identity": true,
+    "send_sync_service_port": true,
+    "canonical_image_request_and_result": true,
+    "caller_stream_scratch_and_cancellation_preserved": true,
+    "native_node_services_optional_injection": true,
+    "execution_engine_exact_proxy_propagation": true,
+    "native_image_executor_exact_proxy_propagation": true,
+    "configuration_identity_partitions_cache": true,
+    "absent_service_is_typed_unavailable": true,
+    "runtime_errors_are_exhaustively_mapped": true
+  },
+  "claims": {
+    "actual_dlmopen_bind_or_codec_admission_executed": false,
+    "installed_or_licensed_ffmpeg_package": false,
+    "valid_h264_mp4_numeric_oracle": false,
+    "codec_package_discovery_or_provisioning": false,
+    "worker_startup_or_restart_wiring": false,
+    "ltxv_preprocess_node_implemented": false,
+    "general_video_media_or_effect_execution": false,
+    "stored_payload_cache_entry_persistence_or_publication": false
+  }
+}

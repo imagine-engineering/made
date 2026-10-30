@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "fixture_id": "cogvideox-inpaint-sim-model-0069",
+  "feature_id": "COMFY-MODEL-0069",
+  "source_symbol": "CogVideoX_Inpaint",
+  "source_ordinal": 89,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/cogvideo/model.py",
+      "sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0"
+    }
+  ],
+  "source_projection": "source_symbol=CogVideoX_Inpaint\nsource_ordinal=89\ninherits=CogVideoX_T2V\nunet_config.image_model=cogvideox\nunet_config.in_channels=48\nsampling_settings.linear_start=0.00085\nsampling_settings.linear_end=0.012\nsampling_settings.beta_schedule=linear\nsampling_settings.zsnr=true\nlatent_format=CogVideoX\nlatent_variant=CogVideoX1_5 when num_attention_heads>=48\nmemory_usage_factor=2.0\nsupported_inference_dtypes=bf16,f16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.CogVideoX(image_to_video=true)\npatch_size_t=rank2 patch projection -> 2\npatch_size_t_defaults=sample_height:96,sample_width:170,sample_frames:81\nclip_tokenizer=sim.text_encoders.cogvideo.CogVideoXT5Tokenizer\nclip_model=sim.text_encoders.sd3_clip.T5XXLModel\n",
+  "source_projection_sha256": "40009f07ead0b4e05a7df803cc9c695e589b214331ae1e440d9061a214a69f64",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

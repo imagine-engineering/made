@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/cuda/ffi-contracts-v1.schema.json",
+  "title": "Zed NVIDIA CUDA native library contracts v1",
+  "$comment": "The runtime additionally enforces exact target filenames, reviewed ABI symbols, sorted unique identities and symbols, compiled policy and kernel digests, and signed package coverage before constructing NativeFfiRegistry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "backend", "abi_floor", "target", "abi_manifest_sha256", "package_policy_sha256", "libraries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "backend": { "const": "cuda" },
+    "abi_floor": { "const": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312" },
+    "target": { "enum": ["aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"] },
+    "abi_manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "package_policy_sha256": { "$ref": "#/$defs/sha256" },
+    "libraries": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "prefixItems": [
+        { "$ref": "#/$defs/cublaslt" },
+        { "$ref": "#/$defs/cudnn" },
+        { "$ref": "#/$defs/driver" },
+        { "$ref": "#/$defs/nvrtc" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "symbols": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
+    },
+    "cublaslt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "cublaslt" },
+        "filename": { "enum": ["cublasLt64_12.dll", "libcublasLt.so.12"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_cuda::loader" }
+      }
+    },
+    "cudnn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "cudnn" },
+        "filename": { "enum": ["cudnn64_9.dll", "libcudnn.so.9"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_cuda::loader" }
+      }
+    },
+    "driver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "driver" },
+        "filename": { "enum": ["libcuda.so.1", "nvcuda.dll"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_cuda::loader" }
+      }
+    },
+    "nvrtc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "nvrtc" },
+        "filename": { "enum": ["libnvrtc.so.12", "nvrtc64_122_0.dll"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_cuda::loader" }
+      }
+    }
+  }
+}

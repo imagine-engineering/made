@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "truth": "source-fingerprinted reduced exact equation",
+  "source": {
+    "snapshot": "ComfyUI 0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "comfy_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": [
+      "build_image_pyramid",
+      "SubTreeExtractor.forward"
+    ]
+  },
+  "case": {
+    "name": "4x4_to_2x2",
+    "input_shape_nchw": [1, 1, 4, 4],
+    "input_f32": [
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0,
+      9.0,
+      10.0,
+      11.0,
+      12.0,
+      13.0,
+      14.0,
+      15.0,
+      16.0
+    ],
+    "kernel": [2, 2],
+    "stride": [2, 2],
+    "padding": [0, 0],
+    "output_shape_nchw": [1, 1, 2, 2],
+    "output_f32": [3.5, 5.5, 11.5, 13.5],
+    "dtypes": ["F16", "BF16", "F32"],
+    "f32_accumulation": true,
+    "workspace_bytes": {
+      "decoded_input": 64,
+      "accumulated_output": 16,
+      "one_byte_short_failure": 79
+    }
+  },
+  "claim_limits": {
+    "licensed_checkpoint_included": false,
+    "upstream_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "film_checkpoint_execution": false,
+    "film_flow_or_fusion_execution": false,
+    "codec_execution": false,
+    "handle_or_cache_execution": false,
+    "output_effect_or_publication": false
+  }
+}

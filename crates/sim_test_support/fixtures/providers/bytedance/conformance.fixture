@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.bytedance",
+  "aliases": [
+    "byteplus",
+    "byteplus-seedance2",
+    "seedance"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0031",
+      "node_identifier": "ByteDance2FirstLastFrameNode",
+      "source_class": "ByteDance2FirstLastFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0032",
+      "node_identifier": "ByteDance2ReferenceNode",
+      "source_class": "ByteDance2ReferenceNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0033",
+      "node_identifier": "ByteDance2TextToVideoNode",
+      "source_class": "ByteDance2TextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0034",
+      "node_identifier": "ByteDanceCreateImageAsset",
+      "source_class": "ByteDanceCreateImageAsset"
+    },
+    {
+      "feature_id": "COMFY-NODE-0035",
+      "node_identifier": "ByteDanceCreateVideoAsset",
+      "source_class": "ByteDanceCreateVideoAsset"
+    },
+    {
+      "feature_id": "COMFY-NODE-0036",
+      "node_identifier": "ByteDanceFirstLastFrameNode",
+      "source_class": "ByteDanceFirstLastFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0037",
+      "node_identifier": "ByteDanceImageNode",
+      "source_class": "ByteDanceImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0038",
+      "node_identifier": "ByteDanceImageReferenceNode",
+      "source_class": "ByteDanceImageReferenceNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0039",
+      "node_identifier": "ByteDanceImageToVideoNode",
+      "source_class": "ByteDanceImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0040",
+      "node_identifier": "ByteDanceSeedAudio",
+      "source_class": "ByteDanceSeedAudioNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0041",
+      "node_identifier": "ByteDanceSeedNode",
+      "source_class": "ByteDanceSeedNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0042",
+      "node_identifier": "ByteDanceSeedreamNode",
+      "source_class": "ByteDanceSeedreamNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0043",
+      "node_identifier": "ByteDanceSeedreamNodeV2",
+      "source_class": "ByteDanceSeedreamNodeV2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0044",
+      "node_identifier": "ByteDanceTextToVideoNode",
+      "source_class": "ByteDanceTextToVideoNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0020",
+      "method": "POST",
+      "path": "/proxy/byteplus/api/v3/contents/generations/tasks",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0021",
+      "method": "POST",
+      "path": "/proxy/byteplus/api/v3/images/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0022",
+      "method": "POST",
+      "path": "/proxy/byteplus/api/v3/responses",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0023",
+      "method": "POST",
+      "path": "/proxy/byteplus/api/v3/tts/create",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0024",
+      "method": "GET",
+      "path": "/proxy/byteplus-seedance2/api/v3/contents/generations/tasks",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0155",
+      "method": "POST",
+      "path": "/proxy/seedance/assets",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0156",
+      "method": "GET",
+      "path": "/proxy/seedance/assets/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0157",
+      "method": "GET",
+      "path": "/proxy/seedance/assets/{asset_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0158",
+      "method": "POST",
+      "path": "/proxy/seedance/virtual-library/assets",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0159",
+      "method": "POST",
+      "path": "/proxy/seedance/visual-validate/sessions",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0160",
+      "method": "GET",
+      "path": "/proxy/seedance/visual-validate/sessions/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0161",
+      "method": "GET",
+      "path": "/proxy/seedance/visual-validate/sessions/{session.session_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0219",
+      "method": "GET",
+      "path": "/proxy/byteplus/api/v3/contents/generations/tasks/{initial_response.id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0220",
+      "method": "GET",
+      "path": "/proxy/byteplus-seedance2/api/v3/contents/generations/tasks/{initial_response.id}",
+      "disposition": "executable"
+    }
+  ],
+  "source_sha256": {
+    "sim_api_nodes/nodes_bytedance.py": "16dbad871ceef57796ee77794da976fa6e95ea03fb436b577b1d31dfede52247",
+    "sim_api_nodes/nodes_bytedance_llm.py": "dc6b3e23d101ac5b384cb9c5b445eead54faacff95834082f1a8ab95b23d9220",
+    "sim_api_nodes/apis/bytedance.py": "54979b66e0947cd314e2db92b3a24014a4ed69fee72d3660e74c85dc8fe41775",
+    "sim_api_nodes/apis/bytedance_llm.py": "3c8ce2f2cfd181f7d0da420cd39c4f932120d3a64ba5af9b3ca6b5698f93587e",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+  },
+  "scope": "source requests and bounded transport; canonical media preparation, asset/auth UI orchestration and compiled guest integration pending"
+}

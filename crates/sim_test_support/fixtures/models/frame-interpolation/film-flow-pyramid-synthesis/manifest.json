@@ -1,0 +1,49 @@
+{
+  "artifact": "zed-native-film-flow-pyramid-synthesis-v1",
+  "evidence_kind": "source-fingerprinted analytic exact arithmetic oracle",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbol": "flow_pyramid_synthesis"
+  },
+  "dependency": {
+    "fixture": "../film-feature-pyramid/manifest.json",
+    "sha256": "a5894cd124c6a63caaa87f845d8df7845ba8f8035707c3cf64a33d1721e88eed"
+  },
+  "contract": {
+    "input_order": "fine-to-coarse residual flows",
+    "initial_flow": "alias the coarsest residual",
+    "step": "bilinear resize to the next residual extent, multiply by two, then add the residual",
+    "output_order": "fine-to-coarse accumulated flows",
+    "interpolation": {
+      "mode": "bilinear",
+      "align_corners": false,
+      "antialias": false,
+      "size_is_explicit": true
+    }
+  },
+  "analytic_oracle": {
+    "residual_shapes": [[1, 2, 4, 4], [1, 2, 2, 2], [1, 2, 1, 1]],
+    "constant_residual_values": [100.0, 10.0, 1.0],
+    "expected_accumulated_values": [124.0, 12.0, 1.0],
+    "coarsest_output_aliases_source": true,
+    "finer_outputs_use_fresh_storage": true,
+    "source_residuals_are_immutable": true,
+    "pre_cancelled_result": "cancelled with zero scratch residue"
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "flow_predictor_execution": false,
+    "feature_warp_execution": false,
+    "fusion_execution": false,
+    "codec_or_container_execution": false,
+    "handle_or_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

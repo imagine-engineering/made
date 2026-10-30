@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "task_id": "sim-parity-native-nodes-utilities-sim-node-0610",
+  "feature_id": "COMFY-NODE-0610",
+  "class_type": "SeedNode",
+  "source": {
+    "path": "sim_extras/nodes_seed.py",
+    "lines": [7, 23],
+    "sha256": "f1566b448ca9e4b4a1cbd15767301635905cf36a44a17f586c18b848e23e5932",
+    "symbol_sha256": "19f9b22945bb152ff5066195067f1b6b4c006589f26c7533fad905044ac3b7fa"
+  },
+  "schema": {
+    "display_name": "Seed",
+    "category": "utilities",
+    "search_aliases": ["seed", "random"],
+    "input": {
+      "name": "seed",
+      "type": "INT",
+      "minimum": 0,
+      "maximum": 9223372036854775807,
+      "control_after_generate": "fixed",
+      "cardinality": "scalar"
+    },
+    "output": {
+      "display_name": "seed",
+      "type": "INT",
+      "cardinality": "scalar"
+    }
+  },
+  "behavior": {
+    "operation": "identity",
+    "boundaries": [0, 9223372036854775807],
+    "cache": "input_identity",
+    "effects": "none",
+    "rng_consumption": "none",
+    "cancellation": "execution_interrupted before output"
+  },
+  "persistence": {
+    "node": {
+      "class_type": "SeedNode",
+      "inputs": { "seed": 81985529216486895 },
+      "unknown_data": { "source_extension": "nodes_seed", "preserve": true }
+    },
+    "recovery": "restore the exact integer and execute a fresh attempt without RNG advancement"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.sonilo",
+  "source_sha256": "0fedcb4659918bc385f511e1b04b202d1f50f578b95f7e5df93d2700836be727",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0626",
+      "node_identifier": "SoniloTextToMusic"
+    },
+    {
+      "feature_id": "COMFY-NODE-0627",
+      "node_identifier": "SoniloVideoToMusic"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0162",
+      "method": "POST",
+      "path": "/proxy/sonilo/t2m/generate",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0163",
+      "method": "POST",
+      "path": "/proxy/sonilo/v2m/generate",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "Source request and NDJSON transport; canonical form, scalar, base64, clock, video preparation, audio allocation and guest binding acceptance pending"
+}

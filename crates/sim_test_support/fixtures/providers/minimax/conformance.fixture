@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.minimax",
+  "source_sha256": "33cbc7389f0c5c0f79431ed677b7aa750d4204ab47b9f73549d7d168cddb8a3c",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0415",
+      "node_identifier": "MinimaxHailuoVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0416",
+      "node_identifier": "MinimaxImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0417",
+      "node_identifier": "MinimaxTextToVideoNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0117",
+      "method": "GET",
+      "path": "/proxy/minimax/files/retrieve",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0118",
+      "method": "GET",
+      "path": "/proxy/minimax/query/video_generation",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0119",
+      "method": "POST",
+      "path": "/proxy/minimax/video_generation",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending"
+}

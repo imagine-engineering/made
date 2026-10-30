@@ -1,0 +1,375 @@
+{
+  "provenance": "Actual pinned NestedTensor, LatentAdd and reshape/repeat helpers with PyTorch CPU tensors, including nested broadcasting and source failures.",
+  "source_sha256": {
+    "sim/nested_tensor.py": "fa663325d09ec898c1bd05506a301fb1dd0c7d71580a57c2db87d843b7e49373",
+    "sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+    "sim_extras/nodes_latent.py": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961"
+  },
+  "pytorch_version": "2.7.1",
+  "cases": [
+    {
+      "first_nested": true,
+      "second_nested": true,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "second_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "outputs": [
+        {
+          "shape": [
+            1,
+            2,
+            1,
+            1,
+            4
+          ],
+          "values": [
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            3,
+            4
+          ],
+          "values": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ]
+        }
+      ]
+    },
+    {
+      "first_nested": true,
+      "second_nested": true,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        2,
+        2,
+        1,
+        1,
+        4
+      ],
+      "second_audio_shape": [
+        2,
+        3,
+        4
+      ],
+      "error": "AttributeError",
+      "message": "'NestedTensor' object has no attribute 'narrow'"
+    },
+    {
+      "first_nested": true,
+      "second_nested": true,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        1,
+        2,
+        1,
+        1,
+        2
+      ],
+      "second_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "error": "AttributeError",
+      "message": "'NestedTensor' object has no attribute 'reshape'"
+    },
+    {
+      "first_nested": true,
+      "second_nested": true,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "second_audio_shape": [
+        1,
+        1,
+        4
+      ],
+      "outputs": [
+        {
+          "shape": [
+            1,
+            2,
+            1,
+            1,
+            4
+          ],
+          "values": [
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            3,
+            4
+          ],
+          "values": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ]
+        }
+      ]
+    },
+    {
+      "first_nested": false,
+      "second_nested": true,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "second_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "error": "TypeError",
+      "message": "unsupported operand type(s) for +: 'Tensor' and 'NestedTensor'"
+    },
+    {
+      "first_nested": true,
+      "second_nested": false,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        1,
+        1,
+        1,
+        1,
+        4
+      ],
+      "second_audio_shape": null,
+      "outputs": [
+        {
+          "shape": [
+            1,
+            2,
+            1,
+            1,
+            4
+          ],
+          "values": [
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3,
+            4
+          ],
+          "values": [
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0
+          ]
+        }
+      ]
+    },
+    {
+      "first_nested": true,
+      "second_nested": false,
+      "first_shape": [
+        1,
+        2,
+        1,
+        1,
+        4
+      ],
+      "first_audio_shape": [
+        1,
+        3,
+        4
+      ],
+      "second_shape": [
+        1,
+        1,
+        1,
+        4
+      ],
+      "second_audio_shape": null,
+      "outputs": [
+        {
+          "shape": [
+            1,
+            2,
+            1,
+            1,
+            4
+          ],
+          "values": [
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0,
+            7.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            3,
+            4
+          ],
+          "values": [
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0
+          ]
+        }
+      ]
+    }
+  ]
+}

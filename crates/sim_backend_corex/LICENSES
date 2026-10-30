@@ -1,0 +1,20 @@
+Zed Iluvatar CoreX adapter metadata
+===================================
+
+The Rust adapter, provenance-blocked ABI manifest, packaging scripts, and Nix
+metadata are part of Zed and are licensed under GPL-3.0-or-later.
+
+Iluvatar CoreX IXUCA, IXRT, IXBLAS, drivers, firmware, headers, runtime
+libraries, and kernels are separately installed vendor software. They are not
+redistributed by this package. A release may not bundle any vendor payload
+without a separately recorded licensing approval.
+
+The primary-source audit used the official Apache-2.0 IxRT OSS repository at
+tag v4.3.0, commit 0528f3ae5da5dd2255f21966b82bedcb2de65582. That tree's
+cmake/FindIxrt.cmake requires headers from a separately downloaded SDK, while
+its ixrt/include entry contains only the text "../include". It therefore does
+not provide the proprietary IXRT 0.8 or IXBLAS declarations required to review
+symbols, signatures, layouts, or normalized header digests. Zed deliberately
+keeps this adapter unbound until that evidence is lawfully supplied and
+reviewed. Iluvatar, CoreX, IXUCA, IXRT, and IXBLAS are marks of their respective
+owner; no endorsement is implied.

@@ -1,0 +1,53 @@
+schema=zed-sim-npu-reviewed-bindings-v1
+abi_floor=CANN-8.0.RC3-AscendCL
+source=https://www.hiascend.com/doc_center/source/zh/canncommercial/80RC3/apiref/appdevgapi/CANN%208.0.RC3%20%E5%BA%94%E7%94%A8%E5%BC%80%E5%8F%91%E6%8E%A5%E5%8F%A3%2001.pdf
+source_sha256=91d8bd8a346bda371c8175066ac5155fb27ccfe4ba63091730ec29dcd96dd091
+published=2025-04-08
+reviewed_pages=101,123-127,131,146,194-196,1252-1253,1291-1292,1309-1310,1339-1340
+
+[runtime/include/acl/acl.h]
+aclError aclInit(const char *configPath)
+aclError aclFinalize(void)
+const char *aclGetRecentErrMsg(void)
+
+[runtime/include/acl/acl_rt.h]
+typedef void *aclrtContext
+typedef void *aclrtStream
+typedef void *aclrtEvent
+aclError aclrtGetVersion(int32_t *majorVersion, int32_t *minorVersion, int32_t *patchVersion)
+aclError aclrtGetDeviceCount(uint32_t *count)
+aclError aclrtSetDevice(int32_t deviceId)
+aclError aclrtResetDevice(int32_t deviceId)
+aclError aclrtCreateContext(aclrtContext *context, int32_t deviceId)
+aclError aclrtDestroyContext(aclrtContext context)
+aclError aclrtSetCurrentContext(aclrtContext context)
+aclError aclrtCreateStream(aclrtStream *stream)
+aclError aclrtDestroyStream(aclrtStream stream)
+aclError aclrtSynchronizeStream(aclrtStream stream)
+aclError aclrtCreateEvent(aclrtEvent *event)
+aclError aclrtDestroyEvent(aclrtEvent event)
+aclError aclrtRecordEvent(aclrtEvent event, aclrtStream stream)
+aclError aclrtSynchronizeEvent(aclrtEvent event)
+aclError aclrtMalloc(void **devPtr, size_t size, aclrtMemMallocPolicy policy)
+aclError aclrtFree(void *devPtr)
+aclError aclrtMemcpy(void *dst, size_t destMax, const void *src, size_t count, aclrtMemcpyKind kind)
+aclError aclrtMemcpyAsync(void *dst, size_t destMax, const void *src, size_t count, aclrtMemcpyKind kind, aclrtStream stream)
+aclError aclrtGetMemInfo(aclrtMemAttr attr, size_t *free, size_t *total)
+const char *aclrtGetSocName(void)
+aclrtMemMallocPolicy=ACL_MEM_MALLOC_HUGE_FIRST:0,ACL_MEM_MALLOC_HUGE_ONLY:1,ACL_MEM_MALLOC_NORMAL_ONLY:2,ACL_MEM_MALLOC_HUGE_FIRST_P2P:3,ACL_MEM_MALLOC_HUGE_ONLY_P2P:4,ACL_MEM_MALLOC_NORMAL_ONLY_P2P:5,ACL_MEM_TYPE_LOW_BAND_WIDTH:256,ACL_MEM_TYPE_HIGH_BAND_WIDTH:4096
+aclrtMemcpyKind=ACL_MEMCPY_HOST_TO_HOST:0,ACL_MEMCPY_HOST_TO_DEVICE:1,ACL_MEMCPY_DEVICE_TO_HOST:2,ACL_MEMCPY_DEVICE_TO_DEVICE:3
+aclrtMemAttr=ACL_DDR_MEM:0,ACL_HBM_MEM:1,ACL_DDR_MEM_HUGE:2,ACL_DDR_MEM_NORMAL:3,ACL_HBM_MEM_HUGE:4,ACL_HBM_MEM_NORMAL:5,ACL_DDR_MEM_P2P_HUGE:6,ACL_DDR_MEM_P2P_NORMAL:7,ACL_HBM_MEM_P2P_HUGE:8,ACL_HBM_MEM_P2P_NORMAL:9
+
+[runtime/include/acl/acl_base.h]
+typedef void aclTensorDesc
+typedef void aclDataBuffer
+aclDataType=ACL_DT_UNDEFINED:-1,ACL_FLOAT:0,ACL_FLOAT16:1,ACL_INT8:2,ACL_INT32:3,ACL_UINT8:4,ACL_INT16:6,ACL_UINT16:7,ACL_UINT32:8,ACL_INT64:9,ACL_UINT64:10,ACL_DOUBLE:11,ACL_BOOL:12,ACL_STRING:13,ACL_COMPLEX64:16,ACL_COMPLEX128:17,ACL_BF16:27,ACL_INT4:29,ACL_UINT1:30,ACL_COMPLEX32:33
+aclFormat=ACL_FORMAT_UNDEFINED:-1,ACL_FORMAT_NCHW:0,ACL_FORMAT_NHWC:1,ACL_FORMAT_ND:2,ACL_FORMAT_NC1HWC0:3,ACL_FORMAT_FRACTAL_Z:4,ACL_FORMAT_NC1HWC0_C04:12,ACL_FORMAT_HWCN:16,ACL_FORMAT_NDHWC:27,ACL_FORMAT_FRACTAL_NZ:29,ACL_FORMAT_NCDHW:30,ACL_FORMAT_NDC1HWC0:32,ACL_FRACTAL_Z_3D:33,ACL_FORMAT_NC:35,ACL_FORMAT_NCL:47
+aclTensorDesc *aclCreateTensorDesc(aclDataType dataType, int numDims, const int64_t *dims, aclFormat format)
+void aclDestroyTensorDesc(const aclTensorDesc *desc)
+aclDataBuffer *aclCreateDataBuffer(void *data, size_t size)
+aclError aclDestroyDataBuffer(const aclDataBuffer *dataBuffer)
+
+[runtime/include/acl/acl_op_compiler.h]
+typedef void aclopAttr
+aclError aclopExecuteV2(const char *opType, int numInputs, aclTensorDesc *inputDesc[], aclDataBuffer *inputs[], int numOutputs, aclTensorDesc *outputDesc[], aclDataBuffer *outputs[], aclopAttr *attr, aclrtStream stream)

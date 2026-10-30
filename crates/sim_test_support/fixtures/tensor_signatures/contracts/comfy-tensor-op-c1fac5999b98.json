@@ -1,0 +1,1338 @@
+{
+  "canonical_target": "torch.Tensor.sub",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/user_manager.py:110:19 (UserManager.add_user)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "blueprints/.glsl/update_blueprints.py:36:12 (sanitize_filename)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/diffusers_convert.py:170:30 (convert_text_enc_state_dict_v20)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/diffusers_convert.py:176:26 (convert_text_enc_state_dict_v20)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/diffusers_convert.py:182:26 (convert_text_enc_state_dict_v20)"
+    },
+    {
+      "expectation": {
+        "attribute": "div",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/utils.py:227:15 (rand_log_logistic)"
+    },
+    {
+      "expectation": {
+        "attribute": "div",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/utils.py:228:15 (rand_log_logistic)"
+    },
+    {
+      "expectation": {
+        "attribute": "mul",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/taesd/taesd.py:125:16 (TAESD.unscale_latents)"
+    },
+    {
+      "expectation": {
+        "attribute": "mul",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/taesd/taesd.py:129:20 (TAESD.decode)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:244:16 (expand_abbreviations_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:266:16 (expand_symbols_multilingual)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:306:21 (_expand_currency)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:344:16 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:346:16 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:348:16 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:349:16 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:350:16 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:354:12 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:355:12 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:356:12 (expand_numbers_multilingual)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/text_encoders/ace_text_cleaners.py:365:12 (collapse_whitespace)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy_api_nodes/nodes_bytedance.py:270:12 (_rewrite_asset_refs)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_api_nodes/nodes_kling.py:272:14 (normalize_omni_prompt_references)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy_api_nodes/nodes_kling.py:273:12 (normalize_omni_prompt_references)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_api_nodes/util/request_logger.py:31:17 (_sanitize_filename_component)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_images.py:558:31 (SaveSVGNode.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_string.py:406:18 (RegexReplace.execute)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "app/user_manager.py:110:19 (UserManager.add_user)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "blueprints/.glsl/update_blueprints.py:36:12 (sanitize_filename)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/diffusers_convert.py:170:30 (convert_text_enc_state_dict_v20)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/diffusers_convert.py:176:26 (convert_text_enc_state_dict_v20)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/diffusers_convert.py:182:26 (convert_text_enc_state_dict_v20)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/utils.py:227:15 (rand_log_logistic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/utils.py:228:15 (rand_log_logistic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:125:16 (TAESD.unscale_latents)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/taesd/taesd.py:129:20 (TAESD.decode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:244:16 (expand_abbreviations_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:266:16 (expand_symbols_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:306:21 (_expand_currency)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:344:16 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:346:16 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:348:16 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:349:16 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:350:16 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:354:12 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:355:12 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:356:12 (expand_numbers_multilingual)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace_text_cleaners.py:365:12 (collapse_whitespace)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_api_nodes/nodes_bytedance.py:270:12 (_rewrite_asset_refs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_api_nodes/nodes_kling.py:272:14 (normalize_omni_prompt_references)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_api_nodes/nodes_kling.py:273:12 (normalize_omni_prompt_references)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_api_nodes/util/request_logger.py:31:17 (_sanitize_filename_component)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:558:31 (SaveSVGNode.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_string.py:406:18 (RegexReplace.execute)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-c1fac5999b98-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "count",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "flags",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-C1FAC5999B98",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "8e201767ea7538ffff41eb66d21ca385732a0d20992d37a67a76160246a828df",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "app/user_manager.py",
+        "sha256": "526b1657782d6197e752492271da79728d8041103f09d9b9ec9d169d56735001"
+      },
+      {
+        "path": "blueprints/.glsl/update_blueprints.py",
+        "sha256": "295ee85281d09daddc6189a2eab5d884fc8208845f9eff2576d87e6a55c1605e"
+      },
+      {
+        "path": "comfy/diffusers_convert.py",
+        "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"
+      },
+      {
+        "path": "comfy/k_diffusion/utils.py",
+        "sha256": "fc30630d8a0e4520b2e864c8f84deea3231c9b04d3f1404fec93fc425f629272"
+      },
+      {
+        "path": "comfy/taesd/taesd.py",
+        "sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc"
+      },
+      {
+        "path": "comfy/text_encoders/ace_text_cleaners.py",
+        "sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3"
+      },
+      {
+        "path": "comfy_api_nodes/nodes_bytedance.py",
+        "sha256": "16dbad871ceef57796ee77794da976fa6e95ea03fb436b577b1d31dfede52247"
+      },
+      {
+        "path": "comfy_api_nodes/nodes_kling.py",
+        "sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84"
+      },
+      {
+        "path": "comfy_api_nodes/util/request_logger.py",
+        "sha256": "e4096a81b072ad24d58af0286f895751c03522b73b4ac38c6017ce2ef7888115"
+      },
+      {
+        "path": "comfy_extras/nodes_images.py",
+        "sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448"
+      },
+      {
+        "path": "comfy_extras/nodes_string.py",
+        "sha256": "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.sub"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_18",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-c05fe0730305",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 110,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'[^a-zA-Z0-9-_]+'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "'-'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "name",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "UserManager.add_user",
+      "site": "app/user_manager.py:110:19 (UserManager.add_user)",
+      "source_path": "app/user_manager.py",
+      "source_sha256": "526b1657782d6197e752492271da79728d8041103f09d9b9ec9d169d56735001",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 36,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'[^\\\\w\\\\-]'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "'_'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "name",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "sanitize_filename",
+      "site": "blueprints/.glsl/update_blueprints.py:36:12 (sanitize_filename)",
+      "source_path": "blueprints/.glsl/update_blueprints.py",
+      "source_sha256": "295ee85281d09daddc6189a2eab5d884fc8208845f9eff2576d87e6a55c1605e",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 170,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "lambda m: protected[re.escape(m.group(0))]",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "k",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "convert_text_enc_state_dict_v20",
+      "site": "comfy/diffusers_convert.py:170:30 (convert_text_enc_state_dict_v20)",
+      "source_path": "comfy/diffusers_convert.py",
+      "source_sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54",
+      "status": "static-call-observed",
+      "target_syntax": "textenc_pattern.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 176,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "lambda m: protected[re.escape(m.group(0))]",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "k_pre",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "convert_text_enc_state_dict_v20",
+      "site": "comfy/diffusers_convert.py:176:26 (convert_text_enc_state_dict_v20)",
+      "source_path": "comfy/diffusers_convert.py",
+      "source_sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54",
+      "status": "static-call-observed",
+      "target_syntax": "textenc_pattern.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 182,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "lambda m: protected[re.escape(m.group(0))]",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "k_pre",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "convert_text_enc_state_dict_v20",
+      "site": "comfy/diffusers_convert.py:182:26 (convert_text_enc_state_dict_v20)",
+      "source_path": "comfy/diffusers_convert.py",
+      "source_sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54",
+      "status": "static-call-observed",
+      "target_syntax": "textenc_pattern.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "attribute": "div",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 227,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "loc",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "rand_log_logistic",
+      "site": "comfy/k_diffusion/utils.py:227:15 (rand_log_logistic)",
+      "source_path": "comfy/k_diffusion/utils.py",
+      "source_sha256": "fc30630d8a0e4520b2e864c8f84deea3231c9b04d3f1404fec93fc425f629272",
+      "status": "static-call-observed",
+      "target_syntax": "min_value.log().sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "attribute": "div",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 228,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "loc",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "rand_log_logistic",
+      "site": "comfy/k_diffusion/utils.py:228:15 (rand_log_logistic)",
+      "source_path": "comfy/k_diffusion/utils.py",
+      "source_sha256": "fc30630d8a0e4520b2e864c8f84deea3231c9b04d3f1404fec93fc425f629272",
+      "status": "static-call-observed",
+      "target_syntax": "max_value.log().sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "attribute": "mul",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 125,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "TAESD.latent_shift",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "TAESD.unscale_latents",
+      "site": "comfy/taesd/taesd.py:125:16 (TAESD.unscale_latents)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "x.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "attribute": "mul",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 129,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.5",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TAESD.decode",
+      "site": "comfy/taesd/taesd.py:129:20 (TAESD.decode)",
+      "source_path": "comfy/taesd/taesd.py",
+      "source_sha256": "8036c118d29d2e0265a209bd3ca88c1ba5157ce61debf78fec2b8ccf4f8ff3bc",
+      "status": "static-call-observed",
+      "target_syntax": "x_sample.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 244,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "regex",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "replacement",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_abbreviations_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:244:16 (expand_abbreviations_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 266,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "regex",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "replacement",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_symbols_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:266:16 (expand_symbols_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 306,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'[^\\\\d.]'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "''",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "m.group(0).replace(',', '.')",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_expand_currency",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:306:21 (_expand_currency)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 344,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_comma_number_re",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "_remove_commas",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:344:16 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 346,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_dot_number_re",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "_remove_dots",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:346:16 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 348,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_currency_re['GBP']",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda m: _expand_currency(m, lang, 'GBP')",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:348:16 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 349,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_currency_re['USD']",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda m: _expand_currency(m, lang, 'USD')",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:349:16 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 350,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_currency_re['EUR']",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda m: _expand_currency(m, lang, 'EUR')",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:350:16 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 354,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_decimal_number_re",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda m: _expand_decimal_point(m, lang)",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:354:12 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 355,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_ordinal_re[lang]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda m: _expand_ordinal(m, lang)",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:355:12 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 356,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_number_re",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda m: _expand_number(m, lang)",
+          "syntax_kind": "Lambda"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "expand_numbers_multilingual",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:356:12 (expand_numbers_multilingual)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 365,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_whitespace_re",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "' '",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "text",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "collapse_whitespace",
+      "site": "comfy/text_encoders/ace_text_cleaners.py:365:12 (collapse_whitespace)",
+      "source_path": "comfy/text_encoders/ace_text_cleaners.py",
+      "source_sha256": "798e1d7d2e29a0a98a1d0bac53a058d5c0c90346f660b3d1aee0622ade85a9c3",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 270,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "_sub",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "prompt",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_rewrite_asset_refs",
+      "site": "comfy_api_nodes/nodes_bytedance.py:270:12 (_rewrite_asset_refs)",
+      "source_path": "comfy_api_nodes/nodes_bytedance.py",
+      "source_sha256": "16dbad871ceef57796ee77794da976fa6e95ea03fb436b577b1d31dfede52247",
+      "status": "static-call-observed",
+      "target_syntax": "_ASSET_REF_RE.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 272,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'(?<!\\\\w)@image(?P<idx>\\\\d*)(?!\\\\w)'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "_image_repl",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "prompt",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "normalize_omni_prompt_references",
+      "site": "comfy_api_nodes/nodes_kling.py:272:14 (normalize_omni_prompt_references)",
+      "source_path": "comfy_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 273,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'(?<!\\\\w)@video(?P<idx>\\\\d*)(?!\\\\w)'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "_video_repl",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "prompt",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "normalize_omni_prompt_references",
+      "site": "comfy_api_nodes/nodes_kling.py:273:12 (normalize_omni_prompt_references)",
+      "source_path": "comfy_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 31,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'[^A-Za-z0-9._-]+'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "'_'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "name",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_sanitize_filename_component",
+      "site": "comfy_api_nodes/util/request_logger.py:31:17 (_sanitize_filename_component)",
+      "source_path": "comfy_api_nodes/util/request_logger.py",
+      "source_sha256": "e4096a81b072ad24d58af0286f895751c03522b73b4ac38c6017ce2ef7888115",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "flags",
+          "syntax": "re.UNICODE",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 558,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "'(<svg[^>]*>)'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "replacement",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "svg_content",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SaveSVGNode.execute",
+      "site": "comfy_extras/nodes_images.py:558:31 (SaveSVGNode.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "count",
+          "syntax": "count",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "flags",
+          "syntax": "flags",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 406,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "regex_pattern",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "replace",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "string",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "RegexReplace.execute",
+      "site": "comfy_extras/nodes_string.py:406:18 (RegexReplace.execute)",
+      "source_path": "comfy_extras/nodes_string.py",
+      "source_sha256": "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1",
+      "status": "static-call-observed",
+      "target_syntax": "re.sub"
+    }
+  ],
+  "static_definition": null
+}

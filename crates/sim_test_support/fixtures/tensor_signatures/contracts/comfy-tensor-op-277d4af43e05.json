@@ -1,0 +1,825 @@
+{
+  "canonical_target": "torch.mm",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/controlnet.py:386:65 (ControlLoraOps.Linear.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/controlnet.py:428:65 (ControlLoraOps.Conv2d.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:87:22 (VectorQuantize._updateEMA)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ops.py:993:22 (QuantLinearFunc.backward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ops.py:999:27 (QuantLinearFunc.backward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/glora.py:100:21 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/glora.py:101:23 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/glora.py:102:25 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/glora.py:122:33 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/glora.py:123:25 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/glora.py:125:30 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:263:18 (LoHaAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/loha.py:271:18 (LoHaAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/lokr.py:299:18 (LoKrAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/weight_adapter/lokr.py:315:22 (LoKrAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/lora.py:260:17 (LoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/weight_adapter/lora.py:268:25 (LoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_sag.py:101:16 (gaussian_blur_2d)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/controlnet.py:386:65 (ControlLoraOps.Linear.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/controlnet.py:428:65 (ControlLoraOps.Conv2d.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/stage_a.py:87:22 (VectorQuantize._updateEMA)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ops.py:993:22 (QuantLinearFunc.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ops.py:999:27 (QuantLinearFunc.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:100:21 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:101:23 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:102:25 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:122:33 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:123:25 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:125:30 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:263:18 (LoHaAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:271:18 (LoHaAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lokr.py:299:18 (LoKrAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lokr.py:315:22 (LoKrAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lora.py:260:17 (LoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lora.py:268:25 (LoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sag.py:101:16 (gaussian_blur_2d)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-277d4af43e05-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match batch broadcasting, contraction dimensions, transpose conventions, singular/degenerate cases, and result ranks.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-277D4AF43E05",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "822ea343f454a9ba8f560d83f4dc2472ef3e10bf59fdb010769ad163cc98f069",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/controlnet.py",
+        "sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/weight_adapter/glora.py",
+        "sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09"
+      },
+      {
+        "path": "comfy/weight_adapter/loha.py",
+        "sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5"
+      },
+      {
+        "path": "comfy/weight_adapter/lokr.py",
+        "sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4"
+      },
+      {
+        "path": "comfy/weight_adapter/lora.py",
+        "sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5"
+      },
+      {
+        "path": "comfy_extras/nodes_sag.py",
+        "sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.mm"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "linear_algebra_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-linear-algebra-comfy-tensor-op-061170cbb6f7",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 65,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 386,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.up.flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.down.flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "ControlLoraOps.Linear.forward",
+      "site": "comfy/controlnet.py:386:65 (ControlLoraOps.Linear.forward)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 65,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 428,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.up.flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.down.flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "ControlLoraOps.Conv2d.forward",
+      "site": "comfy/controlnet.py:428:65 (ControlLoraOps.Conv2d.forward)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 87,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "mask.t()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "z_e_x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "VectorQuantize._updateEMA",
+      "site": "comfy/ldm/cascade/stage_a.py:87:22 (VectorQuantize._updateEMA)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 993,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "grad_mm",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "weight_mm",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "QuantLinearFunc.backward",
+      "site": "comfy/ops.py:993:22 (QuantLinearFunc.backward)",
+      "source_path": "comfy/ops.py",
+      "source_sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 999,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "grad_mm.t()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "input_mm",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "QuantLinearFunc.backward",
+      "site": "comfy/ops.py:999:27 (QuantLinearFunc.backward)",
+      "source_path": "comfy/ops.py",
+      "source_sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 100,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "b2",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "b1",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:100:21 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 101,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.mm(weight.flatten(start_dim=1).to(dtype=intermediate_dtype), a2)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a1",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:101:23 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 102,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.flatten(start_dim=1).to(dtype=intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a2",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:102:25 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 122,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.mm(weight.to(dtype=intermediate_dtype), a1)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a2",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:122:33 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 123,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.to(dtype=intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "a1",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:123:25 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 125,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "b1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "b2",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:125:30 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 263,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w1a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w1b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoHaAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/loha.py:263:18 (LoHaAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 271,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoHaAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/loha.py:271:18 (LoHaAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 299,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w1_a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w1_b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoKrAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lokr.py:299:18 (LoKrAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lokr.py",
+      "source_sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 315,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2_a, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "comfy.model_management.cast_to_device(w2_b, weight.device, intermediate_dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoKrAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lokr.py:315:22 (LoKrAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lokr.py",
+      "source_sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 260,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "mat2.transpose(0, 1).flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "mat3.transpose(0, 1).flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lora.py:260:17 (LoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lora.py",
+      "source_sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 268,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "mat1.flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "mat2.flatten(start_dim=1)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lora.py:268:25 (LoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lora.py",
+      "source_sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 101,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x_kernel[:, None]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x_kernel[None, :]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "gaussian_blur_2d",
+      "site": "comfy_extras/nodes_sag.py:101:16 (gaussian_blur_2d)",
+      "source_path": "comfy_extras/nodes_sag.py",
+      "source_sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm"
+    }
+  ],
+  "static_definition": null
+}

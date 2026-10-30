@@ -1,0 +1,209 @@
+{
+  "fixture_id": "flux-sim-model-0077",
+  "feature_id": "COMFY-MODEL-0077",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale": [
+        128
+      ],
+      "model.diffusion_model.double_blocks.0.img_attn.proj.weight": [
+        2,
+        2
+      ],
+      "model.diffusion_model.single_blocks.0.linear2.weight": [
+        2,
+        2
+      ],
+      "model.diffusion_model.final_layer.linear.weight": [
+        2,
+        2
+      ],
+      "model.diffusion_model.img_in.weight": [
+        128,
+        64
+      ],
+      "model.diffusion_model.txt_in.weight": [
+        128,
+        2
+      ],
+      "model.diffusion_model.vector_in.in_layer.weight": [
+        128,
+        2
+      ],
+      "model.diffusion_model.guidance_in.in_layer.weight": [
+        128,
+        2
+      ]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0660660660660660660660660660660660660660660660660660660660660660",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.double_blocks.0.img_attn.proj.weight",
+      "shape": [
+        2,
+        2
+      ],
+      "values": [
+        1,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "key": "model.diffusion_model.single_blocks.0.linear2.weight",
+      "shape": [
+        2,
+        2
+      ],
+      "values": [
+        2,
+        0,
+        0,
+        0.5
+      ]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.weight",
+      "shape": [
+        2,
+        2
+      ],
+      "values": [
+        1,
+        1,
+        1,
+        -1
+      ]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [
+      1,
+      2
+    ],
+    "values": [
+      1,
+      2
+    ]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 56,
+  "expected_memory_bytes": 56,
+  "checkpoints": [
+    {
+      "name": "double_stream_projection",
+      "values": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "double_stream_activation",
+      "values": [
+        0.7310586,
+        1.7615942
+      ]
+    },
+    {
+      "name": "single_stream_projection",
+      "values": [
+        1.4621172,
+        0.8807971
+      ]
+    },
+    {
+      "name": "single_stream_normalization",
+      "values": [
+        0.9999941,
+        -0.9999941
+      ]
+    },
+    {
+      "name": "final_projection",
+      "values": [
+        0,
+        1.9999882
+      ]
+    },
+    {
+      "name": "flow_output",
+      "values": [
+        0,
+        0.96402675
+      ]
+    }
+  ],
+  "patches": [
+    {
+      "identifier": "flux-single-stream-delta",
+      "kind": "lora",
+      "scale": 1,
+      "targets": [
+        {
+          "key": "native.single_blocks.0.linear2.weight",
+          "expected_shape": [
+            2,
+            2
+          ],
+          "values": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {
+      "name": "double_stream_projection",
+      "values": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "double_stream_activation",
+      "values": [
+        0.7310586,
+        1.7615942
+      ]
+    },
+    {
+      "name": "single_stream_projection",
+      "values": [
+        2.1931758,
+        2.6423912
+      ]
+    },
+    {
+      "name": "single_stream_normalization",
+      "values": [
+        -0.9999901,
+        0.9999901
+      ]
+    },
+    {
+      "name": "final_projection",
+      "values": [
+        0,
+        -1.9999802
+      ]
+    },
+    {
+      "name": "flow_output",
+      "values": [
+        0,
+        -0.9640262
+      ]
+    }
+  ]
+}

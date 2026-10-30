@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Create and verify a detached archive signature in a private temporary GnuPG home."""
+import argparse
+import base64
+from contextlib import contextmanager
+import os
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+
+
+def expected_fingerprint():
+    fingerprint = os.environ["LINUX_SIGNING_KEY_FINGERPRINT"]
+    if not re.fullmatch(r"[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64}", fingerprint):
+        raise ValueError("LINUX_SIGNING_KEY_FINGERPRINT must be a full primary-key fingerprint")
+    return fingerprint.upper()
+
+
+@contextmanager
+def temporary_gpg():
+    with tempfile.TemporaryDirectory(prefix="copper-signing-") as temporary:
+        home = Path(temporary)
+        home.chmod(0o700)
+        environment = dict(os.environ, GNUPGHOME=str(home))
+        def gpg(*arguments, data=None):
+            result = subprocess.run(
+                ("gpg", "--batch", "--no-tty", *arguments), env=environment,
+                input=data, capture_output=True,
+            )
+            if result.returncode:
+                raise RuntimeError("GnuPG signing/verification failed; inspect key provisioning, passphrase, expiry and archive integrity (private diagnostics suppressed)")
+            return result.stdout
+        try:
+            yield gpg
+        finally:
+            result = subprocess.run(("gpgconf", "--homedir", str(home), "--kill", "gpg-agent"), capture_output=True)
+            if result.returncode:
+                raise RuntimeError("Could not stop the temporary signing agent")
+
+
+def verify_fingerprint(status, fingerprint):
+    rejected = {"REVKEYSIG", "EXPKEYSIG", "EXPSIG", "KEYEXPIRED", "KEYREVOKED", "BADSIG", "ERRSIG"}
+    records = [line.split() for line in status.splitlines() if line.startswith("[GNUPG:] ")]
+    if any(len(record) > 1 and record[1] in rejected for record in records):
+        raise ValueError("Archive signing key or signature is expired, revoked or invalid")
+    valid = [record for record in records if len(record) > 1 and record[1] == "VALIDSIG"]
+    if len(valid) != 1 or len(valid[0]) < 11 or valid[0][9] != "8" or fingerprint not in (valid[0][2], valid[0][-1]):
+        raise ValueError("Archive signature does not match the configured primary-key fingerprint")
+
+
+def verify(archive):
+    fingerprint = expected_fingerprint()
+    with temporary_gpg() as gpg:
+        gpg("--import", data=archive.with_name(archive.name + ".pub").read_bytes())
+        status = gpg("--status-fd", "1", "--verify", str(archive) + ".asc", str(archive)).decode()
+        verify_fingerprint(status, fingerprint)
+    print("Verified detached Linux archive signature against the approved primary key")
+
+
+def sign(archive):
+    fingerprint = expected_fingerprint()
+    with temporary_gpg() as gpg:
+        gpg("--import", data=base64.b64decode("".join(os.environ["LINUX_SIGNING_KEY"].split()), validate=True))
+        public_key = gpg("--armor", "--export", fingerprint)
+        if not public_key:
+            raise ValueError("Imported signing key does not match LINUX_SIGNING_KEY_FINGERPRINT")
+        signature = archive.with_name(archive.name + ".asc")
+        signature.unlink(missing_ok=True)
+        password = os.environ["LINUX_SIGNING_KEY_PASSWORD"]
+        if "\n" in password or "\r" in password:
+            raise ValueError("The signing passphrase cannot contain a newline")
+        gpg("--yes", "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--local-user", fingerprint,
+            "--digest-algo", "SHA256", "--armor", "--detach-sign", "--output", str(signature), str(archive),
+            data=(password + "\n").encode())
+        status = gpg("--status-fd", "1", "--verify", str(signature), str(archive)).decode()
+        verify_fingerprint(status, fingerprint)
+        archive.with_name(archive.name + ".pub").write_bytes(public_key)
+        print("Verified detached Linux archive signature; approved primary-key fingerprint matched")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("archive", type=Path)
+    parser.add_argument("--verify-only", action="store_true")
+    arguments = parser.parse_args()
+    (verify if arguments.verify_only else sign)(arguments.archive)

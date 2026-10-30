@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+workspace_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+python3 - "$workspace_root" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+
+
+BOUNDARY_CRATES = ("collaboration_domain", "collaboration_workflow", "nostr_compat")
+FORBIDDEN_PACKAGES = {
+    "gpui": {
+        "component",
+        "gpui",
+        "gpui_macros",
+        "ui",
+        "workspace",
+    },
+    "storage": {
+        "db",
+        "heed",
+        "libsqlite3-sys",
+        "redis",
+        "rocksdb",
+        "rusqlite",
+        "sea-orm",
+        "sea-orm-migration",
+        "sqlx",
+        "sqlx-core",
+    },
+    "transport": {
+        "async-tungstenite",
+        "axum",
+        "client",
+        "http_client",
+        "hyper",
+        "hyper-util",
+        "proto",
+        "reqwest",
+        "rpc",
+        "tokio-tungstenite",
+        "tonic",
+        "tungstenite",
+        "websocket",
+        "websocket-base",
+    },
+}
+
+
+def fail(message):
+    raise SystemExit(f"collaboration dependency boundary failed: {message}")
+
+
+def normal_edges(node):
+    for dependency in node.get("deps", []):
+        dependency_kinds = dependency.get("dep_kinds", [])
+        if any(item.get("kind") != "dev" for item in dependency_kinds):
+            yield dependency["pkg"]
+
+
+def dependency_closure(root_id, nodes):
+    pending = list(normal_edges(nodes[root_id]))
+    visited = set()
+    while pending:
+        package_id = pending.pop()
+        if package_id in visited:
+            continue
+        visited.add(package_id)
+        pending.extend(normal_edges(nodes[package_id]))
+    return visited
+
+
+root = pathlib.Path(sys.argv[1]).resolve()
+result = subprocess.run(
+    ["cargo", "metadata", "--locked", "--format-version=1"],
+    cwd=root,
+    check=False,
+    capture_output=True,
+    text=True,
+)
+if result.returncode != 0:
+    fail(f"cargo metadata exited {result.returncode}: {result.stderr.strip()}")
+
+metadata = json.loads(result.stdout)
+packages_by_name = {}
+packages_by_id = {}
+for package in metadata["packages"]:
+    packages_by_id[package["id"]] = package
+    if package["name"] in BOUNDARY_CRATES:
+        if package["name"] in packages_by_name:
+            fail(f"multiple packages named {package['name']}")
+        packages_by_name[package["name"]] = package
+
+nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
+for crate_name in BOUNDARY_CRATES:
+    package = packages_by_name.get(crate_name)
+    if package is None:
+        fail(f"workspace package {crate_name} is missing")
+
+    boundary = package.get("metadata", {}).get("collaboration-boundary")
+    if not isinstance(boundary, dict):
+        fail(f"{crate_name} has no package.metadata.collaboration-boundary table")
+    layer = boundary.get("layer")
+    if not isinstance(layer, str) or not layer:
+        fail(f"{crate_name} has no boundary layer")
+
+    capabilities = boundary.get("forbidden-capabilities")
+    if set(capabilities or []) != set(FORBIDDEN_PACKAGES):
+        fail(
+            f"{crate_name} must forbid exactly "
+            f"{', '.join(sorted(FORBIDDEN_PACKAGES))}"
+        )
+
+    allowed_direct = set(boundary.get("allowed-normal-dependencies") or [])
+    actual_direct = {
+        dependency["name"]
+        for dependency in package["dependencies"]
+        if dependency.get("kind") != "dev"
+    }
+    if actual_direct != allowed_direct:
+        unexpected = sorted(actual_direct - allowed_direct)
+        stale = sorted(allowed_direct - actual_direct)
+        fail(
+            f"{crate_name} direct dependency allowlist differs; "
+            f"unexpected={unexpected}, stale={stale}"
+        )
+
+    closure = dependency_closure(package["id"], nodes)
+    closure_names = {packages_by_id[package_id]["name"] for package_id in closure}
+    violations = {
+        capability: sorted(closure_names & forbidden)
+        for capability, forbidden in FORBIDDEN_PACKAGES.items()
+        if closure_names & forbidden
+    }
+    if violations:
+        fail(f"{crate_name} ({layer}) reaches forbidden packages: {violations}")
+
+print(
+    "Collaboration dependency boundary passed: "
+    "collaboration_domain=domain, collaboration_workflow=domain, "
+    "nostr_compat=protocol-compatibility; "
+    "direct allowlists and resolved non-dev graphs are clean"
+)
+PY

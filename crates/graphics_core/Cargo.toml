@@ -1,0 +1,41 @@
+[package]
+name = "graphics_core"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+rust-version = "1.98"
+
+[lib]
+path = "src/graphics_core.rs"
+
+[dependencies]
+graphite-editor.workspace = true
+graphite-resource.workspace = true
+serde.workspace = true
+graphite-math-parser.workspace = true
+graphite-math-nodes.workspace = true
+graphite-core-types.workspace = true
+graphite-graph-craft.workspace = true
+graphite-preprocessor.workspace = true
+graphite-interpreted-executor.workspace = true
+graphite-std.workspace = true
+graphite-glam.workspace = true
+graphite-graphic-nodes.workspace = true
+graphite-raster-types.workspace = true
+graphite-raster-nodes.workspace = true
+graphite-graphic-types.workspace = true
+graphite-rendering.workspace = true
+graphite-vector-types.workspace = true
+graphite-skrifa.workspace = true
+futures.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+png.workspace = true
+image.workspace = true
+sim_media.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+
+[package.metadata.graphite]
+source-revision = "28ed22824fae8828756f6f4163db62f3585f21e0"

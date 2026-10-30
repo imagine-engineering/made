@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 --matrix [--offline]" >&2
+}
+
+matrix=false
+offline=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --matrix) matrix=true ;;
+    --offline) offline=true ;;
+    *) usage; exit 2 ;;
+  esac
+  shift
+done
+
+if [[ "$matrix" != true ]]; then
+  usage
+  exit 2
+fi
+
+repository_root="$(git rev-parse --show-toplevel)"
+fixture="$repository_root/crates/project/test_data/rust_test_provider/physical-workspace/Cargo.toml"
+if [[ "$offline" == true ]]; then
+  export CARGO_NET_OFFLINE=true
+fi
+
+result_file="$(mktemp)"
+cleanup() {
+  rm -f -- "$result_file"
+}
+trap cleanup EXIT
+
+record() {
+  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$result_file"
+}
+
+run_target() {
+  python3 - "$@" <<'PYTHON'
+import os
+import signal
+import subprocess
+import sys
+
+try:
+    timeout = int(os.environ.get("ZED_RUST_TOOLS_TARGET_TIMEOUT_SECONDS", "1800"))
+except ValueError:
+    sys.exit("ZED_RUST_TOOLS_TARGET_TIMEOUT_SECONDS must be an integer")
+if not 1 <= timeout <= 3600:
+    sys.exit("ZED_RUST_TOOLS_TARGET_TIMEOUT_SECONDS must be between 1 and 3600")
+
+try:
+    process = subprocess.Popen(sys.argv[1:], start_new_session=os.name == "posix")
+except OSError as error:
+    sys.exit(f"could not start target command: {error}")
+
+try:
+    result = process.wait(timeout=timeout)
+except subprocess.TimeoutExpired:
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    else:
+        try:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(process.pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=5, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            process.kill()
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    print(f"target command timed out after {timeout}s", file=sys.stderr)
+    sys.exit(124)
+else:
+    sys.exit(result)
+PYTHON
+}
+
+run_fixture() {
+  # This function runs in an if condition, which disables Bash errexit inside it.
+  cargo test --manifest-path "$fixture" --offline --no-run --message-format=json >/dev/null || return 1
+  cargo test --manifest-path "$fixture" --offline tests::unit_passes -- --exact >/dev/null || return 1
+  cargo test --manifest-path "$fixture" --offline --test integration >/dev/null || return 1
+  cargo test --manifest-path "$fixture" --offline -- --ignored >/dev/null || return 1
+
+  python3 - "$fixture" <<'PYTHON' || return 1
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+if os.name != "posix":
+    print("POSIX cancellation smoke probe unavailable; physical cancellation is still required", file=sys.stderr)
+    sys.exit(0)
+
+# The marker proves the long-running test, rather than only Cargo, has started.
+with tempfile.TemporaryDirectory(prefix="rust-tools-cancel-") as directory:
+    marker = Path(directory) / "started"
+    process = subprocess.Popen(
+        ["cargo", "test", "--manifest-path", sys.argv[1], "--offline",
+         "tests::cancellable", "--", "--exact"],
+        env={**os.environ, "ZED_RUST_TOOLS_LONG_TEST": "1",
+             "ZED_RUST_TOOLS_STARTED_MARKER": str(marker)},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while not marker.exists():
+            if process.poll() is not None:
+                sys.exit("cancellation smoke probe exited before the test started")
+            if time.monotonic() >= deadline:
+                sys.exit("cancellation smoke probe did not start within 30 seconds")
+            time.sleep(0.05)
+
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            sys.exit("cancellation smoke probe did not stop within 5 seconds")
+        deadline = time.monotonic() + 1
+        while True:
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                break
+            if time.monotonic() >= deadline:
+                sys.exit("cancellation smoke probe left a process in its group")
+            time.sleep(0.05)
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+PYTHON
+
+  local test_output
+  test_output="$(cargo test -p project --lib --features test-support,cargo-workspace,structured-execution,rust-tests rust_test_provider_isolates_partial_roots_and_retains_stale_results)" || return 1
+  if ! grep -Eq 'test result: ok\. [1-9][0-9]* passed' <<< "$test_output"; then
+    echo "stale-state probe did not execute any matching tests" >&2
+    return 1
+  fi
+}
+
+if run_fixture; then
+  record local automated "offline Cargo CLI smoke checks and fixture stale-state test passed on $(uname -s)-$(uname -m); production transport and Zed task cancellation are not certified"
+else
+  record local failed "offline fixture or stale-generation check failed"
+fi
+
+if [[ -n "${ZED_RUST_TOOLS_SSH_HOST:-}" && -n "${ZED_RUST_TOOLS_SSH_REPO:-}" ]]; then
+  if run_target ssh -o BatchMode=yes -o ConnectTimeout=15 "$ZED_RUST_TOOLS_SSH_HOST" "cd '$ZED_RUST_TOOLS_SSH_REPO' && ./script/test-rust-tools-environments --matrix --offline"; then
+    record ssh observed "remote checkout harness passed; complete the production Zed SSH checklist"
+  else
+    record ssh failed "remote checkout harness failed"
+  fi
+else
+  record ssh unavailable "set ZED_RUST_TOOLS_SSH_HOST and ZED_RUST_TOOLS_SSH_REPO"
+fi
+
+if command -v wsl.exe >/dev/null 2>&1 && [[ -n "${ZED_RUST_TOOLS_WSL_DISTRO:-}" && -n "${ZED_RUST_TOOLS_WSL_REPO:-}" ]]; then
+  if run_target wsl.exe --distribution "$ZED_RUST_TOOLS_WSL_DISTRO" --cd "$ZED_RUST_TOOLS_WSL_REPO" ./script/test-rust-tools-environments --matrix --offline; then
+    record wsl observed "WSL checkout harness passed; complete the production Zed WSL checklist"
+  else
+    record wsl failed "WSL checkout harness failed"
+  fi
+else
+  record wsl unavailable "requires Windows plus ZED_RUST_TOOLS_WSL_DISTRO and ZED_RUST_TOOLS_WSL_REPO"
+fi
+
+if command -v docker >/dev/null 2>&1 && [[ -n "${ZED_RUST_TOOLS_CONTAINER:-}" && -n "${ZED_RUST_TOOLS_CONTAINER_REPO:-}" ]]; then
+  if run_target docker exec --workdir "$ZED_RUST_TOOLS_CONTAINER_REPO" "$ZED_RUST_TOOLS_CONTAINER" ./script/test-rust-tools-environments --matrix --offline; then
+    record dev-container observed "container checkout harness passed; complete the production Zed container checklist"
+  else
+    record dev-container failed "container checkout harness failed"
+  fi
+else
+  record dev-container unavailable "set ZED_RUST_TOOLS_CONTAINER and ZED_RUST_TOOLS_CONTAINER_REPO"
+fi
+
+if [[ -f "${ZED_RUST_TOOLS_MULTIPLAYER_EVIDENCE:-}" ]]; then
+  record multiplayer observed "evidence file supplied; validate it against the release checklist"
+else
+  record multiplayer unavailable "set ZED_RUST_TOOLS_MULTIPLAYER_EVIDENCE to a completed checklist"
+fi
+
+physical_certified=false
+if [[ -n "${ZED_RUST_TOOLS_PHYSICAL_EVIDENCE:-}" ]]; then
+  if python3 "$repository_root/script/test-rust-tools-evidence.py" \
+    "$ZED_RUST_TOOLS_PHYSICAL_EVIDENCE" --revision "$(git rev-parse HEAD)" >> "$result_file"; then
+    physical_certified=true
+  else
+    record physical-evidence failed "provided evidence was rejected; no cells certified"
+  fi
+fi
+
+printf 'cell\tstatus\tdetail\n'
+sort "$result_file"
+
+if grep -q $'\tfailed\t' "$result_file"; then
+  exit 1
+fi
+if [[ "${ZED_RUST_TOOLS_REQUIRE_PHYSICAL:-0}" == 1 && "$physical_certified" != true ]]; then
+  echo "physical certification was required but one or more cells remain uncertified" >&2
+  exit 1
+fi

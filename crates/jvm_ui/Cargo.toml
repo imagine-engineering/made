@@ -1,0 +1,48 @@
+[package]
+name = "jvm_ui"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/jvm_ui.rs"
+doctest = false
+
+[features]
+test-support = []
+
+[dependencies]
+anyhow.workspace = true
+db.workspace = true
+editor.workspace = true
+gpui.workspace = true
+language_tools.workspace = true
+log.workspace = true
+lsp.workspace = true
+markdown.workspace = true
+product_flavor.workspace = true
+project = { workspace = true, features = ["jvm-tools"] }
+remote.workspace = true
+settings.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ui.workspace = true
+util.workspace = true
+workspace = { workspace = true, features = ["jvm-tools"] }
+
+[dev-dependencies]
+task.workspace = true
+editor = { workspace = true, features = ["test-support"] }
+futures.workspace = true
+gpui = { workspace = true, features = ["test-support"] }
+language.workspace = true
+mermaid_render = { workspace = true, features = ["test-support"] }
+project = { workspace = true, features = ["jvm-tools", "test-support"] }
+settings.workspace = true
+theme.workspace = true
+theme_settings.workspace = true
+workspace = { workspace = true, features = ["test-support"] }

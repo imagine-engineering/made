@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "profile": "ffmpeg-7.1-x86_64-gnu-general-video-v1",
+  "target": "x86_64-unknown-linux-gnu",
+  "source": {
+    "release": "FFmpeg 7.1",
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "signature_verified": true,
+    "headers": {
+      "libavcodec/avcodec.h": { "bytes": 114986, "sha256": "d6dbc9694974237888592f71020092c4594511e762d609b0076a90e9696ad1b1" },
+      "libavcodec/codec_par.h": { "bytes": 7727, "sha256": "73b787e33b009eee85e62cc91ae6b58ba23565dc1909da98912ffe9104ef1e51" },
+      "libavcodec/packet.h": { "bytes": 30025, "sha256": "219679e1ffe55fd22bc81b151fce8315372c87028fea87780be686f2b38f305f" },
+      "libavformat/avformat.h": { "bytes": 119096, "sha256": "6171ac10e35a67fe04aa8ddfbf84263def2d7ae9159019dd71e5597be5dd3944" },
+      "libavutil/channel_layout.h": { "bytes": 33387, "sha256": "93191d16f2667e0d1aaced08b6de97ad7d5553bd06e6e1a0dc08fa97cb5b80d3" },
+      "libavutil/dict.h": { "bytes": 9374, "sha256": "c95cba1829e7886e31469f4e058bb9af3c8f215619c7ffddbc2045c9039f0554" },
+      "libavutil/display.h": { "bytes": 3472, "sha256": "b9c78c80aa9331b945802b6bcd1db4ecc9ec4f9fad41993cc82b880c0dec2576" },
+      "libavutil/frame.h": { "bytes": 41581, "sha256": "8218f0295206a6543e7d3974a6fcb1f22100a273b09234d0cb84c60cd1638e75" },
+      "libavutil/mathematics.h": { "bytes": 9563, "sha256": "64fac2eb3a42fd3788f5585ac8e65c7d5cd82711730d1f030042ba0a62fe1a62" },
+      "libavutil/pixdesc.h": { "bytes": 16165, "sha256": "5e5b269eae685c54a3f9aa2ff6ab3749e6237a5dfee5bfad1d2c4aef6171a66a" },
+      "libswresample/swresample.h": { "bytes": 22360, "sha256": "ed295cf600b31f445103b0ed08852f46d24c2dc1f8b3b6cd70a91c4b1eca8937" },
+      "libswscale/swscale.h": { "bytes": 16928, "sha256": "42ab58ed743efc74ba2152a049b521d41a0fae31595a9b9c6858742391570ca4" },
+      "libavfilter/avfilter.h": { "bytes": 53419, "sha256": "925d5c51412d5f7d4f404a6ff2f0f40f9d6b004b30e5275b4cf9dd849433c703" },
+      "libavfilter/buffersrc.h": { "bytes": 6747, "sha256": "b4e8e39bcd4179934064572a40fba7d0830f615dbee3c53859addb28bf2d487a" },
+      "libavfilter/buffersink.h": { "bytes": 6923, "sha256": "ab5fe19d11f039ba40d97bc40855d3ffc3df4c8a2d91be6efb141304510c8f34" },
+      "libavfilter/version.h": { "bytes": 1653, "sha256": "3469d7376608039a622aad725daaf5d624bd8e9e25d6956eea621ab2a237a66b" },
+      "libavfilter/version_major.h": { "bytes": 1288, "sha256": "7a8bf18dba3ba32195c213a29a5779e21949c43b41a7c2a7c28f2822e69be9e5" }
+    }
+  },
+  "compiler_oracle": {
+    "compiler": "gcc 15.2.0",
+    "compiler_target": "x86_64-linux-gnu",
+    "oci_index_sha256": "3ae15afe768b06d0c0fe088d822ba5f8045c26630bdacc8d8e7713cf5d8e7289",
+    "oci_linux_amd64_manifest_sha256": "c101370f78e4a30be178c11dd18aeee64c65d617908a98157db2392ca73ab04f",
+    "command": "gcc -std=c11 -Wall -Wextra -Werror -I<verified-ffmpeg-7.1-source> -c verify-general-video-bindings.c",
+    "object_format": "ELF 64-bit LSB relocatable, x86-64",
+    "object_sha256": "c9eb3db4d182c44e71439513cc1108e239f63cc3cda8ee7decc52bbd5c029ae2"
+  },
+  "historical_manifest_sha256": {
+    "ffmpeg-7.1-x86_64-gnu-v1.json": "cefc4429df3abe09508a4f6c91ba2c749580109fab52f3f79e9db7a998b4bb76",
+    "ffmpeg-7.1-x86_64-gnu-data-plane-v1.json": "c5d4780cac865e9dd327f42f80278e6cfd4d85a94cbdd48cafbc981872b440ec",
+    "ffmpeg-7.1-x86_64-gnu-container-metadata-v1.json": "cb989b103743491f19d41a7f451bac06c055496a9ff2cf3d37b12d92b133192d",
+    "ffmpeg-7.1-x86_64-gnu-vp9-alpha-v1.json": "766d286761651abd80698aa986cb79e2c5022d432573f13e949c851ad10b05c1",
+    "ffmpeg-7.1-x86_64-gnu-av1-pixel-format-v1.json": "c467a7efa46dd2291bbe9a5fc1a0ddaa1a8685fa74de377f1b6b366ba464e6ca",
+    "ffmpeg-7.1-x86_64-gnu-h264-mp4-10bit-v1.json": "b81706ef04a75af4fb3547de17f6f950b1df826b2aac4f9b2cb78df0ab0a4d6a"
+  },
+  "contract": {
+    "historical_library_count": 5,
+    "historical_symbol_count": 54,
+    "required_library_count": 6,
+    "supplemental_symbol_count": 24,
+    "general_symbol_count": 78,
+    "runtime_compilation": false,
+    "runtime_loading": false,
+    "runtime_symbol_resolution": false,
+    "runtime_function_invocation": false
+  },
+  "projections": {
+    "AVCodecParameters": { "size": 176, "alignment": 8, "codec_type": 0, "codec_id": 4, "format": 44, "bits_per_raw_sample": 60, "width": 72, "height": 76, "ch_layout": 128, "sample_rate": 152 },
+    "AVStream": { "size": 232, "alignment": 8, "codecpar": 16, "time_base": 32, "start_time": 40, "duration": 48, "nb_frames": 56, "metadata": 80, "avg_frame_rate": 88 },
+    "AVFormatContext": { "size": 472, "alignment": 8, "nb_streams": 44, "streams": 48, "start_time": 96, "duration": 104, "metadata": 192 },
+    "AVFrame": { "size": 440, "alignment": 8, "pts": 136, "sample_rate": 192, "best_effort_timestamp": 320, "metadata": 336, "ch_layout": 408, "duration": 432 }
+  },
+  "libraries": {
+    "avcodec": { "abi_major": 61, "symbol_version_namespace": "LIBAVCODEC_61", "symbols": ["av_packet_alloc", "av_packet_free", "av_packet_rescale_ts", "av_packet_unref", "avcodec_alloc_context3", "avcodec_find_decoder", "avcodec_find_encoder_by_name", "avcodec_flush_buffers", "avcodec_free_context", "avcodec_open2", "avcodec_parameters_copy", "avcodec_parameters_from_context", "avcodec_parameters_to_context", "avcodec_receive_frame", "avcodec_receive_packet", "avcodec_send_frame", "avcodec_send_packet", "avcodec_version"] },
+    "avformat": { "abi_major": 61, "symbol_version_namespace": "LIBAVFORMAT_61", "symbols": ["av_find_best_stream", "av_guess_frame_rate", "av_interleaved_write_frame", "av_read_frame", "av_seek_frame", "av_write_trailer", "avformat_alloc_context", "avformat_alloc_output_context2", "avformat_close_input", "avformat_find_stream_info", "avformat_free_context", "avformat_new_stream", "avformat_open_input", "avformat_seek_file", "avformat_version", "avformat_write_header", "avio_alloc_context", "avio_context_free"] },
+    "avutil": { "abi_major": 59, "symbol_version_namespace": "LIBAVUTIL_59", "symbols": ["av_channel_layout_copy", "av_channel_layout_default", "av_channel_layout_uninit", "av_dict_free", "av_dict_iterate", "av_dict_set", "av_display_rotation_get", "av_frame_alloc", "av_frame_free", "av_frame_get_buffer", "av_frame_get_side_data", "av_frame_make_writable", "av_frame_unref", "av_free", "av_get_pix_fmt_name", "av_malloc", "av_opt_set", "av_opt_set_int", "av_pix_fmt_desc_get", "av_rescale_q", "av_rescale_rnd", "avutil_version"] },
+    "swresample": { "abi_major": 5, "symbol_version_namespace": "LIBSWRESAMPLE_5", "symbols": ["swr_alloc", "swr_alloc_set_opts2", "swr_convert", "swr_free", "swr_get_delay", "swr_init", "swresample_version"] },
+    "swscale": { "abi_major": 8, "symbol_version_namespace": "LIBSWSCALE_8", "symbols": ["sws_freeContext", "sws_getContext", "sws_scale", "swscale_version"] },
+    "avfilter": { "abi_major": 10, "symbol_version_namespace": "LIBAVFILTER_10", "symbols": ["av_buffersink_get_frame", "av_buffersrc_add_frame_flags", "avfilter_get_by_name", "avfilter_graph_alloc", "avfilter_graph_config", "avfilter_graph_create_filter", "avfilter_graph_free", "avfilter_link", "avfilter_version"] }
+  },
+  "claims": {
+    "official_release_signature_verified": true,
+    "reviewed_typed_declarations": true,
+    "installed_ffmpeg_package": false,
+    "loadable_native_library": false,
+    "certified_native_ffi": false,
+    "native_library_loaded": false,
+    "runtime_symbol_address_resolved": false,
+    "runtime_version_checked": false,
+    "codec_availability_probed": false,
+    "codec_available": false,
+    "executable": false,
+    "codec_execution": false,
+    "media_allocation": false,
+    "publication": false
+  }
+}

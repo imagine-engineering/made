@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "fixture_id": "kandinsky5image-sim-model-0100",
+  "feature_id": "COMFY-MODEL-0100",
+  "source_symbol": "Kandinsky5Image",
+  "source_ordinal": 82,
+  "source_architecture": "model_base.Kandinsky5Image",
+  "latent_feature_id": "COMFY-MODEL-0029",
+  "latent_identifier": "Flux",
+  "catalog_projection_sha256": "fcb980f6b4e2505a78e033b2462c23a83d0b4188ce93f2cd752d95da12ca8d36",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/kandinsky5/model.py", "sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/kandinsky5.py", "sha256": "1de8b4f8744946ce52914c03b8e10da1b897a720672401b91f8ddb5897e201f8"},
+    {"path": "crates/sim_model/src/kandinsky5_family.rs", "sha256": "b3021e8deaa185da743f8fde6183994058da90d98010d9fadd43a90debf159c3"},
+    {"path": "crates/sim_model/src/latent_formats/flux_sim_model_0029.rs", "sha256": "22c3b314c00dd31a7c4e777c541521c946ab335bb1bdd7b930fd88a6b7c03751"}
+  ],
+  "source_projection": "Kandinsky5Image|82|model_dim=2560|visual_embed_dim=64|shift=3.0|latent=Flux|dtypes=bf16,f32|clip=Kandinsky5TokenizerImage|layouts=prefixed,standalone|diffusers=unsupported",
+  "source_projection_sha256": "df85405197d8c203af9c203b7ed9f2160b75da28ed3be730aede699752245e94",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

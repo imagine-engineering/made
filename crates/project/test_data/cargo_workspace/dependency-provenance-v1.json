@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "metadata_file": "workspace-v1.json",
+  "manifests": [
+    {
+      "path": "member-one/Cargo.toml",
+      "contents": "[package]\nname = \"member-one\"\nversion = \"0.1.0\"\n\n[target.'cfg(unix)'.dependencies]\nrenamed_member = { workspace = true, optional = true, default-features = false, features = [\"extra\"] }\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\ngit_dep = { git = \"https://example.invalid/repo\" }\n\n[dev-dependencies]\npretty_assertions = \"1\"\n\n[build-dependencies]\ncc = \"1\"\n"
+    },
+    {
+      "path": "member-two/Cargo.toml",
+      "contents": "[package]\nname = \"member-two\"\nversion = \"0.2.0\"\n"
+    }
+  ],
+  "lock_contents": "version = 4\n\n[[package]]\nname = \"member-one\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"member-two\"\nversion = \"0.2.0\"\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n"
+}

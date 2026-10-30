@@ -1,0 +1,192 @@
+{
+  "canonical_target": "torch.Tensor.atan2",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/mediapipe/face_landmarker.py:512:38 (_detection_to_face_rect)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:572:24 (_camera_basis)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_sdpose.py:273:38 (KeypointDraw.draw_wholebody_keypoints)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy_extras/mediapipe/face_landmarker.py:512:38 (_detection_to_face_rect)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:572:24 (_camera_basis)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sdpose.py:273:38 (KeypointDraw.draw_wholebody_keypoints)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-ca83de14d96e-v1",
+  "inventory_kind": "reclassified-external-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-CA83DE14D96E",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "d82545d0f01beed3ab4982bc40ce50d4e8a6b13b046839b3331f7e3a2b9d057c",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy_extras/mediapipe/face_landmarker.py",
+        "sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_sdpose.py",
+        "sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.atan2"
+  },
+  "resolution": {
+    "blocker_reason": "Imported non-tensor receiver evidence proves this is not a PyTorch Tensor contract; its native behavior remains assigned to the owning source feature rather than receiving a fake tensor kernel.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_19",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": false,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-c8ba6ce3159c",
+    "state": "reclassified_external"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 512,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "ly - ry",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "rx - lx",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "_detection_to_face_rect",
+      "site": "comfy_extras/mediapipe/face_landmarker.py:512:38 (_detection_to_face_rect)",
+      "source_path": "comfy_extras/mediapipe/face_landmarker.py",
+      "source_sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802",
+      "status": "static-call-observed",
+      "target_syntax": "math.atan2"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 572,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-float(fwd[0])",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float(fwd[2])",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_camera_basis",
+      "site": "comfy_extras/nodes_gaussian_splat.py:572:24 (_camera_basis)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "math.atan2"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 273,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "X[0] - X[1]",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "Y[0] - Y[1]",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "KeypointDraw.draw_wholebody_keypoints",
+      "site": "comfy_extras/nodes_sdpose.py:273:38 (KeypointDraw.draw_wholebody_keypoints)",
+      "source_path": "comfy_extras/nodes_sdpose.py",
+      "source_sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+      "status": "static-call-observed",
+      "target_syntax": "math.atan2"
+    }
+  ],
+  "static_definition": null
+}

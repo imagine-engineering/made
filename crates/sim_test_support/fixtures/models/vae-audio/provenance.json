@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "oracle_kind": "immutable-source-derived-checkpoints",
+  "production_dependency": false,
+  "sources": [
+    {"path":"projects/sim/ComfyUI/sim/sd.py","sha256":"9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/audio/autoencoder.py","sha256":"4e89cd715a5fba03404ef0417acf27607b541cd0f4c63cc3a7988e2570d9abe8"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/audio/vae_sa3.py","sha256":"1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/ace/vae/autoencoder_dc.py","sha256":"6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/ace/vae/music_dcae_pipeline.py","sha256":"21c2740c2c06544a7cb91ce526e248a2b4d9a85068612dee80a12f79b66ea608"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/ace/vae/music_log_mel.py","sha256":"81f34c4e5b69ce0f5c2cc338840b1a0bc45c76505c0c84a332c9691778565fe1"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/ace/vae/music_vocoder.py","sha256":"8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/autoencoder.py","sha256":"4d4409dadcaac71f34a7eb3199543b4f6029efe09344dbd3b99a8c07a3f814a5"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/vae.py","sha256":"44b6f466317bf8a566642a4bbf6a30af4943aa52a343cdff66ce802207eea554"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/vae_modules.py","sha256":"7b2453fefae854da384c70f780c6cb3290f607f0d45eb3a6f191faeba2704b78"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/distributions.py","sha256":"3ae3040d1e43ecfff4ea9daa7807fa345e28cf93ae5e34d29436d49bb11df772"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/bigvgan.py","sha256":"cc5b4947bde63cc9bedb8689003dce11f9f82ed682bc4a23fb90235a2208eb9e"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/activations.py","sha256":"59994f9372c5dd2996a9617d648c7684a89075aedd1d093c0281538e40e38faf"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/mmaudio/vae/alias_free_torch.py","sha256":"c9f316a443b00bed4c2d50fbd23a4d7b2f7d16656a2a7642744f216f12e2ae8d"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/lightricks/vae/audio_vae.py","sha256":"fafef1fd6709d6f58bfdf0c49029bf2f45d3c83f438839d2c95a7455b0575449"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/lightricks/vae/causal_audio_autoencoder.py","sha256":"661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/lightricks/symmetric_patchifier.py","sha256":"e2d9b8de7a5cc003e74eaba6d0b8303b596df80e59a431eda2d3593ec06c2633"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/lightricks/vocoders/vocoder.py","sha256":"d2ff3ea7c40fc11705d1114d936afd1d466d36b05d95aa338f159ae14547494d"}
+  ]
+}

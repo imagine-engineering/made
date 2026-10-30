@@ -1,0 +1,335 @@
+{
+  "revision": "0613fab3abf72848cedbd982363c603317e092a7",
+  "assets": [
+    {
+      "path": "assets/icons/fractal/a-large-small.svg",
+      "source": "gpui/crates/assets/assets/icons/a-large-small.svg",
+      "sha256": "001c9bf82c1bd9c5c57472155c8b63c4b3563b245fa66e668614185d2e66bf6c"
+    },
+    {
+      "path": "assets/icons/fractal/arrow-down.svg",
+      "source": "gpui/crates/assets/assets/icons/arrow-down.svg",
+      "sha256": "c025be3198f68495ee6083685120681f420792f82dd3709ec91e93bde10f0a5c"
+    },
+    {
+      "path": "assets/icons/fractal/arrow-left.svg",
+      "source": "gpui/crates/assets/assets/icons/arrow-left.svg",
+      "sha256": "cb52ea5bd827756a6b46a1b9b1454ac708f982d66662cdedad836410459f7f98"
+    },
+    {
+      "path": "assets/icons/fractal/arrow-right.svg",
+      "source": "gpui/crates/assets/assets/icons/arrow-right.svg",
+      "sha256": "36f66ab410c20a5be4f74ab0511f7069b417b44b6b6d1410354cbec6897bd2e8"
+    },
+    {
+      "path": "assets/icons/fractal/arrow-up.svg",
+      "source": "gpui/crates/assets/assets/icons/arrow-up.svg",
+      "sha256": "085b42e4779941a3e05560fdcf6c4a4749b0477c22ecb72e80d991b3fda1382a"
+    },
+    {
+      "path": "assets/icons/fractal/bell.svg",
+      "source": "gpui/crates/assets/assets/icons/bell.svg",
+      "sha256": "3f53854d4a20f49bad14c1cd4b7cf1d0c2b046ba324acdb0592af85b922954b1"
+    },
+    {
+      "path": "assets/icons/fractal/book-open.svg",
+      "source": "gpui/crates/assets/assets/icons/book-open.svg",
+      "sha256": "62df53f4edc506abe388b3887dd50283a6333c03a207d99cb1abf8454b0730b0"
+    },
+    {
+      "path": "assets/icons/fractal/case-sensitive.svg",
+      "source": "gpui/crates/assets/assets/icons/case-sensitive.svg",
+      "sha256": "97a5a65da1e3aa3d8bb76f321bc56f6e51d3093250d1457207d34817cbc09bdf"
+    },
+    {
+      "path": "assets/icons/fractal/check.svg",
+      "source": "gpui/crates/assets/assets/icons/check.svg",
+      "sha256": "fbf027b05daa85591c7c14152224502b60c5a1edade8b5e022d2013cc8d8900f"
+    },
+    {
+      "path": "assets/icons/fractal/chevron-down.svg",
+      "source": "gpui/crates/assets/assets/icons/chevron-down.svg",
+      "sha256": "89fa56ca43abddb4f04ea2627a863254bcbb3226f1293e908b5236bd25471c15"
+    },
+    {
+      "path": "assets/icons/fractal/chevron-left.svg",
+      "source": "gpui/crates/assets/assets/icons/chevron-left.svg",
+      "sha256": "89691de25b3a0b3c954ca89e9a24280853b9e8d5e608d1f2463aa47408b30b2e"
+    },
+    {
+      "path": "assets/icons/fractal/chevron-right.svg",
+      "source": "gpui/crates/assets/assets/icons/chevron-right.svg",
+      "sha256": "4f75913617953fb17011d025030cfbd20c825e85c6d26071fe43566e85c5b824"
+    },
+    {
+      "path": "assets/icons/fractal/chevron-up.svg",
+      "source": "gpui/crates/assets/assets/icons/chevron-up.svg",
+      "sha256": "3c28c59c5ef88c4c4a4e92341ef8a5a1b8e4214853148756e353ec57168473d4"
+    },
+    {
+      "path": "assets/icons/fractal/chevrons-up-down.svg",
+      "source": "gpui/crates/assets/assets/icons/chevrons-up-down.svg",
+      "sha256": "b7527f2d92ea2b0a452a3dbbd8bffb71fb071d902202c73969d8c30d3f011a9e"
+    },
+    {
+      "path": "assets/icons/fractal/circle-check.svg",
+      "source": "gpui/crates/assets/assets/icons/circle-check.svg",
+      "sha256": "97f15e68a5383fb26c1926541a06d38ac751a56fa8f3d585a2d3fd38a0a96e67"
+    },
+    {
+      "path": "assets/icons/fractal/circle-x.svg",
+      "source": "gpui/crates/assets/assets/icons/circle-x.svg",
+      "sha256": "32f5484da1d086d693b65ff999cdb23e69804711e54f4ad082567a792bbd943c"
+    },
+    {
+      "path": "assets/icons/fractal/close.svg",
+      "source": "gpui/crates/assets/assets/icons/close.svg",
+      "sha256": "04472e98ac6fa0590ef1c5b4c9297526a79ce6357ec305171b9173f17f871e97"
+    },
+    {
+      "path": "assets/icons/fractal/copy.svg",
+      "source": "gpui/crates/assets/assets/icons/copy.svg",
+      "sha256": "9f9bb2f7f943b350f0455a0b599946bd2ef4dbfcc6bd9a6e4f44149d7d5e161c"
+    },
+    {
+      "path": "assets/icons/fractal/delete.svg",
+      "source": "gpui/crates/assets/assets/icons/delete.svg",
+      "sha256": "bb3eb902a3f69ab344908942088a8bc4db328dc9aeb6d0dd3476386029de258c"
+    },
+    {
+      "path": "assets/icons/fractal/ellipsis.svg",
+      "source": "gpui/crates/assets/assets/icons/ellipsis.svg",
+      "sha256": "4c074b23be59ac3f07794e373ba2639f5c14f0658656017fc63a1fb95ffbc212"
+    },
+    {
+      "path": "assets/icons/fractal/external-link.svg",
+      "source": "gpui/crates/assets/assets/icons/external-link.svg",
+      "sha256": "6e042d0907106f00980191a1c39bbea6d8e945a57cb3c86c06241dca3bf87d10"
+    },
+    {
+      "path": "assets/icons/fractal/eye-off.svg",
+      "source": "gpui/crates/assets/assets/icons/eye-off.svg",
+      "sha256": "01ee02a8232976cc54ded071ad88f84a7a5d5f135b2d225120d6fcb5fa9b9802"
+    },
+    {
+      "path": "assets/icons/fractal/eye.svg",
+      "source": "gpui/crates/assets/assets/icons/eye.svg",
+      "sha256": "7f67381737141e40ee08ed056ade4feeb4a58bf7e17287c26dcdac9070ca61ef"
+    },
+    {
+      "path": "assets/icons/fractal/file.svg",
+      "source": "gpui/crates/assets/assets/icons/file.svg",
+      "sha256": "b7005cb24a35c4acd7c429da94c5d090864e545bcf4b95295a98f404ae48af0b"
+    },
+    {
+      "path": "assets/icons/fractal/folder-open.svg",
+      "source": "gpui/crates/assets/assets/icons/folder-open.svg",
+      "sha256": "5e5d7b03bfee8ab7395d67950254e5e7b87b6cfa0685d787c9904d1df75b76e0"
+    },
+    {
+      "path": "assets/icons/fractal/folder.svg",
+      "source": "gpui/crates/assets/assets/icons/folder.svg",
+      "sha256": "8345cec1b8b55e5cb8f17e85561fed0f206f659ad2d77d5c0b537ae05b128cd2"
+    },
+    {
+      "path": "assets/icons/fractal/fractal-check-double.svg",
+      "source": "gpui/crates/assets/assets/icons/fractal/check-double.svg",
+      "sha256": "03beaebd4d4f8380e0680029be06c2ad50ff2163103ac0e5687198139cbe0f2c"
+    },
+    {
+      "path": "assets/icons/fractal/fractal-clock.svg",
+      "source": "gpui/crates/assets/assets/icons/fractal/clock.svg",
+      "sha256": "c87ad4cfc7d2ac89be2a63448d45838e6fcb58478c8825b95cba22d604548536"
+    },
+    {
+      "path": "assets/icons/fractal/fractal-funnel.svg",
+      "source": "gpui/crates/assets/assets/icons/fractal/funnel.svg",
+      "sha256": "272058c8bc25f4c1330f2084b2e78c621f6685a882fe1ef0c1b4275e3ad7890b"
+    },
+    {
+      "path": "assets/icons/fractal/fractal-microphone.svg",
+      "source": "gpui/crates/assets/assets/icons/fractal/microphone.svg",
+      "sha256": "b5e5ee2bb22aee1cdf588a4628d338e4e677c3afc64b8574f96eaad16841b2d2"
+    },
+    {
+      "path": "assets/icons/fractal/fractal-stop.svg",
+      "source": "gpui/crates/assets/assets/icons/fractal/stop.svg",
+      "sha256": "ea59793e07f904e27613a02c2163d9719a11bc401948a6ae4d12f84008e158bb"
+    },
+    {
+      "path": "assets/icons/fractal/fractal-wrench.svg",
+      "source": "gpui/crates/assets/assets/icons/fractal/wrench.svg",
+      "sha256": "62a844abc47ce9d5ed1f79d5729de2d1ffd2ee7055b1de83415b933cc42ff44a"
+    },
+    {
+      "path": "assets/icons/fractal/frame.svg",
+      "source": "gpui/crates/assets/assets/icons/frame.svg",
+      "sha256": "31ba3fe29df5217f25f3ff7e5e4eebb4d28895d68b71a1eb7d54ddb0ffd4658d"
+    },
+    {
+      "path": "assets/icons/fractal/github.svg",
+      "source": "gpui/crates/assets/assets/icons/github.svg",
+      "sha256": "3ee59ca123810813bf7cfdcc69663a2a09dd10a4a791d610caeae57f0a7b5c81"
+    },
+    {
+      "path": "assets/icons/fractal/globe.svg",
+      "source": "gpui/crates/assets/assets/icons/globe.svg",
+      "sha256": "0e005ae1fb9af38809e08c3628a87af98799dbecb6cce50d21b8d5a058fcb966"
+    },
+    {
+      "path": "assets/icons/fractal/info.svg",
+      "source": "gpui/crates/assets/assets/icons/info.svg",
+      "sha256": "5237b468f275adde82a4fdf98725435cfac89b9288de9cdd7b0e58ad25f3458d"
+    },
+    {
+      "path": "assets/icons/fractal/loader-circle.svg",
+      "source": "gpui/crates/assets/assets/icons/loader-circle.svg",
+      "sha256": "6a17d49c53c748bc3dcdd6ee80789720af4d2d094f028fdb58135f788466c4b1"
+    },
+    {
+      "path": "assets/icons/fractal/maximize.svg",
+      "source": "gpui/crates/assets/assets/icons/maximize.svg",
+      "sha256": "4e46ebbea650d98f636713156db86afe6a0ce84e908f0fd8bef7aa0a893c3acd"
+    },
+    {
+      "path": "assets/icons/fractal/menu.svg",
+      "source": "gpui/crates/assets/assets/icons/menu.svg",
+      "sha256": "7c6117779b9b171ca8bddf658dacb5d7f9765b1d79e8fef66b2e6710440d5abc"
+    },
+    {
+      "path": "assets/icons/fractal/minimize.svg",
+      "source": "gpui/crates/assets/assets/icons/minimize.svg",
+      "sha256": "fb09bd36029aaadad83142b2872811e57586ce8a51eb7f13b352e92841c2790a"
+    },
+    {
+      "path": "assets/icons/fractal/minus.svg",
+      "source": "gpui/crates/assets/assets/icons/minus.svg",
+      "sha256": "7ed9335940184b522fd1d83e03f64bdc90a09acb79c953c9e1d43c9dba2536a2"
+    },
+    {
+      "path": "assets/icons/fractal/panel-left-close.svg",
+      "source": "gpui/crates/assets/assets/icons/panel-left-close.svg",
+      "sha256": "57cd7eaeecbd5d1ca470bafdab403715c149cf76c7eaaff5b8ccd451f4d6dbeb"
+    },
+    {
+      "path": "assets/icons/fractal/panel-left-open.svg",
+      "source": "gpui/crates/assets/assets/icons/panel-left-open.svg",
+      "sha256": "559f32d3ee98ceca6c155d89faa9bd0571f80f0fdfb6cb7e7f5d1d1c2c233b7c"
+    },
+    {
+      "path": "assets/icons/fractal/panel-right-close.svg",
+      "source": "gpui/crates/assets/assets/icons/panel-right-close.svg",
+      "sha256": "91e2037d6da0da4eec247bcf6d8cc51cf234581b0d56b3b795be8f4dfca22102"
+    },
+    {
+      "path": "assets/icons/fractal/panel-right-open.svg",
+      "source": "gpui/crates/assets/assets/icons/panel-right-open.svg",
+      "sha256": "c032d0b7f7a712625e2fa0d0270bbc31400598e6bf00fabbf64301d9bf7ef9cc"
+    },
+    {
+      "path": "assets/icons/fractal/pause.svg",
+      "source": "gpui/crates/assets/assets/icons/pause.svg",
+      "sha256": "432a0647b4e6ea88784f662764eae3ff80531299bd74974b49f0e45a588acbd7"
+    },
+    {
+      "path": "assets/icons/fractal/play.svg",
+      "source": "gpui/crates/assets/assets/icons/play.svg",
+      "sha256": "71ae78d3dc50b4397cace1e9d03bfab7a596adaed0bd3ba96dc1a3f8eb9b8cbf"
+    },
+    {
+      "path": "assets/icons/fractal/plus.svg",
+      "source": "gpui/crates/assets/assets/icons/plus.svg",
+      "sha256": "4fc42c257823302f92b4738207a2f81bc5fa607ed4503dcb0c312aa343fa9c23"
+    },
+    {
+      "path": "assets/icons/fractal/redo-2.svg",
+      "source": "gpui/crates/assets/assets/icons/redo-2.svg",
+      "sha256": "520113cff298e00e47052c2aff3d3d42b1867d1c476e7f0c662d4c20f7846eb2"
+    },
+    {
+      "path": "assets/icons/fractal/redo.svg",
+      "source": "gpui/crates/assets/assets/icons/redo.svg",
+      "sha256": "74c90e24975a1d8cae548098082abd3437d76281f788b053dce4cc8be5eea6a3"
+    },
+    {
+      "path": "assets/icons/fractal/replace.svg",
+      "source": "gpui/crates/assets/assets/icons/replace.svg",
+      "sha256": "63b3de97e59c9aab4dec969f56258ababd5ff85e7204b797f16d5474bc0505dc"
+    },
+    {
+      "path": "assets/icons/fractal/search.svg",
+      "source": "gpui/crates/assets/assets/icons/search.svg",
+      "sha256": "cfe4cacd12d045d6c106c7938b3ad819ad7976e7de540e6012f70c19183809a3"
+    },
+    {
+      "path": "assets/icons/fractal/settings.svg",
+      "source": "gpui/crates/assets/assets/icons/settings.svg",
+      "sha256": "696ef27ef87672554e7663eab42b6580c0d00568e1e0fd62f1750c89b2e876c1"
+    },
+    {
+      "path": "assets/icons/fractal/square-terminal.svg",
+      "source": "gpui/crates/assets/assets/icons/square-terminal.svg",
+      "sha256": "0ef01cd1690e9e99cdb3d35e8683e642dab889c38880a2294f347ea04d8c724d"
+    },
+    {
+      "path": "assets/icons/fractal/star-fill.svg",
+      "source": "gpui/crates/assets/assets/icons/star-fill.svg",
+      "sha256": "57c22d7fbd9f5b73467fa3e0bb62ddd99887c12971be182ee3c324505e3e713d"
+    },
+    {
+      "path": "assets/icons/fractal/star.svg",
+      "source": "gpui/crates/assets/assets/icons/star.svg",
+      "sha256": "817c2f9f5f9672dce50c1f4001f5cbb905f139fcf9569f69a16864aa895bfbe9"
+    },
+    {
+      "path": "assets/icons/fractal/thumbs-down.svg",
+      "source": "gpui/crates/assets/assets/icons/thumbs-down.svg",
+      "sha256": "c8ad440641d94ae12e3719db88567ed4456c08e8ddee32bd5c45fa78e947cefd"
+    },
+    {
+      "path": "assets/icons/fractal/thumbs-up.svg",
+      "source": "gpui/crates/assets/assets/icons/thumbs-up.svg",
+      "sha256": "e575051e7ee8968aa20f481e1268c3190620f9088039be5379208ec7066ccbae"
+    },
+    {
+      "path": "assets/icons/fractal/triangle-alert.svg",
+      "source": "gpui/crates/assets/assets/icons/triangle-alert.svg",
+      "sha256": "bb904b0b92b59f01773eda6bd2c4b206570685b817d0b0a1691fae324ac21d34"
+    },
+    {
+      "path": "assets/icons/fractal/undo-2.svg",
+      "source": "gpui/crates/assets/assets/icons/undo-2.svg",
+      "sha256": "1a9417b22ca5f7da1ecb9c21fb29b6cd20d4d97e8284943d7d242b47ed5bf094"
+    },
+    {
+      "path": "assets/icons/fractal/undo.svg",
+      "source": "gpui/crates/assets/assets/icons/undo.svg",
+      "sha256": "be4a7f587d5c23d36d8098b74d76a7c52f9ee7ae30c285d0c15d4470d304a8de"
+    },
+    {
+      "path": "assets/icons/fractal/user.svg",
+      "source": "gpui/crates/assets/assets/icons/user.svg",
+      "sha256": "1a1413e9f3294b49eb90f4d4aeba0ab782649a75f433dfaf0d5c535b843a3050"
+    },
+    {
+      "path": "assets/icons/fractal/window-close.svg",
+      "source": "gpui/crates/assets/assets/icons/window-close.svg",
+      "sha256": "e36c897d49c86c213157fec7aa34fd42799aa81e420f925ad915731a4f6ecea5"
+    },
+    {
+      "path": "assets/icons/fractal/window-maximize.svg",
+      "source": "gpui/crates/assets/assets/icons/window-maximize.svg",
+      "sha256": "7a4487b5dae263c8c1aa72d5e22e728f019665876fbf69b1faa95ad98f8d294c"
+    },
+    {
+      "path": "assets/icons/fractal/window-minimize.svg",
+      "source": "gpui/crates/assets/assets/icons/window-minimize.svg",
+      "sha256": "9cc07dd3eef66783f886340900e681a65e06dda34bbede9a25cc741c3dbc939f"
+    },
+    {
+      "path": "assets/icons/fractal/window-restore.svg",
+      "source": "gpui/crates/assets/assets/icons/window-restore.svg",
+      "sha256": "dd69f74627f87bb7b0ba9889a9927a6c9f4d46432a50da8bf620c5ce37a98453"
+    }
+  ]
+}

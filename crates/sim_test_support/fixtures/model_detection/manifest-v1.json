@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "fixture_id": "model-detection-foundation-v1",
+  "oracle": {
+    "executed_in_release_tests": false,
+    "source": "projects/sim/ComfyUI/sim/model_detection.py",
+    "source_sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+  },
+  "cases": [
+    "safetensors-native-prefix",
+    "restricted-pytorch-native-prefix",
+    "gguf-metadata",
+    "diffusers-prefix",
+    "sam3-empty-prefix",
+    "malformed",
+    "partial",
+    "unknown-dtype",
+    "dimension-overflow",
+    "no-match",
+    "base-fallback",
+    "ambiguous",
+    "cancellation",
+    "cache-and-io-isolation"
+  ]
+}

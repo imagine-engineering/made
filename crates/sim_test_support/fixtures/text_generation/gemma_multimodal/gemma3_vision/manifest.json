@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-gemma3-vision-projection-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/llama.py",
+      "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "symbols": [
+        "Gemma3MultiModalProjector"
+      ]
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/lt.py",
+      "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+      "symbols": [
+        "Gemma3_12BModel"
+      ]
+    }
+  ],
+  "source_profiles": {
+    "gemma3_4b_vision": {
+      "vision_hidden_size": 1152,
+      "output_hidden_size": 2560,
+      "patch_grid": [64, 64],
+      "pool_kernel_stride": 4,
+      "projected_token_grid": [16, 16],
+      "projected_tokens": 256
+    },
+    "gemma3_12b": {
+      "vision_hidden_size": 1152,
+      "output_hidden_size": 3840,
+      "patch_grid": [64, 64],
+      "pool_kernel_stride": 4,
+      "projected_token_grid": [16, 16],
+      "projected_tokens": 256
+    },
+    "normalization": {
+      "kind": "rms_norm_add_one_weight",
+      "epsilon": 0.000001
+    }
+  },
+  "reduced_fixture": {
+    "backend": "cpu",
+    "dtype": "f32",
+    "input_layout": "BHWC",
+    "prepared_image_shape": [1, 896, 896, 3],
+    "vision_image_shape": [1, 3, 4, 4],
+    "vision_hidden_shape": [1, 16, 4],
+    "pooled_shape": [1, 4, 4],
+    "projection_weight_shape": [4, 3],
+    "output_shape": [1, 4, 3],
+    "output_f32le_sha256": "bb5037a90b0595cb6e7e18d01f6c22ff7e61a465cddd07ecc3768ca0a9677a3f"
+  },
+  "claims": {
+    "licensed_full_checkpoint_oracle": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_parity": false,
+    "exact_source_graph_and_projection_order": true,
+    "cancellation_and_workspace_rollback": true,
+    "storage_id_alias_deduplication": true
+  }
+}

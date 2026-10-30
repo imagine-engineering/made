@@ -1,0 +1,311 @@
+{
+  "canonical_target": "torch.mul",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "sum",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_perpneg.py:16:20 (perp_neg)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wanmove.py:20:58 (get_pos_emb)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "nodes.py:123:18 (ConditioningAverage.addWeighted)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "nodes.py:123:60 (ConditioningAverage.addWeighted)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "nodes.py:126:41 (ConditioningAverage.addWeighted)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "nodes.py:126:97 (ConditioningAverage.addWeighted)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy_extras/nodes_perpneg.py:16:20 (perp_neg)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wanmove.py:20:58 (get_pos_emb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:123:18 (ConditioningAverage.addWeighted)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:123:60 (ConditioningAverage.addWeighted)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:126:41 (ConditioningAverage.addWeighted)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:126:97 (ConditioningAverage.addWeighted)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-615251b481b7-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-615251B481B7",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "db6bf2eefddb43f4a2fc415b4e9401ffa2f3a9da5b95ef97c296833dd0846f95",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy_extras/nodes_perpneg.py",
+        "sha256": "730fe887016232b50b5e12c22654248594d9a0ace2b7c84d11e41e1c5b014bfd"
+      },
+      {
+        "path": "comfy_extras/nodes_wanmove.py",
+        "sha256": "b0a7bdaa04d0aa2e4eac1d9d666d05ad93ee95e406a630ee9a7907c4a81c7dff"
+      },
+      {
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.mul"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_09",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-615251b481b7",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "attribute": "sum",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 16,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "neg",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pos",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "perp_neg",
+      "site": "comfy_extras/nodes_perpneg.py:16:20 (perp_neg)",
+      "source_path": "comfy_extras/nodes_perpneg.py",
+      "source_sha256": "730fe887016232b50b5e12c22654248594d9a0ace2b7c84d11e41e1c5b014bfd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 58,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 20,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.div(i.to(torch.float32), d)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "get_pos_emb",
+      "site": "comfy_extras/nodes_wanmove.py:20:58 (get_pos_emb)",
+      "source_path": "comfy_extras/nodes_wanmove.py",
+      "source_sha256": "b0a7bdaa04d0aa2e4eac1d9d666d05ad93ee95e406a630ee9a7907c4a81c7dff",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 123,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t1",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "conditioning_to_strength",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ConditioningAverage.addWeighted",
+      "site": "nodes.py:123:18 (ConditioningAverage.addWeighted)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 60,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 123,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t0",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1.0 - conditioning_to_strength",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ConditioningAverage.addWeighted",
+      "site": "nodes.py:123:60 (ConditioningAverage.addWeighted)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 126,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "pooled_output_to",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "conditioning_to_strength",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ConditioningAverage.addWeighted",
+      "site": "nodes.py:126:41 (ConditioningAverage.addWeighted)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mul"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 97,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 126,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "pooled_output_from",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1.0 - conditioning_to_strength",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ConditioningAverage.addWeighted",
+      "site": "nodes.py:126:97 (ConditioningAverage.addWeighted)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mul"
+    }
+  ],
+  "static_definition": null
+}

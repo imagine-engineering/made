@@ -1,0 +1,647 @@
+{
+  "canonical_target": "torch.nn.functional.grid_sample",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/moge/panorama.py:130:12 (_grid_sample_uv)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:372:14 (_deformable_attn_v2)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/sam3/detector.py:254:19 (GeometryEncoder._encode_points)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:36:12 (_warp_core)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:15:12 (_warp)"
+    },
+    {
+      "expectation": {
+        "attribute": "squeeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/mediapipe/face_landmarker.py:525:12 (_sample_warp)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1507:13 (_sample_vertex_colours_gpu.samp)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wan.py:654:21 (_patch_motion_single)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy_extras/void_noise_warp.py:84:11 (_torch_remap_relative)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/moge/panorama.py:130:12 (_grid_sample_uv)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:372:14 (_deformable_attn_v2)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/detector.py:254:19 (GeometryEncoder._encode_points)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:36:12 (_warp_core)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:15:12 (_warp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/mediapipe/face_landmarker.py:525:12 (_sample_warp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1507:13 (_sample_vertex_colours_gpu.samp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:654:21 (_patch_motion_single)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/void_noise_warp.py:84:11 (_torch_remap_relative)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-a90ab43a3320-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match batch/channel/spatial conventions, padding, stride, dilation, groups, interpolation coordinates, and invalid geometry failures.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "align_corners",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "mode",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "padding_mode",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-A90AB43A3320",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "d678a430f94166174f4c462c6bed70f29a543eaa4b41d1a8938cd4cb51e0e5a4",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/moge/panorama.py",
+        "sha256": "d278c70946c82356e786f00af5967cc597b0fdab9720f1a54539af781c2e7881"
+      },
+      {
+        "path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+        "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"
+      },
+      {
+        "path": "comfy/ldm/sam3/detector.py",
+        "sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+      },
+      {
+        "path": "comfy_extras/mediapipe/face_landmarker.py",
+        "sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      },
+      {
+        "path": "comfy_extras/void_noise_warp.py",
+        "sha256": "4b923f26b69d76b1e17e166fc2671006a16b3a1f09dc0d480e9c8122ab103dbf"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.functional.grid_sample"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "spatial_functional_kernel_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-spatial-functional-kernel-comfy-tensor-op-1f9d23f3b331",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "mode",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'border'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 130,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "img_bchw",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_grid_sample_uv",
+      "site": "comfy/ldm/moge/panorama.py:130:12 (_grid_sample_uv)",
+      "source_path": "comfy/ldm/moge/panorama.py",
+      "source_sha256": "d278c70946c82356e786f00af5967cc597b0fdab9720f1a54539af781c2e7881",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'zeros'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 372,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "val_l",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grids_per_lvl[lvl]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "_deformable_attn_v2",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:372:14 (_deformable_attn_v2)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 254,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "img_feat_2d",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GeometryEncoder._encode_points",
+      "site": "comfy/ldm/sam3/detector.py:254:19 (GeometryEncoder._encode_points)",
+      "source_path": "comfy/ldm/sam3/detector.py",
+      "source_sha256": "b585e56e8f9516dab49aade13a4fcd8dbf497e184b4b9e062bc3f1d04d8d02d8",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'border'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 36,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "image.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_warp_core",
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:36:12 (_warp_core)",
+      "source_path": "comfy_extras/frame_interpolation_models/film_net.py",
+      "source_sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'border'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 15,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "img.float()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_warp",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:15:12 (_warp)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "squeeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "padding_mode",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 525,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "image_chw.unsqueeze(0)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_sample_warp",
+      "site": "comfy_extras/mediapipe/face_landmarker.py:525:12 (_sample_warp)",
+      "source_path": "comfy_extras/mediapipe/face_landmarker.py",
+      "source_sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "'bilinear'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'border'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 1507,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "inp",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_sample_vertex_colours_gpu.samp",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1507:13 (_sample_vertex_colours_gpu.samp)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.functional.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "grid_mode",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'zeros'",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 654,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "vid.permute(1, 0, 2, 3)[:1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "tracks_n[:, :1].type(vid.dtype)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_patch_motion_single",
+      "site": "comfy_extras/nodes_wan.py:654:21 (_patch_motion_single)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.functional.grid_sample"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "mode",
+          "syntax": "interp",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "align_corners",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding_mode",
+          "syntax": "'zeros'",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 84,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "image[None]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "grid",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_torch_remap_relative",
+      "site": "comfy_extras/void_noise_warp.py:84:11 (_torch_remap_relative)",
+      "source_path": "comfy_extras/void_noise_warp.py",
+      "source_sha256": "4b923f26b69d76b1e17e166fc2671006a16b3a1f09dc0d480e9c8122ab103dbf",
+      "status": "static-call-observed",
+      "target_syntax": "F.grid_sample"
+    }
+  ],
+  "static_definition": null
+}

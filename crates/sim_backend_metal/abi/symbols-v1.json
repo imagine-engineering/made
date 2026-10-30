@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "backend": "metal",
+  "abi_floor": "macos-13-metal-3",
+  "targets": ["aarch64-apple-darwin", "x86_64-apple-darwin"],
+  "frameworks": [
+    {
+      "name": "Metal",
+      "install_name": "/System/Library/Frameworks/Metal.framework/Metal",
+      "image_name": "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+      "symbols": ["MTLCreateSystemDefaultDevice"]
+    },
+    {
+      "name": "MetalPerformanceShaders",
+      "install_name": "/System/Library/Frameworks/MetalPerformanceShaders.framework/MetalPerformanceShaders",
+      "image_name": "/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/MetalPerformanceShaders",
+      "symbols": ["MPSSupportsMTLDevice"]
+    },
+    {
+      "name": "MetalPerformanceShadersGraph",
+      "install_name": "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/MetalPerformanceShadersGraph",
+      "image_name": "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/Versions/A/MetalPerformanceShadersGraph",
+      "symbols": []
+    }
+  ],
+  "classes": [
+    {
+      "name": "MPSGraph",
+      "image_name": "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/Versions/A/MetalPerformanceShadersGraph",
+      "selectors": [
+        {"kind":"class","name":"new","encoding":"@16@0:8"},
+        {"kind":"instance","name":"additionWithPrimaryTensor:secondaryTensor:name:","encoding":"@40@0:8@16@24@32"},
+        {"kind":"instance","name":"compileWithDevice:feeds:targetTensors:targetOperations:compilationDescriptor:","encoding":"@56@0:8@16@24@32@40@48"},
+        {"kind":"instance","name":"constantWithScalar:dataType:","encoding":"@28@0:8d16I24"},
+        {"kind":"instance","name":"init","encoding":"@16@0:8"},
+        {"kind":"instance","name":"placeholderWithShape:dataType:name:","encoding":"@36@0:8@16I24@28"},
+        {"kind":"instance","name":"runWithFeeds:targetTensors:targetOperations:","encoding":"@40@0:8@16@24@32"},
+        {"kind":"instance","name":"runWithMTLCommandQueue:feeds:targetTensors:targetOperations:","encoding":"@48@0:8@16@24@32@40"}
+      ]
+    },
+    {
+      "name": "MPSGraphDevice",
+      "image_name": "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/Versions/A/MetalPerformanceShadersGraph",
+      "selectors": [
+        {"kind":"class","name":"deviceWithMTLDevice:","encoding":"@24@0:8@16"},
+        {"kind":"instance","name":"metalDevice","encoding":"@16@0:8"}
+      ]
+    },
+    {
+      "name": "MPSGraphTensorData",
+      "image_name": "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/Versions/A/MetalPerformanceShadersGraph",
+      "selectors": [
+        {"kind":"instance","name":"initWithMTLBuffer:shape:dataType:","encoding":"@36@0:8@16@24I32"},
+        {"kind":"instance","name":"initWithMTLBuffer:shape:dataType:rowBytes:","encoding":"@44@0:8@16@24I32Q36"}
+      ]
+    }
+  ],
+  "layouts": [
+    {"name":"MPSDataType","size":4,"align":4},
+    {"name":"MTLOrigin","size":24,"align":8},
+    {"name":"MTLRegion","size":48,"align":8},
+    {"name":"MTLSize","size":24,"align":8},
+    {"name":"Objective-C BOOL","size":1,"align":1}
+  ],
+  "headers": [
+    {"path":"Metal/MTLDevice.h","sha256":"41c2dbbb0e572e0cd8ea64022a649bfcea51a880f74ff2194d6ee7a68377f36d"},
+    {"path":"Metal/MTLTypes.h","sha256":"835ba381014a9a666b61dfa9277c6213b6f73cec9d2d64f1a567bb5cd51de1ec"},
+    {"path":"MetalPerformanceShaders/MetalPerformanceShaders.h","sha256":"06e3752402c2f317d0477093662e41323121497a1317ca838ed4282afeb380f4"},
+    {"path":"MPSCore/MPSCoreTypes.h","sha256":"20b2f712c77dfaacec665b1070470373f873b1c1f3206a6f930c7ace8ab2dcf2"},
+    {"path":"MPSGraph/MPSGraph.h","sha256":"45e2e964841078426524210f1458e98a46cafbb1ea10394137bb3a90c1fbe154"},
+    {"path":"MPSGraph/MPSGraphArithmeticOps.h","sha256":"5b1c407099d58aba9604084045a84d28fb72438559965d5c99ff29da12595cde"},
+    {"path":"MPSGraph/MPSGraphCore.h","sha256":"b8d58b60d15042e63f6960c84e6e4db8098aa8d98af2312a90c8590e86332b05"},
+    {"path":"MPSGraph/MPSGraphDevice.h","sha256":"ed4e690f455fb93d96754c9b31967a6fdff2150d5c5a4226dc8649810326d272"},
+    {"path":"MPSGraph/MPSGraphMemoryOps.h","sha256":"42b3e91d664c0dec1df508716f1a6b55158f7b2a0162df32be20f6b0fc3d3eb6"},
+    {"path":"MPSGraph/MPSGraphTensorData.h","sha256":"29cc86c667009d31a469ca63da2e87705c4246445cae7a530bcf5d298879ff73"},
+    {"path":"usr/include/dlfcn.h","sha256":"04294faa7f4d8f08cef5b11c0813595ba0e87aa345677576ff62423aefa77e33"},
+    {"path":"usr/include/objc/runtime.h","sha256":"e34d98bb24db821fde2a06653daa66b72cbeaa8baa55a38c34a6fbdba1adef8c"}
+  ],
+  "readiness_function": "zed_sim_metal_readiness_v1",
+  "unsafe_owner": "sim_backend_metal::loader"
+}

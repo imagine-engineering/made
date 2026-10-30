@@ -1,0 +1,19 @@
+{
+  "format": "zed.sim.audio-encoder-resource-foundation.v1",
+  "source_sha256": {
+    "nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a",
+    "audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
+    "wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
+    "whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22"
+  },
+  "architectures": [
+    "Wav2Vec2Base",
+    "Wav2Vec2Large",
+    "WhisperLargeV3"
+  ],
+  "fixture_kind": "reduced",
+  "certified_device": "CPU",
+  "certified_dtype": "F32",
+  "generator_sha256": "47f772bc44a1f3aeb927fe911556775b5b157bcba3977b4200d6c440a8190dad",
+  "oracle_sha256": "873985e347289929433a8a66918ab17db19f9309e9ae13521ef7ef7d8943a218"
+}
