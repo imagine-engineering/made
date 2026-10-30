@@ -8009,9 +8009,9 @@ mod tests {
                         .filter_map(|binding| {
                             binding
                                 .predicate()
-                                .filter(|predicate| predicate.to_string().contains("ComfyGraph"))
+                                .filter(|predicate| predicate.to_string().contains("SimGraph"))
                                 .map(|predicate| {
-                                    assert!(predicate.to_string().contains("ComfyGraph"));
+                                    assert!(predicate.to_string().contains("SimGraph"));
                                     binding.action().name().to_owned()
                                 })
                         })
@@ -8027,13 +8027,13 @@ mod tests {
                     vec![KeyBinding::new(
                         "ctrl-enter",
                         zed_actions::About,
-                        Some("ComfyGraph"),
+                        Some("SimGraph"),
                     )],
                 );
                 let keystroke = Keystroke::parse("ctrl-enter")
                     .expect("parse the known conflicting Sim keystroke");
                 let mut graph_context = KeyContext::new_with_defaults();
-                graph_context.add("ComfyGraph");
+                graph_context.add("SimGraph");
                 let keymap = cx.key_bindings();
                 let keymap = keymap.borrow();
                 let (resolved_bindings, pending) =
@@ -11067,7 +11067,7 @@ mod tests {
                         "{action} after keymap reload",
                     );
                 }
-                let context = gpui::KeyContext::parse("ComfyGraph").expect("Sim graph key context");
+                let context = gpui::KeyContext::parse("SimGraph").expect("Sim graph key context");
                 let keystroke = gpui::Keystroke::parse("ctrl-enter").expect("Sim queue key");
                 let (bindings, _) =
                     keymap.bindings_for_input(&[keystroke], std::slice::from_ref(&context));

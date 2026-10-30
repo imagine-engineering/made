@@ -4754,14 +4754,17 @@ impl AgentPanel {
         }
     }
 
-    pub(crate) fn open_configuration(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        window.dispatch_action(
-            Box::new(zed_actions::OpenSettingsPage {
-                page: "AI".to_string(),
-                target: None,
-            }),
-            cx,
-        );
+    pub(crate) fn open_configuration(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
+        // Revealing the panel can focus an input absent from the current dispatch tree.
+        window.on_next_frame(|window, cx| {
+            window.dispatch_action(
+                Box::new(zed_actions::OpenSettingsPage {
+                    page: "AI".to_string(),
+                    target: None,
+                }),
+                cx,
+            );
+        });
     }
 
     pub(crate) fn open_active_thread_as_markdown(
@@ -18057,9 +18060,21 @@ mod tests {
                     settings_requests.set(settings_requests.get() + 1);
                 });
             workspace.close_panel::<AgentPanel>(window, cx);
-            workspace.active_pane().focus_handle(cx).focus(window, cx);
+            // This empty workspace has no mounted editor pane to receive actions.
+            workspace.focus_handle(cx).focus(window, cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(window.is_action_available(&OpenSettings, cx));
         });
         cx.dispatch_action(OpenSettings);
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(
+                window.simulate_next_frame(cx) > 0,
+                "mounted agent input frame"
+            );
+        });
         cx.run_until_parked();
         assert_eq!(settings_requests.get(), 1);
         workspace.read_with(&cx, |workspace, cx| {

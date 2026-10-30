@@ -223,11 +223,11 @@ fn val_native_e2e_001() -> Result<(), Box<dyn Error>> {
     );
     cases.insert(
         "saved_png_contains_prompt_and_workflow_metadata",
-        decoded.metadata.comfy_metadata().prompt
+        decoded.metadata.sim_metadata().prompt
             == Some(serde_json::to_string(compiled_hidden_literal(
                 &plan, "5", "prompt",
             )?)?)
-            && decoded.metadata.comfy_metadata().workflow
+            && decoded.metadata.sim_metadata().workflow
                 == Some(serde_json::to_string(
                     compiled_hidden_literal(&plan, "5", "extra_pnginfo")?
                         .get("workflow")

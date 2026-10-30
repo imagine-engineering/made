@@ -148,7 +148,7 @@ fn val_legacy_engine_001() -> Result<(), Box<dyn Error>> {
         lifecycle: LegacyLifecycleEvidence {
             python_environment_managed: true,
             git_custom_nodes_managed: true,
-            comfy_server_managed: true,
+            sim_server_managed: true,
             was_running: true,
             automatic_updates_enabled: true,
             unknown_fields: BTreeMap::from([(

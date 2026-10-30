@@ -1680,8 +1680,12 @@ async fn test_extension_store(cx: &mut TestAppContext) {
         // The on-disk manifest limits the number of FS calls that need to be made
         // on startup.
         assert_eq!(fs.read_dir_call_count(), prev_fs_read_dir_call_count);
-        // The portable package inventory adds one metadata probe without scanning package files.
-        assert_eq!(fs.metadata_call_count(), prev_fs_metadata_call_count + 12);
+        // Each extension probes both Sim component files and both rejected legacy paths;
+        // the index validation and portable package inventory add six fixed probes.
+        assert_eq!(
+            fs.metadata_call_count(),
+            prev_fs_metadata_call_count + 6 + 4 * expected_index.extensions.len()
+        );
     });
 
     store.update(cx, |store, cx| {
