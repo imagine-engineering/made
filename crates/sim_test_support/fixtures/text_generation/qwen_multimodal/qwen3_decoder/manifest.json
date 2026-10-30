@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "evidence_mode": "code-inferred",
+  "snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "filtered_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "comfy/text_encoders/llama.py",
+      "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "symbols": ["Qwen3_06BConfig", "Qwen3_4BConfig", "Qwen3_8BConfig", "Qwen3VL_4BConfig", "Qwen3VL_8BConfig", "RMSNorm", "Attention.forward"]
+    },
+    {
+      "path": "comfy/text_encoders/qwen3vl.py",
+      "sha256": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06",
+      "symbols": ["Qwen3VL", "Qwen3VLClipModel.generate"]
+    }
+  ],
+  "reduced_fixture": {
+    "dtype": "F32",
+    "device": "CPU",
+    "batch": 1,
+    "tokens": [1, 2],
+    "hidden_size": 4,
+    "attention_heads": 2,
+    "key_value_heads": 1,
+    "head_dimension": 2,
+    "normalization_epsilon": 0.000001,
+    "query_norm_weight": [0.75, 1.25],
+    "key_norm_weight": [1.1, 0.8],
+    "rope_theta": 5000000.0,
+    "rope_sections": [1],
+    "logits_f32le_sha256": "e2f7a9dc822b118de4e2b20f5db96609c9d4bb0ab1d7c557fef3ba3b76f3d0f1"
+  },
+  "qualification": "Reduced exact-weight graph fixture; no licensed full Qwen checkpoint or accelerator numerical certification is claimed."
+}

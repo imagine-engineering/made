@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "development_only_packages": [
+    "sim_test_support"
+  ],
+  "source_launcher_paths": [
+    "crates/sim_test_support/src/oracle.rs"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "fixture_id": "pid-sim-model-0109",
+  "feature_id": "COMFY-MODEL-0109",
+  "detector": {
+    "tensor_shapes": { "core.lq_proj.latent_proj.0.weight": [512, 64, 3, 3] },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0109010901090109010901090109010901090109010901090109010901090109",
+  "source_weights": [
+    { "key": "model.diffusion_model.pixel_embedder.proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.s_embedder.proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.y_embedder.proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.pixel_blocks.0.adaLN_modulation_msa.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.pixel_blocks.0.adaLN_modulation_mlp.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.lq_proj.latent_proj.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.lq_proj.gate_modules.0.content_proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.lq_proj.output_heads.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.lq_proj.output_heads.0.bias", "shape": [2], "values": [0.0, 0.0] },
+    { "key": "model.diffusion_model.final_layer.linear.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0] },
+    { "key": "model.diffusion_model.final_layer.linear.bias", "shape": [2], "values": [0.0, 0.0] }
+  ],
+  "input": { "key": "input", "shape": [1, 2], "values": [1.0, -1.0] },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 176,
+  "expected_memory_bytes": 176,
+  "checkpoints": [
+    { "name": "lq.projection", "values": [1.0, -1.0] },
+    { "name": "lq.gate", "values": [0.7310586, -0.26894143] },
+    { "name": "pixel.output", "values": [0.7310586, -0.26894143] }
+  ],
+  "patches": [{
+    "identifier": "pid-lq-bias",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{
+      "key": "native.lq_proj.output_heads.0.bias",
+      "expected_shape": [2],
+      "values": [1.0, 1.0],
+      "application": "add"
+    }]
+  }],
+  "patched_checkpoints": [
+    { "name": "lq.projection", "values": [2.0, 0.0] },
+    { "name": "lq.gate", "values": [1.7615942, 0.0] },
+    { "name": "pixel.output", "values": [1.7615942, 0.0] }
+  ]
+}

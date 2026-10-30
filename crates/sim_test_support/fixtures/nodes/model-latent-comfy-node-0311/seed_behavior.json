@@ -1,0 +1,56 @@
+{
+  "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+  "class_type": "LatentBatchSeedBehavior",
+  "shape": [
+    3,
+    4,
+    8,
+    8
+  ],
+  "cases": [
+    {
+      "seed_behavior": "random",
+      "input_batch_index": [
+        9,
+        10,
+        11
+      ],
+      "expected_batch_index": null,
+      "retained_extra": "retained",
+      "input_unchanged": true
+    },
+    {
+      "seed_behavior": "fixed",
+      "input_batch_index": [
+        9,
+        10,
+        11
+      ],
+      "expected_batch_index": [
+        9,
+        9,
+        9
+      ],
+      "retained_extra": "retained",
+      "input_unchanged": true
+    },
+    {
+      "seed_behavior": "fixed",
+      "input_batch_index": null,
+      "expected_batch_index": [
+        0,
+        0,
+        0
+      ],
+      "retained_extra": "retained",
+      "input_unchanged": true
+    },
+    {
+      "seed_behavior": "random",
+      "input_batch_index": null,
+      "expected_batch_index": null,
+      "retained_extra": "retained",
+      "input_unchanged": true
+    }
+  ]
+}

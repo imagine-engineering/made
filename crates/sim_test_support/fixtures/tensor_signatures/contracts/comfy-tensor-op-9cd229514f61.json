@@ -1,0 +1,597 @@
+{
+  "canonical_target": "torch.concat",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/lightricks/av_model.py:580:16 (LTXAVModel.preprocess_text_embeds)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/ar_model.py:208:23 (CausalWanModel.forward_block)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:571:21 (WanModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:588:27 (WanModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:797:27 (VaceWanModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:908:27 (CameraWanModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:512:21 (AnimateWanModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:521:27 (AnimateWanModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:394:26 (MultiTalkAudioProjModel.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_wandancer.py:135:21 (WanDancerModel.forward_orig)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/lt.py:181:23 (LTXAVTEModel.encode_token_weights)"
+    },
+    {
+      "expectation": {
+        "attribute": "transpose",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_camera_trajectory.py:216:32 (WanCameraEmbedding.execute)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/lightricks/av_model.py:580:16 (LTXAVModel.preprocess_text_embeds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/ar_model.py:208:23 (CausalWanModel.forward_block)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:571:21 (WanModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:588:27 (WanModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:797:27 (VaceWanModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:908:27 (CameraWanModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:512:21 (AnimateWanModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:521:27 (AnimateWanModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:394:26 (MultiTalkAudioProjModel.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_wandancer.py:135:21 (WanDancerModel.forward_orig)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/lt.py:181:23 (LTXAVTEModel.encode_token_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_camera_trajectory.py:216:32 (WanCameraEmbedding.execute)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-9cd229514f61-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-9CD229514F61",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "2723bc237ec99be6044b248b3fe1397e43450c0e3c57adf6cec889144e12f349",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/lightricks/av_model.py",
+        "sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7"
+      },
+      {
+        "path": "comfy/ldm/wan/ar_model.py",
+        "sha256": "823806b0b8b02a780ab3f8e2a6816dfb31b9598aef4e6d8fb3039319a14984a3"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy/ldm/wan/model_animate.py",
+        "sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449"
+      },
+      {
+        "path": "comfy/ldm/wan/model_multitalk.py",
+        "sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8"
+      },
+      {
+        "path": "comfy/ldm/wan/model_wandancer.py",
+        "sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1"
+      },
+      {
+        "path": "comfy/text_encoders/lt.py",
+        "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2"
+      },
+      {
+        "path": "comfy_extras/nodes_camera_trajectory.py",
+        "sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.concat"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_14",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-9cd229514f61",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 580,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(out_vid, out_audio)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "LTXAVModel.preprocess_text_embeds",
+      "site": "comfy/ldm/lightricks/av_model.py:580:16 (LTXAVModel.preprocess_text_embeds)",
+      "source_path": "comfy/ldm/lightricks/av_model.py",
+      "source_sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 208,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[context_clip, context]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "CausalWanModel.forward_block",
+      "site": "comfy/ldm/wan/ar_model.py:208:23 (CausalWanModel.forward_block)",
+      "source_path": "comfy/ldm/wan/ar_model.py",
+      "source_sha256": "823806b0b8b02a780ab3f8e2a6816dfb31b9598aef4e6d8fb3039319a14984a3",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 571,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(full_ref, x)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "WanModel.forward_orig",
+      "site": "comfy/ldm/wan/model.py:571:21 (WanModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 588,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[context_clip, context]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "WanModel.forward_orig",
+      "site": "comfy/ldm/wan/model.py:588:27 (WanModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 797,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[context_clip, context]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "VaceWanModel.forward_orig",
+      "site": "comfy/ldm/wan/model.py:797:27 (VaceWanModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 908,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[context_clip, context]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "CameraWanModel.forward_orig",
+      "site": "comfy/ldm/wan/model.py:908:27 (CameraWanModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 512,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(full_ref, x)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "AnimateWanModel.forward_orig",
+      "site": "comfy/ldm/wan/model_animate.py:512:21 (AnimateWanModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 521,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[context_clip, context]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "AnimateWanModel.forward_orig",
+      "site": "comfy/ldm/wan/model_animate.py:521:27 (AnimateWanModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 394,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[audio_embeds, audio_embeds_vf]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "MultiTalkAudioProjModel.forward",
+      "site": "comfy/ldm/wan/model_multitalk.py:394:26 (MultiTalkAudioProjModel.forward)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 135,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(full_ref, x)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "WanDancerModel.forward_orig",
+      "site": "comfy/ldm/wan/model_wandancer.py:135:21 (WanDancerModel.forward_orig)",
+      "source_path": "comfy/ldm/wan/model_wandancer.py",
+      "source_sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 181,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(out_vid, out_audio)",
+          "syntax_kind": "Tuple"
+        }
+      ],
+      "scope": "LTXAVTEModel.encode_token_weights",
+      "site": "comfy/text_encoders/lt.py:181:23 (LTXAVTEModel.encode_token_weights)",
+      "source_path": "comfy/text_encoders/lt.py",
+      "source_sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 32,
+      "consumer_output_expectation": {
+        "attribute": "transpose",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "2",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 216,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[torch.repeat_interleave(control_camera_video[:, :, 0:1], repeats=4, dim=2), control_camera_video[:, :, 1:]]",
+          "syntax_kind": "List"
+        }
+      ],
+      "scope": "WanCameraEmbedding.execute",
+      "site": "comfy_extras/nodes_camera_trajectory.py:216:32 (WanCameraEmbedding.execute)",
+      "source_path": "comfy_extras/nodes_camera_trajectory.py",
+      "source_sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77",
+      "status": "static-call-observed",
+      "target_syntax": "torch.concat"
+    }
+  ],
+  "static_definition": null
+}

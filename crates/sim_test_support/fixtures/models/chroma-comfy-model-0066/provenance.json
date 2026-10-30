@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture_id": "chroma-sim-model-0066",
+  "feature_id": "COMFY-MODEL-0066",
+  "source_symbol": "Chroma",
+  "source_ordinal": 71,
+  "source_architecture": "model_base.Chroma",
+  "latent_feature_id": "COMFY-MODEL-0029",
+  "latent_identifier": "Flux",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/chroma/model.py", "sha256": "e8bdf9b0f080c71a5d215a11d5a1344af8ef220b6251466c124e261ccddbfb0e"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/chroma/layers.py", "sha256": "1d08fdde7b1a9ea98b6ce9a79bcd4394e5df9a0bb3872a458f79cb11bcfec25f"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/pixart_t5.py", "sha256": "9645107e3fcaafb8adf74b74f7444bc7cf4c9e8b05cdcb7651d65b1798d3d8ac"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/sd3_clip.py", "sha256": "61bde2b4a428779469a01f342a9195d115f2a207c7a3d2c0d6c0a5715fdc03ed"}
+  ],
+  "source_projection": "source_symbol=Chroma\nsource_ordinal=71\nunet_config.image_model=chroma\nsampling_settings.multiplier=1.0\nlatent_format=sim.latent_formats.Flux\nmemory_usage_factor=3.2\nsupported_inference_dtypes=bf16,f16,f32\narchitecture=model_base.Chroma\nclip_tokenizer=sim.text_encoders.pixart_t5.PixArtTokenizer\nclip_model=sim.text_encoders.pixart_t5.pixart_te\nclip_configuration=sim.text_encoders.sd3_clip.t5_xxl_detect\nprocess_unet_state_dict=.scale->.weight\nvae_key_prefix=first_stage_model.\ntext_encoder_key_prefix=cond_stage_model.\n",
+  "source_projection_sha256": "7cc9cc2dd6e1ba923a206f5d59054ec7fb0a42aac927acf91174c3c7a5fc40f1",
+  "alternate_layout": "unprefixed Chroma-native state keys accepted by the pinned detector; no Chroma-specific diffusers converter is claimed",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI Chroma sources; no production Python dependency"
+}

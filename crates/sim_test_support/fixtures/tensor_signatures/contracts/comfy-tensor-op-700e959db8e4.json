@@ -1,0 +1,808 @@
+{
+  "canonical_target": "torch.nn.Conv2d",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:104:21 (SpatialRationalResampler.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:204:21 (LatentUpsampler.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:132:24 (Adapter.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:14:16 (conv_nd)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:235:23 (ResnetBlock_light.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:237:23 (ResnetBlock_light.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:250:24 (extractor.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:255:25 (extractor.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:72:28 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:76:23 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:78:23 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:80:25 (ResnetBlock.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:104:21 (SpatialRationalResampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:204:21 (LatentUpsampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:132:24 (Adapter.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:14:16 (conv_nd)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:235:23 (ResnetBlock_light.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:237:23 (ResnetBlock_light.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:250:24 (extractor.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:255:25 (extractor.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:72:28 (ResnetBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:76:23 (ResnetBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:78:23 (ResnetBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:80:25 (ResnetBlock.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-700e959db8e4-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_3",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_4",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "kernel_size",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "padding",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-700E959DB8E4",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "6771b05d5378ac0b75b36aff3140aea5895debcc175b072cf178e42cd34c762e",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/lightricks/latent_upsampler.py",
+        "sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207"
+      },
+      {
+        "path": "comfy/ldm/modules/temporal_ae.py",
+        "sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/t2i_adapter/adapter.py",
+        "sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af"
+      },
+      {
+        "path": "comfy/weight_adapter/bypass.py",
+        "sha256": "618c286c5f74e823318f41774e02cfcfa02d74ee9d51320ec0aa2694cd74aa8e"
+      },
+      {
+        "path": "comfy/weight_adapter/lora.py",
+        "sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5"
+      },
+      {
+        "path": "comfy_extras/nodes_train.py",
+        "sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.Conv2d"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "neural_network_module_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-neural-network-module-comfy-tensor-op-5b8ce1451811",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 104,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "mid_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.num ** 2 * mid_channels",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "SpatialRationalResampler.__init__",
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:104:21 (SpatialRationalResampler.__init__)",
+      "source_path": "comfy/ldm/lightricks/latent_upsampler.py",
+      "source_sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "kernel_size",
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "padding",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 204,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "mid_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "4 * mid_channels",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "LatentUpsampler.__init__",
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:204:21 (LatentUpsampler.__init__)",
+      "source_path": "comfy/ldm/lightricks/latent_upsampler.py",
+      "source_sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 132,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "cin",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "channels[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "Adapter.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:132:24 (Adapter.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": true,
+          "name": null,
+          "syntax": "kwargs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 14,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": true,
+          "syntax": "args",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "conv_nd",
+      "site": "comfy/t2i_adapter/adapter.py:14:16 (conv_nd)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 235,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResnetBlock_light.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:235:23 (ResnetBlock_light.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 237,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResnetBlock_light.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:237:23 (ResnetBlock_light.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 250,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "inter_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "extractor.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:250:24 (extractor.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 255,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "inter_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "extractor.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:255:25 (extractor.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 72,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "ksize",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "ps",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:72:28 (ResnetBlock.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 76,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:76:23 (ResnetBlock.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 78,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "ksize",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "ps",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:78:23 (ResnetBlock.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 80,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "ksize",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "ps",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/t2i_adapter/adapter.py:80:25 (ResnetBlock.__init__)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Conv2d"
+    }
+  ],
+  "static_definition": null
+}

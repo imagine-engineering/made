@@ -1,0 +1,302 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_corex/abi/symbols-v1.json"
+licenses="$workspace/crates/sim_backend_corex/LICENSES"
+policy="$workspace/nix/sim-backends/corex/package-policy.json"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET ED25519_RECEIPT SIGNER_ID" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --verify-sdk COREX_ROOT" >&2
+    echo "       $0 --self-test" >&2
+}
+
+inspect_structure() {
+    python3 - "$policy" "$1" <<'PY'
+import fnmatch
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+policy_path = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+
+def strict_pairs(values):
+    result = {}
+    for key, value in values:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+policy = json.loads(policy_path.read_text(encoding="utf-8"), object_pairs_hook=strict_pairs)
+expected_policy_keys = {
+    "schema_version", "backend", "abi_floor", "review_state", "allowed_targets",
+    "allowed_files", "forbidden_payload_patterns", "redistributes_vendor_runtime",
+    "license_approval_required_for_redistribution", "signature_algorithm",
+    "signature_domain", "signature_coverage", "final_application_signing_required",
+    "runtime_loading_enabled", "runtime_verification_owner",
+}
+if set(policy) != expected_policy_keys:
+    raise SystemExit("CoreX package policy has unknown or missing fields")
+if (
+    policy["schema_version"] != 1
+    or policy["backend"] != "corex"
+    or policy["review_state"] != "blocked-missing-vendor-headers"
+    or policy["redistributes_vendor_runtime"] is not False
+    or policy["license_approval_required_for_redistribution"] is not True
+    or policy["runtime_loading_enabled"] is not False
+    or policy["runtime_verification_owner"] != "sim_runtime::NativeFfiRegistry"
+):
+    raise SystemExit("CoreX package policy identity or fail-closed state differs")
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("CoreX package root must be a directory and not a symbolic link")
+
+files = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for directory_name in directory_names:
+        path = pathlib.Path(directory, directory_name)
+        if path.is_symlink():
+            raise SystemExit(f"CoreX package directory is a symbolic link: {path.relative_to(root)}")
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"CoreX package entry is not a bounded regular file: {relative}")
+        if any(fnmatch.fnmatch(path.name, pattern) for pattern in policy["forbidden_payload_patterns"]):
+            raise SystemExit(f"CoreX vendor redistribution is forbidden: {relative}")
+        files.append(relative)
+
+if sorted(files) != sorted(policy["allowed_files"]):
+    raise SystemExit(f"CoreX package file set differs: {sorted(files)}")
+
+receipt_path = root / "adapter-manifest.sig"
+receipt = json.loads(receipt_path.read_text(encoding="ascii"), object_pairs_hook=strict_pairs)
+if list(receipt) != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("CoreX signature receipt has unknown, missing, or noncanonical fields")
+if receipt["schema_version"] != 1 or receipt["algorithm"] != "ed25519":
+    raise SystemExit("CoreX signature receipt identity differs")
+if re.fullmatch(r"[0-9a-f]{128}", receipt["signature"]) is None:
+    raise SystemExit("CoreX signature must be 64-byte lowercase hexadecimal Ed25519 data")
+canonical = json.dumps(receipt, separators=(",", ":"), ensure_ascii=True) + "\n"
+if receipt_path.read_text(encoding="ascii") != canonical:
+    raise SystemExit("CoreX signature receipt is not canonical-json-v1")
+
+manifest = json.loads((root / "adapter-manifest.json").read_text(encoding="utf-8"), object_pairs_hook=strict_pairs)
+expected_manifest_keys = {
+    "schema_version", "backend", "abi_floor", "review_state", "target",
+    "abi_manifest_sha256", "required_external_libraries", "discovery_order", "kernels",
+    "redistributes_vendor_runtime", "license_approval_required_for_redistribution",
+    "runtime_loading_enabled", "discovery_is_authorization", "package_receipt_is_authorization",
+    "signer", "signature_algorithm", "signature_domain", "signature_coverage",
+    "runtime_verification_owner", "binding_status_owner", "unsafe_owner",
+    "final_application_signing_required",
+}
+if set(manifest) != expected_manifest_keys:
+    raise SystemExit("CoreX adapter manifest has unknown or missing fields")
+if manifest["backend"] != "corex" or manifest["abi_floor"] != policy["abi_floor"]:
+    raise SystemExit("CoreX adapter manifest identity differs")
+if manifest["review_state"] != "blocked-missing-vendor-headers":
+    raise SystemExit("CoreX package must preserve the provenance blocker")
+if manifest["redistributes_vendor_runtime"] is not False or manifest["kernels"] != []:
+    raise SystemExit("CoreX foundation package must contain no vendor payload or kernels")
+if manifest["runtime_loading_enabled"] is not False:
+    raise SystemExit("CoreX runtime loading cannot be enabled without reviewed declarations")
+if manifest["discovery_is_authorization"] is not False or manifest["package_receipt_is_authorization"] is not False:
+    raise SystemExit("CoreX structural metadata cannot self-authorize")
+if (
+    manifest["schema_version"] != 1
+    or manifest["target"] not in policy["allowed_targets"]
+    or manifest["required_external_libraries"] != ["libixblas.so", "libixrt.so"]
+    or manifest["discovery_order"] != ["SIM_COREX_ROOT", "IXRT_HOME", "signed_package_roots"]
+    or manifest["license_approval_required_for_redistribution"] is not True
+    or manifest["signature_algorithm"] != policy["signature_algorithm"]
+    or manifest["signature_domain"] != policy["signature_domain"]
+    or manifest["signature_coverage"] != policy["signature_coverage"]
+    or manifest["runtime_verification_owner"] != policy["runtime_verification_owner"]
+    or manifest["binding_status_owner"] != "sim_types::NativeBackendBindingStatus"
+    or manifest["unsafe_owner"] != "sim_backend_corex::loader"
+    or manifest["final_application_signing_required"] is not True
+):
+    raise SystemExit("CoreX adapter manifest contract differs")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", manifest["signer"]) is None:
+    raise SystemExit("CoreX signer ID is not canonical")
+
+abi_path = root / "abi/symbols-v1.json"
+abi = json.loads(abi_path.read_text(encoding="utf-8"), object_pairs_hook=strict_pairs)
+if (
+    abi["backend"] != "corex"
+    or abi["abi_floor"] != policy["abi_floor"]
+    or abi["review_state"] != policy["review_state"]
+    or abi["targets"] != policy["allowed_targets"]
+    or [row["filename"] for row in abi["libraries"]] != ["libixblas.so", "libixrt.so"]
+    or any(row["symbols"] for row in abi["libraries"])
+    or abi["layouts"] != []
+    or abi["evidence"]["proves_ixrt_0_8_abi"] is not False
+    or abi["package"]["runtime_loading_enabled"] is not False
+):
+    raise SystemExit("CoreX ABI manifest no longer preserves the reviewed provenance ceiling")
+if manifest["abi_manifest_sha256"] != hashlib.sha256(abi_path.read_bytes()).hexdigest():
+    raise SystemExit("CoreX ABI manifest digest differs")
+
+expected = []
+coverage_path = root / "package-coverage.sha256"
+for relative in sorted(set(files) - {"adapter-manifest.sig", "package-coverage.sha256"}):
+    contents = (root / relative).read_bytes()
+    expected.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+if coverage_path.read_text(encoding="ascii") != "".join(expected):
+    raise SystemExit("CoreX package coverage is incomplete or tampered")
+PY
+}
+
+verify_sdk() {
+    python3 - "$abi_manifest" "$1" <<'PY'
+import json
+import pathlib
+import sys
+
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+root = pathlib.Path(sys.argv[2])
+if not root.is_absolute():
+    raise SystemExit("CoreX SDK root must be absolute")
+missing = ", ".join(row["id"] for row in manifest["missing_evidence"])
+raise SystemExit(
+    "CoreX SDK verification is intentionally unavailable: the checked-in manifest has no reviewed "
+    f"IXRT 0.8/IXBLAS declarations or header digests ({missing})"
+)
+PY
+}
+
+package_backend() {
+    destination=$1
+    target=$2
+    receipt=$3
+    signer=$4
+    python3 - "$destination" "$target" "$receipt" "$signer" "$abi_manifest" "$licenses" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import stat
+import sys
+
+destination, target, receipt, signer, abi_source, licenses_source = map(pathlib.Path, sys.argv[1:])
+target = str(target)
+signer = str(signer)
+if target != "x86_64-unknown-linux-gnu":
+    raise SystemExit("CoreX package target is not the reviewed 64-bit Linux target")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None or len(signer) > 128:
+    raise SystemExit("CoreX signer ID must use the canonical lowercase authority grammar")
+if destination.exists():
+    raise SystemExit("CoreX package destination must not already exist")
+receipt_metadata = receipt.lstat()
+if not stat.S_ISREG(receipt_metadata.st_mode) or receipt_metadata.st_size == 0 or receipt_metadata.st_size > 1024:
+    raise SystemExit("CoreX signature receipt must be a bounded regular file")
+
+destination.mkdir(parents=True)
+(destination / "abi").mkdir()
+shutil.copyfile(abi_source, destination / "abi/symbols-v1.json")
+shutil.copyfile(licenses_source, destination / "LICENSES")
+shutil.copyfile(receipt, destination / "adapter-manifest.sig")
+abi_bytes = abi_source.read_bytes()
+manifest = {
+    "schema_version": 1,
+    "backend": "corex",
+    "abi_floor": "CoreX-IXRT-0.8-ABI-profile",
+    "review_state": "blocked-missing-vendor-headers",
+    "target": target,
+    "abi_manifest_sha256": hashlib.sha256(abi_bytes).hexdigest(),
+    "required_external_libraries": ["libixblas.so", "libixrt.so"],
+    "discovery_order": ["SIM_COREX_ROOT", "IXRT_HOME", "signed_package_roots"],
+    "kernels": [],
+    "redistributes_vendor_runtime": False,
+    "license_approval_required_for_redistribution": True,
+    "runtime_loading_enabled": False,
+    "discovery_is_authorization": False,
+    "package_receipt_is_authorization": False,
+    "signer": signer,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-corex-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "runtime_verification_owner": "sim_runtime::NativeFfiRegistry",
+    "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+    "unsafe_owner": "sim_backend_corex::loader",
+    "final_application_signing_required": True,
+}
+(destination / "adapter-manifest.json").write_text(
+    json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
+covered = []
+for relative in ["LICENSES", "abi/symbols-v1.json", "adapter-manifest.json"]:
+    contents = (destination / relative).read_bytes()
+    covered.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+(destination / "package-coverage.sha256").write_text("".join(covered), encoding="ascii")
+PY
+    inspect_structure "$destination"
+}
+
+self_test() {
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/sim-corex-package.XXXXXX")
+    trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
+    receipt="$temporary/receipt.json"
+    python3 - "$receipt" <<'PY'
+import json
+import pathlib
+import sys
+pathlib.Path(sys.argv[1]).write_text(
+    json.dumps({"schema_version": 1, "algorithm": "ed25519", "signature": "0" * 128}, separators=(",", ":")) + "\n",
+    encoding="ascii",
+)
+PY
+    package_backend "$temporary/package" "x86_64-unknown-linux-gnu" "$receipt" "zed-test"
+    cp "$temporary/package/adapter-manifest.json" "$temporary/manifest.json"
+    printf '\n' >> "$temporary/package/adapter-manifest.json"
+    if inspect_structure "$temporary/package" >/dev/null 2>&1; then
+        echo "tampered CoreX package was accepted" >&2
+        exit 1
+    fi
+    mv "$temporary/manifest.json" "$temporary/package/adapter-manifest.json"
+    inspect_structure "$temporary/package"
+
+    cp -R "$temporary/package" "$temporary/forbidden"
+    printf 'vendor' > "$temporary/forbidden/libixrt.so"
+    if inspect_structure "$temporary/forbidden" >/dev/null 2>&1; then
+        echo "CoreX vendor runtime payload was accepted" >&2
+        exit 1
+    fi
+
+    mkdir "$temporary/sdk"
+    if verify_sdk "$temporary/sdk" >/dev/null 2>&1; then
+        echo "CoreX SDK was accepted without reviewed ABI declarations" >&2
+        exit 1
+    fi
+}
+
+case ${1:-} in
+    --inspect-structure)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        inspect_structure "$2"
+        ;;
+    --verify-sdk)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        verify_sdk "$2"
+        ;;
+    --self-test)
+        [ "$#" -eq 1 ] || { usage; exit 2; }
+        self_test
+        ;;
+    *)
+        [ "$#" -eq 4 ] || { usage; exit 2; }
+        package_backend "$1" "$2" "$3" "$4"
+        ;;
+esac

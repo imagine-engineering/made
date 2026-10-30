@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "backend": "cuda",
+  "ptx_isa": "7.8",
+  "minimum_target": "sm_52",
+  "runtime_compilation_for_core_kernels": false,
+  "kernels": [
+    {
+      "id": "zed_cuda_add_f32",
+      "path": "kernels/core-v1.ptx",
+      "entry": "zed_cuda_add_f32",
+      "sha256": "b3f61b727de366a7cda5874ff0cad2f7e6dee1ad547bfabd5511e1bed0fafe33",
+      "parameter_abi": ["CUdeviceptr", "CUdeviceptr", "CUdeviceptr", "uint64_t"],
+      "determinism": "one correctly-rounded IEEE-754 binary32 addition per element"
+    }
+  ]
+}

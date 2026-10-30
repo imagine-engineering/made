@@ -1,0 +1,85 @@
+{
+  "fixture_id": "sdxl-sim-model-0123",
+  "feature_id": "COMFY-MODEL-0123",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.input_blocks.0.0.weight": [320, 4, 3, 3],
+      "model.diffusion_model.time_embed.0.weight": [1280, 320],
+      "model.diffusion_model.label_emb.0.0.weight": [1, 2816],
+      "model.diffusion_model.out.2.weight": [4, 320, 3, 3],
+      "model.diffusion_model.input_blocks.2.0.in_layers.0.weight": [1],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.0.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.1.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.2.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.3.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.4.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.5.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.6.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.7.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.8.attn2.to_k.weight": [1, 2048],
+      "model.diffusion_model.input_blocks.7.1.transformer_blocks.9.attn2.to_k.weight": [1, 2048],
+      "conditioner.embedders.0.transformer.text_model.embeddings.weight": [1],
+      "conditioner.embedders.1.model.transformer.weight": [1],
+      "first_stage_model.decoder.weight": [1]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0123012301230123012301230123012301230123012301230123012301230123",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.input_blocks.0.0.weight",
+      "shape": [1],
+      "values": [0.0]
+    },
+    {
+      "key": "model.diffusion_model.time_embed.0.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.label_emb.0.0.weight",
+      "shape": [1],
+      "values": [0.0]
+    },
+    {
+      "key": "model.diffusion_model.out.2.weight",
+      "shape": [2, 2],
+      "values": [2.0, 0.0, 0.0, 0.5]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [1.0, 2.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 24,
+  "expected_memory_bytes": 24,
+  "checkpoints": [
+    { "name": "conditioning.timestep_projection", "values": [1.0, 2.0] },
+    { "name": "unet.residual_activation", "values": [0.7310586, 1.7615942] },
+    { "name": "output.noise_prediction", "values": [1.4621172, 0.8807971] }
+  ],
+  "patches": [
+    {
+      "identifier": "sdxl-base-output-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.out.2.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    { "name": "conditioning.timestep_projection", "values": [1.0, 2.0] },
+    { "name": "unet.residual_activation", "values": [0.7310586, 1.7615942] },
+    { "name": "output.noise_prediction", "values": [2.1931758, 2.6423912] }
+  ]
+}

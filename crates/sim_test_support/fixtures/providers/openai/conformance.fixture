@@ -1,0 +1,90 @@
+{
+  "namespace": "zed.sim.provider.openai",
+  "source_sha256": "d8d049f380d4e781dd07d3af1d4b67e798f1260d1fa774e362fc415ead22b697",
+  "sora_source_sha256": "397c8f803454e98d9723b3985a4df00abcde942030a8a5cd497f3a5f921e20f5",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0458",
+      "node_identifier": "OpenAIChatConfig"
+    },
+    {
+      "feature_id": "COMFY-NODE-0459",
+      "node_identifier": "OpenAIChatNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0460",
+      "node_identifier": "OpenAIDalle2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0461",
+      "node_identifier": "OpenAIDalle3"
+    },
+    {
+      "feature_id": "COMFY-NODE-0462",
+      "node_identifier": "OpenAIGPTImage1"
+    },
+    {
+      "feature_id": "COMFY-NODE-0463",
+      "node_identifier": "OpenAIGPTImageNodeV2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0464",
+      "node_identifier": "OpenAIInputFiles"
+    },
+    {
+      "feature_id": "COMFY-NODE-0465",
+      "node_identifier": "OpenAIVideoSora2"
+    }
+  ],
+  "routes": [
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0120",
+      "method": "POST",
+      "path": "/proxy/openai/images/edits"
+    },
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0121",
+      "method": "POST",
+      "path": "/proxy/openai/images/generations"
+    },
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0122",
+      "method": "POST",
+      "path": "/proxy/openai/v1/responses"
+    },
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0123",
+      "method": "POST",
+      "path": "/proxy/openai/v1/videos"
+    },
+    {
+      "disposition": "synthetic_prefix_tombstone",
+      "feature_id": "COMFY-API-EXT-0124",
+      "method": "GET",
+      "path": "/proxy/openai/v1/videos/"
+    },
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0125",
+      "method": "GET",
+      "path": "/proxy/openai/v1/videos/{initial_response.id}"
+    },
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0126",
+      "method": "GET",
+      "path": "/proxy/openai/v1/videos/{initial_response.id}/content"
+    },
+    {
+      "disposition": "executable",
+      "feature_id": "COMFY-API-EXT-0226",
+      "method": "GET",
+      "path": "/proxy/openai/v1/responses/{response_id}"
+    }
+  ]
+}

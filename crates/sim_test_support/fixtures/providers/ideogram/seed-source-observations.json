@@ -1,0 +1,710 @@
+{
+  "schema_version": 1,
+  "scope": "Capture-derived original seed schema projection only; no regenerated Source/gold fixture",
+  "source_api_sha256": "decb87d9aed1e7c9582284e57a5cd50b9ec7a2abc82d400b43db8a7b08255f56",
+  "original_result_path": "/home/asvegah/.codex/worktrees/sim-bfl-provider/sim/target/sim-validation/2026-10-05/task445-original-seed-schema-01d90417b456/result.json",
+  "original_result_sha256": "5524ebbd644c0278db33e361476f575ae6c292fbb3002c69802786be40825099",
+  "profile_sha256": "aeec88359631459313ab776f847b58f2b24cd8e1fe4702b4671cbb42dacc4ab9",
+  "python": "3.12.14",
+  "pydantic": "2.13.5",
+  "pydantic_core": "2.46.5",
+  "original_cases": 40,
+  "original_observations": 80,
+  "original_admitted_per_method": 25,
+  "original_rejected_per_method": 15,
+  "native_parity_cases": 27,
+  "explicitly_open_cases": 13,
+  "cases": [
+    {
+      "id": "seed-omitted",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": null,
+      "seed_python_type": "builtins.NoneType",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-null",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a6e756c6c7d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': None}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": null,
+      "seed_python_type": "builtins.NoneType",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-bool-true",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a747275657d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': True}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "1",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-bool-false",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a66616c73657d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': False}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "0",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-integer-zero",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a307d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 0}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "0",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-integer-positive",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a34327d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 42}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-integer-negative",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2d34327d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': -42}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "-42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-float-integral",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a34322e307d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 42.0}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-float-negative-integral",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2d34322e307d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': -42.0}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "-42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-float-fractional",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a34322e357d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 42.5}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_from_float",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, got a number with a fractional part",
+          "input": 42.5
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-nan",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a4e614e7d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': nan}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "finite_number",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a finite number",
+          "input": {
+            "nonfinite_python_float": "nan"
+          }
+        }
+      ],
+      "json_nonfinite_extension": true,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Pydantic nonfinite JSON extension differs from standard serde JSON; direct native F64 rejection separately tested."
+    },
+    {
+      "id": "seed-positive-infinity",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a496e66696e6974797d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': inf}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "finite_number",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a finite number",
+          "input": {
+            "nonfinite_python_float": "inf"
+          }
+        }
+      ],
+      "json_nonfinite_extension": true,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Pydantic nonfinite JSON extension differs from standard serde JSON; direct native F64 rejection separately tested."
+    },
+    {
+      "id": "seed-negative-infinity",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2d496e66696e6974797d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': -inf}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "finite_number",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a finite number",
+          "input": {
+            "nonfinite_python_float": "-inf"
+          }
+        }
+      ],
+      "json_nonfinite_extension": true,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Pydantic nonfinite JSON extension differs from standard serde JSON; direct native F64 rejection separately tested."
+    },
+    {
+      "id": "seed-decimal-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '42'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-plus-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a222b3432227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '+42'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-minus-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a222d3432227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '-42'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "-42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-integral-fraction-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2234322e30227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '42.0'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Wider original text coercion not implemented; retain actual ASCII/Unicode digit refusal."
+    },
+    {
+      "id": "seed-negative-integral-fraction-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a222d34322e303030227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '-42.000'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "-42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Wider original text coercion not implemented; retain actual ASCII/Unicode digit refusal."
+    },
+    {
+      "id": "seed-fraction-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2234322e35227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '42.5'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "42.5"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-ascii-whitespace",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22205c742b34325c725c6e20227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': ' \\t+42\\r\\n '}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Wider original text coercion not implemented; retain actual ASCII/Unicode digit refusal."
+    },
+    {
+      "id": "seed-underscore",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22345f32227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '4_2'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Wider original text coercion not implemented; retain actual ASCII/Unicode digit refusal."
+    },
+    {
+      "id": "seed-malformed-underscore",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22345f5f32227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '4__2'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "4__2"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-trailing-space",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22343220227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '42 '}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Wider original text coercion not implemented; retain actual ASCII/Unicode digit refusal."
+    },
+    {
+      "id": "seed-hex-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2230783261227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '0x2a'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "0x2a"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-exponent-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22342e326531227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '4.2e1'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "4.2e1"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-leading-zero-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2230303432227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '0042'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-unicode-arabic-decimal",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22d9a4d9a2227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '٤٢'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "٤٢"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-unicode-fullwidth-decimal",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22efbc94efbc92227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '４２'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "４２"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-unicode-whitespace",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22e280833432e28083227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': '\\u200342\\u2003'}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "42",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Wider original text coercion not implemented; retain actual ASCII/Unicode digit refusal."
+    },
+    {
+      "id": "seed-i64-min",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2d393232333337323033363835343737353830387d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': -9223372036854775808}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "-9223372036854775808",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-i64-max",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a393232333337323033363835343737353830377d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 9223372036854775807}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "9223372036854775807",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-below-i64",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a2d393232333337323033363835343737353830397d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': -9223372036854775809}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "-9223372036854775809",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Original arbitrary integer domain exceeds native Option<i64>; no private bigint added."
+    },
+    {
+      "id": "seed-above-i64",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a393232333337323033363835343737353830387d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 9223372036854775808}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "9223372036854775808",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Original arbitrary integer domain exceeds native Option<i64>; no private bigint added."
+    },
+    {
+      "id": "seed-u64-max",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a31383434363734343037333730393535313631357d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 18446744073709551615}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "18446744073709551615",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Original arbitrary integer domain exceeds native Option<i64>; no private bigint added."
+    },
+    {
+      "id": "seed-above-u64",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a31383434363734343037333730393535313631367d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 18446744073709551616}]}",
+      "schema_admitted": true,
+      "typed_seed_decimal": "18446744073709551616",
+      "seed_python_type": "builtins.int",
+      "original_errors": [],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": false,
+      "qualification": "Original arbitrary integer domain exceeds native Option<i64>; no private bigint added."
+    },
+    {
+      "id": "seed-malformed-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22626164227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 'bad'}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": "bad"
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-empty-text",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a22227d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': ''}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer",
+          "input": ""
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-array",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a5b5d7d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': []}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_type",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer",
+          "input": []
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-object",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a7b7d7d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': {}}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_type",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Input should be a valid integer",
+          "input": {}
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    },
+    {
+      "id": "seed-float-at-i64-limit",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a392e323233333732303336383534373736652b31387d5d7d",
+      "raw_python_repr": "{'created': '2026-10-01T00:00:00Z', 'data': [{'url': 'https://fixture.invalid/image', 'seed': 9.223372036854776e+18}]}",
+      "schema_admitted": false,
+      "typed_seed_decimal": null,
+      "seed_python_type": null,
+      "original_errors": [
+        {
+          "type": "int_parsing_size",
+          "loc": [
+            "data",
+            0,
+            "seed"
+          ],
+          "msg": "Unable to parse input string as an integer, exceeded maximum size",
+          "input": 9.223372036854776e+18
+        }
+      ],
+      "json_nonfinite_extension": false,
+      "methods_agree": true,
+      "parity_covered": true,
+      "qualification": null
+    }
+  ]
+}

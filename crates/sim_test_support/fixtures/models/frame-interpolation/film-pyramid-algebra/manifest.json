@@ -1,0 +1,51 @@
+{
+  "artifact": "zed-native-film-pyramid-algebra-v1",
+  "evidence_kind": "source-fingerprinted analytic tensor-algebra oracle",
+  "source": {
+    "repository": "ComfyUI",
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": ["concatenate_pyramids", "multiply_pyramid", "pyramid_warp"]
+  },
+  "dependency": {
+    "fixture": "../film-flow-estimator/manifest.json",
+    "sha256": "e0ff270e5ba333e206b84e5b95afe31888905287fed814fb9bfb5f27f0c71b42"
+  },
+  "analytic_cases": {
+    "concatenate": {
+      "first": [1.0],
+      "second": [2.0],
+      "dimension": 1,
+      "expected": [1.0, 2.0]
+    },
+    "multiply": {
+      "pyramid_values": [1.0, 3.0],
+      "batch_scalar": [0.5],
+      "broadcast_shape": [1, 1, 1, 1],
+      "expected": [0.5, 1.5]
+    },
+    "warp": {
+      "pyramid_values": [1.0, 3.0],
+      "flow_xy": [0.0, 0.0],
+      "expected": [1.0, 3.0]
+    },
+    "maximum_levels": 7,
+    "fresh_output_storage": true,
+    "source_tensors_are_immutable": true,
+    "pre_cancelled_scratch_in_use_bytes": 0
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "checkpoint_weight_execution": false,
+    "flow_prediction_or_synthesis_reimplemented": false,
+    "fusion_execution": false,
+    "codec_or_container_execution": false,
+    "handle_or_cache_execution": false,
+    "effect_or_publication_execution": false
+  }
+}

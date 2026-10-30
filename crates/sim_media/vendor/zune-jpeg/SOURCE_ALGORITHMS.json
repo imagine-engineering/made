@@ -1,0 +1,25 @@
+{
+  "source_version": "3.1.4.1",
+  "sources": {
+    "src/jidctint.c": {
+      "url": "https://raw.githubusercontent.com/libjpeg-turbo/libjpeg-turbo/3.1.4.1/src/jidctint.c",
+      "sha256": "25c26bdfdba0fd95413dda570c79de6268e6e3be418299160a58fb03cb3872a4"
+    },
+    "src/jdsample.c": {
+      "url": "https://raw.githubusercontent.com/libjpeg-turbo/libjpeg-turbo/3.1.4.1/src/jdsample.c",
+      "sha256": "7736ee967c5df3afaa0f86e7638bd550e67774b670d484e070d9f8685ced12c0"
+    },
+    "src/jdcolor.c": {
+      "url": "https://raw.githubusercontent.com/libjpeg-turbo/libjpeg-turbo/3.1.4.1/src/jdcolor.c",
+      "sha256": "b51cdf7f6dc93f8874fdfa82aaea7030cc70bf3408e7fcb60cf76017b07000cf"
+    },
+    "README.ijg": {
+      "url": "https://raw.githubusercontent.com/libjpeg-turbo/libjpeg-turbo/3.1.4.1/README.ijg",
+      "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6"
+    },
+    "src/jdmaster.c": {
+      "url": "https://raw.githubusercontent.com/libjpeg-turbo/libjpeg-turbo/3.1.4.1/src/jdmaster.c",
+      "sha256": "aeaf73d414cdac5fe34c9c5ae3594a22433c241e56da927d8d77231ee9663c7d"
+    }
+  }
+}

@@ -1,0 +1,616 @@
+{
+  "canonical_target": "torch.Tensor.type_as",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/model.py:55:13 (Qwen2RotaryEmbedding._set_cos_sin_cache)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ernie/model.py:290:25 (ErnieImageModel.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/flux/math.py:40:12 (_apply_rope1)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/genmo/joint_model/temporal_rope.py:29:16 (apply_rotary_emb_qk_real)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/genmo/joint_model/temporal_rope.py:30:16 (apply_rotary_emb_qk_real)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hydit/attn_layers.py:87:18 (apply_rotary_emb)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hydit/attn_layers.py:90:22 (apply_rotary_emb)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:62:16 (TextEmbeddings.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:953:38 (MMDiT.forward_core_with_concat)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/ema.py:45:44 (LitEma.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:472:20 (AnimateWanModel.after_patch_embedding)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:477:19 (AnimateWanModel.after_patch_embedding)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:161:16 (RotaryPositionalEmbedding1D.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/text_encoders/llama.py:841:16 (Gemma3MultiModalProjector.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wan.py:535:20 (process_tracks)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/ace/model.py:55:13 (Qwen2RotaryEmbedding._set_cos_sin_cache)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:290:25 (ErnieImageModel.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/math.py:40:12 (_apply_rope1)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/joint_model/temporal_rope.py:29:16 (apply_rotary_emb_qk_real)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/joint_model/temporal_rope.py:30:16 (apply_rotary_emb_qk_real)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/attn_layers.py:87:18 (apply_rotary_emb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/attn_layers.py:90:22 (apply_rotary_emb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:62:16 (TextEmbeddings.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:953:38 (MMDiT.forward_core_with_concat)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/ema.py:45:44 (LitEma.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:472:20 (AnimateWanModel.after_patch_embedding)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:477:19 (AnimateWanModel.after_patch_embedding)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:161:16 (RotaryPositionalEmbedding1D.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/llama.py:841:16 (Gemma3MultiModalProjector.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:535:20 (process_tracks)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-b3036c455992-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-B3036C455992",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "40aeadd443a3065ab205f87957e5d882c33462150cd28df47c8ba8008ea370c8",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/model.py",
+        "sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708"
+      },
+      {
+        "path": "comfy/ldm/ernie/model.py",
+        "sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c"
+      },
+      {
+        "path": "comfy/ldm/flux/math.py",
+        "sha256": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/temporal_rope.py",
+        "sha256": "1217d5d66c5ab329a0cead747ddd6362e579391b89dda599ce3b789f0e6752f9"
+      },
+      {
+        "path": "comfy/ldm/hydit/attn_layers.py",
+        "sha256": "667b14aff9a834392e424845c0002c5c24d62d6a89cf29f26ea0cf0fd2a2d8ea"
+      },
+      {
+        "path": "comfy/ldm/kandinsky5/model.py",
+        "sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+        "sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5"
+      },
+      {
+        "path": "comfy/ldm/modules/ema.py",
+        "sha256": "6185e8296e3ed8adf6fe857b09761cc469240e400a3f0f291917b5ffb8169e4c"
+      },
+      {
+        "path": "comfy/ldm/wan/model_animate.py",
+        "sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449"
+      },
+      {
+        "path": "comfy/ldm/wan/model_multitalk.py",
+        "sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8"
+      },
+      {
+        "path": "comfy/text_encoders/llama.py",
+        "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.type_as"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "storage_dtype_device_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-storage-dtype-device-comfy-tensor-op-00f639d6c8a7",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 55,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.inv_freq",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "Qwen2RotaryEmbedding._set_cos_sin_cache",
+      "site": "comfy/ldm/ace/model.py:55:13 (Qwen2RotaryEmbedding._set_cos_sin_cache)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "torch.arange(self.max_seq_len_cached, device=device, dtype=torch.int64).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 290,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hidden_states",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ErnieImageModel.forward",
+      "site": "comfy/ldm/ernie/model.py:290:25 (ErnieImageModel.forward)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "self.final_norm(hidden_states, c).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 40,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_apply_rope1",
+      "site": "comfy/ldm/flux/math.py:40:12 (_apply_rope1)",
+      "source_path": "comfy/ldm/flux/math.py",
+      "source_sha256": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece",
+      "status": "static-call-observed",
+      "target_syntax": "x_out.reshape(*x.shape).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 29,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "xqk",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "apply_rotary_emb_qk_real",
+      "site": "comfy/ldm/genmo/joint_model/temporal_rope.py:29:16 (apply_rotary_emb_qk_real)",
+      "source_path": "comfy/ldm/genmo/joint_model/temporal_rope.py",
+      "source_sha256": "1217d5d66c5ab329a0cead747ddd6362e579391b89dda599ce3b789f0e6752f9",
+      "status": "static-call-observed",
+      "target_syntax": "(xqk_even * freqs_cos - xqk_odd * freqs_sin).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 30,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "xqk",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "apply_rotary_emb_qk_real",
+      "site": "comfy/ldm/genmo/joint_model/temporal_rope.py:30:16 (apply_rotary_emb_qk_real)",
+      "source_path": "comfy/ldm/genmo/joint_model/temporal_rope.py",
+      "source_sha256": "1217d5d66c5ab329a0cead747ddd6362e579391b89dda599ce3b789f0e6752f9",
+      "status": "static-call-observed",
+      "target_syntax": "(xqk_even * freqs_sin + xqk_odd * freqs_cos).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 87,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "xq",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "apply_rotary_emb",
+      "site": "comfy/ldm/hydit/attn_layers.py:87:18 (apply_rotary_emb)",
+      "source_path": "comfy/ldm/hydit/attn_layers.py",
+      "source_sha256": "667b14aff9a834392e424845c0002c5c24d62d6a89cf29f26ea0cf0fd2a2d8ea",
+      "status": "static-call-observed",
+      "target_syntax": "torch.view_as_real(xq_ * freqs_cis).flatten(3).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 90,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "xk",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "apply_rotary_emb",
+      "site": "comfy/ldm/hydit/attn_layers.py:90:22 (apply_rotary_emb)",
+      "source_path": "comfy/ldm/hydit/attn_layers.py",
+      "source_sha256": "667b14aff9a834392e424845c0002c5c24d62d6a89cf29f26ea0cf0fd2a2d8ea",
+      "status": "static-call-observed",
+      "target_syntax": "torch.view_as_real(xk_ * freqs_cis).flatten(3).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 62,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "text_embed",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "TextEmbeddings.forward",
+      "site": "comfy/ldm/kandinsky5/model.py:62:16 (TextEmbeddings.forward)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "self.norm(text_embed).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 953,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MMDiT.forward_core_with_concat",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:953:38 (MMDiT.forward_core_with_concat)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.Tensor([]).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 45,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "m_param[key]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "LitEma.forward",
+      "site": "comfy/ldm/modules/ema.py:45:44 (LitEma.forward)",
+      "source_path": "comfy/ldm/modules/ema.py",
+      "source_sha256": "6185e8296e3ed8adf6fe857b09761cc469240e400a3f0f291917b5ffb8169e4c",
+      "status": "static-call-observed",
+      "target_syntax": "shadow_params[sname].type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 472,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "motion_vec",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AnimateWanModel.after_patch_embedding",
+      "site": "comfy/ldm/wan/model_animate.py:472:20 (AnimateWanModel.after_patch_embedding)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "torch.zeros(B, 1, H, C).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 477,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "motion_vec",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AnimateWanModel.after_patch_embedding",
+      "site": "comfy/ldm/wan/model_animate.py:477:19 (AnimateWanModel.after_patch_embedding)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "torch.zeros(B, x.shape[2] - motion_vec.shape[1], H, C).type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 161,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "RotaryPositionalEmbedding1D.forward",
+      "site": "comfy/ldm/wan/model_multitalk.py:161:16 (RotaryPositionalEmbedding1D.forward)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "x_.type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 841,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "vision_outputs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Gemma3MultiModalProjector.forward",
+      "site": "comfy/text_encoders/llama.py:841:16 (Gemma3MultiModalProjector.forward)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "projected_vision_outputs.type_as"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 535,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "tracks",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "process_tracks",
+      "site": "comfy_extras/nodes_wan.py:535:20 (process_tracks)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.tensor([*frame_size]).type_as"
+    }
+  ],
+  "static_definition": null
+}

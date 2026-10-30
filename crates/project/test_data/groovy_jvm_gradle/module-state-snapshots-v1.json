@@ -1,0 +1,132 @@
+{
+  "providerVersion": "0.35.0",
+  "providerSha256": "624a5b9b8c14f2d78ad8bf3b6dc82a90944f36018fd4b57316edec8d64be6438",
+  "source": "task7.91 runtime-v3-directory-fence",
+  "pathRemapping": "Only disposable root URI prefix replaced by file:///groovy-module-state/ in each response.",
+  "snapshots": [
+    {
+      "label": "fresh",
+      "sourceJourney": "required-cached",
+      "sourceStage": "required-cached: fresh absent snapshot",
+      "originalReplyCanonicalJsonSha256": "c880af67603935917155ba389ffc5e22d081ca91f54e83259ff97d078336ce2e",
+      "response": {
+        "fullSynchronizationKnown": false,
+        "modules": [
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": false,
+            "moduleUri": "file:///groovy-module-state/application/",
+            "workspaceState": "absent"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": false,
+            "moduleUri": "file:///groovy-module-state/library/",
+            "workspaceState": "absent"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/included/",
+            "descriptionAvailable": false,
+            "moduleUri": "file:///groovy-module-state/included/",
+            "workspaceState": "absent"
+          }
+        ],
+        "rootUri": "file:///groovy-module-state/",
+        "version": 1
+      }
+    },
+    {
+      "label": "closed",
+      "sourceJourney": "required-cached",
+      "sourceStage": "required-cached: production closed snapshot",
+      "originalReplyCanonicalJsonSha256": "47739580a82cbd2ddfe854ecac58c039f9ec8d3055c855701b6a6e23eae85565",
+      "response": {
+        "fullSynchronizationKnown": false,
+        "modules": [
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": false,
+            "moduleUri": "file:///groovy-module-state/application/",
+            "workspaceState": "absent"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/library/",
+            "workspaceState": "closed"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/included/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/included/",
+            "workspaceState": "closed"
+          }
+        ],
+        "rootUri": "file:///groovy-module-state/",
+        "version": 1
+      }
+    },
+    {
+      "label": "open",
+      "sourceJourney": "required-cached",
+      "sourceStage": "required-cached: state snapshot",
+      "originalReplyCanonicalJsonSha256": "5cedac85c1e13177988004da6583ad8a42661ce6a66b2e0447fcac14dd67e803",
+      "response": {
+        "fullSynchronizationKnown": false,
+        "modules": [
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/application/",
+            "workspaceState": "open"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/library/",
+            "workspaceState": "open"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/included/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/included/",
+            "workspaceState": "closed"
+          }
+        ],
+        "rootUri": "file:///groovy-module-state/",
+        "version": 1
+      }
+    },
+    {
+      "label": "recoverable",
+      "sourceJourney": "required-cached-restart",
+      "sourceStage": "required-cached-restart: cold absent description snapshot",
+      "originalReplyCanonicalJsonSha256": "a981c86ab23a4da3668d6ed377df2dfab9854042d107421ba4f4543e6fd962b8",
+      "response": {
+        "fullSynchronizationKnown": false,
+        "modules": [
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/application/",
+            "workspaceState": "open"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/library/",
+            "workspaceState": "absent"
+          },
+          {
+            "buildRootUri": "file:///groovy-module-state/included/",
+            "descriptionAvailable": true,
+            "moduleUri": "file:///groovy-module-state/included/",
+            "workspaceState": "absent"
+          }
+        ],
+        "rootUri": "file:///groovy-module-state/",
+        "version": 1
+      }
+    }
+  ]
+}

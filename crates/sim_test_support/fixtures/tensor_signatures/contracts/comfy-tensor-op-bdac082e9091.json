@@ -1,0 +1,444 @@
+{
+  "canonical_target": "torch.Tensor.requires_grad_",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:318:20 (model_wrapper.cond_grad_fn)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/k_diffusion/deis.py:44:13 (cal_intergrand)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:209:30 (CheckpointFunction.backward)"
+    },
+    {
+      "expectation": {
+        "attribute": "train",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_train.py:1190:13 (TrainLoraNode.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy_extras/nodes_train.py:1303:17 (TrainLoraNode.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_train.py:213:17 (TrainSampler.fwd_bwd)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_train.py:214:17 (TrainSampler.fwd_bwd)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_train.py:501:26 (OffloadCheckpointFunction.backward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_train.py:745:16 (_create_weight_adapter)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_train.py:751:23 (_create_weight_adapter)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_train.py:770:19 (_create_bias_adapter)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:318:20 (model_wrapper.cond_grad_fn)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/deis.py:44:13 (cal_intergrand)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:209:30 (CheckpointFunction.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:1190:13 (TrainLoraNode.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:1303:17 (TrainLoraNode.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:213:17 (TrainSampler.fwd_bwd)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:214:17 (TrainSampler.fwd_bwd)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:501:26 (OffloadCheckpointFunction.backward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:745:16 (_create_weight_adapter)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:751:23 (_create_weight_adapter)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_train.py:770:19 (_create_bias_adapter)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-bdac082e9091-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-BDAC082E9091",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "49dec879cddc2194b548ee28aaa0ad7ff3707cc9a420742cb740d5fef78a9727",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/extra_samplers/uni_pc.py",
+        "sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c"
+      },
+      {
+        "path": "comfy/k_diffusion/deis.py",
+        "sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/util.py",
+        "sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e"
+      },
+      {
+        "path": "comfy_extras/nodes_train.py",
+        "sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.requires_grad_"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_17",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-b91a910a5af9",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 318,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "model_wrapper.cond_grad_fn",
+      "site": "comfy/extra_samplers/uni_pc.py:318:20 (model_wrapper.cond_grad_fn)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "x.detach().requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 44,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "cal_intergrand",
+      "site": "comfy/k_diffusion/deis.py:44:13 (cal_intergrand)",
+      "source_path": "comfy/k_diffusion/deis.py",
+      "source_sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807",
+      "status": "static-call-observed",
+      "target_syntax": "taus.requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 209,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "CheckpointFunction.backward",
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:209:30 (CheckpointFunction.backward)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/util.py",
+      "source_sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "status": "static-call-observed",
+      "target_syntax": "x.detach().requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "attribute": "train",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1190,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TrainLoraNode.execute",
+      "site": "comfy_extras/nodes_train.py:1190:13 (TrainLoraNode.execute)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "mp.model.requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 1303,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TrainLoraNode.execute",
+      "site": "comfy_extras/nodes_train.py:1303:17 (TrainLoraNode.execute)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "adapter.requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 213,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TrainSampler.fwd_bwd",
+      "site": "comfy_extras/nodes_train.py:213:17 (TrainSampler.fwd_bwd)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "xt.requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 214,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TrainSampler.fwd_bwd",
+      "site": "comfy_extras/nodes_train.py:214:17 (TrainSampler.fwd_bwd)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "batch_sigmas.requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 501,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "OffloadCheckpointFunction.backward",
+      "site": "comfy_extras/nodes_train.py:501:26 (OffloadCheckpointFunction.backward)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "x.detach().requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 745,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_create_weight_adapter",
+      "site": "comfy_extras/nodes_train.py:745:16 (_create_weight_adapter)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "train_adapter.train().requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 751,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_create_weight_adapter",
+      "site": "comfy_extras/nodes_train.py:751:23 (_create_weight_adapter)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "BiasDiff(diff).train().requires_grad_"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 770,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_create_bias_adapter",
+      "site": "comfy_extras/nodes_train.py:770:19 (_create_bias_adapter)",
+      "source_path": "comfy_extras/nodes_train.py",
+      "source_sha256": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae",
+      "status": "static-call-observed",
+      "target_syntax": "BiasDiff(bias).train().requires_grad_"
+    }
+  ],
+  "static_definition": null
+}

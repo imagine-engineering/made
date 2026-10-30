@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "feature_id": "COMFY-MODEL-0159",
+  "sampler": "ddim",
+  "source": {
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "dispatch_line": 1375,
+    "equation_lines": [205, 206, 207, 208, 209, 211],
+    "inpaint_noise_lines": [986, 987, 988]
+  },
+  "plan": {
+    "scheduler": "normal",
+    "profile": "sd15-discrete-epsilon-v1",
+    "seed": 41,
+    "sigmas": [2.0, 1.0, 0.0]
+  },
+  "inpaint_replacement_noise": {
+    "base_seed": 41,
+    "effective_seed": 42,
+    "phase": "sampling-noise-and-solver",
+    "shape": [2],
+    "values": [-1.3961126, -1.3419062],
+    "value_bits": [3216159697, 3215704981]
+  },
+  "steps": [
+    {
+      "step": 0,
+      "sigma": 2.0,
+      "next_sigma": 1.0,
+      "latent": [2.0, -2.0],
+      "denoised": [0.5, -0.5],
+      "next_latent": [1.25, -1.25]
+    },
+    {
+      "step": 1,
+      "sigma": 1.0,
+      "next_sigma": 0.0,
+      "latent": [1.25, -1.25],
+      "denoised": [0.25, -0.25],
+      "next_latent": [0.25, -0.25]
+    }
+  ]
+}

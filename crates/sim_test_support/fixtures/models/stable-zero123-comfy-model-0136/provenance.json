@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fixture_id": "stable-zero123-sim-model-0136",
+  "feature_id": "COMFY-MODEL-0136",
+  "source_symbol": "Stable_Zero123",
+  "source_ordinal": 1,
+  "source_architecture": "model_base.Stable_Zero123",
+  "latent_feature_id": "COMFY-MODEL-0045",
+  "latent_identifier": "SD15",
+  "catalog_projection_sha256": "ae0f2b12c2f555835e62f432e33d0c59a100a3f4a2da507d5403d06dad8fbebe",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/openaimodel.py", "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"}
+  ],
+  "source_projection": "source_symbol=Stable_Zero123\nsource_ordinal=1\ninheritance=Stable_Zero123,supported_models_base.BASE\nunet_config.context_dim=768\nunet_config.model_channels=320\nunet_config.use_linear_in_transformer=false\nunet_config.adm_in_channels=None\nunet_config.use_temporal_attention=false\nunet_config.in_channels=8\nunet_extra_config.num_heads=8\nunet_extra_config.num_head_channels=-1\nrequired_keys=cc_projection.weight,cc_projection.bias\nclip_vision_prefix=cond_stage_model.model.visual.\nlatent_format=sim.latent_formats.SD15\nmemory_usage_factor=2.0\nsupported_inference_dtypes=f16,bf16,f32\narchitecture=model_base.Stable_Zero123\nclip_target=None\nvae_key_prefix=first_stage_model.\ntext_encoder_key_prefix=cond_stage_model.\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "eea46386e7fabe83c3015237d22395cf26b9985b66f2c52ef6be1760bfc88223",
+  "alternate_layout": "The pinned Diffusers detector table has no Stable_Zero123 configuration; the native row requires the paired cc_projection tensors and fails closed.",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI Stable_Zero123 sources; no production Python dependency"
+}

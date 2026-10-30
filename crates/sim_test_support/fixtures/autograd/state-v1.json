@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "owner_task_id": "sim-parity-autograd-state-ownership-consolidation",
+  "logical_identity": {
+    "rust_handle_clone": "same_tensor_id",
+    "semantic_view": "fresh_tensor_id_shared_lineage",
+    "detach": "fresh_tensor_id_shared_lineage_unbound",
+    "true_copy": "fresh_tensor_id_fresh_lineage",
+    "copy_on_write": "same_tensor_id_shared_lineage_new_storage"
+  },
+  "state_owners": {
+    "mutation": "sim_tensor::Tensor::MutationLineage",
+    "reverse_traversal": "sim_tensor::AutogradTape",
+    "gradient_publication": "sim_tensor::GradientStore",
+    "checkpoint": "sim_tensor::CheckpointRecord",
+    "physical_storage": "sim_tensor::StorageId"
+  },
+  "serialization": {
+    "tensor_id": "request_local_not_serialized",
+    "mutation_lineage": "request_local_not_serialized"
+  }
+}

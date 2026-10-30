@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sim-native-structured-vae-source-checkpoints-v1",
+  "oracle_kind": "immutable-source-derived-checkpoints",
+  "production_dependency": false,
+  "provenance_sha256": "fd3c5d952a6b39e4d1e92ad445239a9598af62e21ac13d29f8b164616cfee582",
+  "cases": [
+    {
+      "id": "hunyuan-shape-v1",
+      "catalog_contract_id": "conditioning-vae-architecture-sd-sim-ldm-hunyuan3d-vae-shapevae-e9c6b443",
+      "profile": "HunyuanShapeV1",
+      "architecture": "sim.ldm.hunyuan3d.vae.ShapeVAE.v1",
+      "structured_kind": "shape",
+      "equation_checkpoints": [
+        "post_kl_channels_last_linear",
+        "sixteen_residual_self_attention_blocks",
+        "geo_final_layer_norm_eps_1e_5",
+        "fourier_xyz_query_embedding",
+        "chunked_cross_attention_occupancy_projection",
+        "inclusive_resolution_plus_one_volume_grid"
+      ]
+    },
+    {
+      "id": "tripo-splat-v1",
+      "catalog_contract_id": "conditioning-vae-architecture-sd-sim-ldm-triposplat-vae-octreegaussiandecoder-71f21635",
+      "profile": "TripoSplatV1",
+      "architecture": "sim.ldm.triposplat.vae.OctreeGaussianDecoder.v1",
+      "structured_kind": "gaussian_splats",
+      "equation_checkpoints": [
+        "systematic_octree_probability_resampling",
+        "caller_addressed_coordinate_jitter",
+        "log2_absolute_position_embedding",
+        "four_cross_only_octree_blocks",
+        "sixteen_self_cross_gaussian_blocks",
+        "octree_and_gaussian_final_layer_norm_eps_1e_5",
+        "hammersley_atanh_offset_perturbation",
+        "softplus_scale_and_sigmoid_opacity_activation",
+        "y_up_position_and_quaternion_transform"
+      ]
+    }
+  ]
+}

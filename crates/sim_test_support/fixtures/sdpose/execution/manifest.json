@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-sdpose-execution-composition-v1",
+  "provenance": {
+    "mode": "code-inferred-reduced-composition",
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "source_sha256": {
+      "comfy_extras/nodes_sdpose.py": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+      "comfy_extras/nodes_lotus.py": "a1db3c22c71719b11d470655ddd408daa06b8e13f24e25556f77ce0ba825ee08",
+      "comfy/sample.py": "ee3485747727f9a182b9e7dd5a32a81e9429c329f2dcd248996ea0eba191faea",
+      "comfy/samplers.py": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "comfy/k_diffusion/sampling.py": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+    },
+    "dependency_manifest_sha256": {
+      "projection": "e2d3b036c064ce263f893e110a5e8f35a4a0892c154a473031443454c23312fa",
+      "head_projection": "18600eaffd0b4d7f1b14e8b09f61a06cc2916084abafd31a5793da3082410e28",
+      "sd2_capture_production": "d08a427c86c6595b9c012b17be77229fac74823f69d25373160863c5af6e8c24",
+      "sd2_capture_reduced": "db7726ed977259a6423489f125d47a6e58f25e563b9eccd3853f9acbced94124",
+      "resource_production": "e4e4d6ee76c44be75abfa2a40c124262479a6a6b3fd5325baa102768bbe29d97",
+      "resource_reduced": "9daa6b3cdc8e47d0932eb0ae090996598a4fd93c9e539b6b6b4792b988c4b590"
+    },
+    "licensed_checkpoint": null,
+    "upstream_runtime_oracle": null,
+    "accelerator_numeric_oracle": null
+  },
+  "conditioning": {
+    "lotus_f16le_sha256": "168b6113df66f4f1006e36bcd143aa46215a28ff60d0e769cc8a412c16c0b951",
+    "lotus_f32le_sha256": "a7ba15b03c89931a7764a7d4b398201b322e00524d03efaac172b48dc637397d",
+    "cross_attention_shape": ["batch", 2, 1024],
+    "adm_f32": [0.8414709568023682, 0.0, 0.5403022766113281, 1.0]
+  },
+  "execution_contract": {
+    "resize_width": 768,
+    "resize_height": 1024,
+    "area_only_when_both_axes_do_not_grow": true,
+    "latent_shape": ["batch", 4, 128, 96],
+    "simple_sigmas_f32_bits": [1097454994, 0],
+    "model_time": 999.0,
+    "denoiser_calls": 1,
+    "rng_draws": 0,
+    "final_publication_type": "POSE_KEYPOINT"
+  },
+  "bbox_contract": {
+    "coordinate_conversion": "finite-f64-truncate-toward-zero-then-clamp",
+    "empty_frame_falls_back_to_full_image": true,
+    "missing_frames_repeat_last": true,
+    "nonempty_all_invalid_frame_people": 0,
+    "invalid_projected_x_forces_xy": [-1.0, -1.0],
+    "scores_are_preserved": true
+  }
+}

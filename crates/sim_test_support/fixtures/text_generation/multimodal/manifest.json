@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-text-generation-foundation",
+  "source_profile": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "mode": "code-inferred-reduced-exact-weights",
+    "runtime_oracle": null,
+    "licensed_checkpoint": false,
+    "accelerator_numeric_parity": false
+  },
+  "source_sha256": {
+    "comfy_extras/nodes_textgen.py": "b328e8a2dc89cfd3a93ab49c1be880a3e89ec4521eef506823753617c86c99e9",
+    "comfy/sd.py": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
+    "comfy/sd1_clip.py": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2",
+    "comfy/text_encoders/gemma4.py": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+    "comfy/text_encoders/llama.py": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+    "comfy/text_encoders/lt.py": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+    "comfy/text_encoders/lumina2.py": "f6af934b3d5014c6df37bb527167d1f94e44b1309079f57d4cb2f9460729da84",
+    "comfy/text_encoders/qwen3vl.py": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06",
+    "comfy/text_encoders/qwen35.py": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+    "comfy/text_encoders/qwen_vl.py": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+    "comfy/text_encoders/spiece_tokenizer.py": "300de9904c109171b2270524a35c372e6b8c145b88b3f9d242613d45c2bb559f"
+  },
+  "prerequisite_manifest_sha256": {
+    "qwen_multimodal/generation/manifest.json": "0197c3bdfa8e021aae0b63fbf0b9711dcb1dbe672f3a3a9269a062e8d6020462",
+    "gemma_multimodal/generation/manifest.json": "2cf556417f4f9f8465ea8848176be2fdaf42444681dc4a8113d8479d3ebe17f1"
+  },
+  "adapter_contract": {
+    "clip_resolution": "one sealed Qwen or Gemma CLIP lease retained for the complete call",
+    "qwen_media": "IMAGE only; VIDEO and AUDIO reject before RNG open",
+    "gemma3_media": "zero or one IMAGE; VIDEO and AUDIO reject before RNG open",
+    "gemma4_media": "VIDEO takes precedence over IMAGE; AUDIO is independent for E2B/E4B and rejected for 31B",
+    "rng": "one prompt-attempt-node-addressed Philox replay transaction opens after handle validation and media preparation",
+    "publication": "the adapter returns one staged scalar result and never publishes handles, cache state, KV, prepared media, or partial text"
+  },
+  "sampling_projection": {
+    "maximum_new_tokens": [1, 32768],
+    "off": "argmax with zero RNG draws",
+    "top_k_zero": "disabled",
+    "top_p_one": "disabled",
+    "minimum_p_zero": "disabled",
+    "generated_suffix_only": true
+  },
+  "failure_matrix": [
+    "wrong CLIP role, type, store, generation, or digest",
+    "decoder-only, diffusion, SD1, or CLIP-vision resource presented as multimodal",
+    "wrong IMAGE or AUDIO role/type/digest",
+    "unsupported family/media capability or marker count",
+    "cancellation or workspace exhaustion before and after every bounded preparation/generation phase"
+  ]
+}

@@ -1,0 +1,26 @@
+[package]
+name = "sim_nodes"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+build = "build.rs"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_nodes.rs"
+[dependencies]
+sim_media.workspace = true
+sim_model.workspace = true
+sim_sampler.workspace = true
+sim_tensor.workspace = true
+sim_types.workspace = true
+fancy-regex.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+[dev-dependencies]
+sim_model = { workspace = true, features = ["test-support"] }

@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-partner-three-d-sim-node-0552",
+  "provider": {
+    "identifier": "sim-api",
+    "disposition": "provider_required",
+    "reason": "cloud provider authorization is required",
+    "effect": "provider",
+    "cache": "never",
+    "failure": "provider authorization or invocation failures surface through the verified provider boundary without a native fallback",
+    "cancellation": "provider cancellation is owned by the verified provider invocation",
+    "persistence": "workflow inputs and schema-v2 metadata persist without credentials or fabricated provider results",
+    "recovery": "a fresh registry generation restores the same provider-required binding and reauthorizes through the provider boundary"
+  },
+  "sources": [
+    {
+      "path": "sim_api_nodes/nodes_rodin.py",
+      "sha256": "e833ab2c68c6c619b4666b269e04e2f3c36a076f6a9e2b44f1bc845ba3614555"
+    },
+    {
+      "path": "sim_api_nodes/nodes_hunyuan3d.py",
+      "sha256": "b40684e319579f7f1fb43fc513c0a94298602468d777c11a765de728256fbab0"
+    }
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0552",
+      "class_type": "Rodin3D_Gen25_Text",
+      "source_lines": [1031, 1105],
+      "symbol_sha256": "7e71532203290e21e13d345b09330a1c00aff9d3754e63f5eff65f37f3fa2403",
+      "definition_sha256": "bc7ea3274558f4d9e36b1b3341044d614cb2b0c0c7d56ec27b758ac53d08df4e",
+      "inputs": ["prompt", "mode", "material", "geometry_file_format", "texture_mode", "seed", "TAPose", "hd_texture", "texture_delight", "addon_highpack", "bbox_width", "bbox_height", "bbox_length", "height_cm"],
+      "outputs": ["model_file"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0553",
+      "class_type": "Rodin3D_Regular",
+      "source_lines": [225, 281],
+      "symbol_sha256": "e0bd8ef311f33481fec877801dea80302eba076f2d9e12f52467e889242a9637",
+      "definition_sha256": "545376e5f0259fffb1eea4749f4e3f12c582877e432d06afa61f0f4d40013b8c",
+      "inputs": ["Images", "Seed", "Material_Type", "Polygon_count"],
+      "outputs": ["3D Model Path", "GLB"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0554",
+      "class_type": "Rodin3D_Sketch",
+      "source_lines": [401, 460],
+      "symbol_sha256": "0b77ce871e267450af63f3e2fe0e36fe81ababc25cbb11498546ad8f487b65e5",
+      "definition_sha256": "ffaf11d6ecbc44243e30e7eb622418a44b413e255b52a2489c3ded43f26a963d",
+      "inputs": ["Images", "Seed"],
+      "outputs": ["3D Model Path", "GLB"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0555",
+      "class_type": "Rodin3D_Smooth",
+      "source_lines": [343, 398],
+      "symbol_sha256": "c7dc23d2a7a8e2d425fc389476ef381f4ebf974f522c6e3774222866eee064e9",
+      "definition_sha256": "ac5f6c652de44beba005a2f574c858ca3fe23280723d276e072a745877569efc",
+      "inputs": ["Images", "Seed", "Material_Type", "Polygon_count"],
+      "outputs": ["3D Model Path", "GLB"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0658",
+      "class_type": "Tencent3DPartNode",
+      "source_lines": [590, 659],
+      "symbol_sha256": "33f8b3d6b34198d0d59e2de2ad9f33d357f88ddaf6f986756be4c3b5f855cec3",
+      "definition_sha256": "48c2fdccf575bf852d200ee46114b1ab6935b9879ffb74a935a699a6531984a0",
+      "inputs": ["model_3d", "seed"],
+      "outputs": ["FBX"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0659",
+      "class_type": "Tencent3DTextureEditNode",
+      "source_lines": [501, 587],
+      "symbol_sha256": "eedddc8bd47a4af6e45a516f2817e7c1dded575d9e28ea9b66a1d7a39b93526c",
+      "definition_sha256": "3644ef37ab4589abf6f0587321cefed8e8fc7da2bc12a9ab86851bd44c1ef357",
+      "inputs": ["model_3d", "prompt", "seed"],
+      "outputs": ["GLB", "OBJ", "texture_image"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0660",
+      "class_type": "TencentImageToModelNode",
+      "source_lines": [238, 408],
+      "symbol_sha256": "fe422cfa714dbff7cd5dabb286d93d59afe9a01daf711ca09ebcf47ef100a52e",
+      "definition_sha256": "05af63467df876caa63ff537d2e203c13bc52500b329cb31f37ab28f12400f15",
+      "inputs": ["model", "image", "image_left", "image_right", "image_back", "face_count", "generate_type", "seed"],
+      "outputs": ["model_file", "GLB", "OBJ", "texture_image", "optional_metallic", "optional_normal", "optional_roughness"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0661",
+      "class_type": "TencentModelTo3DUVNode",
+      "source_lines": [411, 498],
+      "symbol_sha256": "b69519df055043555ab7f4d75cfb3b77b9011d5a8e93d0b3ba30c7a8674bd2cb",
+      "definition_sha256": "58884dd3c55ad7a7c86a328ebb1546ad52cf5597e204c8168bff2b10dc7bd5ba",
+      "inputs": ["model_3d", "seed"],
+      "outputs": ["OBJ", "FBX", "uv_image"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0662",
+      "class_type": "TencentSmartTopologyNode",
+      "source_lines": [662, 750],
+      "symbol_sha256": "effbccb4d239ffb6b575fc547dd54cbb61aa4508502345cb5bef1d66b320926b",
+      "definition_sha256": "4aef0abe1d5b40487e6ebf01680077729882fbb22305cdd2da1655599ca5e189",
+      "inputs": ["model_3d", "polygon_type", "face_level", "seed"],
+      "outputs": ["OBJ"]
+    },
+    {
+      "feature_id": "COMFY-NODE-0663",
+      "class_type": "TencentTextToModelNode",
+      "source_lines": [119, 235],
+      "symbol_sha256": "8110b6a70cdd26d5d0dcb791e654a6292895693e25076b982951c65f787422d6",
+      "definition_sha256": "cd2190f0c8f548436ad498e32e20c3b6c5ff4716a7e9488c97204523a8ba4d04",
+      "inputs": ["model", "prompt", "face_count", "generate_type", "seed"],
+      "outputs": ["model_file", "GLB", "OBJ", "texture_image"]
+    }
+  ]
+}

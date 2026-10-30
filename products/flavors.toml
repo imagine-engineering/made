@@ -1,0 +1,75 @@
+schema_version = 1
+
+[[products]]
+id = "rust"
+status = "enabled"
+display_name = "Copper"
+appearance = { theme = "assets/themes/fractal-neutral/fractal-neutral.json", light = "Fractal Neutral Light", dark = "Fractal Neutral Dark", font_family = "Figtree", font_asset = "assets/fonts/figtree/Figtree.ttf" }
+executable_name = "copper"
+bundle_identifier = "dev.ideflavors.rust"
+url_scheme = "ide-rust"
+icon_set = "assets/product_flavors/rust"
+data_namespace = "ide-rust"
+update_namespace = "rust"
+instance_port_offset = 4000
+windows_installer_id = "{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}"
+cargo_features = ["agentic-tools", "rust-tools"]
+remote_server_features = ["rust-tools"]
+default_extensions = []
+default_language_servers = ["rust-analyzer"]
+toolchain_onboarding = "rustup"
+agent_profile = "rust-engineer"
+agent_profile_name = "Rust Engineer"
+agent_instructions = "assets/product_flavors/rust/agent-instructions.md"
+installer_name = "{product}-{version}-{platform}-{arch}.{extension}"
+artifact_name = "{product}-{version}-{platform}-{arch}.{extension}"
+targets = ["linux-x86_64", "macos-aarch64", "windows-x86_64"]
+
+[[products]]
+id = "jvm"
+status = "planned"
+display_name = "Groovy"
+appearance = { theme = "assets/themes/fractal-neutral/fractal-neutral.json", light = "Fractal Neutral Light", dark = "Fractal Neutral Dark", font_family = "Figtree", font_asset = "assets/fonts/figtree/Figtree.ttf" }
+executable_name = "groovy"
+bundle_identifier = "dev.ideflavors.jvm"
+url_scheme = "ide-jvm"
+icon_set = "assets/product_flavors/jvm"
+data_namespace = "ide-jvm"
+update_namespace = "jvm"
+instance_port_offset = 5000
+windows_installer_id = "{2AC88D3C-1B47-5E60-A2D1-05317D203AA0}"
+cargo_features = ["agentic-tools", "jvm-tools"]
+remote_server_features = ["jvm-tools"]
+default_extensions = ["java", "kotlin"]
+default_language_servers = ["jdtls", "kotlin-lsp"]
+toolchain_onboarding = "jdk"
+agent_profile = "jvm-engineer"
+agent_profile_name = "JVM Engineer"
+agent_instructions = "assets/product_flavors/jvm/agent-instructions.md"
+installer_name = "{product}-{version}-{platform}-{arch}.{extension}"
+artifact_name = "{product}-{version}-{platform}-{arch}.{extension}"
+targets = []
+
+[[products]]
+id = "game"
+status = "planned"
+display_name = "Forge"
+executable_name = "forge"
+bundle_identifier = "dev.ideflavors.game"
+url_scheme = "ide-game"
+icon_set = "assets/product_flavors/game"
+data_namespace = "ide-game"
+update_namespace = "game"
+instance_port_offset = 6000
+windows_installer_id = "{D246281B-90DD-5B83-BDE9-4FF1C9D2C0DA}"
+cargo_features = ["agentic"]
+remote_server_features = []
+default_extensions = ["csharp"]
+default_language_servers = ["csharp"]
+toolchain_onboarding = "dotnet"
+agent_profile = "game-engineer"
+agent_profile_name = "Game Developer"
+agent_instructions = "assets/product_flavors/game/agent-instructions.md"
+installer_name = "{product}-{version}-{platform}-{arch}.{extension}"
+artifact_name = "{product}-{version}-{platform}-{arch}.{extension}"
+targets = []

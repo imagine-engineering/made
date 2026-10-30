@@ -1,0 +1,17 @@
+{
+  "downloaded-image.png": {
+    "source": "sim_test_support/fixtures/providers/ideogram/downloaded-image.png",
+    "producer": "real PIL-generated 1x1 RGB image fixture",
+    "bytes": 69,
+    "sha256": "f84c41a85b0f9813b5863d7e3846d64c4d273a5aa86ea0591817d9841c5573ce",
+    "acceptance": "real encoded bytes into rejecting RGBA canonical callback; no native tensor allocation claim"
+  },
+  "downloaded-video.mp4": {
+    "source": "projects/sim/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+    "producer": "pinned frontend browser asset",
+    "source_wrapper": "download_url_to_video_output -> InputImpl.VideoFromFile",
+    "bytes": 6163,
+    "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",
+    "acceptance": "provenance-bound encoded bytes into rejecting canonical video callback; no MP4 parser/native decode claim; not the 129-byte structural container"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "truth": "source-fingerprinted reduced exact composition",
+  "source": {
+    "snapshot": "ComfyUI 0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "file": "sim_extras/frame_interpolation_models/film_net.py",
+    "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "symbols": [
+      "build_image_pyramid",
+      "FILMNet.extract_features"
+    ]
+  },
+  "dependencies": {
+    "film_convolution_manifest": {
+      "path": "crates/sim_test_support/fixtures/models/frame-interpolation/film-convolution/manifest.json",
+      "sha256": "d0645235b2d6d2ce7ee2cd7f8bed8df0cadf20572a6e1099bb3663e061f5f93a"
+    }
+  },
+  "production_profile": {
+    "levels": 7,
+    "minimum_height": 64,
+    "minimum_width": 64,
+    "pool_kernel": [2, 2],
+    "pool_stride": [2, 2],
+    "pool_padding": [0, 0],
+    "ceil_mode": false
+  },
+  "case": {
+    "name": "three_level_four_by_four_image_pyramid",
+    "input_shape_nchw": [1, 1, 4, 4],
+    "input_f32": [
+      1.0, 2.0, 3.0, 4.0,
+      5.0, 6.0, 7.0, 8.0,
+      9.0, 10.0, 11.0, 12.0,
+      13.0, 14.0, 15.0, 16.0
+    ],
+    "levels": [
+      {
+        "shape_nchw": [1, 1, 4, 4],
+        "storage": "aliases_input"
+      },
+      {
+        "shape_nchw": [1, 1, 2, 2],
+        "output_f32": [3.5, 5.5, 11.5, 13.5],
+        "storage": "fresh"
+      },
+      {
+        "shape_nchw": [1, 1, 1, 1],
+        "output_f32": [8.5],
+        "storage": "fresh"
+      }
+    ]
+  },
+  "dtypes": ["F16", "BF16", "F32"],
+  "workspace_failure_bytes": 63,
+  "claim_limits": {
+    "licensed_checkpoint_included": false,
+    "upstream_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "film_feature_extractor_execution": false,
+    "film_flow_or_fusion_execution": false,
+    "codec_execution": false,
+    "handle_or_cache_execution": false,
+    "output_effect_or_publication": false
+  }
+}

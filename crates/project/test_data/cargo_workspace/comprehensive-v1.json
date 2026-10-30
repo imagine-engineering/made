@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "roots": [
+    {
+      "manifest_path": "nested/virtual/Cargo.toml",
+      "root_path": "/fixture/virtual",
+      "metadata": {
+        "packages": [
+          {
+            "name": "duplicate-name",
+            "version": "0.1.0",
+            "id": "path+file:///fixture/virtual/member-one#0.1.0",
+            "license": null,
+            "license_file": null,
+            "description": null,
+            "source": null,
+            "dependencies": [
+              {"name":"member-two","source":null,"req":"*","kind":null,"rename":"renamed_member","optional":true,"uses_default_features":false,"features":["extra"],"target":"cfg(unix)","registry":null,"path":"/fixture/virtual/member-two"},
+              {"name":"serde","source":"registry+https://github.com/rust-lang/crates.io-index","req":"^1","kind":null,"rename":null,"optional":false,"uses_default_features":true,"features":["derive"],"target":null,"registry":"https://github.com/rust-lang/crates.io-index"},
+              {"name":"pretty_assertions","source":"registry+https://github.com/rust-lang/crates.io-index","req":"^1","kind":"dev","rename":null,"optional":false,"uses_default_features":true,"features":[],"target":null,"registry":null},
+              {"name":"cc","source":"registry+https://github.com/rust-lang/crates.io-index","req":"^1","kind":"build","rename":null,"optional":false,"uses_default_features":true,"features":[],"target":null,"registry":null},
+              {"name":"git_dep","source":"git+https://example.invalid/repo#deadbeef","req":"*","kind":null,"rename":null,"optional":false,"uses_default_features":true,"features":[],"target":null,"registry":null}
+            ],
+            "targets": [
+              {"kind":["lib"],"crate_types":["lib"],"name":"member_one","src_path":"/fixture/virtual/member-one/src/lib.rs","edition":"2024","doc":true,"doctest":true,"test":true},
+              {"kind":["bin"],"crate_types":["bin"],"name":"member-one","src_path":"/fixture/virtual/member-one/src/main.rs","edition":"2024","doc":true,"doctest":false,"test":true},
+              {"kind":["example"],"crate_types":["bin"],"name":"demo","src_path":"/fixture/virtual/member-one/examples/demo.rs","edition":"2024","required-features":["extra"],"doc":false,"doctest":false,"test":false},
+              {"kind":["test"],"crate_types":["bin"],"name":"integration","src_path":"/fixture/virtual/member-one/tests/integration.rs","edition":"2024","doc":false,"doctest":false,"test":true},
+              {"kind":["bench"],"crate_types":["bin"],"name":"throughput","src_path":"/fixture/virtual/member-one/benches/throughput.rs","edition":"2024","doc":false,"doctest":false,"test":true},
+              {"kind":["custom-build"],"crate_types":["bin"],"name":"build-script-build","src_path":"/fixture/virtual/member-one/build.rs","edition":"2024","doc":false,"doctest":false,"test":false},
+              {"kind":["future-kind"],"crate_types":["bin"],"name":"future","src_path":"/fixture/virtual/member-one/src/future.rs","edition":"2024","doc":false,"doctest":false,"test":false}
+            ],
+            "features": {"default":["extra"],"extra":["dep:member-two"]},
+            "manifest_path": "/fixture/virtual/member-one/Cargo.toml",
+            "metadata": null,
+            "publish": null,
+            "authors": [],
+            "categories": [],
+            "keywords": [],
+            "readme": null,
+            "repository": null,
+            "homepage": null,
+            "documentation": null,
+            "edition": "2024",
+            "links": null,
+            "default_run": null,
+            "rust_version": null
+          },
+          {
+            "name": "member-two",
+            "version": "0.2.0",
+            "id": "path+file:///fixture/virtual/member-two#0.2.0",
+            "license": null,
+            "license_file": null,
+            "description": null,
+            "source": null,
+            "dependencies": [],
+            "targets": [{"kind":["lib"],"crate_types":["lib"],"name":"member_two","src_path":"/fixture/virtual/member-two/src/lib.rs","edition":"2021","doc":true,"doctest":true,"test":true}],
+            "features": {"extra":[]},
+            "manifest_path": "/fixture/virtual/member-two/Cargo.toml",
+            "metadata": null,
+            "publish": null,
+            "authors": [],
+            "categories": [],
+            "keywords": [],
+            "readme": null,
+            "repository": null,
+            "homepage": null,
+            "documentation": null,
+            "edition": "2021",
+            "links": null,
+            "default_run": null,
+            "rust_version": null
+          }
+        ],
+        "workspace_members": ["path+file:///fixture/virtual/member-one#0.1.0", "path+file:///fixture/virtual/member-two#0.2.0"],
+        "workspace_default_members": ["path+file:///fixture/virtual/member-one#0.1.0"],
+        "resolve": {
+          "root": null,
+          "nodes": [
+            {"id":"path+file:///fixture/virtual/member-one#0.1.0","dependencies":["path+file:///fixture/virtual/member-two#0.2.0"],"deps":[{"name":"renamed_member","pkg":"path+file:///fixture/virtual/member-two#0.2.0","dep_kinds":[{"kind":null,"target":"cfg(unix)"}]}],"features":["default","extra","implicit"]},
+            {"id":"path+file:///fixture/virtual/member-two#0.2.0","dependencies":[],"deps":[],"features":[]}
+          ]
+        },
+        "target_directory": "/fixture/virtual/target",
+        "version": 1,
+        "workspace_root": "/fixture/virtual"
+      }
+    },
+    {
+      "manifest_path": "independent/Cargo.toml",
+      "root_path": "/fixture/standalone",
+      "metadata": {
+        "packages": [{
+          "name":"duplicate-name","version":"1.0.0","id":"path+file:///fixture/standalone#1.0.0","license":null,"license_file":null,"description":null,"source":null,"dependencies":[],
+          "targets":[{"kind":["bin"],"crate_types":["bin"],"name":"standalone","src_path":"/fixture/standalone/src/main.rs","edition":"2021","doc":true,"doctest":false,"test":true}],
+          "features":{},"manifest_path":"/fixture/standalone/Cargo.toml","metadata":null,"publish":null,"authors":[],"categories":[],"keywords":[],"readme":null,"repository":null,"homepage":null,"documentation":null,"edition":"2021","links":null,"default_run":null,"rust_version":null
+        }],
+        "workspace_members":["path+file:///fixture/standalone#1.0.0"],
+        "workspace_default_members":["path+file:///fixture/standalone#1.0.0"],
+        "resolve":{"root":"path+file:///fixture/standalone#1.0.0","nodes":[{"id":"path+file:///fixture/standalone#1.0.0","dependencies":[],"deps":[],"features":[]}]},
+        "target_directory":"/fixture/standalone/target","version":1,"workspace_root":"/fixture/standalone"
+      }
+    },
+    {
+      "manifest_path": "broken/Cargo.toml",
+      "root_path": "/fixture/broken",
+      "metadata": {"version": 2}
+    }
+  ],
+  "profile_manifests": [
+    {"path":"nested/virtual/Cargo.toml","contents":"[profile.dev]\nopt-level = 1\n[profile.ci]\ninherits = \"dev\"\n"},
+    {"path":"broken/Cargo.toml","contents":"[profile.bad\nopt-level = 3"}
+  ],
+  "toolchain_declarations": [
+    {"path":"nested/virtual/rust-toolchain.toml","contents":"[toolchain]\nchannel = \"stable\"\ncomponents = [\"rustfmt\", \"clippy\"]\ntargets = [\"wasm32-unknown-unknown\"]\n"},
+    {"path":"independent/rust-toolchain","contents":"1.90.0\n"}
+  ]
+}

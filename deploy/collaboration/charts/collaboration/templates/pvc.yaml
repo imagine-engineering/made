@@ -1,0 +1,15 @@
+{{- if and .Values.deployment.enabled .Values.persistence.git.enabled (not .Values.persistence.git.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "collaboration.name" . }}-git
+  labels: {{- include "collaboration.runtimeLabels" . | nindent 4 }}
+spec:
+  accessModes: [{{ .Values.persistence.git.accessMode }}]
+  resources:
+    requests:
+      storage: {{ .Values.persistence.git.size }}
+  {{- if .Values.persistence.git.storageClass }}
+  storageClassName: {{ .Values.persistence.git.storageClass | quote }}
+  {{- end }}
+{{- end }}

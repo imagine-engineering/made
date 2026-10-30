@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+from pathlib import Path
+import plistlib
+import subprocess
+import tempfile
+
+
+def run(arguments, **kwargs):
+    try:
+        return subprocess.run(arguments, check=True, text=True, timeout=180, **kwargs)
+    except subprocess.CalledProcessError as error:
+        if error.stdout:
+            print(error.stdout, flush=True)
+        if error.stderr:
+            print(error.stderr, flush=True)
+        raise
+
+
+def check_launch(cli, editor, plan, version):
+    output = run([str(cli), "--version"], capture_output=True).stdout.strip()
+    print(output, flush=True)
+    if not output.startswith(f"{plan['display_name']} {version} "):
+        raise RuntimeError(f"Unexpected packaged CLI version: {output}")
+    run([str(editor), "--help"], capture_output=True)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--product", required=True)
+    parser.add_argument("--platform", choices=["linux", "macos", "windows"], required=True)
+    parser.add_argument("--target", required=True)
+    parser.add_argument("--plan", type=Path)
+    parser.add_argument("--commit-sha")
+    arguments = parser.parse_args()
+    version = os.environ["RELEASE_VERSION"]
+    if arguments.plan:
+        if not arguments.commit_sha:
+            parser.error("--commit-sha is required with --plan")
+        plan = json.loads(arguments.plan.read_text())
+        expected = {
+            "commit_sha": arguments.commit_sha,
+            "product_id": arguments.product,
+            "platform": arguments.platform,
+            "target": arguments.target,
+            "channel": "stable",
+            "application_features": os.environ["ZED_PRODUCT_APP_FEATURES"].split(","),
+            "remote_server_features": os.environ["ZED_PRODUCT_REMOTE_FEATURES"].split(","),
+            "artifact_name": os.environ["ZED_PRODUCT_ARTIFACT_NAME"],
+        }
+        for key, value in expected.items():
+            if plan.get(key) != value:
+                raise RuntimeError(f"Bundle plan {key} mismatch: {plan.get(key)!r} != {value!r}")
+    else:
+        output = run(
+            ["cargo", "xtask", "bundle", "--product", arguments.product,
+             "--platform", arguments.platform, "--target", arguments.target, "--dry-run"],
+            capture_output=True,
+        )
+        plan = json.loads(output.stdout)
+    target_dir = Path(os.environ.get("CARGO_TARGET_DIR", plan["target_dir"]))
+    artifact = (target_dir / "release" / plan["artifact_name"]).resolve(strict=True)
+    executable = plan["executable_name"]
+    production = os.environ.get("ZED_PRODUCT_SIGNING") == "required"
+    if production and plan.get("signing") != "required":
+        raise RuntimeError("Production artifact validation requires a production bundle plan")
+    windows_verifier = str(Path("crates/zed/resources/windows/sign.ps1").resolve())
+
+    with tempfile.TemporaryDirectory(prefix="product-bundle-smoke-") as directory:
+        directory = Path(directory)
+        if arguments.platform == "linux":
+            if production:
+                run(["python3", "script/sign-linux-archive", "--verify-only", str(artifact)])
+            run(["tar", "-xzf", str(artifact), "-C", str(directory)])
+            application = directory / f"{executable}.app"
+            desktop = application / "share/applications" / f"{plan['bundle_identifier']}.desktop"
+            contents = desktop.read_text()
+            for entry in [f"Name={plan['display_name']}", f"Exec={executable} %U"]:
+                if entry not in contents.splitlines():
+                    raise RuntimeError(f"Missing desktop metadata: {entry}")
+            check_launch(application / "bin" / executable,
+                         application / "libexec" / f"{executable}-editor", plan, version)
+        elif arguments.platform == "macos":
+            if production:
+                run(["python3", "script/verify-macos-signature", str(artifact), "--notarized"])
+            mount = directory / "mounted"
+            mount.mkdir()
+            run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", str(mount),
+                 str(artifact)], capture_output=True)
+            try:
+                application = directory / f"{plan['display_name']}.app"
+                run(["ditto", str(mount / application.name), str(application)])
+            finally:
+                run(["hdiutil", "detach", str(mount)])
+            with (application / "Contents/Info.plist").open("rb") as file:
+                metadata = plistlib.load(file)
+            icon_set = Path("assets/product_flavors") / arguments.product
+            if (icon_set / "app-icon.icns").is_file():
+                if metadata.get("CFBundleIconFile") != "product-app-icon.icns":
+                    raise RuntimeError("Product ICNS is not selected")
+                expected_icon = (icon_set / "app-icon.icns").read_bytes()
+                for name in ("product-app-icon.icns", "Document.icns"):
+                    if (application / "Contents/Resources" / name).read_bytes() != expected_icon:
+                        raise RuntimeError(f"Packaged product icon differs: {name}")
+            for key, expected in {
+                "CFBundleName": plan["display_name"],
+                "CFBundleIdentifier": plan["bundle_identifier"],
+                "CFBundleExecutable": executable,
+                "CFBundleShortVersionString": version,
+                "CFBundleVersion": version,
+            }.items():
+                if metadata.get(key) != expected:
+                    raise RuntimeError(f"Unexpected {key}: {metadata.get(key)}")
+            if plan["display_name"] != "Zed":
+                for key, value in metadata.items():
+                    if (key.startswith("NS") and key.endswith("UsageDescription")
+                            and isinstance(value, str) and "Zed" in value):
+                        raise RuntimeError(f"Upstream product name remains in {key}")
+                for document in metadata.get("CFBundleDocumentTypes", []):
+                    if "Zed" in document.get("CFBundleTypeName", ""):
+                        raise RuntimeError("Upstream product name remains in a document type")
+            if production:
+                run(["python3", "script/verify-macos-signature", str(application),
+                     "--entitlements", "crates/zed/resources/zed.entitlements", "--notarized"])
+            run(["codesign", "--verify", "--deep", "--strict", str(application)])
+            check_launch(application / "Contents/MacOS/cli",
+                         application / "Contents/MacOS" / executable, plan, version)
+        else:
+            application = directory / "installed"
+            install_log = directory / "install.log"
+            try:
+                if production:
+                    run(["pwsh", "-NoProfile", "-File", windows_verifier, "-VerifyOnly", "-filePath", str(artifact)])
+                run([str(artifact), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
+                     "/TASKS=", f"/DIR={application}", f"/LOG={install_log}"])
+                if production:
+                    run(["pwsh", "-NoProfile", "-File", windows_verifier, "-VerifyOnly", "-filePath", str(application)])
+                check_launch(application / "bin" / f"{executable}.exe",
+                             application / f"{executable}.exe", plan, version)
+                output = run([str(application / f"{executable}.exe"), "--foreground",
+                              "--system-specs", "--user-data-dir", str(directory / "data")],
+                             capture_output=True).stdout
+                print(output, flush=True)
+                if not (application / "tools/auto_update_helper.exe").is_file():
+                    raise RuntimeError("Installed updater is missing")
+            finally:
+                if install_log.is_file():
+                    print(install_log.read_text(encoding="utf-8-sig", errors="replace"), flush=True)
+                uninstaller = application / "unins000.exe"
+                if uninstaller.is_file():
+                    run([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+
+    print(f"Verified {artifact.name}: packaged metadata, CLI version, and editor help startup", flush=True)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "backend": "corex",
+  "abi_floor": "CoreX-IXRT-0.8-ABI-profile",
+  "review_state": "blocked-missing-vendor-headers",
+  "allowed_targets": ["x86_64-unknown-linux-gnu"],
+  "allowed_files": [
+    "LICENSES",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "forbidden_payload_patterns": [
+    "libixrt.so",
+    "libixblas.so",
+    "*.so",
+    "*.so.*",
+    "*.a",
+    "*.h",
+    "*.hpp",
+    "*.cuh"
+  ],
+  "redistributes_vendor_runtime": false,
+  "license_approval_required_for_redistribution": true,
+  "signature_algorithm": "ed25519",
+  "signature_domain": "zed-sim-corex-package-v1",
+  "signature_coverage": "package-coverage-v1",
+  "final_application_signing_required": true,
+  "runtime_loading_enabled": false,
+  "runtime_verification_owner": "sim_runtime::NativeFfiRegistry"
+}

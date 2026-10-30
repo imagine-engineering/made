@@ -1,0 +1,15 @@
+version: 1
+title: Release risk review
+description: Review the current project's changes for release risks and missing validation.
+command: release-risk
+instructions: |
+  Review the existing project using its instructions and normal tool permissions.
+  Identify concrete regressions, compatibility risks, security issues and missing tests.
+  Cite the relevant files and explain the user impact of each finding.
+  Distinguish verified findings from uncertainty. Do not claim tests ran unless they did.
+  This is a review request; do not modify files or publish changes.
+prompt: 'Review {{focus}} for release risks and report actionable findings.'
+parameters:
+  - name: focus
+    description: The changes or area to review
+    default: the current changes

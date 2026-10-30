@@ -1,0 +1,3109 @@
+{
+  "canonical_target": "torch.Tensor.max",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/audio_encoders/whisper.py:48:52 (WhisperFeatureExtractor.__call__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/image_encoders/dino2.py:176:23 (RotaryPositionEmbedding2D.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:744:54 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:832:54 (sample_dpmpp_2m_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:890:54 (sample_dpmpp_3m_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:949:54 (sample_dpmpp_3m_sde_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:959:54 (sample_dpmpp_2m_sde_heun_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:969:54 (sample_dpmpp_2m_sde_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:979:54 (sample_dpmpp_sde_gpu)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ace/ace_step15.py:459:21 (AceStepTimbreEncoder.unpack_timbre_embeddings)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ace/lyric_encoder.py:907:43 (make_pad_mask)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/position_embedding.py:137:87 (VideoRopePosition3DEmb.generate_embeddings)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:40:18 (select_reference_view._normalize)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:50:19 (select_reference_view)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/depth_anything_3/transform.py:110:45 (mat_to_quat)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hidream_o1/utils.py:132:26 (get_rope_index_fix_point)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hidream_o1/utils.py:149:26 (get_rope_index_fix_point)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hidream_o1/utils.py:155:42 (get_rope_index_fix_point)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:23:22 (fps)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:264:18 (normalize_mesh)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/av_model.py:674:67 (LTXAVModel._process_input)"
+    },
+    {
+      "expectation": {
+        "attribute": "expand_as",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/lightricks/av_model.py:782:17 (LTXAVModel._prepare_timestep)"
+    },
+    {
+      "expectation": {
+        "attribute": "expand_as",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/lightricks/av_model.py:788:17 (LTXAVModel._prepare_timestep)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/lightricks/model.py:556:9 (compute_prompt_timestep)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/sdpose.py:90:30 (HeatmapHead.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/sdpose.py:95:27 (HeatmapHead.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/modules/sub_quadratic_attention.py:175:24 (_get_attention_scores_no_kv_chunking)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:673:31 (DFINETransformer._decoder_input)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:1631:23 (SAM31Tracker._match_and_add_detections)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:91:16 (_nms_masks)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/preview.py:41:43 (render_splat)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/triposplat/preview.py:87:13 (decode_x0_to_image)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:227:25 (OctreeProbabilityFixedlenDecoder.sample)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:53:16 (sample_probs)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:26:24 (calculate_x_ref_attn_map)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:285:22 (SingleStreamMultiAttention.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:289:46 (SingleStreamMultiAttention.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:290:46 (SingleStreamMultiAttention.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/text_encoders/ace15.py:82:21 (sample_manual_loop_no_classes)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy/text_encoders/gemma4.py:687:17 (Gemma4VisionEncoder.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/llama.py:1126:31 (Qwen25_7BVLI.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/llama.py:906:24 (BaseGenerate.generate)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/text_encoders/llama.py:959:28 (BaseGenerate.sample_token)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/qwen_vl.py:105:27 (qwen2vl_mrope_position_ids)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen_vl.py:408:25 (Qwen2VLVisionTransformer.get_position_embeddings)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/mediapipe/face_landmarker.py:672:38 (FaceLandmarker.detect_batch)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_audio.py:703:19 (AudioMerge.execute)"
+    },
+    {
+      "expectation": {
+        "attribute": "detach",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_chroma_radiance.py:103:21 (ChromaRadianceOptions.execute.model_function_wrapper)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:116:33 (_normalize_confidence)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:528:36 (DA3GeometryToMesh.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1254:14 (_splat_density)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1321:17 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1332:22 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1365:22 (_clean_components)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1545:42 (_gaussian_to_mesh)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:872:22 (_render_gaussian)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:895:45 (_render_gaussian)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_save_3d.py:107:20 (save_glb)"
+    },
+    {
+      "expectation": {
+        "attribute": "tolist",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_save_3d.py:180:20 (save_glb)"
+    },
+    {
+      "expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_scail.py:203:28 (WanSCAILToVideo.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_sdpose.py:172:124 (KeypointDraw.fillConvexPoly)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_sdpose.py:172:70 (KeypointDraw.fillConvexPoly)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_sdpose.py:588:20 (get_face_bboxes)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy_extras/nodes_tomesd.py:93:30 (bipartite_soft_matching_random2d)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_triposplat.py:45:33 (_preprocess)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_triposplat.py:46:33 (_preprocess)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_void.py:141:12 (VOIDQuadmaskPreprocess.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wan.py:598:37 (merge_final)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wan.py:603:37 (merge_final)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:289:29 (piptrack)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:397:23 (compute_chroma_cens)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:500:14 (estimate_tempo_from_onset)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:530:17 (detect_onset_peaks)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:541:40 (detect_onset_peaks)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:550:16 (detect_onset_peaks)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:592:27 (track_beats)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:707:41 (power_to_db)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/void_noise_warp.py:141:13 (sum_indexed_values)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_async_nodes.py:83:58 (TestAsyncNodes.test_basic_async_execution)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:484:64 (TestExecution.test_undeclared_inputs)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:502:68 (TestExecution.test_for_loop)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:515:63 (TestExecution.test_mixed_expansion_returns)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:516:63 (TestExecution.test_mixed_expansion_returns)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:517:63 (TestExecution.test_mixed_expansion_returns)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:522:68 (TestExecution.test_mixed_expansion_returns)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:537:54 (TestExecution.test_mixed_lazy_results)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:538:56 (TestExecution.test_mixed_lazy_results)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:539:56 (TestExecution.test_mixed_lazy_results)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:565:55 (TestExecution.test_is_changed_with_outputs)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:570:55 (TestExecution.test_is_changed_with_outputs)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:671:54 (TestExecution.test_execution_block_list_output)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests/execution/test_execution.py:672:54 (TestExecution.test_execution_block_list_output)"
+    },
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "tests/execution/testing_nodes/testing-pack/conditions.py:134:16 (TestToBoolNode.to_bool)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests/execution/testing_nodes/testing-pack/specific_tests.py:28:20 (TestLazyMixImages.check_lazy_status)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests/execution/testing_nodes/testing-pack/specific_tests.py:39:20 (TestLazyMixImages.mix)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/audio_encoders/whisper.py:48:52 (WhisperFeatureExtractor.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/image_encoders/dino2.py:176:23 (RotaryPositionEmbedding2D.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:744:54 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:832:54 (sample_dpmpp_2m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:890:54 (sample_dpmpp_3m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:949:54 (sample_dpmpp_3m_sde_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:959:54 (sample_dpmpp_2m_sde_heun_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:969:54 (sample_dpmpp_2m_sde_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:979:54 (sample_dpmpp_sde_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/ace_step15.py:459:21 (AceStepTimbreEncoder.unpack_timbre_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/lyric_encoder.py:907:43 (make_pad_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/position_embedding.py:137:87 (VideoRopePosition3DEmb.generate_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:40:18 (select_reference_view._normalize)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:50:19 (select_reference_view)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/transform.py:110:45 (mat_to_quat)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/utils.py:132:26 (get_rope_index_fix_point)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/utils.py:149:26 (get_rope_index_fix_point)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/utils.py:155:42 (get_rope_index_fix_point)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/utils.py:163:28 (get_rope_index_fix_point)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:23:22 (fps)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:264:18 (normalize_mesh)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/av_model.py:674:67 (LTXAVModel._process_input)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/av_model.py:782:17 (LTXAVModel._prepare_timestep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/av_model.py:788:17 (LTXAVModel._prepare_timestep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:556:9 (compute_prompt_timestep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/sdpose.py:90:30 (HeatmapHead.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/sdpose.py:95:27 (HeatmapHead.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/sub_quadratic_attention.py:175:24 (_get_attention_scores_no_kv_chunking)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:673:31 (DFINETransformer._decoder_input)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:1631:23 (SAM31Tracker._match_and_add_detections)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:91:16 (_nms_masks)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/preview.py:41:43 (render_splat)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/preview.py:87:13 (decode_x0_to_image)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:227:25 (OctreeProbabilityFixedlenDecoder.sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:53:16 (sample_probs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:26:24 (calculate_x_ref_attn_map)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:285:22 (SingleStreamMultiAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:289:46 (SingleStreamMultiAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:290:46 (SingleStreamMultiAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/ace15.py:82:21 (sample_manual_loop_no_classes)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gemma4.py:687:17 (Gemma4VisionEncoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/llama.py:1126:31 (Qwen25_7BVLI.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/llama.py:906:24 (BaseGenerate.generate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/llama.py:959:28 (BaseGenerate.sample_token)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen_vl.py:105:27 (qwen2vl_mrope_position_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen_vl.py:408:25 (Qwen2VLVisionTransformer.get_position_embeddings)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/mediapipe/face_landmarker.py:672:38 (FaceLandmarker.detect_batch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_audio.py:703:19 (AudioMerge.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_chroma_radiance.py:103:21 (ChromaRadianceOptions.execute.model_function_wrapper)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:116:33 (_normalize_confidence)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:528:36 (DA3GeometryToMesh.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1254:14 (_splat_density)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1321:17 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1332:22 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1365:22 (_clean_components)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1545:42 (_gaussian_to_mesh)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:872:22 (_render_gaussian)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:895:45 (_render_gaussian)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_save_3d.py:107:20 (save_glb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_save_3d.py:180:20 (save_glb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_scail.py:203:28 (WanSCAILToVideo.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sdpose.py:172:124 (KeypointDraw.fillConvexPoly)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sdpose.py:172:70 (KeypointDraw.fillConvexPoly)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sdpose.py:588:20 (get_face_bboxes)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_tomesd.py:93:30 (bipartite_soft_matching_random2d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_triposplat.py:45:33 (_preprocess)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_triposplat.py:46:33 (_preprocess)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_void.py:141:12 (VOIDQuadmaskPreprocess.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:598:37 (merge_final)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:603:37 (merge_final)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:289:29 (piptrack)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:397:23 (compute_chroma_cens)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:500:14 (estimate_tempo_from_onset)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:530:17 (detect_onset_peaks)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:541:40 (detect_onset_peaks)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:550:16 (detect_onset_peaks)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:592:27 (track_beats)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:707:41 (power_to_db)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/void_noise_warp.py:141:13 (sum_indexed_values)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_async_nodes.py:83:58 (TestAsyncNodes.test_basic_async_execution)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:484:64 (TestExecution.test_undeclared_inputs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:502:68 (TestExecution.test_for_loop)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:515:63 (TestExecution.test_mixed_expansion_returns)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:516:63 (TestExecution.test_mixed_expansion_returns)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:517:63 (TestExecution.test_mixed_expansion_returns)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:522:68 (TestExecution.test_mixed_expansion_returns)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:537:54 (TestExecution.test_mixed_lazy_results)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:538:56 (TestExecution.test_mixed_lazy_results)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:539:56 (TestExecution.test_mixed_lazy_results)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:565:55 (TestExecution.test_is_changed_with_outputs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:570:55 (TestExecution.test_is_changed_with_outputs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:671:54 (TestExecution.test_execution_block_list_output)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/test_execution.py:672:54 (TestExecution.test_execution_block_list_output)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/testing_nodes/testing-pack/conditions.py:134:16 (TestToBoolNode.to_bool)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/testing_nodes/testing-pack/specific_tests.py:28:20 (TestLazyMixImages.check_lazy_status)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests/execution/testing_nodes/testing-pack/specific_tests.py:39:20 (TestLazyMixImages.mix)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-61b9bb91a65a-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match reduced axes, keep-dimension behavior, empty-domain behavior, output rank, and scalar-versus-tensor results.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "axis",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdims",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-61B9BB91A65A",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "b410d6db0c2e97f9fcf52436d7d033a947ae5fcd409b6bbf79feca3ec5f81373",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/audio_encoders/whisper.py",
+        "sha256": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22"
+      },
+      {
+        "path": "comfy/image_encoders/dino2.py",
+        "sha256": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/ace/ace_step15.py",
+        "sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e"
+      },
+      {
+        "path": "comfy/ldm/ace/lyric_encoder.py",
+        "sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103"
+      },
+      {
+        "path": "comfy/ldm/cosmos/position_embedding.py",
+        "sha256": "ab27e03b9af1ecafba7062ef9e63d6092f71fa12c872e43ad8107df7b27b7fa0"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+        "sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/transform.py",
+        "sha256": "30291a7f8d3d83cc6a911daf603342444ed30e7141abb3ba8ccc7f41273ac763"
+      },
+      {
+        "path": "comfy/ldm/hidream_o1/utils.py",
+        "sha256": "5382588a09d04988c1894fbcf9b5f5d29f8bfa2db24d0b8a8933162709b472ae"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/lightricks/av_model.py",
+        "sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/modules/sdpose.py",
+        "sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a"
+      },
+      {
+        "path": "comfy/ldm/modules/sub_quadratic_attention.py",
+        "sha256": "c804fbbda0fbc6404999be734d3c33b868375959736f8e21ad417782ab0638a0"
+      },
+      {
+        "path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+        "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"
+      },
+      {
+        "path": "comfy/ldm/sam3/tracker.py",
+        "sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e"
+      },
+      {
+        "path": "comfy/ldm/triposplat/preview.py",
+        "sha256": "1cc6a5b11900ded9722a999b523a1f8c4f778fe796456289c5343970b1aa31ff"
+      },
+      {
+        "path": "comfy/ldm/triposplat/vae.py",
+        "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+      },
+      {
+        "path": "comfy/ldm/wan/model_multitalk.py",
+        "sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8"
+      },
+      {
+        "path": "comfy/text_encoders/ace15.py",
+        "sha256": "21106ab99d7d543a2d157202531e60a80bfa55c88740f9708d2bf7415466f04e"
+      },
+      {
+        "path": "comfy/text_encoders/gemma4.py",
+        "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6"
+      },
+      {
+        "path": "comfy/text_encoders/llama.py",
+        "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a"
+      },
+      {
+        "path": "comfy/text_encoders/qwen_vl.py",
+        "sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f"
+      },
+      {
+        "path": "comfy_extras/mediapipe/face_landmarker.py",
+        "sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802"
+      },
+      {
+        "path": "comfy_extras/nodes_audio.py",
+        "sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4"
+      },
+      {
+        "path": "comfy_extras/nodes_chroma_radiance.py",
+        "sha256": "a16d2f4d5953020da038d30594ffe93ee2ba50508ab8f412784e57e9f571a5e5"
+      },
+      {
+        "path": "comfy_extras/nodes_depth_anything_3.py",
+        "sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_save_3d.py",
+        "sha256": "73a7f2cfcc32abac5bffad0ada05790915e0f8b5d3010be7fee3c5eee1103f8f"
+      },
+      {
+        "path": "comfy_extras/nodes_scail.py",
+        "sha256": "4f0de5c18bd40db615d837b2ab0ddea30ed4ac17231c251fd65f770bbec3cd0e"
+      },
+      {
+        "path": "comfy_extras/nodes_sdpose.py",
+        "sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21"
+      },
+      {
+        "path": "comfy_extras/nodes_tomesd.py",
+        "sha256": "af0e1461ae6ad220dc7c8e5fe8e53508293329e2bdf3272acd96bfce6774c884"
+      },
+      {
+        "path": "comfy_extras/nodes_triposplat.py",
+        "sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628"
+      },
+      {
+        "path": "comfy_extras/nodes_void.py",
+        "sha256": "b80cd0b5831335087fd29f959be2659820b7927c8b7622cb4b3e9c9fde2c6d4f"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      },
+      {
+        "path": "comfy_extras/nodes_wandancer.py",
+        "sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed"
+      },
+      {
+        "path": "comfy_extras/void_noise_warp.py",
+        "sha256": "4b923f26b69d76b1e17e166fc2671006a16b3a1f09dc0d480e9c8122ab103dbf"
+      },
+      {
+        "path": "tests/execution/test_async_nodes.py",
+        "sha256": "bd9bf53cb3cceec15dbb3e8c23cdeb9fe027bb13ddca69164bbdf217dc7356d5"
+      },
+      {
+        "path": "tests/execution/test_execution.py",
+        "sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07"
+      },
+      {
+        "path": "tests/execution/testing_nodes/testing-pack/conditions.py",
+        "sha256": "b350b905fe2fcda0044645018aded95eb1531775513d19b860c04ed6a49146b3"
+      },
+      {
+        "path": "tests/execution/testing_nodes/testing-pack/specific_tests.py",
+        "sha256": "6ac74cc1721a51de4b1f24f77392004dafdd8e110dfe1c54d8400bfdd2e60ed7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.max"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "reduction_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-reduction-comfy-tensor-op-00e998458e0c",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 52,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [],
+      "scope": "WhisperFeatureExtractor.__call__",
+      "site": "comfy/audio_encoders/whisper.py:48:52 (WhisperFeatureExtractor.__call__)",
+      "source_path": "comfy/audio_encoders/whisper.py",
+      "source_sha256": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
+      "status": "static-call-observed",
+      "target_syntax": "log_mel_spec.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 176,
+      "positional_arguments": [],
+      "scope": "RotaryPositionEmbedding2D.forward",
+      "site": "comfy/image_encoders/dino2.py:176:23 (RotaryPositionEmbedding2D.forward)",
+      "source_path": "comfy/image_encoders/dino2.py",
+      "source_sha256": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
+      "status": "static-call-observed",
+      "target_syntax": "positions.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 744,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:744:54 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 832,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde",
+      "site": "comfy/k_diffusion/sampling.py:832:54 (sample_dpmpp_2m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 890,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_3m_sde",
+      "site": "comfy/k_diffusion/sampling.py:890:54 (sample_dpmpp_3m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 949,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_3m_sde_gpu",
+      "site": "comfy/k_diffusion/sampling.py:949:54 (sample_dpmpp_3m_sde_gpu)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 959,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde_heun_gpu",
+      "site": "comfy/k_diffusion/sampling.py:959:54 (sample_dpmpp_2m_sde_heun_gpu)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 969,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde_gpu",
+      "site": "comfy/k_diffusion/sampling.py:969:54 (sample_dpmpp_2m_sde_gpu)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 979,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde_gpu",
+      "site": "comfy/k_diffusion/sampling.py:979:54 (sample_dpmpp_sde_gpu)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigmas.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 459,
+      "positional_arguments": [],
+      "scope": "AceStepTimbreEncoder.unpack_timbre_embeddings",
+      "site": "comfy/ldm/ace/ace_step15.py:459:21 (AceStepTimbreEncoder.unpack_timbre_embeddings)",
+      "source_path": "comfy/ldm/ace/ace_step15.py",
+      "source_sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e",
+      "status": "static-call-observed",
+      "target_syntax": "counts.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 43,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 907,
+      "positional_arguments": [],
+      "scope": "make_pad_mask",
+      "site": "comfy/ldm/ace/lyric_encoder.py:907:43 (make_pad_mask)",
+      "source_path": "comfy/ldm/ace/lyric_encoder.py",
+      "source_sha256": "f6506034c513af1fc0790b62dce1769583d464a4be8f0ef8eabfbd1e0e86a103",
+      "status": "static-call-observed",
+      "target_syntax": "lengths.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 87,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 137,
+      "positional_arguments": [],
+      "scope": "VideoRopePosition3DEmb.generate_embeddings",
+      "site": "comfy/ldm/cosmos/position_embedding.py:137:87 (VideoRopePosition3DEmb.generate_embeddings)",
+      "source_path": "comfy/ldm/cosmos/position_embedding.py",
+      "source_sha256": "ab27e03b9af1ecafba7062ef9e63d6092f71fa12c872e43ad8107df7b27b7fa0",
+      "status": "static-call-observed",
+      "target_syntax": "fps.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 40,
+      "positional_arguments": [],
+      "scope": "select_reference_view._normalize",
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:40:18 (select_reference_view._normalize)",
+      "source_path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+      "source_sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+      "status": "static-call-observed",
+      "target_syntax": "metric.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 50,
+      "positional_arguments": [],
+      "scope": "select_reference_view",
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:50:19 (select_reference_view)",
+      "source_path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+      "source_sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+      "status": "static-call-observed",
+      "target_syntax": "sim_no_diag.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 110,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "flr",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "mat_to_quat",
+      "site": "comfy/ldm/depth_anything_3/transform.py:110:45 (mat_to_quat)",
+      "source_path": "comfy/ldm/depth_anything_3/transform.py",
+      "source_sha256": "30291a7f8d3d83cc6a911daf603342444ed30e7141abb3ba8ccc7f41273ac763",
+      "status": "static-call-observed",
+      "target_syntax": "q_abs[..., None].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 132,
+      "positional_arguments": [],
+      "scope": "get_rope_index_fix_point",
+      "site": "comfy/ldm/hidream_o1/utils.py:132:26 (get_rope_index_fix_point)",
+      "source_path": "comfy/ldm/hidream_o1/utils.py",
+      "source_sha256": "5382588a09d04988c1894fbcf9b5f5d29f8bfa2db24d0b8a8933162709b472ae",
+      "status": "static-call-observed",
+      "target_syntax": "llm_pos_ids_list[-1].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 149,
+      "positional_arguments": [],
+      "scope": "get_rope_index_fix_point",
+      "site": "comfy/ldm/hidream_o1/utils.py:149:26 (get_rope_index_fix_point)",
+      "source_path": "comfy/ldm/hidream_o1/utils.py",
+      "source_sha256": "5382588a09d04988c1894fbcf9b5f5d29f8bfa2db24d0b8a8933162709b472ae",
+      "status": "static-call-observed",
+      "target_syntax": "llm_pos_ids_list[-1].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 42,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 155,
+      "positional_arguments": [],
+      "scope": "get_rope_index_fix_point",
+      "site": "comfy/ldm/hidream_o1/utils.py:155:42 (get_rope_index_fix_point)",
+      "source_path": "comfy/ldm/hidream_o1/utils.py",
+      "source_sha256": "5382588a09d04988c1894fbcf9b5f5d29f8bfa2db24d0b8a8933162709b472ae",
+      "status": "static-call-observed",
+      "target_syntax": "llm_positions.max"
+    },
+    {
+      "candidate_calls": [
+        {
+          "keyword_arguments": [
+            {
+              "expanded_mapping": false,
+              "name": "keepdim",
+              "syntax": "True",
+              "syntax_kind": "Constant"
+            }
+          ],
+          "positional_arguments": [
+            {
+              "index": 0,
+              "starred": false,
+              "syntax": "-1",
+              "syntax_kind": "UnaryOp"
+            }
+          ],
+          "target_name": "max",
+          "target_syntax": "position_ids.max(0, keepdim=False)[0].max"
+        },
+        {
+          "keyword_arguments": [
+            {
+              "expanded_mapping": false,
+              "name": "keepdim",
+              "syntax": "False",
+              "syntax_kind": "Constant"
+            }
+          ],
+          "positional_arguments": [
+            {
+              "index": 0,
+              "starred": false,
+              "syntax": "0",
+              "syntax_kind": "Constant"
+            }
+          ],
+          "target_name": "max",
+          "target_syntax": "position_ids.max"
+        }
+      ],
+      "catalog_field": "production_call_sites",
+      "matching_call_nodes": 2,
+      "site": "comfy/ldm/hidream_o1/utils.py:163:28 (get_rope_index_fix_point)",
+      "status": "call-node-not-unique"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 23,
+      "positional_arguments": [],
+      "scope": "fps",
+      "site": "comfy/ldm/hunyuan3d/vae.py:23:22 (fps)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "batch.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 264,
+      "positional_arguments": [],
+      "scope": "normalize_mesh",
+      "site": "comfy/ldm/hunyuan3d/vae.py:264:18 (normalize_mesh)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "(bbox[1] - bbox[0]).max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 67,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 674,
+      "positional_arguments": [],
+      "scope": "LTXAVModel._process_input",
+      "site": "comfy/ldm/lightricks/av_model.py:674:67 (LTXAVModel._process_input)",
+      "source_path": "comfy/ldm/lightricks/av_model.py",
+      "source_sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7",
+      "status": "static-call-observed",
+      "target_syntax": "frame_mask.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "attribute": "expand_as",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 782,
+      "positional_arguments": [],
+      "scope": "LTXAVModel._prepare_timestep",
+      "site": "comfy/ldm/lightricks/av_model.py:782:17 (LTXAVModel._prepare_timestep)",
+      "source_path": "comfy/ldm/lightricks/av_model.py",
+      "source_sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7",
+      "status": "static-call-observed",
+      "target_syntax": "a_timestep_scaled.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "attribute": "expand_as",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 788,
+      "positional_arguments": [],
+      "scope": "LTXAVModel._prepare_timestep",
+      "site": "comfy/ldm/lightricks/av_model.py:788:17 (LTXAVModel._prepare_timestep)",
+      "source_path": "comfy/ldm/lightricks/av_model.py",
+      "source_sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7",
+      "status": "static-call-observed",
+      "target_syntax": "timestep_scaled.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 556,
+      "positional_arguments": [],
+      "scope": "compute_prompt_timestep",
+      "site": "comfy/ldm/lightricks/model.py:556:9 (compute_prompt_timestep)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "timestep_scaled.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 90,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hm[k]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "HeatmapHead.forward",
+      "site": "comfy/ldm/modules/sdpose.py:90:30 (HeatmapHead.forward)",
+      "source_path": "comfy/ldm/modules/sdpose.py",
+      "source_sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 95,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "hm[k]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "HeatmapHead.forward",
+      "site": "comfy/ldm/modules/sdpose.py:95:27 (HeatmapHead.forward)",
+      "source_path": "comfy/ldm/modules/sdpose.py",
+      "source_sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 175,
+      "positional_arguments": [],
+      "scope": "_get_attention_scores_no_kv_chunking",
+      "site": "comfy/ldm/modules/sub_quadratic_attention.py:175:24 (_get_attention_scores_no_kv_chunking)",
+      "source_path": "comfy/ldm/modules/sub_quadratic_attention.py",
+      "source_sha256": "c804fbbda0fbc6404999be734d3c33b868375959736f8e21ad417782ab0638a0",
+      "status": "static-call-observed",
+      "target_syntax": "attn_scores.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 673,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "DFINETransformer._decoder_input",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:673:31 (DFINETransformer._decoder_input)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "logits.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 1631,
+      "positional_arguments": [],
+      "scope": "SAM31Tracker._match_and_add_detections",
+      "site": "comfy/ldm/sam3/tracker.py:1631:23 (SAM31Tracker._match_and_add_detections)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "overlap.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 91,
+      "positional_arguments": [],
+      "scope": "_nms_masks",
+      "site": "comfy/ldm/sam3/tracker.py:91:16 (_nms_masks)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "_compute_mask_overlap(masks[i:i + 1], masks[torch.tensor(keep, device=masks.device)]).max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 43,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 41,
+      "positional_arguments": [],
+      "scope": "render_splat",
+      "site": "comfy/ldm/triposplat/preview.py:41:43 (render_splat)",
+      "source_path": "comfy/ldm/triposplat/preview.py",
+      "source_sha256": "1cc6a5b11900ded9722a999b523a1f8c4f778fe796456289c5343970b1aa31ff",
+      "status": "static-call-observed",
+      "target_syntax": "radius.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 87,
+      "positional_arguments": [],
+      "scope": "decode_x0_to_image",
+      "site": "comfy/ldm/triposplat/preview.py:87:13 (decode_x0_to_image)",
+      "source_path": "comfy/ldm/triposplat/preview.py",
+      "source_sha256": "1cc6a5b11900ded9722a999b523a1f8c4f778fe796456289c5343970b1aa31ff",
+      "status": "static-call-observed",
+      "target_syntax": "gaussian.get_scaling.float().cpu().numpy().max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 227,
+      "positional_arguments": [],
+      "scope": "OctreeProbabilityFixedlenDecoder.sample",
+      "site": "comfy/ldm/triposplat/vae.py:227:25 (OctreeProbabilityFixedlenDecoder.sample)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "mask.sum(dim=1).max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 53,
+      "positional_arguments": [],
+      "scope": "sample_probs",
+      "site": "comfy/ldm/triposplat/vae.py:53:16 (sample_probs)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "counts.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 26,
+      "positional_arguments": [],
+      "scope": "calculate_x_ref_attn_map",
+      "site": "comfy/ldm/wan/model_multitalk.py:26:24 (calculate_x_ref_attn_map)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "attn_chunk.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 285,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "SingleStreamMultiAttention.forward",
+      "site": "comfy/ldm/wan/model_multitalk.py:285:22 (SingleStreamMultiAttention.forward)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "x_ref_attn_map.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 289,
+      "positional_arguments": [],
+      "scope": "SingleStreamMultiAttention.forward",
+      "site": "comfy/ldm/wan/model_multitalk.py:289:46 (SingleStreamMultiAttention.forward)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "max_min_values[0, :, 0].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 290,
+      "positional_arguments": [],
+      "scope": "SingleStreamMultiAttention.forward",
+      "site": "comfy/ldm/wan/model_multitalk.py:290:46 (SingleStreamMultiAttention.forward)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "max_min_values[1, :, 0].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 82,
+      "positional_arguments": [],
+      "scope": "sample_manual_loop_no_classes",
+      "site": "comfy/text_encoders/ace15.py:82:21 (sample_manual_loop_no_classes)",
+      "source_path": "comfy/text_encoders/ace15.py",
+      "source_sha256": "21106ab99d7d543a2d157202531e60a80bfa55c88740f9708d2bf7415466f04e",
+      "status": "static-call-observed",
+      "target_syntax": "probs.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 687,
+      "positional_arguments": [],
+      "scope": "Gemma4VisionEncoder.forward",
+      "site": "comfy/text_encoders/gemma4.py:687:17 (Gemma4VisionEncoder.forward)",
+      "source_path": "comfy/text_encoders/gemma4.py",
+      "source_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "status": "static-call-observed",
+      "target_syntax": "clamped[:, :, 0].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1126,
+      "positional_arguments": [],
+      "scope": "Qwen25_7BVLI.forward",
+      "site": "comfy/text_encoders/llama.py:1126:31 (Qwen25_7BVLI.forward)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "grid.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 906,
+      "positional_arguments": [],
+      "scope": "BaseGenerate.generate",
+      "site": "comfy/text_encoders/llama.py:906:24 (BaseGenerate.generate)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "position_ids[:, -1].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 959,
+      "positional_arguments": [],
+      "scope": "BaseGenerate.sample_token",
+      "site": "comfy/text_encoders/llama.py:959:28 (BaseGenerate.sample_token)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "probs_before_filter.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 105,
+      "positional_arguments": [],
+      "scope": "qwen2vl_mrope_position_ids",
+      "site": "comfy/text_encoders/qwen_vl.py:105:27 (qwen2vl_mrope_position_ids)",
+      "source_path": "comfy/text_encoders/qwen_vl.py",
+      "source_sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+      "status": "static-call-observed",
+      "target_syntax": "grid.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 408,
+      "positional_arguments": [],
+      "scope": "Qwen2VLVisionTransformer.get_position_embeddings",
+      "site": "comfy/text_encoders/qwen_vl.py:408:25 (Qwen2VLVisionTransformer.get_position_embeddings)",
+      "source_path": "comfy/text_encoders/qwen_vl.py",
+      "source_sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+      "status": "static-call-observed",
+      "target_syntax": "grid_thw[:, 1:].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 672,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "FaceLandmarker.detect_batch",
+      "site": "comfy_extras/mediapipe/face_landmarker.py:672:38 (FaceLandmarker.detect_batch)",
+      "source_path": "comfy_extras/mediapipe/face_landmarker.py",
+      "source_sha256": "759cb3449bfff77742891e97500e660ecf12a0d82c6b123c80953d76d11a5802",
+      "status": "static-call-observed",
+      "target_syntax": "lmks_xy.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 703,
+      "positional_arguments": [],
+      "scope": "AudioMerge.execute",
+      "site": "comfy_extras/nodes_audio.py:703:19 (AudioMerge.execute)",
+      "source_path": "comfy_extras/nodes_audio.py",
+      "source_sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+      "status": "static-call-observed",
+      "target_syntax": "waveform.abs().max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "detach",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 103,
+      "positional_arguments": [],
+      "scope": "ChromaRadianceOptions.execute.model_function_wrapper",
+      "site": "comfy_extras/nodes_chroma_radiance.py:103:21 (ChromaRadianceOptions.execute.model_function_wrapper)",
+      "source_path": "comfy_extras/nodes_chroma_radiance.py",
+      "source_sha256": "a16d2f4d5953020da038d30594ffe93ee2ba50508ab8f412784e57e9f571a5e5",
+      "status": "static-call-observed",
+      "target_syntax": "args['timestep'].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 116,
+      "positional_arguments": [],
+      "scope": "_normalize_confidence",
+      "site": "comfy_extras/nodes_depth_anything_3.py:116:33 (_normalize_confidence)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "c.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 528,
+      "positional_arguments": [],
+      "scope": "DA3GeometryToMesh.execute",
+      "site": "comfy_extras/nodes_depth_anything_3.py:528:36 (DA3GeometryToMesh.execute)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "depth.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1254,
+      "positional_arguments": [],
+      "scope": "_splat_density",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1254:14 (_splat_density)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(hi - lo).max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1321,
+      "positional_arguments": [],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1321:17 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "label.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1332,
+      "positional_arguments": [],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1332:22 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(cmax[largest] - cmin[largest]).max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1365,
+      "positional_arguments": [],
+      "scope": "_clean_components",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1365:22 (_clean_components)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(cmax[largest] - cmin[largest]).max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 42,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1545,
+      "positional_arguments": [],
+      "scope": "_gaussian_to_mesh",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1545:42 (_gaussian_to_mesh)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "vol.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 872,
+      "positional_arguments": [],
+      "scope": "_render_gaussian",
+      "site": "comfy_extras/nodes_gaussian_splat.py:872:22 (_render_gaussian)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "front.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 895,
+      "positional_arguments": [],
+      "scope": "_render_gaussian",
+      "site": "comfy_extras/nodes_gaussian_splat.py:895:45 (_render_gaussian)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "depth_map[covm].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 107,
+      "positional_arguments": [],
+      "scope": "save_glb",
+      "site": "comfy_extras/nodes_save_3d.py:107:20 (save_glb)",
+      "source_path": "comfy_extras/nodes_save_3d.py",
+      "source_sha256": "73a7f2cfcc32abac5bffad0ada05790915e0f8b5d3010be7fee3c5eee1103f8f",
+      "status": "static-call-observed",
+      "target_syntax": "faces_signed.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "attribute": "tolist",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 180,
+      "positional_arguments": [],
+      "scope": "save_glb",
+      "site": "comfy_extras/nodes_save_3d.py:180:20 (save_glb)",
+      "source_path": "comfy_extras/nodes_save_3d.py",
+      "source_sha256": "73a7f2cfcc32abac5bffad0ada05790915e0f8b5d3010be7fee3c5eee1103f8f",
+      "status": "static-call-observed",
+      "target_syntax": "vertices_np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "attribute": "values",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 203,
+      "positional_arguments": [],
+      "scope": "WanSCAILToVideo.execute",
+      "site": "comfy_extras/nodes_scail.py:203:28 (WanSCAILToVideo.execute)",
+      "source_path": "comfy_extras/nodes_scail.py",
+      "source_sha256": "4f0de5c18bd40db615d837b2ab0ddea30ed4ac17231c251fd65f770bbec3cd0e",
+      "status": "static-call-observed",
+      "target_syntax": "rm[..., :3].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 124,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 172,
+      "positional_arguments": [],
+      "scope": "KeypointDraw.fillConvexPoly",
+      "site": "comfy_extras/nodes_sdpose.py:172:124 (KeypointDraw.fillConvexPoly)",
+      "source_path": "comfy_extras/nodes_sdpose.py",
+      "source_sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+      "status": "static-call-observed",
+      "target_syntax": "pts[:, 0].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 70,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 172,
+      "positional_arguments": [],
+      "scope": "KeypointDraw.fillConvexPoly",
+      "site": "comfy_extras/nodes_sdpose.py:172:70 (KeypointDraw.fillConvexPoly)",
+      "source_path": "comfy_extras/nodes_sdpose.py",
+      "source_sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+      "status": "static-call-observed",
+      "target_syntax": "pts[:, 1].max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 588,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "kp2ds_face",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_face_bboxes",
+      "site": "comfy_extras/nodes_sdpose.py:588:20 (get_face_bboxes)",
+      "source_path": "comfy_extras/nodes_sdpose.py",
+      "source_sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 93,
+      "positional_arguments": [],
+      "scope": "bipartite_soft_matching_random2d",
+      "site": "comfy_extras/nodes_tomesd.py:93:30 (bipartite_soft_matching_random2d)",
+      "source_path": "comfy_extras/nodes_tomesd.py",
+      "source_sha256": "af0e1461ae6ad220dc7c8e5fe8e53508293329e2bdf3272acd96bfce6774c884",
+      "status": "static-call-observed",
+      "target_syntax": "scores.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 45,
+      "positional_arguments": [],
+      "scope": "_preprocess",
+      "site": "comfy_extras/nodes_triposplat.py:45:33 (_preprocess)",
+      "source_path": "comfy_extras/nodes_triposplat.py",
+      "source_sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628",
+      "status": "static-call-observed",
+      "target_syntax": "xs.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 46,
+      "positional_arguments": [],
+      "scope": "_preprocess",
+      "site": "comfy_extras/nodes_triposplat.py:46:33 (_preprocess)",
+      "source_path": "comfy_extras/nodes_triposplat.py",
+      "source_sha256": "11fdabc2d220aaf6fa2c6642c7698ae66f6a1f5e2077e7acacc0c32f99b7a628",
+      "status": "static-call-observed",
+      "target_syntax": "ys.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 141,
+      "positional_arguments": [],
+      "scope": "VOIDQuadmaskPreprocess.execute",
+      "site": "comfy_extras/nodes_void.py:141:12 (VOIDQuadmaskPreprocess.execute)",
+      "source_path": "comfy_extras/nodes_void.py",
+      "source_sha256": "b80cd0b5831335087fd29f959be2659820b7927c8b7622cb4b3e9c9fde2c6d4f",
+      "status": "static-call-observed",
+      "target_syntax": "m.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 598,
+      "positional_arguments": [],
+      "scope": "merge_final",
+      "site": "comfy_extras/nodes_wan.py:598:37 (merge_final)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "vert_assign.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 603,
+      "positional_arguments": [],
+      "scope": "merge_final",
+      "site": "comfy_extras/nodes_wan.py:603:37 (merge_final)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "vert_assign.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdims",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 289,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "S",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "piptrack",
+      "site": "comfy_extras/nodes_wandancer.py:289:29 (piptrack)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdims",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 397,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "np.abs(chroma_smooth)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "compute_chroma_cens",
+      "site": "comfy_extras/nodes_wandancer.py:397:23 (compute_chroma_cens)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 500,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "np.abs(tempogram)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "estimate_tempo_from_onset",
+      "site": "comfy_extras/nodes_wandancer.py:500:14 (estimate_tempo_from_onset)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 530,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "onset_normalized",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "detect_onset_peaks",
+      "site": "comfy_extras/nodes_wandancer.py:530:17 (detect_onset_peaks)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 541,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "onset_normalized[:min(post_max_frames, len(onset_normalized))]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "detect_onset_peaks",
+      "site": "comfy_extras/nodes_wandancer.py:541:40 (detect_onset_peaks)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 550,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "onset_normalized[max(0, n - pre_max_frames):min(n + post_max_frames, len(onset_normalized))]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "detect_onset_peaks",
+      "site": "comfy_extras/nodes_wandancer.py:550:16 (detect_onset_peaks)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 592,
+      "positional_arguments": [],
+      "scope": "track_beats",
+      "site": "comfy_extras/nodes_wandancer.py:592:27 (track_beats)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "localscore.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 707,
+      "positional_arguments": [],
+      "scope": "power_to_db",
+      "site": "comfy_extras/nodes_wandancer.py:707:41 (power_to_db)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "log_spec.max"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 141,
+      "positional_arguments": [],
+      "scope": "sum_indexed_values",
+      "site": "comfy_extras/void_noise_warp.py:141:13 (sum_indexed_values)",
+      "source_path": "comfy_extras/void_noise_warp.py",
+      "source_sha256": "4b923f26b69d76b1e17e166fc2671006a16b3a1f09dc0d480e9c8122ab103dbf",
+      "status": "static-call-observed",
+      "target_syntax": "index_matrix.max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 58,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 83,
+      "positional_arguments": [],
+      "scope": "TestAsyncNodes.test_basic_async_execution",
+      "site": "tests/execution/test_async_nodes.py:83:58 (TestAsyncNodes.test_basic_async_execution)",
+      "source_path": "tests/execution/test_async_nodes.py",
+      "source_sha256": "bd9bf53cb3cceec15dbb3e8c23cdeb9fe027bb13ddca69164bbdf217dc7356d5",
+      "status": "static-call-observed",
+      "target_syntax": "np.array(result_images[0]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 64,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 484,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_undeclared_inputs",
+      "site": "tests/execution/test_execution.py:484:64 (TestExecution.test_undeclared_inputs)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(result_image).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 68,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 502,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_for_loop",
+      "site": "tests/execution/test_execution.py:502:68 (TestExecution.test_for_loop)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(result_image).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 63,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 515,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_expansion_returns",
+      "site": "tests/execution/test_execution.py:515:63 (TestExecution.test_mixed_expansion_returns)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images_dynamic[0]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 63,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 516,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_expansion_returns",
+      "site": "tests/execution/test_execution.py:516:63 (TestExecution.test_mixed_expansion_returns)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images_dynamic[1]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 63,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 517,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_expansion_returns",
+      "site": "tests/execution/test_execution.py:517:63 (TestExecution.test_mixed_expansion_returns)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images_dynamic[2]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 68,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 522,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_expansion_returns",
+      "site": "tests/execution/test_execution.py:522:68 (TestExecution.test_mixed_expansion_returns)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images_literal[i]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 537,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_lazy_results",
+      "site": "tests/execution/test_execution.py:537:54 (TestExecution.test_mixed_lazy_results)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[0]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 56,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 538,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_lazy_results",
+      "site": "tests/execution/test_execution.py:538:56 (TestExecution.test_mixed_lazy_results)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[1]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 56,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 539,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_mixed_lazy_results",
+      "site": "tests/execution/test_execution.py:539:56 (TestExecution.test_mixed_lazy_results)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[2]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 55,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 565,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_is_changed_with_outputs",
+      "site": "tests/execution/test_execution.py:565:55 (TestExecution.test_is_changed_with_outputs)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[0]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 55,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 570,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_is_changed_with_outputs",
+      "site": "tests/execution/test_execution.py:570:55 (TestExecution.test_is_changed_with_outputs)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[0]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 671,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_execution_block_list_output",
+      "site": "tests/execution/test_execution.py:671:54 (TestExecution.test_execution_block_list_output)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[0]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 54,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 672,
+      "positional_arguments": [],
+      "scope": "TestExecution.test_execution_block_list_output",
+      "site": "tests/execution/test_execution.py:672:54 (TestExecution.test_execution_block_list_output)",
+      "source_path": "tests/execution/test_execution.py",
+      "source_sha256": "b39ad78c0c8d42c5417b008a9913d473b55abd753d1f1d6d53f39f48c6c3bd07",
+      "status": "static-call-observed",
+      "target_syntax": "numpy.array(images[1]).max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 134,
+      "positional_arguments": [],
+      "scope": "TestToBoolNode.to_bool",
+      "site": "tests/execution/testing_nodes/testing-pack/conditions.py:134:16 (TestToBoolNode.to_bool)",
+      "source_path": "tests/execution/testing_nodes/testing-pack/conditions.py",
+      "source_sha256": "b350b905fe2fcda0044645018aded95eb1531775513d19b860c04ed6a49146b3",
+      "status": "static-call-observed",
+      "target_syntax": "value.max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 28,
+      "positional_arguments": [],
+      "scope": "TestLazyMixImages.check_lazy_status",
+      "site": "tests/execution/testing_nodes/testing-pack/specific_tests.py:28:20 (TestLazyMixImages.check_lazy_status)",
+      "source_path": "tests/execution/testing_nodes/testing-pack/specific_tests.py",
+      "source_sha256": "6ac74cc1721a51de4b1f24f77392004dafdd8e110dfe1c54d8400bfdd2e60ed7",
+      "status": "static-call-observed",
+      "target_syntax": "mask.max"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 39,
+      "positional_arguments": [],
+      "scope": "TestLazyMixImages.mix",
+      "site": "tests/execution/testing_nodes/testing-pack/specific_tests.py:39:20 (TestLazyMixImages.mix)",
+      "source_path": "tests/execution/testing_nodes/testing-pack/specific_tests.py",
+      "source_sha256": "6ac74cc1721a51de4b1f24f77392004dafdd8e110dfe1c54d8400bfdd2e60ed7",
+      "status": "static-call-observed",
+      "target_syntax": "mask.max"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,226 @@
+{
+  "canonical_target": "comfy.ops.cast_modules_with_vbar",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_prefetch.py:62:26 (prefetch_queue_pop)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "comfy_modules"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "dtype"
+        },
+        {
+          "argument": "positional:2",
+          "parameter": "device"
+        },
+        {
+          "argument": "positional:3",
+          "parameter": "bias_dtype"
+        },
+        {
+          "argument": "positional:4",
+          "parameter": "non_blocking"
+        }
+      ],
+      "site": "comfy/model_prefetch.py:62:26 (prefetch_queue_pop)",
+      "status": "static-compatible"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-23da7f686728-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "comfy_modules",
+      "type": "dynamic"
+    },
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "device",
+      "type": "dynamic"
+    },
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "bias_dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "non_blocking",
+      "type": "dynamic"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-23DA7F686728",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "d8f419bea404bece44f01b79626141e38612c621c953acd6e36ba6b0bf50281a",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/model_prefetch.py",
+        "sha256": "55b31bff96371d270f811970fd3b500e5aa21f53597e3cc6a188a66201c8b7a6"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.cast_modules_with_vbar"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-227f5d04687a",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 62,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "comfy_modules",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "None",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 3,
+          "starred": false,
+          "syntax": "None",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 4,
+          "starred": false,
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "prefetch_queue_pop",
+      "site": "comfy/model_prefetch.py:62:26 (prefetch_queue_pop)",
+      "source_path": "comfy/model_prefetch.py",
+      "source_sha256": "55b31bff96371d270f811970fd3b500e5aa21f53597e3cc6a188a66201c8b7a6",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_modules_with_vbar"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "FunctionDef",
+    "definition_line": 91,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "declared-function",
+    "parameters": [
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "comfy_modules",
+        "type": "dynamic"
+      },
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "device",
+        "type": "dynamic"
+      },
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "bias_dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "non_blocking",
+        "type": "dynamic"
+      }
+    ],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        [
+          {
+            "syntax_kind": "Name"
+          }
+        ]
+      ]
+    }
+  }
+}

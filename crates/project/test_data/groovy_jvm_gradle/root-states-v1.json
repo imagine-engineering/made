@@ -1,0 +1,135 @@
+{
+  "providerVersion": "0.37.0",
+  "providerSha256": "8cd8b65616b348d7dac5d47e3d4738532067ed10d60bbcd6294134b3ba95f7ba",
+  "sourceTask": "7.97",
+  "sourceReceiptSha256": "fe77cd8883fc5774068f526a0bf8800e3191555d757745cb2540968cf71e1915",
+  "pathRemapping": "Only rootUri is replaced by file:///groovy-root-state/; other response fields remain exact.",
+  "snapshots": [
+    {
+      "label": "fresh",
+      "sourceJourney": "root-state-seed",
+      "sourceStage": "startup",
+      "originalReplyCanonicalJsonSha256": "bb628e5a6a2fbeb9c6f6b507ddd10eee883c18d588df31626403c9325d1d2cae",
+      "response": {
+        "workspaceState": "absent",
+        "fullSynchronizationKnown": false,
+        "rootUri": "file:///groovy-root-state/",
+        "version": 1,
+        "descriptionAvailable": false
+      }
+    },
+    {
+      "label": "open",
+      "sourceJourney": "root-state-retained",
+      "sourceStage": "startup",
+      "originalReplyCanonicalJsonSha256": "07dca34669d253a51afb669d5bec07a4fe00d275a453c819df311ec9d7966f1c",
+      "response": {
+        "workspaceState": "open",
+        "descriptionAvailable": true,
+        "version": 1,
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false
+      }
+    },
+    {
+      "label": "closed",
+      "sourceJourney": "root-state-retained",
+      "sourceStage": "SDK root state observation",
+      "originalReplyCanonicalJsonSha256": "949f1bcead98321cfb14cc902990fb3dd8aa3c6b9448c5d9daa38f125ce31b74",
+      "response": {
+        "workspaceState": "closed",
+        "descriptionAvailable": true,
+        "version": 1,
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false
+      }
+    },
+    {
+      "label": "recoverable",
+      "sourceJourney": "root-state-cold",
+      "sourceStage": "startup",
+      "originalReplyCanonicalJsonSha256": "8e0886d50e0e3a2021dc98fca8bf3299dae44564fb47a222f868bac3c608442d",
+      "response": {
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false,
+        "workspaceState": "absent",
+        "descriptionAvailable": true,
+        "version": 1
+      }
+    }
+  ],
+  "phases": [
+    {
+      "sourceJourney": "root-state-retained",
+      "sourceStage": "valid already-open control",
+      "originalReplyCanonicalJsonSha256": "7bff851a2e70994089b2fee4c0d94a5429c726ead45c542e4fff45e493252beb",
+      "response": {
+        "rootStatePhaseComplete": true,
+        "open": true,
+        "version": 1,
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false
+      }
+    },
+    {
+      "sourceJourney": "root-state-retained",
+      "sourceStage": "close",
+      "originalReplyCanonicalJsonSha256": "2f4d7cc1a3528db851bf9c89dcf4f3957c6e459485c6780f85c640ad7e523eec",
+      "response": {
+        "rootStatePhaseComplete": true,
+        "open": false,
+        "version": 1,
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false
+      }
+    },
+    {
+      "sourceJourney": "root-state-retained",
+      "sourceStage": "open",
+      "originalReplyCanonicalJsonSha256": "7bff851a2e70994089b2fee4c0d94a5429c726ead45c542e4fff45e493252beb",
+      "response": {
+        "rootStatePhaseComplete": true,
+        "open": true,
+        "version": 1,
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false
+      }
+    },
+    {
+      "sourceJourney": "root-state-retained",
+      "sourceStage": "close",
+      "originalReplyCanonicalJsonSha256": "2f4d7cc1a3528db851bf9c89dcf4f3957c6e459485c6780f85c640ad7e523eec",
+      "response": {
+        "rootStatePhaseComplete": true,
+        "open": false,
+        "version": 1,
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false
+      }
+    },
+    {
+      "sourceJourney": "root-state-cold",
+      "sourceStage": "recreateClosed",
+      "originalReplyCanonicalJsonSha256": "2f4d7cc1a3528db851bf9c89dcf4f3957c6e459485c6780f85c640ad7e523eec",
+      "response": {
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false,
+        "rootStatePhaseComplete": true,
+        "open": false,
+        "version": 1
+      }
+    },
+    {
+      "sourceJourney": "root-state-cold",
+      "sourceStage": "open",
+      "originalReplyCanonicalJsonSha256": "7bff851a2e70994089b2fee4c0d94a5429c726ead45c542e4fff45e493252beb",
+      "response": {
+        "rootUri": "file:///groovy-root-state/",
+        "fullSynchronizationKnown": false,
+        "rootStatePhaseComplete": true,
+        "open": true,
+        "version": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "backend": "cuda",
+  "allowed_payloads": [
+    "LICENSES",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "kernels/core-v1.ptx",
+    "kernels/manifest-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json"
+  ],
+  "required_payloads": [
+    "LICENSES",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "kernels/core-v1.ptx",
+    "kernels/manifest-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json"
+  ],
+  "forbidden_payloads": [
+    "*.dll",
+    "*.dylib",
+    "*.h",
+    "*.lib",
+    "*.so",
+    "*.so.*",
+    "*.a",
+    "*.cubin",
+    "*.fatbin"
+  ],
+  "maximum_file_bytes": 4194304,
+  "signature_algorithm": "ed25519",
+  "signature_domain": "zed-sim-cuda-package-v1",
+  "signature_coverage_excludes": ["adapter-manifest.sig", "package-coverage.sha256"],
+  "redistributes_driver": false,
+  "approved_vendor_redistributables": [],
+  "license_approval_required_for_vendor_runtime": true,
+  "runtime_compilation_for_core_kernels": false,
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "structural_receipt_is_authorization": false
+}

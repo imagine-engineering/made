@@ -1,0 +1,38 @@
+{
+  "fixture_schema": "zed.sim.video-codec-ltxv-tensor-preprocess.v1",
+  "truth_mode": "synthetic-source-compatible-ltxv-tensor-preprocess",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "image_ops_sha256": "9b6144cf2c7d162c27992d14c775bae73b532ca3a3487ec99d35a07c67bdea38"
+  },
+  "prerequisites": {
+    "codec_ltxv_h264_mp4_decode_manifest_sha256": "029b1eb31589abda84346a505c361a8fe6830bbb1d3b7a8dbf2a6f57c7c8a227"
+  },
+  "contract": {
+    "canonical_input": "nonempty-batch CPU F32 BHWC IMAGE tensor",
+    "compression_range": [0, 100],
+    "compression_zero_fresh_stack_without_codec_calls": true,
+    "compression_zero_accepts_zero_spatial_dimensions": true,
+    "compressed_input_requires_rgb": true,
+    "crop_origin": "top-left",
+    "crop_bottom_and_right_to_even": true,
+    "source_byte_conversion": "trunc(value * 255) as i64 as u8",
+    "batch_execution_order": "serial ascending index",
+    "native_composition": ["encode", "borrowed-demux", "first-frame-decode"],
+    "decoded_rgb_normalization": "f32(byte) / 255",
+    "one_final_tensor_after_all_frames": true,
+    "cancellation_bounds_and_workspace_are_attempt_local": true
+  },
+  "claims": {
+    "licensed_or_installed_ffmpeg_package": false,
+    "valid_production_mp4_or_h264_execution": false,
+    "production_h264_or_pyav_color_numeric_oracle": false,
+    "arbitrary_torch_dtype_or_device_supported": false,
+    "general_video_decode_supported": false,
+    "media_payload_or_handle_published": false,
+    "effect_cache_persistence_recovery_or_publication": false
+  }
+}

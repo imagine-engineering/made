@@ -1,0 +1,236 @@
+{
+  "canonical_target": "torch.nn.Module.__init__",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/ldm/chroma_radiance/model.py:52:9 (ChromaRadiance.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/ldm/pixart/pixartms.py:96:9 (PixArtMS.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/ops.py:460:13 (disable_weight_init.Linear.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/ops.py:709:13 (disable_weight_init.Embedding.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/text_encoders/qwen35.py:407:9 (Qwen35Transformer.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/ldm/chroma_radiance/model.py:52:9 (ChromaRadiance.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/pixartms.py:96:9 (PixArtMS.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ops.py:460:13 (disable_weight_init.Linear.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ops.py:709:13 (disable_weight_init.Embedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:407:9 (Qwen35Transformer.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-d54af27b4d70-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-D54AF27B4D70",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "ef6b2b857be2719637513e2e2684b83683de663eb3e289d34452ed7b71b24105",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/chroma_radiance/model.py",
+        "sha256": "c8a356f24b99e4351917fba91d062b819330c89edfa999cf2e7d530b7e473251"
+      },
+      {
+        "path": "comfy/ldm/pixart/pixartms.py",
+        "sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.Module.__init__"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_20",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-d54af27b4d70",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 52,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ChromaRadiance.__init__",
+      "site": "comfy/ldm/chroma_radiance/model.py:52:9 (ChromaRadiance.__init__)",
+      "source_path": "comfy/ldm/chroma_radiance/model.py",
+      "source_sha256": "c8a356f24b99e4351917fba91d062b819330c89edfa999cf2e7d530b7e473251",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module.__init__"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 96,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "PixArtMS.__init__",
+      "site": "comfy/ldm/pixart/pixartms.py:96:9 (PixArtMS.__init__)",
+      "source_path": "comfy/ldm/pixart/pixartms.py",
+      "source_sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module.__init__"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 460,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "disable_weight_init.Linear.__init__",
+      "site": "comfy/ops.py:460:13 (disable_weight_init.Linear.__init__)",
+      "source_path": "comfy/ops.py",
+      "source_sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.Module.__init__"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 709,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "disable_weight_init.Embedding.__init__",
+      "site": "comfy/ops.py:709:13 (disable_weight_init.Embedding.__init__)",
+      "source_path": "comfy/ops.py",
+      "source_sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.Module.__init__"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 407,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Qwen35Transformer.__init__",
+      "site": "comfy/text_encoders/qwen35.py:407:9 (Qwen35Transformer.__init__)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "nn.Module.__init__"
+    }
+  ],
+  "static_definition": null
+}

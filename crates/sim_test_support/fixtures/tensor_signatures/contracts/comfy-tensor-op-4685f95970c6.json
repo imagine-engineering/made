@@ -1,0 +1,245 @@
+{
+  "canonical_target": "torch.Tensor.unique",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "scalar_one_or_none",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:228:13 (get_or_create_reference)"
+    },
+    {
+      "expectation": {
+        "attribute": "scalars",
+        "kind": "attribute-access"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:352:12 (list_references_page)"
+    },
+    {
+      "expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "site": "comfy/sample.py:13:28 (prepare_noise_inner)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1372:12 (_clean_components)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/comfy_api_test/video_bit_depth_test.py:45:20 (decoded_levels)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "app/assets/database/queries/asset_reference.py:228:13 (get_or_create_reference)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:352:12 (list_references_page)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/sample.py:13:28 (prepare_noise_inner)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1372:12 (_clean_components)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/comfy_api_test/video_bit_depth_test.py:45:20 (decoded_levels)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-4685f95970c6-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "return_inverse",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-4685F95970C6",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "a263985c75c382852b3ab7a06ab6138aab1e0b3fd0121b8ef9561c1471be8456",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "app/assets/database/queries/asset_reference.py",
+        "sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59"
+      },
+      {
+        "path": "comfy/sample.py",
+        "sha256": "ee3485747727f9a182b9e7dd5a32a81e9429c329f2dcd248996ea0eba191faea"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "tests-unit/comfy_api_test/video_bit_depth_test.py",
+        "sha256": "ef54c6b01e971e052df9632d6e9e88cf55fee3b08eadfe19b534e2441dd3ad81"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.unique"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_06",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-4130d690d4b2",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "attribute": "scalar_one_or_none",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 228,
+      "positional_arguments": [],
+      "scope": "get_or_create_reference",
+      "site": "app/assets/database/queries/asset_reference.py:228:13 (get_or_create_reference)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(select(AssetReference).where(AssetReference.asset_id == asset_id, AssetReference.name == name, AssetReference.owner_id == owner_id, AssetReference.file_path.is_(None)).limit(1)).unique"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "scalars",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 352,
+      "positional_arguments": [],
+      "scope": "list_references_page",
+      "site": "app/assets/database/queries/asset_reference.py:352:12 (list_references_page)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(base).unique"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 2,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "return_inverse",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 13,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "noise_inds",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "prepare_noise_inner",
+      "site": "comfy/sample.py:13:28 (prepare_noise_inner)",
+      "source_path": "comfy/sample.py",
+      "source_sha256": "ee3485747727f9a182b9e7dd5a32a81e9429c329f2dcd248996ea0eba191faea",
+      "status": "static-call-observed",
+      "target_syntax": "np.unique"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1372,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "faces",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_clean_components",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1372:12 (_clean_components)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "np.unique"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 45,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "frame.to_ndarray(format='gbrpf32le')[..., 0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "decoded_levels",
+      "site": "tests-unit/comfy_api_test/video_bit_depth_test.py:45:20 (decoded_levels)",
+      "source_path": "tests-unit/comfy_api_test/video_bit_depth_test.py",
+      "source_sha256": "ef54c6b01e971e052df9632d6e9e88cf55fee3b08eadfe19b534e2441dd3ad81",
+      "status": "static-call-observed",
+      "target_syntax": "np.unique"
+    }
+  ],
+  "static_definition": null
+}

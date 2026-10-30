@@ -1,0 +1,438 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sim-native-video-vae-source-checkpoints-v1",
+  "oracle_kind": "immutable-source-derived-checkpoints",
+  "production_dependency": false,
+  "provenance_sha256": "fb6222852c118c9206e4e0e5779181f7303aa3a0f9fea72b5028906f06012504",
+  "cases": [
+    {
+      "id": "hunyuan-image-refiner",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-27dec63f"
+      ],
+      "profile": "HunyuanImageRefinerV1",
+      "latent": "HunyuanImage21Refiner",
+      "temporal_ratio": 4,
+      "spatial_ratio": 16,
+      "state_checkpoints": [
+        {
+          "name": "decoder.conv_in.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "single_frame_encode_expand_temporal_4",
+        "single_frame_decode_select_last",
+        "spatial_stride_16",
+        "diagonal_gaussian_mode"
+      ]
+    },
+    {
+      "id": "mochi",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-genmo-vae-model-videovae-b1621cfc"
+      ],
+      "profile": "MochiV1",
+      "latent": "Mochi",
+      "temporal_ratio": 6,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.blocks.2.blocks.3.stack.5.weight",
+          "rank": 5
+        },
+        {
+          "name": "encoder.layers.4.layers.1.attn_block.attn.qkv.weight",
+          "rank": 2
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_temporal_encode_ceil_t_div_6",
+        "causal_temporal_decode_t_mul_6_minus_5",
+        "spatial_stride_8",
+        "per_channel_latent_affine"
+      ]
+    },
+    {
+      "id": "ltx-video-v0",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
+      ],
+      "profile": "LtxVideoV0",
+      "latent": "LTXV",
+      "temporal_ratio": 8,
+      "spatial_ratio": 32,
+      "state_checkpoints": [
+        {
+          "name": "decoder.up_blocks.0.res_blocks.0.conv1.conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_temporal_encode_ceil_t_div_8",
+        "causal_temporal_decode_t_mul_8_minus_7",
+        "spatial_stride_32",
+        "caller_addressed_deterministic_decode_rng"
+      ]
+    },
+    {
+      "id": "ltx-video-v1",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
+      ],
+      "profile": "LtxVideoV1",
+      "latent": "LTXV",
+      "temporal_ratio": 8,
+      "spatial_ratio": 32,
+      "state_checkpoints": [
+        {
+          "name": "decoder.up_blocks.0.res_blocks.0.conv1.conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_temporal_encode_ceil_t_div_8",
+        "causal_temporal_decode_t_mul_8_minus_7",
+        "spatial_stride_32",
+        "caller_addressed_deterministic_decode_rng"
+      ]
+    },
+    {
+      "id": "ltx-video-v2",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
+      ],
+      "profile": "LtxVideoV2",
+      "latent": "LTXV",
+      "temporal_ratio": 8,
+      "spatial_ratio": 32,
+      "state_checkpoints": [
+        {
+          "name": "decoder.up_blocks.0.res_blocks.0.conv1.conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_temporal_encode_ceil_t_div_8",
+        "causal_temporal_decode_t_mul_8_minus_7",
+        "spatial_stride_32",
+        "caller_addressed_deterministic_decode_rng"
+      ]
+    },
+    {
+      "id": "hunyuan-video-refiner",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencodingengine-d7c8a707"
+      ],
+      "profile": "HunyuanVideoRefinerV1",
+      "latent": "HunyuanVideo15",
+      "temporal_ratio": 4,
+      "spatial_ratio": 16,
+      "state_checkpoints": [
+        {
+          "name": "decoder.conv_in.conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_temporal_encode_ceil_t_div_4",
+        "causal_temporal_decode_t_mul_4_minus_3",
+        "spatial_stride_16",
+        "first_frame_cache_boundary"
+      ]
+    },
+    {
+      "id": "cogvideox",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-cogvideo-vae-autoencoderklcogvideox-18fb0b1a"
+      ],
+      "profile": "CogVideoXV1",
+      "latent": "CogVideoX",
+      "temporal_ratio": 4,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.conv_in.conv.weight",
+          "rank": 5
+        },
+        {
+          "name": "decoder.mid_block.resnets.0.norm1.norm_layer.weight",
+          "rank": 1
+        },
+        {
+          "name": "encoder.conv_out.conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_conv3d_first_frame_replication",
+        "rolling_temporal_encode_cache",
+        "rolling_temporal_decode_cache",
+        "diagonal_gaussian_mode"
+      ]
+    },
+    {
+      "id": "cogvideox-1-5",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-cogvideo-vae-autoencoderklcogvideox-18fb0b1a"
+      ],
+      "profile": "CogVideoXV1",
+      "latent": "CogVideoX1_5",
+      "temporal_ratio": 4,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.conv_in.conv.weight",
+          "rank": 5
+        },
+        {
+          "name": "decoder.mid_block.resnets.0.norm1.norm_layer.weight",
+          "rank": 1
+        },
+        {
+          "name": "encoder.conv_out.conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_conv3d_first_frame_replication",
+        "rolling_temporal_encode_cache",
+        "rolling_temporal_decode_cache",
+        "diagonal_gaussian_mode"
+      ]
+    },
+    {
+      "id": "causal-3d",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-autoencoderkl-153e7ff2"
+      ],
+      "profile": "Causal3dV1",
+      "latent": "unbound",
+      "temporal_ratio": 4,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.conv_in.conv.weight",
+          "rank": 5
+        },
+        {
+          "name": "post_quant_conv.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_conv3d_prefix_cache",
+        "temporal_compress_4",
+        "diagonal_gaussian_mode"
+      ]
+    },
+    {
+      "id": "cosmos",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-cosmos-vae-causalcontinuousvideotokenizer-ba589e82"
+      ],
+      "profile": "CosmosV1",
+      "latent": "Cosmos1CV8x8x8",
+      "temporal_ratio": 8,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.unpatcher3d.wavelets",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_temporal_encode_ceil_t_div_8",
+        "causal_temporal_decode_t_mul_8_minus_7",
+        "haar_wavelet_patchify_3d",
+        "haar_wavelet_unpatchify_3d"
+      ]
+    },
+    {
+      "id": "wan-2-1",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-wan-vae-wanvae-ce05ff38"
+      ],
+      "profile": "Wan21V1",
+      "latent": "Wan21",
+      "temporal_ratio": 4,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.middle.0.residual.0.gamma",
+          "rank": 1
+        },
+        {
+          "name": "encoder.conv1.weight",
+          "rank": 5
+        },
+        {
+          "name": "decoder.head.2.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_conv3d_two_frame_cache",
+        "first_frame_separate_encode",
+        "first_frame_separate_decode",
+        "causal_temporal_index_4"
+      ]
+    },
+    {
+      "id": "wan-2-2",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-ldm-wan-vae2-2-wanvae-69fa166b"
+      ],
+      "profile": "Wan22V1",
+      "latent": "Wan22",
+      "temporal_ratio": 4,
+      "spatial_ratio": 16,
+      "state_checkpoints": [
+        {
+          "name": "decoder.middle.0.residual.0.gamma",
+          "rank": 1
+        },
+        {
+          "name": "decoder.upsamples.0.upsamples.0.residual.2.weight",
+          "rank": 5
+        }
+      ],
+      "equation_checkpoints": [
+        "causal_conv3d_two_frame_cache",
+        "first_frame_separate_encode",
+        "first_frame_separate_decode",
+        "causal_temporal_index_4"
+      ]
+    },
+    {
+      "id": "taehv-wan-2-2",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-4688008a"
+      ],
+      "profile": "TaeHvWan22V1",
+      "latent": "Wan22",
+      "temporal_ratio": 4,
+      "spatial_ratio": 16,
+      "state_checkpoints": [
+        {
+          "name": "decoder.1.weight",
+          "rank": 4
+        },
+        {
+          "name": "decoder.22.bias",
+          "rank": 1
+        }
+      ],
+      "equation_checkpoints": [
+        "frame_queue_dependency_order",
+        "first_frame_zero_temporal_memory",
+        "temporal_blend_memory",
+        "bounded_frame_work_queue"
+      ]
+    },
+    {
+      "id": "taehv-ltx2",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-4688008a"
+      ],
+      "profile": "TaeHvLtx2V1",
+      "latent": "LTXV",
+      "temporal_ratio": 8,
+      "spatial_ratio": 32,
+      "state_checkpoints": [
+        {
+          "name": "decoder.1.weight",
+          "rank": 4
+        },
+        {
+          "name": "decoder.22.bias",
+          "rank": 1
+        }
+      ],
+      "equation_checkpoints": [
+        "frame_queue_dependency_order",
+        "first_frame_zero_temporal_memory",
+        "temporal_blend_memory",
+        "bounded_frame_work_queue"
+      ]
+    },
+    {
+      "id": "lighttae-hunyuan-1-5",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-baed411e"
+      ],
+      "profile": "LightTaeHv15V1",
+      "latent": "HunyuanVideo15",
+      "temporal_ratio": 4,
+      "spatial_ratio": 16,
+      "state_checkpoints": [
+        {
+          "name": "decoder.1.weight",
+          "rank": 4
+        },
+        {
+          "name": "decoder.22.bias",
+          "rank": 1
+        }
+      ],
+      "equation_checkpoints": [
+        "frame_queue_dependency_order",
+        "first_frame_zero_temporal_memory",
+        "temporal_blend_memory",
+        "bounded_frame_work_queue"
+      ]
+    },
+    {
+      "id": "taehv-hunyuan",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-ff3688fd"
+      ],
+      "profile": "TaeHvHunyuanV1",
+      "latent": "HunyuanVideo",
+      "temporal_ratio": 4,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.1.weight",
+          "rank": 4
+        },
+        {
+          "name": "decoder.22.bias",
+          "rank": 1
+        }
+      ],
+      "equation_checkpoints": [
+        "frame_queue_dependency_order",
+        "first_frame_zero_temporal_memory",
+        "temporal_blend_memory",
+        "bounded_frame_work_queue"
+      ]
+    },
+    {
+      "id": "lighttae-wan-2-1",
+      "catalog_contract_ids": [
+        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-ff3688fd"
+      ],
+      "profile": "LightTaeWan21V1",
+      "latent": "Wan21",
+      "temporal_ratio": 4,
+      "spatial_ratio": 8,
+      "state_checkpoints": [
+        {
+          "name": "decoder.1.weight",
+          "rank": 4
+        },
+        {
+          "name": "decoder.22.bias",
+          "rank": 1
+        }
+      ],
+      "equation_checkpoints": [
+        "frame_queue_dependency_order",
+        "first_frame_zero_temporal_memory",
+        "temporal_blend_memory",
+        "bounded_frame_work_queue"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "contract": "zed-sim-metal-execution-v1",
+  "backend": "metal",
+  "abi_floor": "macos-13-metal-3",
+  "allowed_targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin"
+  ],
+  "reviewed_sdk_version": "26.2",
+  "reviewed_xcode_build": "17C52",
+  "minimum_macos_version": "13.0",
+  "metal_language_version": "metal3.0",
+  "runtime_compilation_forbidden": true,
+  "allowed_payloads": [
+    "LICENSES",
+    "abi/execution-v1.json",
+    "abi/reviewed-execution-bindings-v1.txt",
+    "execution-policy.json",
+    "kernels/tensor_ops.metal",
+    "kernels/tensor_ops.metallib",
+    "package-coverage.sha256",
+    "target.json"
+  ],
+  "forbidden_payload_suffixes": [
+    ".air",
+    ".dylib",
+    ".framework",
+    ".h"
+  ],
+  "execution_abi_sha256": "5b183c3a01ab5d6cfad93c185a9aafa0fe66ad2db5c70c7ec5458f9c3701017e",
+  "reviewed_execution_bindings_sha256": "3e4499b0597c8e470eed3866d2c60fa72bc4cebe5e58af44873585667a118426",
+  "tensor_ops_source_sha256": "1c93eb5fe65f495e02b1132a5de597d7f945c6463ffb5f89c0f03f8aa1dfc91b",
+  "tensor_ops_metallib_sha256_by_target": {
+    "aarch64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b",
+    "x86_64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b"
+  },
+  "license_notice_sha256": "a41f64e75ac4c3e527d5beaee1b1359c6d3ea13b2118f60672c8362b5b30c990",
+  "authorization_owner": "sim_runtime::MetalPackageVerificationKey",
+  "authorization_package": "signed-main-metal-package",
+  "development_structure_only": true,
+  "runtime_authorization_from_structure": false,
+  "redistributes_apple_frameworks": false,
+  "required_entitlements": []
+}

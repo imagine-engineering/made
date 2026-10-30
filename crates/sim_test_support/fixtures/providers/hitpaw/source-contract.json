@@ -1,0 +1,4195 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.hitpaw",
+  "source_sha256": {
+    "sim_api_nodes/nodes_hitpaw.py": "8f479c2060c399b3e5a57c0770a623dd4be6a00c711f2ce9c10ccdd55651fc6e",
+    "sim_api_nodes/apis/hitpaw.py": "df2e5bc200512990cdac52fe7ef947cbb9d9a1be322b27e2a84c6d7ff6fceb60",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+  },
+  "scope": "Actual source request/preflight/model-resolution selection and task errors. Native Lanczos pixels/upload/materialization are explicit structural boundaries, not fabricated outputs.",
+  "contracts": {
+    "HitPawGeneralImageEnhance": {
+      "arguments": [
+        "model",
+        "image",
+        "upscale_factor",
+        "auto_downscale"
+      ],
+      "defaults": {},
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Image.Output()]"
+    },
+    "HitPawVideoEnhance": {
+      "arguments": [
+        "model",
+        "video"
+      ],
+      "defaults": {},
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Video.Output()]"
+    }
+  },
+  "model_map": {
+    "Portrait Restore Model (1x)": "portrait_restore_1x",
+    "Portrait Restore Model (2x)": "portrait_restore_2x",
+    "General Restore Model (1x)": "general_restore_1x",
+    "General Restore Model (2x)": "general_restore_2x",
+    "General Restore Model (4x)": "general_restore_4x",
+    "Ultra HD Model (2x)": "ultrahd_restore_2x",
+    "Generative Model (1x)": "generative_1x"
+  },
+  "target_map": {
+    "720p": 720,
+    "1080p": 1080,
+    "2K/QHD": 1440,
+    "4K/UHD": 2160,
+    "8K": 4320
+  },
+  "square_map": {
+    "720p": 720,
+    "1080p": 1080,
+    "2K/QHD": 1440,
+    "4K/UHD": 2048,
+    "8K": 4096
+  },
+  "limited_models": [
+    "Generative Model (1x)"
+  ],
+  "cases": [
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative_portrait",
+          "image": {
+            "native_image": "small",
+            "width": 1024,
+            "height": 768,
+            "batch_count": 2
+          },
+          "upscale_factor": 1,
+          "auto_downscale": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_portrait_1x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "small",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative_portrait",
+          "image": {
+            "native_image": "small",
+            "width": 1024,
+            "height": 768,
+            "batch_count": 2
+          },
+          "upscale_factor": 2,
+          "auto_downscale": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_portrait_2x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "small",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative_portrait",
+          "image": {
+            "native_image": "small",
+            "width": 1024,
+            "height": 768,
+            "batch_count": 2
+          },
+          "upscale_factor": 4,
+          "auto_downscale": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_portrait_4x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "small",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "small",
+            "width": 1024,
+            "height": 768,
+            "batch_count": 2
+          },
+          "upscale_factor": 1,
+          "auto_downscale": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_1x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "small",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "small",
+            "width": 1024,
+            "height": 768,
+            "batch_count": 2
+          },
+          "upscale_factor": 2,
+          "auto_downscale": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_2x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "small",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "small",
+            "width": 1024,
+            "height": 768,
+            "batch_count": 2
+          },
+          "upscale_factor": 4,
+          "auto_downscale": false
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_4x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "small",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "large",
+            "width": 2000,
+            "height": 1500,
+            "batch_count": 1
+          },
+          "upscale_factor": 4,
+          "auto_downscale": true
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_4x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "downscale_image",
+          "slot": "large",
+          "total_pixels": 2000000
+        },
+        {
+          "operation": "upload_image",
+          "slot": "large-downscaled",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "large",
+            "width": 4000,
+            "height": 4000,
+            "batch_count": 1
+          },
+          "upscale_factor": 4,
+          "auto_downscale": true
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_2x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "downscale_image",
+          "slot": "large",
+          "total_pixels": 8000000
+        },
+        {
+          "operation": "upload_image",
+          "slot": "large-downscaled",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "large",
+            "width": 12000,
+            "height": 10000,
+            "batch_count": 1
+          },
+          "upscale_factor": 4,
+          "auto_downscale": true
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_1x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "downscale_image",
+          "slot": "large",
+          "total_pixels": 32000000
+        },
+        {
+          "operation": "upload_image",
+          "slot": "large-downscaled",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "large",
+            "width": 4000,
+            "height": 4000,
+            "batch_count": 1
+          },
+          "upscale_factor": 2,
+          "auto_downscale": true
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_2x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "downscale_image",
+          "slot": "large",
+          "total_pixels": 8000000
+        },
+        {
+          "operation": "upload_image",
+          "slot": "large-downscaled",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "large",
+            "width": 10000,
+            "height": 10000,
+            "batch_count": 1
+          },
+          "upscale_factor": 1,
+          "auto_downscale": true
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_1x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "downscale_image",
+          "slot": "large",
+          "total_pixels": 32000000
+        },
+        {
+          "operation": "upload_image",
+          "slot": "large-downscaled",
+          "total_pixels": null
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (1x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_1x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (1x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_1x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (1x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_1x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (1x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_1x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (1x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_1x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (1x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_1x",
+            "resolution": [
+              7680,
+              4320
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_2x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (2x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_2x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (2x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_2x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (2x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_2x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (2x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_2x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Portrait Restore Model (2x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "portrait_restore_2x",
+            "resolution": [
+              7680,
+              4320
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (1x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_1x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (1x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_1x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (1x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_1x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (1x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_1x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (1x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_1x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (1x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_1x",
+            "resolution": [
+              7680,
+              4320
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              7680,
+              4320
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (4x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_4x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (4x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_4x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (4x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_4x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (4x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_4x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (4x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_4x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (4x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_4x",
+            "resolution": [
+              7680,
+              4320
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Ultra HD Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "ultrahd_restore_2x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Ultra HD Model (2x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "ultrahd_restore_2x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Ultra HD Model (2x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "ultrahd_restore_2x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Ultra HD Model (2x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "ultrahd_restore_2x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Ultra HD Model (2x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "ultrahd_restore_2x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Ultra HD Model (2x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "ultrahd_restore_2x",
+            "resolution": [
+              7680,
+              4320
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Generative Model (1x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "generative_1x",
+            "resolution": [
+              640,
+              360
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Generative Model (1x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "generative_1x",
+            "resolution": [
+              1280,
+              720
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Generative Model (1x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "generative_1x",
+            "resolution": [
+              1920,
+              1080
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Generative Model (1x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "generative_1x",
+            "resolution": [
+              2560,
+              1440
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "Generative Model (1x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "small-video",
+            "width": 640,
+            "height": 360,
+            "duration": 0.49995
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "generative_1x",
+            "resolution": [
+              3840,
+              2160
+            ],
+            "original_resolution": [
+              640,
+              360
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "small-video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "4K/UHD"
+          },
+          "video": {
+            "native_video": "dimensions",
+            "width": 720,
+            "height": 720,
+            "duration": 3600.00005
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              2048,
+              2048
+            ],
+            "original_resolution": [
+              720,
+              720
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "dimensions",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "8K"
+          },
+          "video": {
+            "native_video": "dimensions",
+            "width": 720,
+            "height": 720,
+            "duration": 3600.00005
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              4096,
+              4096
+            ],
+            "original_resolution": [
+              720,
+              720
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "dimensions",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "1080p"
+          },
+          "video": {
+            "native_video": "dimensions",
+            "width": 360,
+            "height": 640,
+            "duration": 3600.00005
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              1080,
+              1920
+            ],
+            "original_resolution": [
+              360,
+              640
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "dimensions",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "2K/QHD"
+          },
+          "video": {
+            "native_video": "dimensions",
+            "width": 1919,
+            "height": 1081,
+            "duration": 3600.00005
+          }
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              2556,
+              1440
+            ],
+            "original_resolution": [
+              1919,
+              1081
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        },
+        {
+          "path": "/proxy/hitpaw/api/task-status",
+          "method": "POST",
+          "body": {
+            "job_id": "source-job-42"
+          },
+          "poll_interval": 10.0,
+          "price_usd": 0.123
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "dimensions",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video",
+          "url": "https://fixture.invalid/result"
+        }
+      ]
+    }
+  ],
+  "preflight_errors": [
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "large",
+            "width": 4000,
+            "height": 4000,
+            "batch_count": 1
+          },
+          "upscale_factor": 4,
+          "auto_downscale": false
+        }
+      },
+      "message": "Output size (16000x16000 = 256,000,000 pixels) exceeds maximum allowed size of 32,000,000 pixels (32MP). Enable auto_downscale or use a smaller input image or a lower upscale factor.",
+      "requests": [],
+      "media": [],
+      "response_mode": null
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "too-large",
+            "width": 1080,
+            "height": 1080,
+            "duration": 1
+          }
+        }
+      },
+      "message": "Selected resolution 720p (720x720) is smaller than the input video (1080x1080). Please select a higher resolution or 'original'.",
+      "requests": [],
+      "media": [],
+      "response_mode": null
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "720p"
+          },
+          "video": {
+            "native_video": "too-large",
+            "width": 1920,
+            "height": 1080,
+            "duration": 1
+          }
+        }
+      },
+      "message": "Selected resolution 720p (720p) is smaller than the input video's shorter dimension (1080p). Please select a higher resolution or 'original'.",
+      "requests": [],
+      "media": [],
+      "response_mode": null
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "duration",
+            "width": 640,
+            "height": 360,
+            "duration": 0.4998
+          }
+        }
+      },
+      "message": "Video duration must be at least 0.5s, got 0.4998s",
+      "requests": [],
+      "media": [],
+      "response_mode": null
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "duration",
+            "width": 640,
+            "height": 360,
+            "duration": 3600.0002
+          }
+        }
+      },
+      "message": "Video duration must be at most 3600s, got 3600.0002s",
+      "requests": [],
+      "media": [],
+      "response_mode": null
+    }
+  ],
+  "response_errors": [
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "source",
+            "width": 100,
+            "height": 100,
+            "batch_count": 1
+          },
+          "upscale_factor": 2,
+          "auto_downscale": false
+        }
+      },
+      "message": "Task creation failed with code 400: source creation failure",
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_2x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 400,
+            "message": "source creation failure",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "source",
+          "total_pixels": null
+        }
+      ],
+      "response_mode": "creation-error"
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "video",
+            "width": 1919,
+            "height": 1081,
+            "duration": 3
+          }
+        }
+      },
+      "message": "Task creation failed with code 400: source creation failure",
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              1919,
+              1081
+            ],
+            "original_resolution": [
+              1919,
+              1081
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 400,
+            "message": "source creation failure",
+            "data": {
+              "job_id": "source-job-42",
+              "consume_coins": 123
+            }
+          }
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "response_mode": "creation-error"
+    },
+    {
+      "input": {
+        "node": "HitPawGeneralImageEnhance",
+        "arguments": {
+          "model": "generative",
+          "image": {
+            "native_image": "source",
+            "width": 100,
+            "height": 100,
+            "batch_count": 1
+          },
+          "upscale_factor": 2,
+          "auto_downscale": false
+        }
+      },
+      "message": "unsupported operand type(s) for /: 'NoneType' and 'int'",
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/photo-enhancer",
+          "method": "POST",
+          "body": {
+            "model_name": "generative_2x",
+            "img_url": "https://storage.fixture.invalid/image",
+            "extension": ".png",
+            "exif": false
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42"
+            }
+          }
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_image",
+          "slot": "source",
+          "total_pixels": null
+        }
+      ],
+      "response_mode": "missing-coins"
+    },
+    {
+      "input": {
+        "node": "HitPawVideoEnhance",
+        "arguments": {
+          "model": {
+            "model": "General Restore Model (2x)",
+            "resolution": "original"
+          },
+          "video": {
+            "native_video": "video",
+            "width": 1919,
+            "height": 1081,
+            "duration": 3
+          }
+        }
+      },
+      "message": "unsupported operand type(s) for /: 'NoneType' and 'int'",
+      "requests": [
+        {
+          "path": "/proxy/hitpaw/api/video-enhancer",
+          "method": "POST",
+          "body": {
+            "video_url": "https://storage.fixture.invalid/video",
+            "extension": ".mp4",
+            "model_name": "general_restore_2x",
+            "resolution": [
+              1919,
+              1081
+            ],
+            "original_resolution": [
+              1919,
+              1081
+            ]
+          },
+          "wait_label": "Creating task",
+          "final_label_on_success": "Task created",
+          "response": {
+            "code": 200,
+            "message": "success",
+            "data": {
+              "job_id": "source-job-42"
+            }
+          }
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "video",
+          "container": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "response_mode": "missing-coins"
+    }
+  ],
+  "polling": {
+    "COMPLETED_STATUSES": [
+      "succeeded",
+      "succeed",
+      "success",
+      "completed",
+      "finished",
+      "done",
+      "complete"
+    ],
+    "FAILED_STATUSES": [
+      "cancelled",
+      "canceled",
+      "canceling",
+      "fail",
+      "failed",
+      "error"
+    ],
+    "QUEUED_STATUSES": [
+      "created",
+      "queued",
+      "queueing",
+      "submitted",
+      "initializing",
+      "wait",
+      "in_queue"
+    ]
+  }
+}

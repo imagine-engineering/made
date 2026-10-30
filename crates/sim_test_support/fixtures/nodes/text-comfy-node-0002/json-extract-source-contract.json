@@ -1,0 +1,514 @@
+{
+  "schema_version": 1,
+  "task": 676,
+  "feature_id": "COMFY-NODE-0276",
+  "source": {
+    "file": "sim_extras/nodes_string.py",
+    "sha256": "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1",
+    "class_line": 410,
+    "unchanged_class_ast_sha256": "9f11be8e0b2cf3c992f5909a8bbe6293c64757145e797fa9752cf771e3262760"
+  },
+  "source_execution": "Unchanged original class AST; real stdlib json/str; only ComfyNode and NodeOutput descriptor capture",
+  "environment": {
+    "python": "3.12.14",
+    "unicode_data": "15.0.0"
+  },
+  "preserved_fixture_sha256": "2e288b0974d0a811f55505031360e7f5c41cb95493d2326bafddcd2e832d4af9",
+  "ordinary_cases": [
+    {
+      "id": "null",
+      "json_string": "{\"value\": null}",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "true",
+      "json_string": "{\"value\": true}",
+      "key": "value",
+      "output": "True"
+    },
+    {
+      "id": "false",
+      "json_string": "{\"value\": false}",
+      "key": "value",
+      "output": "False"
+    },
+    {
+      "id": "signed-integer",
+      "json_string": "{\"value\": -987}",
+      "key": "value",
+      "output": "-987"
+    },
+    {
+      "id": "unsigned-integer",
+      "json_string": "{\"value\": 18446744073709551615}",
+      "key": "value",
+      "output": "18446744073709551615"
+    },
+    {
+      "id": "fraction",
+      "json_string": "{\"value\": 1.5}",
+      "key": "value",
+      "output": "1.5"
+    },
+    {
+      "id": "integral-float",
+      "json_string": "{\"value\": 1.0}",
+      "key": "value",
+      "output": "1.0"
+    },
+    {
+      "id": "negative-zero",
+      "json_string": "{\"value\": -0.0}",
+      "key": "value",
+      "output": "-0.0"
+    },
+    {
+      "id": "direct-empty",
+      "json_string": "{\"value\": \"\"}",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "direct-quotes",
+      "json_string": "{\"value\": \"don't say \\\"hello\\\"\"}",
+      "key": "value",
+      "output": "don't say \"hello\""
+    },
+    {
+      "id": "direct-printable-unicode",
+      "json_string": "{\"value\": \"café 中文 🎵\"}",
+      "key": "value",
+      "output": "café 中文 🎵"
+    },
+    {
+      "id": "empty-array",
+      "json_string": "{\"value\": []}",
+      "key": "value",
+      "output": "[]"
+    },
+    {
+      "id": "empty-object",
+      "json_string": "{\"value\": {}}",
+      "key": "value",
+      "output": "{}"
+    },
+    {
+      "id": "nested-values",
+      "json_string": "{\"value\": [true, false, null, 3, 1.5, {\"x\": [\"café\", \"中文\", \"🎵\"]}]}",
+      "key": "value",
+      "output": "[True, False, None, 3, 1.5, {'x': ['café', '中文', '🎵']}]"
+    },
+    {
+      "id": "quote-selection",
+      "json_string": "{\"value\": [\"don't\", \"say \\\"hello\\\"\", \"don't say \\\"hello\\\"\", \"\\\\\\\\path\\\\file\"]}",
+      "key": "value",
+      "output": "[\"don't\", 'say \"hello\"', 'don\\'t say \"hello\"', '\\\\\\\\path\\\\file']"
+    },
+    {
+      "id": "insertion-order",
+      "json_string": "{\"value\": {\"z\": \"first\", \"a\": \"second\", \"m\": [\"don't\", \"line\\nbreak\"]}}",
+      "key": "value",
+      "output": "{'z': 'first', 'a': 'second', 'm': [\"don't\", 'line\\nbreak']}"
+    },
+    {
+      "id": "control-keys",
+      "json_string": "{\"value\": {\"line\\nbreak\": \"tab\\tvalue\", \"don't\": {\"\\u0000\": \"\\u001f\"}}}",
+      "key": "value",
+      "output": "{'line\\nbreak': 'tab\\tvalue', \"don't\": {'\\x00': '\\x1f'}}"
+    },
+    {
+      "id": "ascii-control-00",
+      "json_string": "{\"value\": [\"before\\u0000after\"]}",
+      "key": "value",
+      "output": "['before\\x00after']"
+    },
+    {
+      "id": "ascii-control-01",
+      "json_string": "{\"value\": [\"before\\u0001after\"]}",
+      "key": "value",
+      "output": "['before\\x01after']"
+    },
+    {
+      "id": "ascii-control-02",
+      "json_string": "{\"value\": [\"before\\u0002after\"]}",
+      "key": "value",
+      "output": "['before\\x02after']"
+    },
+    {
+      "id": "ascii-control-03",
+      "json_string": "{\"value\": [\"before\\u0003after\"]}",
+      "key": "value",
+      "output": "['before\\x03after']"
+    },
+    {
+      "id": "ascii-control-04",
+      "json_string": "{\"value\": [\"before\\u0004after\"]}",
+      "key": "value",
+      "output": "['before\\x04after']"
+    },
+    {
+      "id": "ascii-control-05",
+      "json_string": "{\"value\": [\"before\\u0005after\"]}",
+      "key": "value",
+      "output": "['before\\x05after']"
+    },
+    {
+      "id": "ascii-control-06",
+      "json_string": "{\"value\": [\"before\\u0006after\"]}",
+      "key": "value",
+      "output": "['before\\x06after']"
+    },
+    {
+      "id": "ascii-control-07",
+      "json_string": "{\"value\": [\"before\\u0007after\"]}",
+      "key": "value",
+      "output": "['before\\x07after']"
+    },
+    {
+      "id": "ascii-control-08",
+      "json_string": "{\"value\": [\"before\\bafter\"]}",
+      "key": "value",
+      "output": "['before\\x08after']"
+    },
+    {
+      "id": "ascii-control-09",
+      "json_string": "{\"value\": [\"before\\tafter\"]}",
+      "key": "value",
+      "output": "['before\\tafter']"
+    },
+    {
+      "id": "ascii-control-0a",
+      "json_string": "{\"value\": [\"before\\nafter\"]}",
+      "key": "value",
+      "output": "['before\\nafter']"
+    },
+    {
+      "id": "ascii-control-0b",
+      "json_string": "{\"value\": [\"before\\u000bafter\"]}",
+      "key": "value",
+      "output": "['before\\x0bafter']"
+    },
+    {
+      "id": "ascii-control-0c",
+      "json_string": "{\"value\": [\"before\\fafter\"]}",
+      "key": "value",
+      "output": "['before\\x0cafter']"
+    },
+    {
+      "id": "ascii-control-0d",
+      "json_string": "{\"value\": [\"before\\rafter\"]}",
+      "key": "value",
+      "output": "['before\\rafter']"
+    },
+    {
+      "id": "ascii-control-0e",
+      "json_string": "{\"value\": [\"before\\u000eafter\"]}",
+      "key": "value",
+      "output": "['before\\x0eafter']"
+    },
+    {
+      "id": "ascii-control-0f",
+      "json_string": "{\"value\": [\"before\\u000fafter\"]}",
+      "key": "value",
+      "output": "['before\\x0fafter']"
+    },
+    {
+      "id": "ascii-control-10",
+      "json_string": "{\"value\": [\"before\\u0010after\"]}",
+      "key": "value",
+      "output": "['before\\x10after']"
+    },
+    {
+      "id": "ascii-control-11",
+      "json_string": "{\"value\": [\"before\\u0011after\"]}",
+      "key": "value",
+      "output": "['before\\x11after']"
+    },
+    {
+      "id": "ascii-control-12",
+      "json_string": "{\"value\": [\"before\\u0012after\"]}",
+      "key": "value",
+      "output": "['before\\x12after']"
+    },
+    {
+      "id": "ascii-control-13",
+      "json_string": "{\"value\": [\"before\\u0013after\"]}",
+      "key": "value",
+      "output": "['before\\x13after']"
+    },
+    {
+      "id": "ascii-control-14",
+      "json_string": "{\"value\": [\"before\\u0014after\"]}",
+      "key": "value",
+      "output": "['before\\x14after']"
+    },
+    {
+      "id": "ascii-control-15",
+      "json_string": "{\"value\": [\"before\\u0015after\"]}",
+      "key": "value",
+      "output": "['before\\x15after']"
+    },
+    {
+      "id": "ascii-control-16",
+      "json_string": "{\"value\": [\"before\\u0016after\"]}",
+      "key": "value",
+      "output": "['before\\x16after']"
+    },
+    {
+      "id": "ascii-control-17",
+      "json_string": "{\"value\": [\"before\\u0017after\"]}",
+      "key": "value",
+      "output": "['before\\x17after']"
+    },
+    {
+      "id": "ascii-control-18",
+      "json_string": "{\"value\": [\"before\\u0018after\"]}",
+      "key": "value",
+      "output": "['before\\x18after']"
+    },
+    {
+      "id": "ascii-control-19",
+      "json_string": "{\"value\": [\"before\\u0019after\"]}",
+      "key": "value",
+      "output": "['before\\x19after']"
+    },
+    {
+      "id": "ascii-control-1a",
+      "json_string": "{\"value\": [\"before\\u001aafter\"]}",
+      "key": "value",
+      "output": "['before\\x1aafter']"
+    },
+    {
+      "id": "ascii-control-1b",
+      "json_string": "{\"value\": [\"before\\u001bafter\"]}",
+      "key": "value",
+      "output": "['before\\x1bafter']"
+    },
+    {
+      "id": "ascii-control-1c",
+      "json_string": "{\"value\": [\"before\\u001cafter\"]}",
+      "key": "value",
+      "output": "['before\\x1cafter']"
+    },
+    {
+      "id": "ascii-control-1d",
+      "json_string": "{\"value\": [\"before\\u001dafter\"]}",
+      "key": "value",
+      "output": "['before\\x1dafter']"
+    },
+    {
+      "id": "ascii-control-1e",
+      "json_string": "{\"value\": [\"before\\u001eafter\"]}",
+      "key": "value",
+      "output": "['before\\x1eafter']"
+    },
+    {
+      "id": "ascii-control-1f",
+      "json_string": "{\"value\": [\"before\\u001fafter\"]}",
+      "key": "value",
+      "output": "['before\\x1fafter']"
+    },
+    {
+      "id": "escaped-del-c1-7f",
+      "json_string": "{\"value\": {\"x\": \"before\\u007fafter\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x7fafter'}"
+    },
+    {
+      "id": "escaped-del-c1-80",
+      "json_string": "{\"value\": {\"x\": \"before\\u0080after\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x80after'}"
+    },
+    {
+      "id": "escaped-del-c1-85",
+      "json_string": "{\"value\": {\"x\": \"before\\u0085after\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x85after'}"
+    },
+    {
+      "id": "escaped-del-c1-9f",
+      "json_string": "{\"value\": {\"x\": \"before\\u009fafter\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x9fafter'}"
+    },
+    {
+      "id": "malformed",
+      "json_string": "{broken",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "truncated",
+      "json_string": "{\"value\":",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "invalid-escape",
+      "json_string": "{\"value\":\"\\q\"}",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "nonobject-array",
+      "json_string": "[\"value\"]",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "nonobject-null",
+      "json_string": "null",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "nonobject-string",
+      "json_string": "\"value\"",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "nonobject-number",
+      "json_string": "7",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "missing-key",
+      "json_string": "{\"other\":\"value\"}",
+      "key": "value",
+      "output": ""
+    },
+    {
+      "id": "duplicate-key",
+      "json_string": "{\"value\":\"old\",\"value\":[\"new\\nline\"]}",
+      "key": "value",
+      "output": "['new\\nline']"
+    },
+    {
+      "id": "empty-key",
+      "json_string": "{\"\":\"empty key\"}",
+      "key": "",
+      "output": "empty key"
+    }
+  ],
+  "capability_cases": [
+    {
+      "id": "direct-control",
+      "json_string": "{\"value\": \"line\\nbreak\\t\\u0000\"}",
+      "key": "value",
+      "output": "line\nbreak\t\u0000",
+      "native_gap": "Canonical STRING output rejects source-valid NUL"
+    },
+    {
+      "id": "c1-control-7f",
+      "json_string": "{\"value\": {\"x\": \"beforeafter\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x7fafter'}",
+      "native_gap": "Canonical workflow STRING input rejects literal DEL/C1 controls"
+    },
+    {
+      "id": "c1-control-80",
+      "json_string": "{\"value\": {\"x\": \"beforeafter\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x80after'}",
+      "native_gap": "Canonical workflow STRING input rejects literal DEL/C1 controls"
+    },
+    {
+      "id": "c1-control-85",
+      "json_string": "{\"value\": {\"x\": \"beforeafter\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x85after'}",
+      "native_gap": "Canonical workflow STRING input rejects literal DEL/C1 controls"
+    },
+    {
+      "id": "c1-control-9f",
+      "json_string": "{\"value\": {\"x\": \"beforeafter\"}}",
+      "key": "value",
+      "output": "{'x': 'before\\x9fafter'}",
+      "native_gap": "Canonical workflow STRING input rejects literal DEL/C1 controls"
+    },
+    {
+      "id": "nonprintable-unicode-200b",
+      "json_string": "{\"value\": [\"​\"]}",
+      "key": "value",
+      "output": "['\\u200b']",
+      "native_gap": "Canonical repr does not escape all Python nonprintable Unicode"
+    },
+    {
+      "id": "nonprintable-unicode-2028",
+      "json_string": "{\"value\": [\" \"]}",
+      "key": "value",
+      "output": "['\\u2028']",
+      "native_gap": "Canonical repr does not escape all Python nonprintable Unicode"
+    },
+    {
+      "id": "nonprintable-unicode-e000",
+      "json_string": "{\"value\": [\"\"]}",
+      "key": "value",
+      "output": "['\\ue000']",
+      "native_gap": "Canonical repr does not escape all Python nonprintable Unicode"
+    },
+    {
+      "id": "beyond-u64-integer",
+      "json_string": "{\"value\": 18446744073709551617}",
+      "key": "value",
+      "output": "18446744073709551617",
+      "native_gap": "Canonical serde_json representation cannot retain Python arbitrary integer exactly"
+    },
+    {
+      "id": "nan",
+      "json_string": "{\"value\":NaN}",
+      "key": "value",
+      "output": "nan",
+      "native_gap": "Python json accepts nonfinite extensions; canonical JSON rejects them"
+    },
+    {
+      "id": "infinity",
+      "json_string": "{\"value\":Infinity}",
+      "key": "value",
+      "output": "inf",
+      "native_gap": "Python json accepts nonfinite extensions; canonical JSON rejects them"
+    },
+    {
+      "id": "negative-infinity",
+      "json_string": "{\"value\":-Infinity}",
+      "key": "value",
+      "output": "-inf",
+      "native_gap": "Python json accepts nonfinite extensions; canonical JSON rejects them"
+    },
+    {
+      "id": "large-exponent",
+      "json_string": "{\"value\": 1e+20}",
+      "key": "value",
+      "output": "1e+20",
+      "native_gap": "Canonical JSON number display does not prove exact Python exponent formatting"
+    },
+    {
+      "id": "small-exponent",
+      "json_string": "{\"value\": 1e-08}",
+      "key": "value",
+      "output": "1e-08",
+      "native_gap": "Canonical JSON number display does not prove exact Python exponent formatting"
+    },
+    {
+      "id": "deep-source-container",
+      "json_string": "{\"value\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "key": "value",
+      "output": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+      "native_gap": "Canonical serde_json nesting bound differs from original source"
+    },
+    {
+      "id": "integer-digit-limit",
+      "json_string": "{\"value\":11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111}",
+      "key": "value",
+      "error": {
+        "type": "ValueError",
+        "message": "Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit"
+      },
+      "native_gap": "Original integer conversion raises ValueError; canonical parse failure currently returns empty string"
+    }
+  ]
+}

@@ -1,0 +1,1064 @@
+{
+  "canonical_target": "torch.Tensor.neg",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sa_solver.py:61:25 (compute_simple_stochastic_adams_b_coeffs)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sa_solver.py:65:25 (compute_simple_stochastic_adams_b_coeffs)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1333:26 (sample_dpmpp_2s_ancestral_cfg_pp)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1334:26 (sample_dpmpp_2s_ancestral_cfg_pp)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1365:26 (sample_dpmpp_2m_cfg_pp)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1400:26 (res_multistep)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1401:26 (res_multistep)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1545:18 (sample_er_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/k_diffusion/sampling.py:156:16 (sigma_to_half_log_snr)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/k_diffusion/sampling.py:157:12 (sigma_to_half_log_snr)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1634:25 (sample_seeds_2)"
+    },
+    {
+      "expectation": {
+        "attribute": "sigmoid",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:164:16 (half_log_snr_to_sigma)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1650:37 (sample_seeds_2)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:165:12 (half_log_snr_to_sigma)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1706:25 (sample_seeds_3)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1717:37 (sample_seeds_3)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1728:37 (sample_seeds_3)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1833:83 (sample_sa_solver)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:486:16 (DPMSolver.sigma)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:657:26 (sample_dpmpp_2s_ancestral)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:658:26 (sample_dpmpp_2s_ancestral)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:776:41 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:776:63 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:777:27 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:785:41 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:785:63 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:786:25 (sample_dpmpp_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:800:26 (sample_dpmpp_2m)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:801:26 (sample_dpmpp_2m)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:859:78 (sample_dpmpp_2m_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:864:40 (sample_dpmpp_2m_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:866:45 (sample_dpmpp_2m_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:869:83 (sample_dpmpp_2m_sde)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:916:78 (sample_dpmpp_3m_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "expm1",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:926:25 (sample_dpmpp_3m_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "expm1",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:933:25 (sample_dpmpp_3m_sde)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:937:83 (sample_dpmpp_3m_sde)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/sa_solver.py:61:25 (compute_simple_stochastic_adams_b_coeffs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sa_solver.py:65:25 (compute_simple_stochastic_adams_b_coeffs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1333:26 (sample_dpmpp_2s_ancestral_cfg_pp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1334:26 (sample_dpmpp_2s_ancestral_cfg_pp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1365:26 (sample_dpmpp_2m_cfg_pp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1400:26 (res_multistep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1401:26 (res_multistep)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1545:18 (sample_er_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:156:16 (sigma_to_half_log_snr)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:157:12 (sigma_to_half_log_snr)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1634:25 (sample_seeds_2)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:164:16 (half_log_snr_to_sigma)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1650:37 (sample_seeds_2)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:165:12 (half_log_snr_to_sigma)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1706:25 (sample_seeds_3)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1717:37 (sample_seeds_3)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1728:37 (sample_seeds_3)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:1833:83 (sample_sa_solver)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:486:16 (DPMSolver.sigma)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:657:26 (sample_dpmpp_2s_ancestral)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:658:26 (sample_dpmpp_2s_ancestral)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:776:41 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:776:63 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:777:27 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:785:41 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:785:63 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:786:25 (sample_dpmpp_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:800:26 (sample_dpmpp_2m)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:801:26 (sample_dpmpp_2m)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:859:78 (sample_dpmpp_2m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:864:40 (sample_dpmpp_2m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:866:45 (sample_dpmpp_2m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:869:83 (sample_dpmpp_2m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:916:78 (sample_dpmpp_3m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:926:25 (sample_dpmpp_3m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:933:25 (sample_dpmpp_3m_sde)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:937:83 (sample_dpmpp_3m_sde)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-ecf812a5cf81-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [],
+  "operation_id": "COMFY-TENSOR-OP-ECF812A5CF81",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "b122b878f087ba66963489cc61663f4f0cdb2cd8e323ac4e97a051de8e9aa06e",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/sa_solver.py",
+        "sha256": "84f54b743f6491ea8e0a8ff21db88579016e374c9b7a05b3d84c3ac4454af461"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.neg"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "elementwise_or_runtime_operation_21",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-elementwise-or-runtime-operation-comfy-tensor-op-e78ad841c264",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 61,
+      "positional_arguments": [],
+      "scope": "compute_simple_stochastic_adams_b_coeffs",
+      "site": "comfy/k_diffusion/sa_solver.py:61:25 (compute_simple_stochastic_adams_b_coeffs)",
+      "source_path": "comfy/k_diffusion/sa_solver.py",
+      "source_sha256": "84f54b743f6491ea8e0a8ff21db88579016e374c9b7a05b3d84c3ac4454af461",
+      "status": "static-call-observed",
+      "target_syntax": "(-h * tau_mul).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 65,
+      "positional_arguments": [],
+      "scope": "compute_simple_stochastic_adams_b_coeffs",
+      "site": "comfy/k_diffusion/sa_solver.py:65:25 (compute_simple_stochastic_adams_b_coeffs)",
+      "source_path": "comfy/k_diffusion/sa_solver.py",
+      "source_sha256": "84f54b743f6491ea8e0a8ff21db88579016e374c9b7a05b3d84c3ac4454af461",
+      "status": "static-call-observed",
+      "target_syntax": "(-h * tau_mul).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1333,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2s_ancestral_cfg_pp",
+      "site": "comfy/k_diffusion/sampling.py:1333:26 (sample_dpmpp_2s_ancestral_cfg_pp)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "t.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1334,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2s_ancestral_cfg_pp",
+      "site": "comfy/k_diffusion/sampling.py:1334:26 (sample_dpmpp_2s_ancestral_cfg_pp)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1365,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_cfg_pp",
+      "site": "comfy/k_diffusion/sampling.py:1365:26 (sample_dpmpp_2m_cfg_pp)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1400,
+      "positional_arguments": [],
+      "scope": "res_multistep",
+      "site": "comfy/k_diffusion/sampling.py:1400:26 (res_multistep)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "t.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1401,
+      "positional_arguments": [],
+      "scope": "res_multistep",
+      "site": "comfy/k_diffusion/sampling.py:1401:26 (res_multistep)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1545,
+      "positional_arguments": [],
+      "scope": "sample_er_sde",
+      "site": "comfy/k_diffusion/sampling.py:1545:18 (sample_er_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "half_log_snrs.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 156,
+      "positional_arguments": [],
+      "scope": "sigma_to_half_log_snr",
+      "site": "comfy/k_diffusion/sampling.py:156:16 (sigma_to_half_log_snr)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.logit().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 157,
+      "positional_arguments": [],
+      "scope": "sigma_to_half_log_snr",
+      "site": "comfy/k_diffusion/sampling.py:157:12 (sigma_to_half_log_snr)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1634,
+      "positional_arguments": [],
+      "scope": "sample_seeds_2",
+      "site": "comfy/k_diffusion/sampling.py:1634:25 (sample_seeds_2)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-2 * r * h * eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "attribute": "sigmoid",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 164,
+      "positional_arguments": [],
+      "scope": "half_log_snr_to_sigma",
+      "site": "comfy/k_diffusion/sampling.py:164:16 (half_log_snr_to_sigma)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "half_log_snr.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1650,
+      "positional_arguments": [],
+      "scope": "sample_seeds_2",
+      "site": "comfy/k_diffusion/sampling.py:1650:37 (sample_seeds_2)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "segment_factor.mul(2).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 165,
+      "positional_arguments": [],
+      "scope": "half_log_snr_to_sigma",
+      "site": "comfy/k_diffusion/sampling.py:165:12 (half_log_snr_to_sigma)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "half_log_snr.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1706,
+      "positional_arguments": [],
+      "scope": "sample_seeds_3",
+      "site": "comfy/k_diffusion/sampling.py:1706:25 (sample_seeds_3)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-2 * r_1 * h * eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1717,
+      "positional_arguments": [],
+      "scope": "sample_seeds_3",
+      "site": "comfy/k_diffusion/sampling.py:1717:37 (sample_seeds_3)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "segment_factor.mul(2).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1728,
+      "positional_arguments": [],
+      "scope": "sample_seeds_3",
+      "site": "comfy/k_diffusion/sampling.py:1728:37 (sample_seeds_3)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "segment_factor.mul(2).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 83,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 1833,
+      "positional_arguments": [],
+      "scope": "sample_sa_solver",
+      "site": "comfy/k_diffusion/sampling.py:1833:83 (sample_sa_solver)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-2 * tau_t ** 2 * h).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 486,
+      "positional_arguments": [],
+      "scope": "DPMSolver.sigma",
+      "site": "comfy/k_diffusion/sampling.py:486:16 (DPMSolver.sigma)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "t.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 657,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2s_ancestral",
+      "site": "comfy/k_diffusion/sampling.py:657:26 (sample_dpmpp_2s_ancestral)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "t.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 658,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2s_ancestral",
+      "site": "comfy/k_diffusion/sampling.py:658:26 (sample_dpmpp_2s_ancestral)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 776,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:776:41 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "lambda_s.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 63,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 776,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:776:63 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "lambda_s_1.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 777,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:777:27 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sd.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 785,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:785:41 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "lambda_s.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 63,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 785,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:785:63 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "lambda_t.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 786,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_sde",
+      "site": "comfy/k_diffusion/sampling.py:786:25 (sample_dpmpp_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sd.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 800,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m",
+      "site": "comfy/k_diffusion/sampling.py:800:26 (sample_dpmpp_2m)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "t.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 801,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m",
+      "site": "comfy/k_diffusion/sampling.py:801:26 (sample_dpmpp_2m)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "sigma.log().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 78,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 859,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde",
+      "site": "comfy/k_diffusion/sampling.py:859:78 (sample_dpmpp_2m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-h_eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 864,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde",
+      "site": "comfy/k_diffusion/sampling.py:864:40 (sample_dpmpp_2m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-h_eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 866,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde",
+      "site": "comfy/k_diffusion/sampling.py:866:45 (sample_dpmpp_2m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-h_eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 83,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 869,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_2m_sde",
+      "site": "comfy/k_diffusion/sampling.py:869:83 (sample_dpmpp_2m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-2 * h * eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 78,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 916,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_3m_sde",
+      "site": "comfy/k_diffusion/sampling.py:916:78 (sample_dpmpp_3m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-h_eta).expm1().neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "expm1",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 926,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_3m_sde",
+      "site": "comfy/k_diffusion/sampling.py:926:25 (sample_dpmpp_3m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "h_eta.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "attribute": "expm1",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 933,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_3m_sde",
+      "site": "comfy/k_diffusion/sampling.py:933:25 (sample_dpmpp_3m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "h_eta.neg"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 83,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 937,
+      "positional_arguments": [],
+      "scope": "sample_dpmpp_3m_sde",
+      "site": "comfy/k_diffusion/sampling.py:937:83 (sample_dpmpp_3m_sde)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "(-2 * h * eta).expm1().neg"
+    }
+  ],
+  "static_definition": null
+}

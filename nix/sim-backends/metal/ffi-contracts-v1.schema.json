@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/metal/ffi-contracts-v1.schema.json",
+  "title": "Zed Metal native FFI contracts v1",
+  "$comment": "The package validator additionally requires the exact reviewed framework, class, selector, layout, source, function, owner, ABI, target, and metallib rows and their deterministic ordering.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "backend",
+    "abi_floor",
+    "target",
+    "minimum_macos_version",
+    "metal_language_version",
+    "minimum_metal_family",
+    "abi_manifest_sha256",
+    "execution_abi_sha256",
+    "frameworks",
+    "classes",
+    "resource_selectors",
+    "layouts",
+    "metallibs",
+    "runtime_compilation_forbidden"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "backend": {
+      "const": "metal"
+    },
+    "abi_floor": {
+      "const": "macos-13-metal-3"
+    },
+    "target": {
+      "enum": [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin"
+      ]
+    },
+    "minimum_macos_version": {
+      "const": "13.0"
+    },
+    "metal_language_version": {
+      "const": "metal3.0"
+    },
+    "minimum_metal_family": {
+      "const": 5001
+    },
+    "abi_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "execution_abi_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "frameworks": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/framework"
+      }
+    },
+    "classes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/class"
+      }
+    },
+    "resource_selectors": {
+      "type": "array",
+      "minItems": 29,
+      "maxItems": 29,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/resource_selector"
+      }
+    },
+    "layouts": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/layout"
+      }
+    },
+    "metallibs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/metallib"
+      }
+    },
+    "runtime_compilation_forbidden": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "framework": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "name",
+        "install_name",
+        "image_name",
+        "required_symbols",
+        "unsafe_owner"
+      ],
+      "properties": {
+        "identity": {
+          "enum": [
+            "metal-framework",
+            "metal-performance-shaders-framework",
+            "metal-performance-shaders-graph-framework"
+          ]
+        },
+        "name": {
+          "enum": [
+            "Metal",
+            "MetalPerformanceShaders",
+            "MetalPerformanceShadersGraph"
+          ]
+        },
+        "install_name": {
+          "type": "string",
+          "pattern": "^/System/Library/Frameworks/[A-Za-z]+\\.framework/[A-Za-z]+$"
+        },
+        "image_name": {
+          "type": "string",
+          "pattern": "^/System/Library/Frameworks/[A-Za-z]+\\.framework/Versions/A/[A-Za-z]+$"
+        },
+        "required_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "unsafe_owner": {
+          "const": "sim_backend_metal::loader"
+        }
+      }
+    },
+    "class": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "image_name",
+        "selectors"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "image_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "selectors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/class_selector"
+          }
+        }
+      }
+    },
+    "class_selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name",
+        "encoding"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "class",
+            "instance"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "encoding": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "resource_selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "selector",
+        "encoding",
+        "return_nullability"
+      ],
+      "properties": {
+        "class": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "selector": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "encoding": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "return_nullability": {
+          "enum": [
+            "not-applicable",
+            "nonnull",
+            "nullable"
+          ]
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "size",
+        "align"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "align": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        }
+      }
+    },
+    "metallib": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "path",
+        "sha256",
+        "source_path",
+        "source_sha256",
+        "required_functions",
+        "unsafe_owner"
+      ],
+      "properties": {
+        "identity": {
+          "enum": [
+            "metal-readiness-metallib",
+            "metal-tensor-ops-metallib"
+          ]
+        },
+        "path": {
+          "enum": [
+            "kernels/readiness.metallib",
+            "kernels/tensor_ops.metallib"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_path": {
+          "enum": [
+            "kernels/readiness.metal",
+            "kernels/tensor_ops.metal"
+          ]
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "required_functions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^zed_sim_metal_[a-z0-9_]+_v1$"
+          }
+        },
+        "unsafe_owner": {
+          "enum": [
+            "sim_backend_metal::execution",
+            "sim_backend_metal::loader"
+          ]
+        }
+      }
+    }
+  }
+}

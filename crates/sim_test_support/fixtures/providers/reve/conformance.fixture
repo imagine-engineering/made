@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.reve",
+  "source_sha256": "d80ca98264a8a665f979682fd40324210af88483d2d74920ba8952c77ff63a73",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0546",
+      "node_identifier": "ReveImageCreateNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0547",
+      "node_identifier": "ReveImageEditNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0548",
+      "node_identifier": "ReveImageRemixNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0145",
+      "method": "POST",
+      "path": "/proxy/reve/v1/image/create",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0146",
+      "method": "POST",
+      "path": "/proxy/reve/v1/image/edit",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0147",
+      "method": "POST",
+      "path": "/proxy/reve/v1/image/remix",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "Source request and direct binary transport; canonical native RGBA and guest integration pending"
+}

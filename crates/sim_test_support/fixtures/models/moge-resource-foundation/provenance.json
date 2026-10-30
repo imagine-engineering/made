@@ -1,0 +1,39 @@
+{
+  "arithmetic_contract": "IEEE-754 binary32 boundaries with source-derived transcendental ULP limits",
+  "command": "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/moge-resource-foundation/generate_oracle.py --check",
+  "dino_oracle_sha256": "a15373f41d84dd407399f4a943ef66b59045621305fea00231ee9d2cbf528519",
+  "format": "moge-resource-foundation-provenance-v1",
+  "generator_sha256": "ade866b84cc16c7b5ad8564fa295086ad5be102cbd7c76f4002abe5dbbcea58c",
+  "mutations": [
+    "v1_mask",
+    "v1_points",
+    "v1_projection",
+    "v2_mask",
+    "v2_neck",
+    "v2_normal",
+    "v2_points",
+    "v2_projection",
+    "v2_scale"
+  ],
+  "oracle_domain": "moge-resource-foundation-v2",
+  "oracle_sha256": "de86dcd7c37fc1d2aa742a272c5ad91ce1945e2d3492ac053e4adcae0e37e9a6",
+  "pinned_sources": {
+    "projects/sim/ComfyUI/sim/image_encoders/dino2.py": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
+    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/sim/ComfyUI/sim/ldm/moge/geometry.py": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+    "projects/sim/ComfyUI/sim/ldm/moge/model.py": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c",
+    "projects/sim/ComfyUI/sim/ldm/moge/modules.py": "3655abdce2de058624bd4ea2f02757ab42bd811d9afab0fef824fe480afdb2a6",
+    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "projects/sim/ComfyUI/sim/model_patcher.py": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/sim/ComfyUI/sim/text_encoders/bert.py": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c",
+    "projects/sim/ComfyUI/sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+    "projects/sim/ComfyUI/sim_extras/nodes_moge.py": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265"
+  },
+  "profiles": [
+    "v1",
+    "v2"
+  ],
+  "runtime_boundary": "Model architecture and downstream geometry equations remain an independently derived binary32 foundation, with unchanged recorded ULP bounds and no learned-model certification. Camera focal/shift golds execute the three unchanged tagged geometry functions with CPU Torch 2.8.0, NumPy 1.26.4 and SciPy 1.16.2, including original interpolation, mask handling, library-default MINPACK and final scalar promotion. Solver status/nfev receipts are genuine SciPy observations, not invented accepted/rejected iteration counts. Native numerical results do not supply gold values. No network, credential or native-model subprocess is used.",
+  "source_graph_sha256": "aee25a9fac0fe231fbeaa8228747c133adb2c6bb38677373029e078aa4c629f2"
+}

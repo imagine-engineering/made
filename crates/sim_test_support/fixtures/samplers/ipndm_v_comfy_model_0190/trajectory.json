@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "identity": "ipndm_v",
+  "feature_id": "COMFY-MODEL-0190",
+  "source_ordinal": 28,
+  "source": {
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "equation_lines": [1150, 1157, 1164, 1166, 1168, 1170, 1171, 1172, 1174, 1178, 1179, 1180, 1185, 1186, 1187, 1188, 1189, 1195, 1196, 1197, 1198, 1199, 1200, 1201, 1202, 1204, 1207, 1209, 1211],
+    "registry_line": 973,
+    "catalog_line": 191
+  },
+  "max_order": 4,
+  "tolerance": 0.00001,
+  "shape": [2],
+  "sigmas": [4.0, 2.5, 1.4, 0.7, 0.2, 0.0],
+  "initial": [1.0, -0.5],
+  "steps": [
+    {
+      "step": 0,
+      "sigma": 4.0,
+      "next_sigma": 2.5,
+      "latent_before": [1.0, -0.5],
+      "denoised": [0.6, -0.2],
+      "derivative": [0.1, -0.075],
+      "order": 1,
+      "coefficients": [1.0],
+      "latent_after": [0.85, -0.3875]
+    },
+    {
+      "step": 1,
+      "sigma": 2.5,
+      "next_sigma": 1.4,
+      "latent_before": [0.85, -0.3875],
+      "denoised": [0.4, -0.1],
+      "derivative": [0.18, -0.115],
+      "order": 2,
+      "coefficients": [1.3666667, -0.36666667],
+      "latent_after": [0.61973333, -0.24486667]
+    },
+    {
+      "step": 2,
+      "sigma": 1.4,
+      "next_sigma": 0.7,
+      "latent_before": [0.61973333, -0.24486667],
+      "denoised": [0.25, -0.05],
+      "derivative": [0.26409525, -0.13919048],
+      "order": 3,
+      "coefficients": [1.7896271, -1.1353536, 0.3457265],
+      "latent_after": [0.40774465, -0.14374267]
+    },
+    {
+      "step": 3,
+      "sigma": 0.7,
+      "next_sigma": 0.2,
+      "latent_before": [0.40774465, -0.14374267],
+      "denoised": [0.1, 0.02],
+      "derivative": [0.43963522, -0.2339181],
+      "order": 4,
+      "coefficients": [1.9764911, -1.4377706, 0.58164984, -0.04273103],
+      "latent_after": [0.11291936, 0.019206313]
+    },
+    {
+      "step": 4,
+      "sigma": 0.2,
+      "next_sigma": 0.0,
+      "latent_before": [0.11291936, 0.019206313],
+      "denoised": [0.03, 0.01],
+      "derivative": [0.4145968, 0.046031564],
+      "order": 4,
+      "coefficients": [],
+      "latent_after": [0.03, 0.01]
+    }
+  ],
+  "terminal": [0.03, 0.01]
+}

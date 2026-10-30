@@ -1,0 +1,4 @@
+DROP TABLE public.collaboration_workflow_approval_outbox;
+DROP TABLE public.collaboration_workflow_approvals;
+ALTER TABLE public.collaboration_workflow_steps
+    DROP CONSTRAINT collaboration_workflow_steps_operation_identity;

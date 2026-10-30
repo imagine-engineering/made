@@ -1,0 +1,82 @@
+{
+  "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+  "class_type": "LatentCrop",
+  "cases": [
+    {
+      "width": 64,
+      "height": 64,
+      "x": 0,
+      "y": 0,
+      "expected_shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        1,
+        4,
+        16,
+        20
+      ]
+    },
+    {
+      "width": 512,
+      "height": 512,
+      "x": 0,
+      "y": 0,
+      "expected_shape": [
+        1,
+        4,
+        16,
+        20
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        1,
+        4,
+        16,
+        20
+      ]
+    },
+    {
+      "width": 64,
+      "height": 64,
+      "x": 200,
+      "y": 200,
+      "expected_shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        1,
+        4,
+        16,
+        20
+      ]
+    },
+    {
+      "width": 80,
+      "height": 72,
+      "x": 40,
+      "y": 64,
+      "expected_shape": [
+        1,
+        4,
+        8,
+        10
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        1,
+        4,
+        16,
+        20
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Validate signing policy without displaying credential values."""
+import argparse
+import os
+import re
+import sys
+from urllib.parse import urlsplit
+
+CREDENTIALS = {
+    "linux": ("LINUX_SIGNING_KEY", "LINUX_SIGNING_KEY_PASSWORD", "LINUX_SIGNING_KEY_FINGERPRINT"),
+    "macos": (
+        "MACOS_SIGNING_IDENTITY", "MACOS_CERTIFICATE", "MACOS_CERTIFICATE_PASSWORD",
+        "APPLE_NOTARIZATION_KEY", "APPLE_NOTARIZATION_KEY_ID", "APPLE_NOTARIZATION_ISSUER_ID",
+    ),
+    "windows": (
+        "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "ACCOUNT_NAME",
+        "CERT_PROFILE_NAME", "ENDPOINT", "WINDOWS_SIGNING_PUBLISHER", "FILE_DIGEST", "TIMESTAMP_DIGEST", "TIMESTAMP_SERVER",
+    ),
+}
+
+
+def validate(platform, policy, environment):
+    if policy not in ("auto", "off", "required"):
+        raise ValueError("Unknown signing policy")
+    if policy == "required" and environment.get("ZED_DISABLE_SIGNING"):
+        raise ValueError("Required production signing conflicts with ZED_DISABLE_SIGNING")
+    if policy == "off" or environment.get("ZED_DISABLE_SIGNING"):
+        return False
+    missing = [name for name in CREDENTIALS[platform] if not environment.get(name, "").strip()]
+    if missing:
+        if policy == "required":
+            raise ValueError("Missing required signing credentials: " + ", ".join(missing))
+        return False
+    if platform == "macos" and not re.fullmatch(r"Developer ID Application: .+ \([A-Z0-9]{10}\)", environment["MACOS_SIGNING_IDENTITY"]):
+        raise ValueError("MACOS_SIGNING_IDENTITY must select a complete Developer ID Application identity including its Team ID")
+    if platform == "linux" and not re.fullmatch(r"[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64}", environment["LINUX_SIGNING_KEY_FINGERPRINT"]):
+        raise ValueError("LINUX_SIGNING_KEY_FINGERPRINT must be the full primary-key fingerprint")
+    if platform == "windows":
+        if any(environment[name].upper() != "SHA256" for name in ("FILE_DIGEST", "TIMESTAMP_DIGEST")):
+            raise ValueError("FILE_DIGEST and TIMESTAMP_DIGEST must be SHA256")
+        if environment["TIMESTAMP_SERVER"] != "http://timestamp.acs.microsoft.com":
+            raise ValueError("TIMESTAMP_SERVER must select the Azure RFC3161 timestamp service")
+        endpoint = urlsplit(environment["ENDPOINT"])
+        if (endpoint.scheme != "https" or endpoint.username is not None or endpoint.password is not None
+                or not re.fullmatch(r"[a-z0-9-]+\.codesigning\.azure\.net", endpoint.netloc)
+                or endpoint.path not in ("", "/") or endpoint.query or endpoint.fragment):
+            raise ValueError("ENDPOINT must select an HTTPS Azure code-signing endpoint")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--platform", choices=CREDENTIALS, required=True)
+    parser.add_argument("--policy", default=os.environ.get("ZED_PRODUCT_SIGNING", "auto"))
+    arguments = parser.parse_args()
+    try:
+        available = validate(arguments.platform, arguments.policy, os.environ)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print("production" if available else "development")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

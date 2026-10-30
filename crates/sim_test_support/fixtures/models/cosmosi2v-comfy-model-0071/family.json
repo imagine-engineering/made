@@ -1,0 +1,75 @@
+{
+  "fixture_id": "cosmosi2v-sim-model-0071",
+  "feature_id": "COMFY-MODEL-0071",
+  "detector": {
+    "tensor_shapes": {
+      "net.x_embedder.proj.1.weight": [1, 72],
+      "net.blocks.block0.blocks.0.block.attn.to_q.0.weight": [4096, 1],
+      "net.t_embedder.1.linear_1.weight": [2, 2],
+      "net.t_embedder.1.linear_2.weight": [2, 2],
+      "net.blocks.block0.blocks.2.block.layer2.weight": [2, 2],
+      "net.final_layer.linear.weight": [2, 2],
+      "net.affline_norm.weight": [2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0710710710710710710710710710710710710710710710710710710710710710",
+  "source_weights": [
+    {
+      "key": "net.t_embedder.1.linear_1.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "net.blocks.block0.blocks.2.block.layer2.weight",
+      "shape": [2, 2],
+      "values": [2.0, 0.0, 0.0, 0.5]
+    },
+    {
+      "key": "net.final_layer.linear.weight",
+      "shape": [2, 2],
+      "values": [1.0, 1.0, 1.0, -1.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [1.0, 2.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 28,
+  "expected_memory_bytes": 28,
+  "checkpoints": [
+    {"name": "timestep_projection", "values": [1.0, 2.0]},
+    {"name": "timestep_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "transformer_block_projection", "values": [1.4621172, 0.8807971]},
+    {"name": "transformer_block_normalization", "values": [0.9999941, -0.9999941]},
+    {"name": "video_projection", "values": [0.0, 1.9999882]},
+    {"name": "video_output", "values": [0.0, 0.96402675]}
+  ],
+  "patches": [
+    {
+      "identifier": "cosmosi2v-transformer-block-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.blocks.block0.blocks.2.block.layer2.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "timestep_projection", "values": [1.0, 2.0]},
+    {"name": "timestep_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "transformer_block_projection", "values": [2.1931758, 2.6423912]},
+    {"name": "transformer_block_normalization", "values": [-0.9999901, 0.9999901]},
+    {"name": "video_projection", "values": [0.0, -1.9999802]},
+    {"name": "video_output", "values": [0.0, -0.9640262]}
+  ]
+}

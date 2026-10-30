@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture_id": "kandinsky5-sim-model-0099",
+  "feature_id": "COMFY-MODEL-0099",
+  "source_symbol": "Kandinsky5",
+  "source_ordinal": 83,
+  "source_architecture": "model_base.Kandinsky5",
+  "latent_feature_id": "COMFY-MODEL-0037",
+  "latent_identifier": "HunyuanVideo",
+  "catalog_projection_sha256": "3ebe95468ad1e7e8429178ed043dbddabd25e291242ca328988a1022ddac5114",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "crates/sim_model/src/kandinsky5_family.rs", "sha256": "b3021e8deaa185da743f8fde6183994058da90d98010d9fadd43a90debf159c3"},
+    {"path": "crates/sim_model/src/latent_formats/hunyuanvideo_sim_model_0037.rs", "sha256": "4df46e4d74034b0b1f8ef60bf860dc948fc1b418c08c6f6e2b7e363aaa198854"},
+    {"path": "crates/sim_model/src/latent_formats/flux_sim_model_0029.rs", "sha256": "22c3b314c00dd31a7c4e777c541521c946ab335bb1bdd7b930fd88a6b7c03751"}
+  ],
+  "source_projection": "source_symbol=Kandinsky5\nsource_ordinal=83\ninheritance=Kandinsky5,supported_models_base.BASE\nunet_config.image_model=kandinsky5\nsampling_settings.shift=10.0\nlatent_format=latent_formats.HunyuanVideo\nmemory_usage_factor=1.25\nsupported_inference_dtypes=bf16,f32\narchitecture=model_base.Kandinsky5\nclip_target=Kandinsky5Tokenizer+kandinsky5.te\nmodel_dimensions=1792,4096\nvisual_embed_dimension=132\ntext_blocks=2\nvisual_blocks=32\nlayouts=prefixed-native,standalone-native\ndiffusers_support=none\nconditioning=pooled_output,attention_mask,cross_attn,time_dimension,video_concat\nstate_mapping=canonical-kandinsky5\n",
+  "source_projection_sha256": "d30ca11ad85ab7b42889a8348b313c735f0a50d5b5fcce2abbdc07a0b7de92dc",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

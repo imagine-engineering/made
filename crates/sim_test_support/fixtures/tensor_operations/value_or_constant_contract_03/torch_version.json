@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "resolution_module": "value_or_constant_contract_03",
+  "operation_id": "COMFY-TENSOR-OP-83FC32D08FD1",
+  "baseline_overload_id": "COMFY-TENSOR-OP-83FC32D08FD1:reference",
+  "baseline_fixture_sha256": "3b2ec96cfd4cbca07b78407aac962cf3a4eb60fac51d66b215b6dfc10237d280",
+  "owner_task_id": "comfy-parity-tensor-ops-value-or-constant-contract-comfy-tensor-op-6542124fe760",
+  "inventory_kind": "namespace_value_reference",
+  "canonical_target": "torch.version.__version__",
+  "reference_semantic": {
+    "category": "version-value",
+    "value": "torch.version.__version__"
+  },
+  "canonical_rust_semantic": "VersionValueReference::Torch",
+  "executable": false,
+  "source_observations": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/model_management.py",
+      "line": 98,
+      "use": "runtime compatibility version report"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "purpose": "Test-only actual guest filesystem confinement through production WASI preopens",
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "target": "wasm32-wasip2",
+  "command": "rustc --edition=2024 --target=wasm32-wasip2 --crate-name made_wasi_confinement -C opt-level=1 -C debuginfo=0 crates/extension_host/test_data/wasi_confinement.rs -o crates/extension_host/test_data/wasi_confinement.wasm",
+  "sha256": {
+    "wasi_confinement.rs": "6105f3a7a6cf936b7649dc79c73ed80b2c8c60d4b0c9474fe9dbeed1025af19a",
+    "wasi_confinement.wasm": "40ea8a8810ff098d2db7709986c7e8ebb34d46c8d9a8c234745b427279c00202"
+  },
+  "expected_denied_operations": 24,
+  "preopen_aliases": [
+    ".",
+    "production PWD absolute alias"
+  ],
+  "execution": "Actual guest macOS Apple Silicon baseline passed24 denial cases plus positive controls; see .agents/specs/zed-v1-24-port-audit/evidence/wasi-baseline-execution.json. Other native platforms and future resolutions remain unqualified."
+}

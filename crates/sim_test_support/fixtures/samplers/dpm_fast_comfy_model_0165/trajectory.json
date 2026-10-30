@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "identity": "dpm_fast",
+  "feature_id": "COMFY-MODEL-0165",
+  "source_ordinal": 11,
+  "source": {
+    "wrapper_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "wrapper_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "equation_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "equation_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4"
+  },
+  "tolerance": 0.00003,
+  "seed": 356,
+  "rng": {
+    "contract_id": "COMFY-RNG-B35F0F617BFA",
+    "workflow": "dpm-fast-fixture-v1",
+    "attempt": "attempt-0165",
+    "node": "KSampler-11",
+    "output": 11,
+    "execution_ordinal": 165,
+    "batch": 74
+  },
+  "sigmas": [2.0, 1.5, 1.0, 0.7, 0.4, 0.0],
+  "initial": [0.800000011920929, -1.100000023841858],
+  "options": {"eta": 0.65, "noise_scale": 0.8},
+  "internal_times": [-0.6931471824645996, 0.1115717887878418, 0.9162907004356384],
+  "intervals": [
+    {
+      "interval": 0,
+      "order": 3,
+      "time": -0.6931471824645996,
+      "next_time": 0.1115717887878418,
+      "solver_next_time": 0.31781670451164246,
+      "sigma": 2.0,
+      "next_sigma": 0.8944271802902222,
+      "sigma_down": 0.7277361750602722,
+      "sigma_up": 0.5199999809265137,
+      "latent_before": [0.800000011920929, -1.100000023841858],
+      "base_denoised": [0.7960000038146973, -1.152000069618225],
+      "evaluations": [
+        {"evaluation":0,"sigma":2.0,"input":[0.800000011920929,-1.100000023841858],"denoised":[0.7960000038146973,-1.152000069618225],"epsilon":[0.0020000040531158447,0.026000022888183594]},
+        {"evaluation":1,"sigma":1.4278348684310913,"input":[0.7988556623458862,-1.1148762702941895],"denoised":[0.7322379350662231,-1.0597212314605713],"epsilon":[0.04665646329522133,-0.03862844407558441]},
+        {"evaluation":2,"sigma":1.01935613155365,"input":[0.7591289281845093,-1.0691850185394287],"denoised":[0.65870201587677,-0.9532973766326904],"epsilon":[0.0985199436545372,-0.11368709802627563]}
+      ],
+      "solved": [0.7206164598464966, -1.0218746662139893],
+      "noise": [0.6588551998138428, -2.5271263122558594],
+      "latent_after": [0.9947001934051514, -2.0731592178344727]
+    },
+    {
+      "interval": 1,
+      "order": 2,
+      "time": 0.1115717887878418,
+      "next_time": 0.9162907004356384,
+      "solver_next_time": 0.9162907004356384,
+      "sigma": 0.8944271802902222,
+      "next_sigma": 0.4000000059604645,
+      "sigma_down": 0.3254535496234894,
+      "sigma_up": 0.0,
+      "latent_before": [0.9947001934051514, -2.0731592178344727],
+      "base_denoised": [0.8145711421966553, -1.6536716222763062],
+      "evaluations": [
+        {"evaluation":0,"sigma":0.8944271802902222,"input":[0.9947001934051514,-2.0731592178344727],"denoised":[0.8145711421966553,-1.6536716222763062],"epsilon":[0.20139040052890778,-0.4690013825893402]},
+        {"evaluation":1,"sigma":0.5981395244598389,"input":[0.9350306987762451,-1.9341999292373657],"denoised":[0.7390174865722656,-1.5002892017364502],"epsilon":[0.3277048170566559,-0.7254339456558228]}
+      ],
+      "solved": [0.8326740264892578, -1.7144850492477417],
+      "noise": [-0.24581846594810486, 0.11198525130748749],
+      "latent_after": [0.8326740264892578, -1.7144850492477417]
+    }
+  ],
+  "terminal": [0.8326740264892578, -1.7144850492477417]
+}

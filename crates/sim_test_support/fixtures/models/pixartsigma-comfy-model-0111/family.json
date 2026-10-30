@@ -1,0 +1,107 @@
+{
+  "fixture_id": "pixartsigma-sim-model-0111",
+  "feature_id": "COMFY-MODEL-0111",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.blocks.0.attn.qkv.weight": [3456, 1152]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0111011101110111011101110111011101110111011101110111011101110111",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.x_embedder.proj.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.x_embedder.proj.bias",
+      "shape": [2],
+      "values": [0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.t_embedder.mlp.0.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.t_embedder.mlp.0.bias",
+      "shape": [2],
+      "values": [0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.y_embedder.y_proj.fc1.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.y_embedder.y_proj.fc1.bias",
+      "shape": [2],
+      "values": [0.0, 0.0]
+    },
+    {
+      "key": "model.diffusion_model.blocks.0.attn.qkv.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.blocks.0.cross_attn.q_linear.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.blocks.0.cross_attn.kv_linear.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.final_layer.linear.bias",
+      "shape": [2],
+      "values": [0.0, 0.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [1.0, -1.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 152,
+  "expected_memory_bytes": 152,
+  "checkpoints": [
+    { "name": "patch_embedding", "values": [1.0, -1.0] },
+    { "name": "timestep_embedding", "values": [1.0, -1.0] },
+    { "name": "timestep_activation", "values": [0.7310586, -0.26894143] },
+    { "name": "caption_projection", "values": [0.7310586, -0.26894143] },
+    { "name": "image_output", "values": [0.7310586, -0.26894143] }
+  ],
+  "patches": [
+    {
+      "identifier": "pixart-sigma-input-bias",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.x_embedder.proj.bias",
+          "expected_shape": [2],
+          "values": [1.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    { "name": "patch_embedding", "values": [2.0, 0.0] },
+    { "name": "timestep_embedding", "values": [2.0, 0.0] },
+    { "name": "timestep_activation", "values": [1.7615942, 0.0] },
+    { "name": "caption_projection", "values": [1.7615942, 0.0] },
+    { "name": "image_output", "values": [1.7615942, 0.0] }
+  ]
+}

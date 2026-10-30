@@ -1,0 +1,30 @@
+{
+  "artifact_mode": "code-inferred-synthetic-exact-equations",
+  "comfyui": {
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "version": "0.27.1"
+  },
+  "fixture_contract": {
+    "heatmap_shape": [1, 133, 256, 192],
+    "input_canvas": [768, 1024],
+    "openpose_cardinalities": [18, 6, 70, 21, 21],
+    "raw_scores_are_probabilities": false
+  },
+  "limitations": [
+    "No licensed SDPose checkpoint is bundled.",
+    "No upstream Python runtime or accelerator numerical oracle was executed.",
+    "The fixture proves the pinned source projection equations with deterministic synthetic heatmaps."
+  ],
+  "sources": [
+    {
+      "path": "comfy/ldm/modules/sdpose.py",
+      "sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a"
+    },
+    {
+      "path": "comfy_extras/nodes_sdpose.py",
+      "sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21"
+    }
+  ],
+  "stable_task_id": "comfy-parity-native-sdpose-heatmap-projection-foundation"
+}

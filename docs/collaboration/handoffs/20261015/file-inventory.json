@@ -1,0 +1,1816 @@
+{
+  "classification": "Pre-transfer snapshot of every258 tracked/untracked change; all source112 now WIP committed; specification/evidence remainder committed with handoff",
+  "observed_utc": "2026-10-15T09:24:21.437211+00:00",
+  "base_head": "6c4db6ee24461921f98483e44a52661a0a745f63",
+  "source_WIP_commit": "d4828cc93da67e6568a2c45908167d94132b57de",
+  "tracked": 101,
+  "untracked": 157,
+  "files": [
+    {
+      "path": ".agents/specs/collaborative-workspace/current-delivery-checkpoint.md",
+      "status": " M",
+      "bytes": 244759,
+      "sha256": "6db80cd21828ae545eeeb4c1a87809f3302aa1c063a1de4908abc11869c6ae35",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/specs/collaborative-workspace/delta-parity-matrix.md",
+      "status": " M",
+      "bytes": 409237,
+      "sha256": "6adfbc937518dc74a35f0e21fb3d36e263fe1c118f4ff65ede31a1f4216864ef",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/specs/collaborative-workspace/design.md",
+      "status": " M",
+      "bytes": 518073,
+      "sha256": "bd03cbf259a2a2c4fb2ef41d63e78887d790b7c5e47b1ce7609a476a5973cede",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/specs/collaborative-workspace/remaining-changes-ledger.json",
+      "status": " M",
+      "bytes": 7721309,
+      "sha256": "dd9aa07a338cee5173117ddc5a2e34cafbcf3c5060e9aa2b767ce6c57f7128f0",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/specs/collaborative-workspace/remediation-checklist.json",
+      "status": " M",
+      "bytes": 6975708,
+      "sha256": "d4400a4cb304d234b4283a79ead725c19461e84b6bd840dfd97caa54e7dcb697",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/specs/collaborative-workspace/reuse-ownership-matrix.md",
+      "status": " M",
+      "bytes": 26796,
+      "sha256": "e63e197e8a570c1ab168a3a3e088791e6bc0321575e0a2db73deb7c0f13a18d6",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/specs/collaborative-workspace/tasks.md",
+      "status": " M",
+      "bytes": 1091762,
+      "sha256": "e613a4aa6a227b72405074cc05b56f2b1c9fcc8864c9e621d907d2fad05dc514",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": "crates/acp_thread/src/connection.rs",
+      "status": " M",
+      "bytes": 40685,
+      "sha256": "040d0bc5dfcb96aed21d5b0a820c7020be604256db88bb15f56737c9712c2657",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent/src/thread.rs",
+      "status": " M",
+      "bytes": 421993,
+      "sha256": "f87ea9420c985cb2a68e3ac0605eb6058dea79c03ba34586191d27c140e8cf31",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/Cargo.toml",
+      "status": " M",
+      "bytes": 5320,
+      "sha256": "bc2cc02c4d58fa9b7795e1f990c1f912b227ebf9d493d443eebb33e986e89dbf",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/agent_panel.rs",
+      "status": " M",
+      "bytes": 933025,
+      "sha256": "dbddd8fb3cd40c829f32134c914fc8c5d98110d01e14390aed7dfb7bba155e4b",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/agent_ui.rs",
+      "status": " M",
+      "bytes": 47860,
+      "sha256": "217625f5752bacda9759f982007fe9aa9bdfd2e61ddae1b9a8e73fc4cfc6f225",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/collaborative_composer.rs",
+      "status": " M",
+      "bytes": 38664,
+      "sha256": "c4bf7707144e9544b9462d6ced19d87e433d70abe599bb8aabc355b322e58b12",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/collaborative_timeline.rs",
+      "status": " M",
+      "bytes": 24891,
+      "sha256": "d1bb69a92d0a4dbc0f5437fe80f6f6689441ed3949d486a5cf19189fee26e9a6",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/conversation_view.rs",
+      "status": " M",
+      "bytes": 536086,
+      "sha256": "fe45462804c84b29b48667ab225c3d22448ad0093bdc5b27bd1d73ff77b79601",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/conversation_view/thread_view.rs",
+      "status": " M",
+      "bytes": 645637,
+      "sha256": "f488780a94756aab7067ab351e1c44c003fedad6f50a150339c02b7305ab03d2",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/draft_prompt_store.rs",
+      "status": " M",
+      "bytes": 12259,
+      "sha256": "7295d06774a61334e0b9d941c9dcb485bb18213a09f5b52efd2729747a406f6c",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/entry_view_state.rs",
+      "status": " M",
+      "bytes": 55750,
+      "sha256": "e0f7b5aa690c31c20b730f5b708579acbeb567d79cc8491f8b45c130d1fc78c8",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/language_model_selector.rs",
+      "status": " M",
+      "bytes": 29909,
+      "sha256": "6751da28c81edf31e071cb63427b9957c54d37dc4bf22491a254b24d1d9b8d31",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/message_editor.rs",
+      "status": " M",
+      "bytes": 278710,
+      "sha256": "8501555a7ae17dbb110e46305ba721298ceb9dda9c2c0d7b3ce9e2cfcd8247d2",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/model_selector.rs",
+      "status": " M",
+      "bytes": 37505,
+      "sha256": "c6a64f0384388f80d65f43d8c1431344c0edeabcd44f25415d04be236c3590aa",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/terminal_thread_metadata_store.rs",
+      "status": " M",
+      "bytes": 174476,
+      "sha256": "0784471b23349a431540e0c243d292e53b9dd208922d2bd5013fddc82f0096e1",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/agent_ui/src/ui/model_selector_components.rs",
+      "status": " M",
+      "bytes": 9820,
+      "sha256": "05ad5112da04598a173c6e0208903282171ad5a6aab7e382a225456bada60f79",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/cli/src/collaboration_moderation.rs",
+      "status": " M",
+      "bytes": 24255,
+      "sha256": "32f6ba10b71ae6fb6f2a432574ec09ed8bbb2c788a5924d26275dc36273f89d1",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/admin/moderation.rs",
+      "status": " M",
+      "bytes": 78664,
+      "sha256": "97c3a1727ee2011c64e3a8ecd41d2f26d525da4f8330872d64c4240c2fb211bd",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/audit/events.rs",
+      "status": " M",
+      "bytes": 25773,
+      "sha256": "97fbcc06ac9741935c9fdb293bff5abc0ffada269248301a4316b3c43267bc7d",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/audit/repository.rs",
+      "status": " M",
+      "bytes": 43022,
+      "sha256": "26f4a45c514654bfa99a8b4c88025fbc69e3f004260f021de8f2f9a44fbe2e70",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/audit/usage.rs",
+      "status": " M",
+      "bytes": 35045,
+      "sha256": "4796146c8de605e255b0faaca3acc0b42c14514b22f3107320b84916b40ff210",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/compatibility.rs",
+      "status": " M",
+      "bytes": 19794,
+      "sha256": "a02f7c52786c37a27192ab666d6870ccafff7f26790ec3820584f70cc6371b3e",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/db/collaboration/event_repository.rs",
+      "status": " M",
+      "bytes": 27050,
+      "sha256": "4b80a589d556e41eddb443b568a78561afd1254e8bffbd3d12f68eefe0714477",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/db/collaboration/outbox.rs",
+      "status": " M",
+      "bytes": 18250,
+      "sha256": "585521bf000004bbf47b0ee6ec65fe3ca8e8d46a99c894a3de81d662b41c68a9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/identity.rs",
+      "status": " M",
+      "bytes": 56,
+      "sha256": "e19db814b50ef1fbd0512738b28824a8c9184654bc0f7b49ce34d39e58cafe67",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/lib.rs",
+      "status": " M",
+      "bytes": 10899,
+      "sha256": "b9b651f9ef99f1f72102e7bd9c868df63b4a79deb68c67295048deec22d8b3d9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/main.rs",
+      "status": " M",
+      "bytes": 12114,
+      "sha256": "e53e7da37c06162592fedd4a07777a49310a97c961c51ef88fc2f21dc8c1f3f4",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/messages/channel_admission.rs",
+      "status": " M",
+      "bytes": 65913,
+      "sha256": "dd68eb6ed0e04e98ecc809b005a108840b53b3101054d8243def2162fc9af14e",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/messages/channel_mutation.rs",
+      "status": " M",
+      "bytes": 51026,
+      "sha256": "85ea516410bf8081d427f26287b7a5102b2a1567d5bb78f7ec4e433d318541c1",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/messages/channel_service.rs",
+      "status": " M",
+      "bytes": 32240,
+      "sha256": "62bf1c9c0bae5edc2597e19e3a8920e50e6cc927afcc3e48f0d599fc7e520afb",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/nostr/auth.rs",
+      "status": " M",
+      "bytes": 30585,
+      "sha256": "1b3c124105190b96301bc18e833a639c9e7d0d4acbb54759cf6d93ebe195f366",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/nostr/event_ingest.rs",
+      "status": " M",
+      "bytes": 13850,
+      "sha256": "48552c6c1bd4cdad90e9f0110a09fab476ae261108ab1ef1fd295dd67cf44603",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/nostr/http.rs",
+      "status": " M",
+      "bytes": 60713,
+      "sha256": "7c2557f53190139f2eaa223877fae4c0cda2929d389c6ad0271afa58ce444991",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/nostr/replay.rs",
+      "status": " M",
+      "bytes": 6572,
+      "sha256": "ae48d9223ef4e14944352eee0f75db7c409fe4b8d01bbf6e9311450dc7927215",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/audit_chain.rs",
+      "status": " M",
+      "bytes": 16166,
+      "sha256": "009d1eaf88fa86a68d8893b6c5e03ee0dd1f4abc233fafefaee1b8aa46d30d29",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/compatibility.rs",
+      "status": " M",
+      "bytes": 8868,
+      "sha256": "33d5d00968c3471f1795fbf7c4659e88ffcaf7a9d2ccaa89c6c53876760722cc",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/integration/channel_message_tests.rs",
+      "status": " M",
+      "bytes": 81151,
+      "sha256": "fbe91bf355fbe926384df8181faef1e1e9aaa7f3a8003a24be6f7ab145ee2a5e",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/integration/test_server.rs",
+      "status": " M",
+      "bytes": 35077,
+      "sha256": "c7d8dcdfe27c96edae8415e6346bda7ae00e8c276a9013c9fdeddbdb72326b5d",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/moderation_operator_api.rs",
+      "status": " M",
+      "bytes": 19570,
+      "sha256": "b768c83a59ef6bb2780d9f96ccb9f6b510c247da488f24665086fc8ce02933d0",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/nostr_auth_vectors.rs",
+      "status": " M",
+      "bytes": 41208,
+      "sha256": "087584838d6ff01fdebdd0a9a5c4da114fb06cc1650fc548c36ce223c125db95",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/nostr_http.rs",
+      "status": " M",
+      "bytes": 34482,
+      "sha256": "a602fd1f9b71da5f1459a3652ddd472522de7f37f9e81e4ac0692bc47d4346ac",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/tenant_admission_rpc.rs",
+      "status": " M",
+      "bytes": 27970,
+      "sha256": "7a1fcfc54ec15e9345e98507bb2838bf7f8ae7b1b719d4a64b3b0b0352c97626",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collaboration_domain/src/authorization.rs",
+      "status": " M",
+      "bytes": 20562,
+      "sha256": "9cdc7b5af89d7fe5674ba19bb2e009f2a6163dd0f6debbfc7e2bb95fd7c8d625",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collaboration_domain/src/membership.rs",
+      "status": " M",
+      "bytes": 43464,
+      "sha256": "ae7052da38a0ad79ef210115efb7280b1530d31cf515fe28aa3b9817e131ffdb",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collaboration_domain/src/moderation.rs",
+      "status": " M",
+      "bytes": 64950,
+      "sha256": "8791dc7fd91059fddf439b32688b919b269c1057c562c066f17636509da9beec",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collaboration_domain/src/moderation_policy.rs",
+      "status": " M",
+      "bytes": 36842,
+      "sha256": "fee19dd5d6becd915b5722c5006b078b3ab361d5cc7c9d822e5bea18cd80af62",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collaboration_domain/src/principal.rs",
+      "status": " M",
+      "bytes": 24376,
+      "sha256": "bd6bbd391dc2882454240d7dc626bc94d32fc6e618687e454310655795ce3d91",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collaboration_domain/src/profile.rs",
+      "status": " M",
+      "bytes": 27025,
+      "sha256": "95612ca39780cf34990054d37213fa36d00e73dd768899584c429d76f118027e",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/context_server/Cargo.toml",
+      "status": " M",
+      "bytes": 1074,
+      "sha256": "deecc32522dc37b4a0e1ebe1b290db92d8c46e8d6145b512a1a960e757f95283",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/db/src/kvp.rs",
+      "status": " M",
+      "bytes": 11673,
+      "sha256": "aebffd31d159c7a52df6effc4233b017ace027f5b37ddae344f68ef8f20f3526",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/diagnostics/src/doctor.rs",
+      "status": " M",
+      "bytes": 621253,
+      "sha256": "ebcb223af103d60ba805dd36093a9922e34556797ff5440e1416dc7634c314ee",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/editor/src/display_map/block_map.rs",
+      "status": " M",
+      "bytes": 206765,
+      "sha256": "a373f081fba62a92bdb0939160eb4d71de8874a8c3284562a8218c03e54fe4b9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/editor/src/editor.rs",
+      "status": " M",
+      "bytes": 466931,
+      "sha256": "d9f32749d5dfda9c767299df222a937bffc125461c678f20eaa7873558e96246",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/editor/src/editor_tests.rs",
+      "status": " M",
+      "bytes": 1378077,
+      "sha256": "f1aa739b0d4e4c7de5cb94e3af6b00c13d84792dd53f1e057dc599af30d5109d",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/editor/src/element.rs",
+      "status": " M",
+      "bytes": 509835,
+      "sha256": "4f67f25af8d1b694af3cbb69b051e8ae08b6291a1d9abe6ef2d9058b118f94cf",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/gpui/src/elements/list.rs",
+      "status": " M",
+      "bytes": 120112,
+      "sha256": "2abe518532bf374fd11005d7da0c72f4dc3cb3db1c69ded2131ca43bc4e4eaf9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/gpui/src/window.rs",
+      "status": " M",
+      "bytes": 299533,
+      "sha256": "7f5474d442011f2a36603ec1f8975a0a20d81c0cc03eb8fc79eef75f4929fb63",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/gpui/src/window/a11y.rs",
+      "status": " M",
+      "bytes": 42865,
+      "sha256": "12a9cd292cd1460d58eda512fa1ad139d7a4cab3599f155ba07a14125b82be6f",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/picker/src/picker.rs",
+      "status": " M",
+      "bytes": 74922,
+      "sha256": "64a44f2b4b27c048e244a35513a464108a82a846bf76d22cb881501902323158",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/project/src/environment.rs",
+      "status": " M",
+      "bytes": 18891,
+      "sha256": "25a3e5aecdb6f813640710c59e7e5c7f27e912a32bec9fac6335519526cd3a58",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/sidebar/src/sidebar_tests.rs",
+      "status": " M",
+      "bytes": 599819,
+      "sha256": "82882d5f6be309380b4cc5f9cd89b32921763c9852322a0a081a5dda1f051f94",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/terminal/src/alacritty.rs",
+      "status": " M",
+      "bytes": 52534,
+      "sha256": "379e95fe4e29f1aa408aada332696fe679c527eb6db578ea5ab021cede5ec2c9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/terminal/src/terminal.rs",
+      "status": " M",
+      "bytes": 274821,
+      "sha256": "cc13abc19d58aabb3b4bf8608cb731a8e5a8d49e0702db565cd6c4230252d8cc",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/terminal_view/Cargo.toml",
+      "status": " M",
+      "bytes": 1883,
+      "sha256": "c30d8cd24b0ffcaa56ba57bf2ffb5fca5bf827f8a6c37afc8efce583a4430e6b",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/terminal_view/src/terminal_element.rs",
+      "status": " M",
+      "bytes": 117143,
+      "sha256": "d42c97f48c89273d3abac2042ad650a967b98e8d7da4fe6b06b534c4aa516e4a",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/terminal_view/src/terminal_panel.rs",
+      "status": " M",
+      "bytes": 234527,
+      "sha256": "be11d2c3fe445bef5753aa0c592469e906828441196e445fb28b6f3b31712c9e",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/terminal_view/src/terminal_view.rs",
+      "status": " M",
+      "bytes": 133430,
+      "sha256": "b344af3eb5c79219f7f53d29eaa5ad63e7409c5e882e1e6a67bf34ebef5a0132",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/workspace/src/workspace.rs",
+      "status": " M",
+      "bytes": 817633,
+      "sha256": "013f2cf9c0ffce56a0867cac4964a10dfb1c5eb38130ddbc3ca993fdf69d549b",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/workspace/src/workspace_presentation_actions.rs",
+      "status": " M",
+      "bytes": 2531,
+      "sha256": "cce7c929eac02a6da283064cebf02e24f9b99cbf9f8661faab8bbeac416fb764",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/workspace/tests/collaborative_ownership_invariants.rs",
+      "status": " M",
+      "bytes": 7905,
+      "sha256": "7d768ef602eed7c69f3417e3bb69062acc9697d8c5270ab929fccb6dedecbae9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/zed/Cargo.toml",
+      "status": " M",
+      "bytes": 11959,
+      "sha256": "095f50c28309b476f22aaf8d9e429e5488d499a2355dcae60f0ebde44e430570",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/zed/src/zed.rs",
+      "status": " M",
+      "bytes": 446868,
+      "sha256": "919daa3e16e7c33dd4b55c53bbaba3b462787bea436fa6df7aee5db258247579",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/zed/src/zed/app_menus.rs",
+      "status": " M",
+      "bytes": 15590,
+      "sha256": "fb30cf205b9d6180eea121cced8ec6725d9bc391a552aa64c97cb14c057e05cc",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/README.md",
+      "status": " M",
+      "bytes": 3688,
+      "sha256": "ebebb775c61f4783ef10e59e71a892ff46560ef84a8b1462c5de0a1a0fb737e6",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/templates/_helpers.tpl",
+      "status": " M",
+      "bytes": 9361,
+      "sha256": "2f3566d31a07ab6a10f455ca8bc29a2f6d099b53f4b4ca69579fa43b63c84309",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/templates/deployment.yaml",
+      "status": " M",
+      "bytes": 8776,
+      "sha256": "ab08823f7c4ea914e81f3fe73b668b56577234d7297df066ba702a41ed77ad40",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/templates/httproute.yaml",
+      "status": " M",
+      "bytes": 961,
+      "sha256": "d572a636e4aacd38add166657f2fabe6ea401104a5cff33e1c120424ec5bcc30",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/templates/ingress.yaml",
+      "status": " M",
+      "bytes": 1789,
+      "sha256": "d2416725dc85eecf9beade937fe003a709c8cee48f085427e43d44a33a83f959",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/tests/render.sh",
+      "status": " M",
+      "bytes": 22020,
+      "sha256": "9fe7c88b593fbc7b5f3d7ba60721f722e033a5e340528f68ee2fd45acfb127e5",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/values.schema.json",
+      "status": " M",
+      "bytes": 14531,
+      "sha256": "71055b36ec9ac10d236930c48e07517b7ed1542270b367db8d0315464066e87c",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/charts/collaboration/values.yaml",
+      "status": " M",
+      "bytes": 3065,
+      "sha256": "9d1f55c01f11b881d75b93ee4bbcca4d34a1981c1392106a58bfd759c71645dc",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/compose/README.md",
+      "status": " M",
+      "bytes": 6165,
+      "sha256": "8536e82f7466b27bfef7fdbf0b50dec03c1cfe8e3f17a1efd06da8292f116ec2",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/compose/check.py",
+      "status": " M",
+      "bytes": 10973,
+      "sha256": "5db822aedd7fcf101457cf2e1ba56ace46a07f4b98431ceaad00fc0133c16d9f",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/compose/compose.yaml",
+      "status": " M",
+      "bytes": 6169,
+      "sha256": "5b9dc86408882d4d2cafe7d97fd7ad39da66c6454e11f2059645e13f4893b9bb",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/migrations/README.md",
+      "status": " M",
+      "bytes": 3925,
+      "sha256": "88145cf54216874af15dedb58ef2b3a3f6379d9257fd25301498fd9b55512483",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/migrations/check.py",
+      "status": " M",
+      "bytes": 5874,
+      "sha256": "bbb252c74e88818f8709c90323ed927035906dbc14cc9a94c702880075407603",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/migrations/manifest.json",
+      "status": " M",
+      "bytes": 13740,
+      "sha256": "a3b80811b1d903ab303f587f79a4a6b14ca2382db574c07287204e5bf7a21375",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "deploy/collaboration/migrations/tests/smoke.sh",
+      "status": " M",
+      "bytes": 8781,
+      "sha256": "abb80dd41d35e2370c02cfa1817bd23c90673c763ad6ed9cb7547b34e0ae289b",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "docs/collaboration/architecture.md",
+      "status": " M",
+      "bytes": 21118,
+      "sha256": "7c3519083d760098550380867946da0bd15e0bb52fce24b5a7ef000b083c161f",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "docs/collaboration/compatibility.md",
+      "status": " M",
+      "bytes": 11835,
+      "sha256": "c58b620965f57285d6bf9795d9c285550dd87915edcc787ea2649e855ec7ea6b",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "docs/collaboration/operations.md",
+      "status": " M",
+      "bytes": 39740,
+      "sha256": "aa8af47dd6a9994a140babc64720313bdd2311560723c98625c36eae87654f19",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "script/check-multiplayer-tools",
+      "status": " M",
+      "bytes": 6745,
+      "sha256": "a4591b3ab73b4af6026d2e7a7dc985b34428f67143ee3f9ef95b169677129b90",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "script/check-rust-tools-feature-boundary",
+      "status": " M",
+      "bytes": 8172,
+      "sha256": "c19032aa57c2da7e7b5970f74afb3592ee73026baaf7c21c68fafd11c9d500ee",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "script/validate-collaboration-storage",
+      "status": " M",
+      "bytes": 17551,
+      "sha256": "df139164c0b4f47e7fd84a2691c19eb078b5a58c952906d45958cfb0308dc717",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-closed-owner-normal-mp-static-delta-reference-20261013/README.md",
+      "status": "??",
+      "bytes": 2335,
+      "sha256": "abfe2da402a1adabefb5dee20a7ffbdc09c2939d1c534c062813b2c44e0c38b1",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-closed-owner-normal-mp-static-delta-reference-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 5549,
+      "sha256": "19ab1d93892fa44e78e8ee050e724c5ba169b522858e94eb10b17384461f1943",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-closed-owner-normal-mp-static-delta-reference-20261013/manifest.json",
+      "status": "??",
+      "bytes": 16885,
+      "sha256": "53c598d6a373d4cce99c80a7e2aa08d09e9e969ace46d7e3fafd7932582de309",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-delta-restored-output-selection-comment-reference-20261013/README.md",
+      "status": "??",
+      "bytes": 1378,
+      "sha256": "e00f8e36044b6d36111c032b46db791c92aab8a2b244110b6db3f0fab3c71d02",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-delta-restored-output-selection-comment-reference-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3582,
+      "sha256": "03a4bcc3c6cec41bd1f68f03193629e676e318408379811e8b4c86bb15e23957",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-delta-restored-output-selection-comment-reference-20261013/manifest.json",
+      "status": "??",
+      "bytes": 3907,
+      "sha256": "06395fb2207526221b100f818a402f876a3a75ad2c39c160708aae751d314d7e",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-full-multiplayer-lint-failure-20261013/README.md",
+      "status": "??",
+      "bytes": 578,
+      "sha256": "4c7a181d30a326526a61584e6ee3fdb3af4ecca5a0f5a3972d3cd4ffe227bb3f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-full-multiplayer-lint-failure-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 1199,
+      "sha256": "dc40dac6a64c05034cbac4e59f7e4f9fe619f2400c8556b457f2f72ce58e0c87",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-full-multiplayer-lint-failure-20261013/manifest.json",
+      "status": "??",
+      "bytes": 3793,
+      "sha256": "178e59200ae6e65c46fc277d1a60174b348910dcbc2d878f0a3e74ce5dcbabea",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-unused-rust198-cache-restored-access-20261013/README.md",
+      "status": "??",
+      "bytes": 1633,
+      "sha256": "74c89f6a87b453d8c3028e7458e44dbf0429dffb023c3762963ea96136f4c409",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-unused-rust198-cache-restored-access-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2054,
+      "sha256": "1a3ed4d924186016920aec120c3f4cb44fc26d9c9f731863c40b10ea7e5b8121",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-unused-rust198-cache-restored-access-20261013/manifest.json",
+      "status": "??",
+      "bytes": 4919,
+      "sha256": "d94bb374276c8c1cd818a848c459fae8fe130099e38e18639c21b07ee0292706",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-closed-selection-fixture-readiness-old-quit-20261013/README.md",
+      "status": "??",
+      "bytes": 1820,
+      "sha256": "f82f036688ed47ed4fa86af2d8462da9e2d5b285850af3746fdd9d02bd723a13",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-closed-selection-fixture-readiness-old-quit-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3438,
+      "sha256": "12c20576e2579a5c219556a2c2101647acf5e1c5702b9fa33831c46685050c13",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-closed-selection-fixture-readiness-old-quit-20261013/manifest.json",
+      "status": "??",
+      "bytes": 10366,
+      "sha256": "7d69cfe101d787159d6b41562a0ff2adb31ee20b4ef000c6af34ebf6b293c6ca",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-delta-comment-cancel-reentry-reference-20261013/README.md",
+      "status": "??",
+      "bytes": 1639,
+      "sha256": "e688dae90daaeffa27c1462bc5b16431af1a96fb9a0d74fdb6b2308e144c65cc",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-delta-comment-cancel-reentry-reference-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 1967,
+      "sha256": "15a31692f025c3858aedc0c401dfe8a8e8115d2ae576f3d882c897f3bbef3e52",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-delta-comment-cancel-reentry-reference-20261013/manifest.json",
+      "status": "??",
+      "bytes": 4740,
+      "sha256": "1f426f72576818d255640c02dc6b92dda54efb89fd275d8b4c7c7b389b60e593",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current115-normal-mp-native-restored-output-before-fix-20261013/README.md",
+      "status": "??",
+      "bytes": 1330,
+      "sha256": "14275b5a88dc3bab171a4a2eae6096da7916d66e350e2330d172d3a698cafde7",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current115-normal-mp-native-restored-output-before-fix-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3703,
+      "sha256": "1e2d78de869b5ae8720be8c2638e12945d2ad4a439e8438b4b7136bcc0e5d81d",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current115-normal-mp-native-restored-output-before-fix-20261013/manifest.json",
+      "status": "??",
+      "bytes": 9831,
+      "sha256": "42151996f810705a1526948f387f1d0e5309bca01a5e335fcbc02c82999696fe",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current119-compile-failure-delta-comment-restart-reference-20261013/README.md",
+      "status": "??",
+      "bytes": 1327,
+      "sha256": "817b1e0e4e471df81d0ba56ed47b3eb1c0c8bac1be3d685508bb26e77885749f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current119-compile-failure-delta-comment-restart-reference-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3474,
+      "sha256": "461ec8e174be451c475e31ab18cd2654030b96260e85ea5cd5a94e9e6c36fb82",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current119-compile-failure-delta-comment-restart-reference-20261013/manifest.json",
+      "status": "??",
+      "bytes": 9299,
+      "sha256": "f82027b133089a02ad994cf2106c0a6c0adcb588b0ac99bd599f74aef6257eb1",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-mounted-backend-nine-owner-selection-20261013/README.md",
+      "status": "??",
+      "bytes": 1440,
+      "sha256": "f5bc170b67b842e42c533ee2060571bc8a39c1f54d6ee3e986af8bfb80caf84f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-mounted-backend-nine-owner-selection-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4522,
+      "sha256": "caa24ea261625cb0377ecc973f5579435530c76ca6d9086f6cefa5ad8a6fdda8",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-mounted-backend-nine-owner-selection-20261013/manifest.json",
+      "status": "??",
+      "bytes": 11152,
+      "sha256": "e9ae55c4820381d98e1c436c61b1ec8590048b9bbab684ffd4932793ec66d458",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-normal-mp-affected13-clippy-test-failure-20261013/README.md",
+      "status": "??",
+      "bytes": 1441,
+      "sha256": "ee1f4085ff327683f24402ad48c16a40967e313ff9c8ee58b6ec0ad5e9f37387",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-normal-mp-affected13-clippy-test-failure-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3351,
+      "sha256": "e9a4440b22715d729047fe8abb324bcf5b969a38aa49e6c7abd4f49421fd698a",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-normal-mp-affected13-clippy-test-failure-20261013/manifest.json",
+      "status": "??",
+      "bytes": 11329,
+      "sha256": "574debe702e181eb190fa1bfa829d2c421c199db90034d31f36d23ac5f72bb61",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-native-live-stop-history-restart-failure-delta-access-20261013/README.md",
+      "status": "??",
+      "bytes": 1679,
+      "sha256": "4ecc6fd804734d186614ca5dc55b36c8c528dc2baa58420d0aaa2712607019a6",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-native-live-stop-history-restart-failure-delta-access-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4977,
+      "sha256": "a17346c3faceecbe006d39defaf1bb8ffcf150c7fe9a481f5c8201c42d8e3e65",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-native-live-stop-history-restart-failure-delta-access-20261013/manifest.json",
+      "status": "??",
+      "bytes": 15672,
+      "sha256": "0ae27d761f49ba015cd1c66d529f5546ad256d0cb7257cb482f03fb859f5d63c",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current122-closed-clippy-nine-owner-full-mp-custody-limits-20261013/README.md",
+      "status": "??",
+      "bytes": 1352,
+      "sha256": "a08d89e36bbfe0b0dcfe60958867ef5a80971a1d4f7d579ddf418d698637e3eb",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current122-closed-clippy-nine-owner-full-mp-custody-limits-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 5104,
+      "sha256": "3c7116b30abbd6666b87f413112292d6ee6ff77d730d8bfdcf4bd80ff38597e3",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current122-closed-clippy-nine-owner-full-mp-custody-limits-20261013/manifest.json",
+      "status": "??",
+      "bytes": 9800,
+      "sha256": "c3d20a0f22e795a8a6342de85e2d1c1707ab93b706cc81a6709dfed282a1dcae",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-agent-metadata-components-20261013/README.md",
+      "status": "??",
+      "bytes": 789,
+      "sha256": "e5babfdb4a825e3ab1a008794dbf85ab632aa127215e7769d380de6497c863b3",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-agent-metadata-components-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 17811,
+      "sha256": "2f196bdc3a7e0cbb110cc7ae811102f12242f4cc5ca024634fb5648eeae8fbd3",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-agent-metadata-components-20261013/manifest.json",
+      "status": "??",
+      "bytes": 804,
+      "sha256": "8098a27a5e55f40be8d9172f1b2132d0c1a65ae56d586ceae9ccfaa80955bf70",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-disposable-sql-static-cleanup-20261013/README.md",
+      "status": "??",
+      "bytes": 788,
+      "sha256": "c07eaa9cff915851aac72d5d838ae5ce38ac116f0c7f4f1d49193698cb3a1669",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-disposable-sql-static-cleanup-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 5298,
+      "sha256": "0a603fafb2856791808880a089e5a6896a7e64dc472ecd6e96e69f25d073ea2f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-disposable-sql-static-cleanup-20261013/manifest.json",
+      "status": "??",
+      "bytes": 3081,
+      "sha256": "a55e6b37edd4dc746116d8df5f6656ee1e9555ac251a0336960d3974a81394af",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-closed-ten-clippy-normal-full-mp-prior-failures-20261013/README.md",
+      "status": "??",
+      "bytes": 1682,
+      "sha256": "27ee9379d7b6b9c22ce5e7b0a046c1ea255171633921d6099c7565472c42b07f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-closed-ten-clippy-normal-full-mp-prior-failures-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 8795,
+      "sha256": "6a968f80553c1ed2967746c9106d33a8e8929fcf3fca5a3a6ab4fa76d6d108a0",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-closed-ten-clippy-normal-full-mp-prior-failures-20261013/manifest.json",
+      "status": "??",
+      "bytes": 27331,
+      "sha256": "589f0ba4d63e8af5a2db17a64ba0248677026b71061012549328a359f96c8fa3",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-native-history-restart-standard-wiring-failure-20261013/README.md",
+      "status": "??",
+      "bytes": 1734,
+      "sha256": "32b767daaede68d8c3a070f9c42f54a72a718e33d77091383c9c189449902037",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-native-history-restart-standard-wiring-failure-20261013/RETENTION-LOCATION.json",
+      "status": "??",
+      "bytes": 8150,
+      "sha256": "928d73050e3906e5649723b88970dcd222e585c87044d8e0ecd9450e91755cb2",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-native-history-restart-standard-wiring-failure-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 7312,
+      "sha256": "618ff8b0ac17eee7187f0d9d95300878091f28d6fb0f40bd33f101204857bd0c",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-native-history-restart-standard-wiring-failure-20261013/manifest.json",
+      "status": "??",
+      "bytes": 40595,
+      "sha256": "d62ea0edd91e38592909af8f51eef02262a2286e65d2c9a1666338cdac264ae6",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-native-reflow-standard-compile-cache-evidence-20261013/README.md",
+      "status": "??",
+      "bytes": 1771,
+      "sha256": "225ffc7b9b65a50b46beaa3abdbb728042d48536f1ee73da42eb023c4593379c",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-native-reflow-standard-compile-cache-evidence-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 6106,
+      "sha256": "3bae92a4aafb7472c009358d6d581f34eecec4df526e0d70032cb27715030c23",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-native-reflow-standard-compile-cache-evidence-20261013/manifest.json",
+      "status": "??",
+      "bytes": 31831,
+      "sha256": "283ea4ed39d908095c86396f4144ed4bfe35b89b76ed315d0d7877c07a565722",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-primary36-standard-capacity-interruption-20261013/README.md",
+      "status": "??",
+      "bytes": 1523,
+      "sha256": "9a67d23fae66bcb4c113eb369f77cb9524ba6b840ee6a554f83ec49191ed01f4",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-primary36-standard-capacity-interruption-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4819,
+      "sha256": "fe9cc15b18d228d385ac344d84bfa3f033c4e251e30530c15a345fc71694e07a",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-primary36-standard-capacity-interruption-20261013/manifest.json",
+      "status": "??",
+      "bytes": 18276,
+      "sha256": "db2d199613c7009c87116b8432746f4a7018568f940423414e95383aecf00bcf",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry1-namespace-capacity-cache-recovery-20261013/README.md",
+      "status": "??",
+      "bytes": 1334,
+      "sha256": "f1a32338ea018d03d1b8870375c9b1adb1299b07a2170fa2436b7e6df02b3db6",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry1-namespace-capacity-cache-recovery-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4457,
+      "sha256": "d982d83b9c908738987cdfc036cef34d13216d85c49216f22421cf12f68355ea",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry1-namespace-capacity-cache-recovery-20261013/manifest.json",
+      "status": "??",
+      "bytes": 20980,
+      "sha256": "d8d808d32ae98e502119c38507d7cfa2c73fdcb07b0d4234f77594a8c15c1025",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry2-capacity-interruption-20261013/README.md",
+      "status": "??",
+      "bytes": 1004,
+      "sha256": "5cb5477974e5b7f1f1c6f0d40a9c3421a96d1f063f734ea4cdb6c344e8044bd4",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry2-capacity-interruption-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3074,
+      "sha256": "7ed032b9d951a9c6d7b6d05480085137700d6da706018889095e15a532358f42",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry2-capacity-interruption-20261013/manifest.json",
+      "status": "??",
+      "bytes": 6740,
+      "sha256": "c59f162f5085232ae7da94e7f151a5b5fdb6f42425b9cc6a8607e21e8ea5ffa3",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current128-through131-closed-reflow-failures-source132-provenance-20261013/README.md",
+      "status": "??",
+      "bytes": 1537,
+      "sha256": "a1795c8b0b64894a121475f3f002aaf059bece8b76d6d0d708e557e1f78f6403",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current128-through131-closed-reflow-failures-source132-provenance-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 6128,
+      "sha256": "7e339f9247a7b8c922e0abb2540acc8de0a1723ad973d49fd8a8bcb4b2d2d9ae",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current128-through131-closed-reflow-failures-source132-provenance-20261013/manifest.json",
+      "status": "??",
+      "bytes": 26675,
+      "sha256": "8adcd1553764942bca06794d029e4ad999dd351cecf246174429063575aa91c2",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current132-through134-closed-reflow-delta-source136-provenance-20261013/README.md",
+      "status": "??",
+      "bytes": 1057,
+      "sha256": "bc850667936647bcbf313b14495e72154a0c2d4a55782e7ae7bf3bcad57de28a",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current132-through134-closed-reflow-delta-source136-provenance-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4251,
+      "sha256": "f3670c558779a127ad71a38567c95ee1789b2b53680616fdf9ea5fd17853fb35",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current132-through134-closed-reflow-delta-source136-provenance-20261013/manifest.json",
+      "status": "??",
+      "bytes": 17279,
+      "sha256": "70b0aa8310e932bf09864bc53b070d045257e5a99fb8da7a248cb6d70d38e852",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-affected15-clippy-closed-lint-20261014/README.md",
+      "status": "??",
+      "bytes": 832,
+      "sha256": "ccaf5429656d69001086d7f71a316ad25f791102e49177890ea101398a0720b4",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-affected15-clippy-closed-lint-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2000,
+      "sha256": "adf42c3b735af48b5f7b241db33ca38935609378aed6a4a8fe2850608e806d3b",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-affected15-clippy-closed-lint-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4562,
+      "sha256": "c93f37695f4e5a50a7ffdfab0354e5b76b89409af7f1bae3441982f33925be45",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-closed-primary-reflow-gpui-list-component-20261013/README.md",
+      "status": "??",
+      "bytes": 1013,
+      "sha256": "7ed9ccda4b2bd2859ae2fb7cfe757385285ae7b02f32ec23896e3051516b89c9",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-closed-primary-reflow-gpui-list-component-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2857,
+      "sha256": "7a5c00bf08d72bec85c91642d5d5f5093cf6a98d603e6244e169ab024662ef83",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-closed-primary-reflow-gpui-list-component-20261013/manifest.json",
+      "status": "??",
+      "bytes": 7103,
+      "sha256": "fea83997a3b117dc597b42ef491f72b731c3605fd433b118faf6598fb802b827",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-duplicate-normal-output-retention-and-warm1-absence-20261013/README.md",
+      "status": "??",
+      "bytes": 988,
+      "sha256": "ca3f4064c8172de7fb7e3fee8ab3ba22c49ac23cedf1583088a4f6c492af5935",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-duplicate-normal-output-retention-and-warm1-absence-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 1847,
+      "sha256": "dfa7a3b33bff3d23f1cf2dd1a799130eef3fc1ca756fa332226e24c37a559570",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-duplicate-normal-output-retention-and-warm1-absence-20261013/manifest.json",
+      "status": "??",
+      "bytes": 3539,
+      "sha256": "dedcface4976c7b931a81935ace36665c4b37e07a599d903e1a0404074a7f464",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-exact619-completed-rlib-copy-cleanup-20261013/README.md",
+      "status": "??",
+      "bytes": 1001,
+      "sha256": "0d9ea3b3695e53394320d5172d3160e0c7637e44c56dddf59c3b531835467095",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-exact619-completed-rlib-copy-cleanup-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 1486,
+      "sha256": "23f5776d6947f427b778f02326dbc671547d8f8b529f78a2e85d0be281e487a6",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-exact619-completed-rlib-copy-cleanup-20261013/manifest.json",
+      "status": "??",
+      "bytes": 4200,
+      "sha256": "99d4d9bf522155675fb74107fb0ac48634f35a8a3d3a75c0eb5361f600ffee57",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-full-standard-sidebar-failure-20261014/README.md",
+      "status": "??",
+      "bytes": 1090,
+      "sha256": "bf16a40e1a564a12a5da486551bb36a493f4b41a378524d21be37672ceb3a47f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-full-standard-sidebar-failure-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2322,
+      "sha256": "b0c582c8ff4ff5d3d1e18cb343ff56d7cbddcd2a032d20bc2cf039696cdac6dc",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-full-standard-sidebar-failure-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4181,
+      "sha256": "93eb9c2418c40f514491373ae6bfc465213b7e713b13198c4b022e7d529a58f4",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-only-list30-closed-component-20261013/README.md",
+      "status": "??",
+      "bytes": 1048,
+      "sha256": "e7ab0767a378663a59b0ba2528b3605acb9ed9f94173007fc5f8f33daeb04b06",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-only-list30-closed-component-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3128,
+      "sha256": "9497109497756be1e920763dde5766530ae036ae7b88f1a7afe474250615ffb9",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-only-list30-closed-component-20261013/manifest.json",
+      "status": "??",
+      "bytes": 6115,
+      "sha256": "33179324f2deee0408a11e3ad1449eba7744f46324201eb5303802a4cd6fa3ed",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-warm1-closed-capacity-interruption-20261013/README.md",
+      "status": "??",
+      "bytes": 891,
+      "sha256": "fa9528f832f82fc98bf5567de1f486cd9b7cfba11f18134f69c368f0db55f944",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-warm1-closed-capacity-interruption-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 1749,
+      "sha256": "8f755603f3e14b7cfa318a4d827fcf485a5d9f56b881f6f31c5712478d082bc2",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-warm1-closed-capacity-interruption-20261013/manifest.json",
+      "status": "??",
+      "bytes": 4478,
+      "sha256": "ec54d2c34c363e94d51f191ed28cb0de877e1729dc0f5279ad5c65295d979891",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-normal-copper-mp-closed-build-bundle-provenance-20261014/README.md",
+      "status": "??",
+      "bytes": 1091,
+      "sha256": "bd0d0f3a411f104f73afddc2d91b36cd9097a35d86f68300a794f0f34bda8a60",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-normal-copper-mp-closed-build-bundle-provenance-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2669,
+      "sha256": "968c30fae2589a560e804a9f70a0cd6fcf53537e0f5cdf2995d3d5b3a7170f38",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-normal-copper-mp-closed-build-bundle-provenance-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4727,
+      "sha256": "8430f05702f755c3517f0bd0a1e153de48164e64f9efeca40352ce496db973d1",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-one-obsolete-mp-test-cache-retention-20261013/README.md",
+      "status": "??",
+      "bytes": 911,
+      "sha256": "88af315976fd4182c307f7079ee5cc19b86a9fafaf3fbe042148bce466a8f024",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-one-obsolete-mp-test-cache-retention-20261013/evidence.tar.gz",
+      "status": "??",
+      "bytes": 1564,
+      "sha256": "82103fdac7a481a4a54b508f484df013b82fa47d80f7318aa57adb3dac928b70",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-one-obsolete-mp-test-cache-retention-20261013/manifest.json",
+      "status": "??",
+      "bytes": 3331,
+      "sha256": "b42d5954f0b44b47a118e3ff6534f76b19fac6c4fdfbe329bfc33aadca8bb497",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-ten-owner3038-closed-component-20261014/README.md",
+      "status": "??",
+      "bytes": 1039,
+      "sha256": "66673179127c7864ddb9058f24ea23954d531649518a275c8c0167cc0ba2e171",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-ten-owner3038-closed-component-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4025,
+      "sha256": "858ada7daf47c16d59eeb01bb47356619521dfe9081d7b74ba23942a56c88a78",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-ten-owner3038-closed-component-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4810,
+      "sha256": "e731c484839821c539344f63c389e1bc6e5f836bdd036804269cafbd67dd9a7c",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-diagnostic-doctor-cleanup-source138-capacity-access-20261014/README.md",
+      "status": "??",
+      "bytes": 2811,
+      "sha256": "53bd39ea21ebed880db198cc9c5970d365d1fb18ee6545788b1d7e091aeb0c3a",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-diagnostic-doctor-cleanup-source138-capacity-access-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 5449,
+      "sha256": "eb7df5580b0194c1439099a152cc88d32f21adf5854fcf62f0cdf7de5d9d05d9",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-diagnostic-doctor-cleanup-source138-capacity-access-20261014/manifest.json",
+      "status": "??",
+      "bytes": 35180,
+      "sha256": "a70a761245acb67050c5f1c4b6303aaa3ea13e90a150ea5f07329afa0279180f",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-multiplayer-closed-profile-20261014/README.md",
+      "status": "??",
+      "bytes": 1434,
+      "sha256": "58f394950b6067cee505977ecdc92829f8c95ea875c879dad7a2db5dd0fbc9cc",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-multiplayer-closed-profile-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2324,
+      "sha256": "e7757bfc681866da0926a1e2e7eb56f556348fb5b6044f5233eec7b584dbb996",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-multiplayer-closed-profile-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4152,
+      "sha256": "09db539dbdaeefffc486ae38b4b402cf1448d8c8ee9b86b9523aab8ae8daa9fe",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-standard-closed-draft-discard-profile-20261014/README.md",
+      "status": "??",
+      "bytes": 1295,
+      "sha256": "910ce6b7942240f54c76dfab813cbac1725b77faefac55d46c79306cbe52f52a",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-standard-closed-draft-discard-profile-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2778,
+      "sha256": "bddd508d86d16ea1403a2060b833aa12f03b95961926e8c975cb34f35995b217",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-standard-closed-draft-discard-profile-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4204,
+      "sha256": "04f5b6279d98a7b4ce477a5eddbe0a80690437076bc848347e87343abf41218b",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-normal-mp-build-bundle-singleton-launch-blocker-20261014/README.md",
+      "status": "??",
+      "bytes": 1367,
+      "sha256": "715fc1e2ad35bd70c6bf01676eeb40ffde279e20ef9f290863fee2b226f74b62",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-normal-mp-build-bundle-singleton-launch-blocker-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3081,
+      "sha256": "daa0de51124a8b8235a5f799f534fda6cf63aed33b4b0b44db83d2ea5ea18673",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-normal-mp-build-bundle-singleton-launch-blocker-20261014/manifest.json",
+      "status": "??",
+      "bytes": 5726,
+      "sha256": "f8e937101923e899127fba9bf3f98bc57262f8897ba0a5861ece42060d981282",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-settled-native-standard-build-cache-doctor-prior-failure-20261014/README.md",
+      "status": "??",
+      "bytes": 2003,
+      "sha256": "5d417af5cfbe88e6394b80846a507b0331c8c07b764a6dcf232a4299e074ec5b",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-settled-native-standard-build-cache-doctor-prior-failure-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 6441,
+      "sha256": "a15ca4b6606a0cc03420d1ca82dafbfc63ab1bb5bf08a659c24cb7c6b5853e63",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-settled-native-standard-build-cache-doctor-prior-failure-20261014/manifest.json",
+      "status": "??",
+      "bytes": 22654,
+      "sha256": "b05d282ee143b6dcef9053c582afc344ccad2f4a23d528736e3efd4f41a3b4b3",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-ten-owner-affected15-clippy-closed-20261014/README.md",
+      "status": "??",
+      "bytes": 1270,
+      "sha256": "26dc77c80838f8d33cb0c5c262a1b7f3e03cdc14cd092df6776ea626c75d142b",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-ten-owner-affected15-clippy-closed-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4288,
+      "sha256": "6cb5434f5f644bfd768db2617229dbe816bede212aca96fdc2e4aef9dce8323a",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-ten-owner-affected15-clippy-closed-20261014/manifest.json",
+      "status": "??",
+      "bytes": 6894,
+      "sha256": "2381c099e35f756999f9c872828675e5e851cc62278c7e04bc7f21af1da78dc8",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-focused52-clippy15-normal-mp-cleanup-closed-20261014/README.md",
+      "status": "??",
+      "bytes": 2387,
+      "sha256": "60066125c3b52d660888234b2b89f6529e13253b1d0705ab7a52e894b3ae6803",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-focused52-clippy15-normal-mp-cleanup-closed-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4286,
+      "sha256": "57d95cc4981a9e899f9a33ea11a7645c1495efdfd6d8960c0b2b34edcbcc3937",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-focused52-clippy15-normal-mp-cleanup-closed-20261014/manifest.json",
+      "status": "??",
+      "bytes": 16741,
+      "sha256": "a375a085560e7e9ad946f3531ed403981c5ef88a5cc6dfb119080ce0f8188ffc",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-native-inline-command-keyboard-mismatch-20261014/README.md",
+      "status": "??",
+      "bytes": 2618,
+      "sha256": "034f7a93d99e6cf6187b9957ca19a7f85dd6c2e8f98fc0e6a2b0092a26920ceb",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-native-inline-command-keyboard-mismatch-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 3950,
+      "sha256": "0ca5c5756a3e5a2f327068e19cd4033b7465d1a7111f4905e9396ad1040d6a3e",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-native-inline-command-keyboard-mismatch-20261014/manifest.json",
+      "status": "??",
+      "bytes": 7235,
+      "sha256": "e37d8e448cda925b40fb6ceb87db552cd137a813900a154cae9993f62762c780",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current140-141-test-wiring-capacity-and-exact-cache-cleanup-20261014/README.md",
+      "status": "??",
+      "bytes": 2723,
+      "sha256": "b8643430c4c046706082a8a2d7d8a1a75f2b1a3899c9e25c167bacf053662028",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current140-141-test-wiring-capacity-and-exact-cache-cleanup-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4493,
+      "sha256": "7f4099c86e66c5d07d441b8d9932060fb056ff7ae2f712cef303a370f67c6913",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current140-141-test-wiring-capacity-and-exact-cache-cleanup-20261014/manifest.json",
+      "status": "??",
+      "bytes": 9676,
+      "sha256": "74f143e9a19b90d751371b3e5242236b831c566e7ee409cf9509ef3a03ebeeb1",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-delta-reentry-warmretry1-capacity-and-cleanup2-20261014/README.md",
+      "status": "??",
+      "bytes": 2971,
+      "sha256": "d6b38fec917f7276909e1120d30657d8c7afa3b65ae614a32654afedb2049594",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-delta-reentry-warmretry1-capacity-and-cleanup2-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 5404,
+      "sha256": "793a8c4a1d7487619bdc8afb58ac4bc1d8e69bc9d5ac6de543d39d157de2fb2e",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-delta-reentry-warmretry1-capacity-and-cleanup2-20261014/manifest.json",
+      "status": "??",
+      "bytes": 10946,
+      "sha256": "a82a442c4ebded97166aa9b7e94bcb0d1f74e1557dbf3ffb8f12ad1250d89c34",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-keyboard-real-failure-diagnostic-proposal-20261014/README.md",
+      "status": "??",
+      "bytes": 2879,
+      "sha256": "c998fc6aa69b7415cf566404718f7425f6159fef6835f0664e6351ec2597901c",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-keyboard-real-failure-diagnostic-proposal-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 2806,
+      "sha256": "e480b31093f9379c6af998d4568d632c29e5460dc36506d08a8bf7f2a22beb50",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-keyboard-real-failure-diagnostic-proposal-20261014/manifest.json",
+      "status": "??",
+      "bytes": 4599,
+      "sha256": "d3a01c59a56860ed15d2a846d51f62ea1db2f91d54accbbe288f00a4aefbc5c4",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current142145-closed-keyboard-diagnostics-20261014/README.md",
+      "status": "??",
+      "bytes": 3382,
+      "sha256": "9c3327daed038628039730ef5b22a6f2d081eaa2e5a2c9bfaee18cadb9606319",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current142145-closed-keyboard-diagnostics-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 4743,
+      "sha256": "3f2a69b25d677b4fdeeb5b0d1c3444bfe017b61929f91f2556e894ba7a71d9df",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current142145-closed-keyboard-diagnostics-20261014/manifest.json",
+      "status": "??",
+      "bytes": 7785,
+      "sha256": "6d980b895425778403cba901ce24bddb78e0ded51e19b21b4bae6f681565fe80",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current145148-matched-native-validation-and-current-preparation-20261014/README.md",
+      "status": "??",
+      "bytes": 3800,
+      "sha256": "daa3c642a7ed249c38c9a6307622f0831e843b7ff246fee51f2f410062c08957",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current145148-matched-native-validation-and-current-preparation-20261014/evidence.tar.gz",
+      "status": "??",
+      "bytes": 27588,
+      "sha256": "bdc13d85f8a99811065937bb70f92bde670f6683365185416ac72694d557c056",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current145148-matched-native-validation-and-current-preparation-20261014/manifest.json",
+      "status": "??",
+      "bytes": 50815,
+      "sha256": "d114c5fab682a8c53fc011468d60e4c7de45bf5f90fabb57a6c9a3c8035b83cd",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current148149-closed-owner-build-lint-and-native-20261015/README.md",
+      "status": "??",
+      "bytes": 4475,
+      "sha256": "e5157ad633bd18733dc6d08b002a583dc9ccbf9584cc686a5f70d117b15acf65",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current148149-closed-owner-build-lint-and-native-20261015/evidence.tar.gz",
+      "status": "??",
+      "bytes": 12070,
+      "sha256": "3afd4f7f60ba5713b1e2bfe0ab316447106f5cfc04546beb1b142a2713dee264",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current148149-closed-owner-build-lint-and-native-20261015/manifest.json",
+      "status": "??",
+      "bytes": 33729,
+      "sha256": "f80feb059ac4e60df32b4eb5fafc03d14af405e6ca2a5d3f470034b8356b3630",
+      "group": "specs-and-evidence"
+    },
+    {
+      "path": "crates/agent_ui/src/inline_terminal_view.rs",
+      "status": "??",
+      "bytes": 23246,
+      "sha256": "9c986dce5e25d7b78a3dac8e89554100134542552cb41aa5ae60a25fdc6dcc1c",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261009000100_collaboration_identity_profiles.down.sql",
+      "status": "??",
+      "bytes": 119,
+      "sha256": "9cfb3a97d220dfe58d5aee8cf0964f35a342f33d696f0f439c0ab4036fe5e262",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261009000100_collaboration_identity_profiles.up.sql",
+      "status": "??",
+      "bytes": 3702,
+      "sha256": "4477b9a86d57f5b60596364438e5cc4625affbbfd9a198a3d822546898fe0aef",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000100_collaboration_identity_registration.down.sql",
+      "status": "??",
+      "bytes": 3145,
+      "sha256": "28018cd60134bc76f720f3209368f46158ed66b0376f91ff28c38b9c64f366b5",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000100_collaboration_identity_registration.up.sql",
+      "status": "??",
+      "bytes": 4104,
+      "sha256": "f15a7ce140fd2db1091369090ec15ea5f483444e39c484d6a89f3690a6184219",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000200_collaboration_identity_observation.down.sql",
+      "status": "??",
+      "bytes": 4006,
+      "sha256": "a97af9016dd05663bc2f49b87f6b238e59589446744f6b7b0b783f7cb873389d",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000200_collaboration_identity_observation.up.sql",
+      "status": "??",
+      "bytes": 4741,
+      "sha256": "e52b2b62d8af59096d50e2945df3248af50699b9d3935a49406404bd8e36da47",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000300_collaboration_moderation_subject_targets.down.sql",
+      "status": "??",
+      "bytes": 4377,
+      "sha256": "46a05fbb31d359d82086d428bd350ae67d2e052bd42b49dcfb4ff74aee22376f",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000300_collaboration_moderation_subject_targets.up.sql",
+      "status": "??",
+      "bytes": 4820,
+      "sha256": "24835ecdf37639e272289af840f854e8f742ffd14f7aa48926b4bfe97a9da1ae",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000400_collaboration_identity_accepted_names.down.sql",
+      "status": "??",
+      "bytes": 2261,
+      "sha256": "981430ad439a4a4df31bfc52fd5568d51cc4c14790af22e4af70f55400d4d31c",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000400_collaboration_identity_accepted_names.up.sql",
+      "status": "??",
+      "bytes": 3097,
+      "sha256": "3d8a1bad742c3be24eed5593c8a57e537e7a9c9ae93466fc5b59179275c4c53a",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000500_collaboration_moderation_signed_reasons.down.sql",
+      "status": "??",
+      "bytes": 900,
+      "sha256": "36b6123a1c87b418092e55d96e62f2f2651a8b9851a7896d7494edc0c10da092",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000500_collaboration_moderation_signed_reasons.up.sql",
+      "status": "??",
+      "bytes": 692,
+      "sha256": "8e7892e2f60d609e206104f3b1a82911f84119fa4a6eebb97107557c59697475",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000600_collaboration_virtual_agent_message_authors.down.sql",
+      "status": "??",
+      "bytes": 3817,
+      "sha256": "670db99d0dd686b215de5efb5fc481a2b3a1efa06ba1225fdf036e8cdc3ebeb0",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/migrations/20261010000600_collaboration_virtual_agent_message_authors.up.sql",
+      "status": "??",
+      "bytes": 11837,
+      "sha256": "675fcf8696b29db7833fdb96ae3c5ad517980bc1feb59cd3acfb7a1868f93ae9",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/src/identity/profile_repository.rs",
+      "status": "??",
+      "bytes": 128954,
+      "sha256": "90fb4ca01e435041d16cf9540da1cca28a9f29ff0ade2317efc57a7fee235eaa",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "crates/collab/tests/identity_profile_repository.rs",
+      "status": "??",
+      "bytes": 428323,
+      "sha256": "e2930e6f90ddf8942afdf10e889d378fec1901d6c6683f5e268e8df98e609225",
+      "group": "source-tests-tooling-docs"
+    },
+    {
+      "path": "script/test-collaboration-storage-readiness.py",
+      "status": "??",
+      "bytes": 7230,
+      "sha256": "9254241032882582e9577af94295479658888e2975782bef5ab60d9256980ddf",
+      "group": "source-tests-tooling-docs"
+    }
+  ]
+}

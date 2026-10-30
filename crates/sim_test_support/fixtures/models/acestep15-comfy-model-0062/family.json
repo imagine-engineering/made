@@ -1,0 +1,73 @@
+{
+  "fixture_id": "acestep15-sim-model-0062",
+  "feature_id": "COMFY-MODEL-0062",
+  "detector": {
+    "tensor_shapes": {
+      "decoder.condition_embedder.weight": [2, 2],
+      "decoder.norm_out.weight": [2],
+      "decoder.layers.0.self_attn_norm.weight": [4],
+      "decoder.layers.0.self_attn.q_proj.weight": [256, 4],
+      "decoder.layers.0.mlp.gate_proj.weight": [12, 4],
+      "decoder.layers.1.self_attn_norm.weight": [4],
+      "encoder.lyric_encoder.layers.0.input_layernorm.weight": [4],
+      "encoder.lyric_encoder.layers.0.self_attn.q_proj.weight": [256, 4],
+      "encoder.lyric_encoder.layers.0.mlp.gate_proj.weight": [12, 4],
+      "tokenizer.audio_acoustic_proj.weight": [1],
+      "detokenizer.proj_out.weight": [1],
+      "null_condition_emb": [1, 1, 4],
+      "text_encoders.qwen3_2b.transformer.model.norm.weight": [4],
+      "vae.decoder.weight": [1]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "a621a621a621a621a621a621a621a621a621a621a621a621a621a621a621a621",
+  "source_weights": [
+    {
+      "key": "decoder.condition_embedder.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "decoder.norm_out.weight",
+      "shape": [2],
+      "values": [1.0, 1.0]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 1, 2],
+    "values": [1.0, 2.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 40,
+  "expected_memory_bytes": 40,
+  "checkpoints": [
+    {"name": "decoder-input-projection", "values": [1.0, 2.0]},
+    {"name": "decoder-output-normalization", "values": [-0.999998, 0.999998]},
+    {"name": "decoder-gated-activation", "values": [-0.268941, 0.731057]},
+    {"name": "decoder-self-attention", "values": [-0.268941, 0.731057]}
+  ],
+  "patches": [
+    {
+      "identifier": "fixture-condition-projection",
+      "kind": "replacement",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "decoder.condition_embedder.weight",
+          "expected_shape": [2, 2],
+          "values": [0.0, 1.0, 1.0, 0.0],
+          "application": "replace"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "decoder-input-projection", "values": [2.0, 1.0]},
+    {"name": "decoder-output-normalization", "values": [0.999998, -0.999998]},
+    {"name": "decoder-gated-activation", "values": [0.731057, -0.268941]},
+    {"name": "decoder-self-attention", "values": [0.731057, -0.268941]}
+  ]
+}

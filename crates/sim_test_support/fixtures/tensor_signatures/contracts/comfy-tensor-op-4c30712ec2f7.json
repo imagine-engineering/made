@@ -1,0 +1,499 @@
+{
+  "canonical_target": "comfy.ops.mixed_precision_ops",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/sd1_clip.py:114:30 (SDClipModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/gpt_oss.py:520:26 (LensGptOssClipModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:101:40 (TestMixedPrecisionOps.test_mixed_precision_load)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:149:40 (TestMixedPrecisionOps.test_state_dict_quantized_preserved)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:187:40 (TestMixedPrecisionOps.test_weight_function_compatibility)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:227:40 (TestMixedPrecisionOps.test_error_handling_unknown_format)"
+    },
+    {
+      "expectation": {
+        "attribute": "Linear",
+        "kind": "attribute-access"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:261:23 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:43:40 (TestMixedPrecisionOps.test_all_layers_standard)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        },
+        {
+          "argument": "keyword:full_precision_mm",
+          "parameter": "full_precision_mm"
+        }
+      ],
+      "site": "comfy/sd1_clip.py:114:30 (SDClipModel.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "compute_dtype"
+        },
+        {
+          "argument": "keyword:full_precision_mm",
+          "parameter": "full_precision_mm"
+        }
+      ],
+      "site": "comfy/text_encoders/gpt_oss.py:520:26 (LensGptOssClipModel.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        }
+      ],
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:101:40 (TestMixedPrecisionOps.test_mixed_precision_load)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        }
+      ],
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:149:40 (TestMixedPrecisionOps.test_state_dict_quantized_preserved)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        }
+      ],
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:187:40 (TestMixedPrecisionOps.test_weight_function_compatibility)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        }
+      ],
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:227:40 (TestMixedPrecisionOps.test_error_handling_unknown_format)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        }
+      ],
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:261:23 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "quant_config"
+        }
+      ],
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:43:40 (TestMixedPrecisionOps.test_all_layers_standard)",
+      "status": "static-compatible"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-4c30712ec2f7-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": "{}",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "quant_config",
+      "type": "dynamic"
+    },
+    {
+      "default": "torch.bfloat16",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "compute_dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": "False",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "full_precision_mm",
+      "type": "dynamic"
+    },
+    {
+      "default": "[]",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "disabled",
+      "type": "dynamic"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-4C30712EC2F7",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "2d92981b154f32361ace660ae5b0591ba20ad8f9c98c9d56a8120bca1a4c7b9b",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/sd1_clip.py",
+        "sha256": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2"
+      },
+      {
+        "path": "comfy/text_encoders/gpt_oss.py",
+        "sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc"
+      },
+      {
+        "path": "tests-unit/comfy_quant/test_mixed_precision.py",
+        "sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.mixed_precision_ops"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-227f5d04687a",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "full_precision_mm",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 114,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "quant_config",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SDClipModel.__init__",
+      "site": "comfy/sd1_clip.py:114:30 (SDClipModel.__init__)",
+      "source_path": "comfy/sd1_clip.py",
+      "source_sha256": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "full_precision_mm",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 520,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "quant_config",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LensGptOssClipModel.__init__",
+      "site": "comfy/text_encoders/gpt_oss.py:520:26 (LensGptOssClipModel.__init__)",
+      "source_path": "comfy/text_encoders/gpt_oss.py",
+      "source_sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 101,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "{}",
+          "syntax_kind": "Dict"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_mixed_precision_load",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:101:40 (TestMixedPrecisionOps.test_mixed_precision_load)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 149,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "{}",
+          "syntax_kind": "Dict"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_state_dict_quantized_preserved",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:149:40 (TestMixedPrecisionOps.test_state_dict_quantized_preserved)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 187,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "{}",
+          "syntax_kind": "Dict"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_weight_function_compatibility",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:187:40 (TestMixedPrecisionOps.test_weight_function_compatibility)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 227,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "{}",
+          "syntax_kind": "Dict"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_error_handling_unknown_format",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:227:40 (TestMixedPrecisionOps.test_error_handling_unknown_format)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "attribute": "Linear",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 261,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "{}",
+          "syntax_kind": "Dict"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:261:23 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.mixed_precision_ops"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 43,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "{}",
+          "syntax_kind": "Dict"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_all_layers_standard",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:43:40 (TestMixedPrecisionOps.test_all_layers_standard)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.mixed_precision_ops"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "FunctionDef",
+    "definition_line": 1163,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "declared-function",
+    "parameters": [
+      {
+        "default": "{}",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "quant_config",
+        "type": "dynamic"
+      },
+      {
+        "default": "torch.bfloat16",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "compute_dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": "False",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "full_precision_mm",
+        "type": "dynamic"
+      },
+      {
+        "default": "[]",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "disabled",
+        "type": "dynamic"
+      }
+    ],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        [
+          {
+            "syntax_kind": "Name"
+          }
+        ]
+      ]
+    }
+  }
+}

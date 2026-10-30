@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-bounded-memory-avio-v1",
+  "truth_mode": "synthetic-bounded-retained-binding-memory-avio",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "ffmpeg_release": "7.1",
+    "ffmpeg_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "avio_header_sha256": "b1a25f1465b87b62bf2797870c39fbbf81d2e1b4513ac34a66d57963e8facb6f",
+    "aviobuf_source_sha256": "318a36bcb5dffd145ff74619190a023458cba95ee90c1ce316e0e1a946f78f1b"
+  },
+  "dependencies": {
+    "symbol_binding_fixture_sha256": "76ec18127e54deff5b581046786ebd62aafa3e92a34aec45aaad114fcb0a5bd6",
+    "data_plane_abi_fixture_sha256": "9fdd0cff1392ae8eb399a0b3fa36a2a2cef074df52d6315b629c25c6f7dd34ca"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_ffi",
+    "bound_functions_invoked": [
+      "av_malloc",
+      "av_free",
+      "avio_alloc_context",
+      "avio_context_free"
+    ],
+    "input_read_returns_eof_not_zero": true,
+    "seek_modes": [
+      "SEEK_SET",
+      "SEEK_CUR",
+      "SEEK_END",
+      "AVSEEK_SIZE",
+      "AVSEEK_FORCE"
+    ],
+    "output_overwrite_and_zero_filled_holes": true,
+    "output_limit_failure_atomic": true,
+    "callback_unwind_contained": true,
+    "cancellation_precedes_callback_failure_at_publication": true,
+    "workspace_authorizes_output_and_native_buffer_headroom": true,
+    "current_replacement_buffer_freed_before_context": true,
+    "binding_borrow_outlives_context_and_callbacks": true,
+    "raw_context_buffer_and_callbacks_private": true
+  },
+  "synthetic_fixture": {
+    "native_functions": "exact-signature injected allocation and AVIO lifecycle functions",
+    "test_cases": [
+      "chunked input and EOF",
+      "checked input and output seeks",
+      "output append overwrite sparse gap and exact limit",
+      "callback cancellation and panic containment",
+      "null native allocations",
+      "replacement-buffer reverse cleanup",
+      "late cancellation and clean retry",
+      "workspace release convergence"
+    ]
+  },
+  "claims": {
+    "licensed_or_installed_ffmpeg_package": false,
+    "production_ffmpeg_availability": false,
+    "format_opened_or_probed": false,
+    "encoder_or_decoder_probed": false,
+    "mux_or_demux_executed": false,
+    "codec_or_media_result_produced": false,
+    "numeric_codec_oracle": false,
+    "media_payload_or_handle_published": false,
+    "effect_cache_persistence_or_recovery_owned": false
+  }
+}

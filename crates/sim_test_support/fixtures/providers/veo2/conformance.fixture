@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.veo2",
+  "source_sha256": "90c1e81fcc00499d43786cf947c07ae7123e8112b88586e324c2952d39468e85",
+  "aliases": [
+    "veo"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0722",
+      "node_identifier": "Veo3FirstLastFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0723",
+      "node_identifier": "Veo3VideoGenerationNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0724",
+      "node_identifier": "VeoVideoGenerationNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0187",
+      "method": "POST",
+      "path": "/proxy/veo/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0188",
+      "method": "POST",
+      "path": "/proxy/veo/{model}/generate",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0189",
+      "method": "POST",
+      "path": "/proxy/veo/{model}/poll",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "Actual-source request and transport; canonical request/model/JSON/PNG/base64/scalar/clock adapters, native VIDEO and guest acceptance pending"
+}

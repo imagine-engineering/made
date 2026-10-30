@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-mask-sim-node-0625",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0625",
+      "class_type": "SolidMask",
+      "source": "sim_extras/nodes_mask.py:180-200",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "4bf1f49158b3bda2ec2a4c71d82bd75261e4114602522f07785db64ee54622f4",
+      "inputs": {
+        "value": { "default": 1.0, "minimum": 0.0, "maximum": 1.0, "step": 0.01 },
+        "width": { "default": 512, "minimum": 1, "maximum": 16384, "step": 1 },
+        "height": { "default": 512, "minimum": 1, "maximum": 16384, "step": 1 }
+      },
+      "operation": "torch.full((1, height, width), value, dtype=torch.float32, device=sim.model_management.intermediate_device())"
+    },
+    {
+      "feature_id": "COMFY-NODE-0675",
+      "class_type": "ThresholdMask",
+      "source": "sim_extras/nodes_mask.py:388-408",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "ab891d13f5dccbbce17d25f4f038d589c1d9b6f1db7fb4c95839fbb2c248c2ef",
+      "value": { "default": 0.5, "minimum": 0.0, "maximum": 1.0, "step": 0.01 },
+      "operation": "(mask > value).float()",
+      "boundary": "values equal to the threshold become zero"
+    },
+    {
+      "feature_id": "COMFY-NODE-0742",
+      "class_type": "VOIDQuadmaskPreprocess",
+      "source": "sim_extras/nodes_void.py:108-163",
+      "source_file_sha256": "b80cd0b5831335087fd29f959be2659820b7927c8b7622cb4b3e9c9fde2c6d4f",
+      "source_symbol_sha256": "a972ff74686baaa3a3659a74517d3b6f7335e8f62d09be9329d0e71d1fad137a",
+      "dilate_width": { "default": 0, "minimum": 0, "maximum": 50, "step": 1 },
+      "scale": "multiply the complete mask by 255 when its global maximum is at most 1",
+      "dilation": "max_pool2d(mask < 128, kernel=2*dilate_width+1, stride=1, padding=dilate_width), then zero matching source values",
+      "quantization": [
+        { "source": "value <= 31", "quantized": 0, "output": 1.0 },
+        { "source": "31 < value <= 95", "quantized": 63, "output": 0.7529411764705882 },
+        { "source": "95 < value <= 191", "quantized": 127, "output": 0.5019607843137255 },
+        { "source": "value > 191", "quantized": 255, "output": 0.0 }
+      ]
+    }
+  ],
+  "behavior": {
+    "input_is_list": false,
+    "output_is_list": [false],
+    "lazy_inputs": false,
+    "effect": "pure",
+    "cache": "input_identity",
+    "cancellation": "execution_interrupted_without_output_publication",
+    "persistence": "source class types and literal widget values round-trip unchanged",
+    "recovery": "stale mask handles fail and fresh handles execute deterministically"
+  }
+}

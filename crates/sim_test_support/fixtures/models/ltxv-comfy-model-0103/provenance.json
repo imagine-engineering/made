@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "fixture_id": "ltxv-sim-model-0103",
+  "feature_id": "COMFY-MODEL-0103",
+  "source_symbol": "LTXV",
+  "source_ordinal": 32,
+  "source_architecture": "model_base.LTXV",
+  "latent_feature_id": "COMFY-MODEL-0040",
+  "latent_identifier": "LTXV",
+  "catalog_projection_sha256": "00ddbb70c115677110385d245a5d59c87d2e49a9e3c9d09192c3ca74f2a40f4b",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lightricks/model.py", "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/lt.py", "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2"},
+    {"path": "crates/sim_model/src/ltx_family.rs", "sha256": "e655e96897672ba2875d42cb2b9f3f09333ccb42678d94819392c0617ae062b4"},
+    {"path": "crates/sim_model/src/latent_formats/ltxv_sim_model_0040.rs", "sha256": "023cd128c2fa62b639f0a246b67fa40d4c86ade059e1c4c622ac7f7786d0f85f"}
+  ],
+  "source_projection": "LTXV|32|image_model=ltxv|shift=2.37|memory=(cross_attention_dim/2048)*5.5|latent=LTXV|dtypes=bf16,f32|layouts=prefixed,saved-model,standalone|diffusers=unsupported",
+  "source_projection_sha256": "de53933236e9d88196f780c5609b87b8a2d26a876793a2f860246b47a4bbf6ab",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

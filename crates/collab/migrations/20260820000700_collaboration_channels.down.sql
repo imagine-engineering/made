@@ -1,0 +1,6 @@
+DROP TABLE public.collaboration_channel_memberships;
+DROP TABLE public.collaboration_channel_invites;
+DROP TABLE public.collaboration_channels;
+DROP TABLE public.collaboration_join_policy_acceptances;
+DROP TABLE public.collaboration_community_memberships;
+DROP TABLE public.collaboration_communities;

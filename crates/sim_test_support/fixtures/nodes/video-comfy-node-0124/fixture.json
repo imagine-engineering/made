@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-video-component-create-node-foundation",
+  "feature_id": "COMFY-NODE-0124",
+  "source": {
+    "path": "sim_extras/nodes_video.py",
+    "sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "byte_length": 12074,
+    "class_type": "CreateVideo",
+    "class_line": 125,
+    "execute_line": 157,
+    "definition_sha256": "7b8f73c9956495ab4538b9cc7e1f8baf727e12bddbe535cafa83dadf99e63b22"
+  },
+  "contract": {
+    "category": "video",
+    "display_name": "Create Video",
+    "search_aliases": ["images to video"],
+    "inputs": {
+      "images": "IMAGE",
+      "fps": {
+        "type": "FLOAT",
+        "default": 30.0,
+        "minimum": 1.0,
+        "maximum": 120.0,
+        "step": 1.0
+      },
+      "audio": {
+        "type": "AUDIO",
+        "optional": true
+      },
+      "bit_depth": {
+        "type": "INT",
+        "default": 8,
+        "minimum": 8,
+        "maximum": 10,
+        "step": 2,
+        "optional": true
+      }
+    },
+    "outputs": ["VIDEO"],
+    "output_names": ["video"],
+    "input_is_list": false,
+    "output_is_list": [false],
+    "effect": "pure",
+    "cache": "input_identity"
+  },
+  "behavior": {
+    "frame_rate": "exact_reduced_Fraction_of_the_f64_input",
+    "bit_depth": "8_or_10_with_default_8",
+    "component_ownership": "VIDEO_aliases_the_immutable_IMAGE_frames_and_optional_AUDIO_waveform",
+    "metadata": "empty",
+    "alpha": "absent",
+    "success": "publish_one_fresh_canonical_VIDEO_handle_after_component_validation_and_cancellation_checks",
+    "invalid_input": "non_retryable_failure_without_publication",
+    "cancelled": "execution_interrupted_without_publication",
+    "recovery": "fresh_execution_succeeds_after_invalid_or_cancelled_attempt"
+  },
+  "evidence_claims": {
+    "native_node_descriptor_and_execution": true,
+    "canonical_video_component_publication": true,
+    "exact_python_fraction_identity": true,
+    "codec_or_container_execution": false,
+    "filesystem_path_or_output_effect": false,
+    "media_bytes_or_external_publication": false,
+    "cache_persistence_or_recovery_owner": false
+  }
+}

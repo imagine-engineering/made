@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.bfl",
+  "source_sha256": "78f943d92611ef196cb9e01da6ac686be815e270650760abc168f3c7c525d643",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0174",
+      "node_identifier": "Flux2ImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0175",
+      "node_identifier": "Flux2MaxImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0176",
+      "node_identifier": "Flux2ProImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0179",
+      "node_identifier": "FluxEraseNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0182",
+      "node_identifier": "FluxKontextMaxImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0184",
+      "node_identifier": "FluxKontextProImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0186",
+      "node_identifier": "FluxProExpandNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0187",
+      "node_identifier": "FluxProFillNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0188",
+      "node_identifier": "FluxProUltraImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0189",
+      "node_identifier": "FluxVTONode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0005",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-2-max/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0006",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-2-pro/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0007",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-kontext-max/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0008",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-kontext-pro/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0009",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-pro-1.0-expand/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0010",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-pro-1.0-fill/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0011",
+      "method": "POST",
+      "path": "/proxy/bfl/flux-pro-1.1-ultra/generate"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0012",
+      "method": "POST",
+      "path": "/proxy/bfl/v1/flux-tools/erase-v1"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0013",
+      "method": "POST",
+      "path": "/proxy/bfl/v1/flux-tools/vto-v1"
+    }
+  ],
+  "scope": "source request and bounded response transport; canonical media integration pending",
+  "source_ratio_validation": {
+    "python_strip_control_separators": [
+      28,
+      29,
+      30,
+      31
+    ],
+    "preserve_aspect_ratio_and_prompt_bytes": true,
+    "nodes": [
+      "FluxProUltraImageNode",
+      "FluxKontextProImageNode",
+      "FluxKontextMaxImageNode"
+    ],
+    "validation_utils_sha256": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "underscore_integer_within_u64": true,
+    "broader_python_integer_admission": "pending"
+  }
+}

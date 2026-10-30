@@ -1,0 +1,12 @@
+filesystem|input-root
+filesystem|model-root
+network-provider|demo|https://demo.invalid/v1/generate
+secret|secret.demo
+clock|workflow
+randomness|sampler
+model|zed-asset://model/fixture.json
+transactional-output|outputs
+transactional-output|output-transaction
+sanitized-log|info
+declarative-ui|panel.demo
+route|route.demo

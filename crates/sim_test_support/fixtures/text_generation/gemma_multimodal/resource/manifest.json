@@ -1,0 +1,61 @@
+{
+  "task_id": "comfy-parity-native-gemma-multimodal-resource-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source_sha256": {
+    "sd.py": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
+    "sd1_clip.py": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2",
+    "llama.py": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+    "lt.py": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+    "lumina2.py": "f6af934b3d5014c6df37bb527167d1f94e44b1309079f57d4cb2f9460729da84",
+    "gemma4.py": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+    "spiece_tokenizer.py": "300de9904c109171b2270524a35c372e6b8c145b88b3f9d242613d45c2bb559f"
+  },
+  "prerequisite_manifests": {
+    "tokenizer": "618b47997c35d829e93eef831309d534506e48d6c0417779d22181c21e8d94f7",
+    "gemma3_decoder": "cac4af07600d7b0f8fecc21e96f64fc5261dbaa9a551dcd9f50d50a7fb375277",
+    "gemma4_decoder": "ff9d5a18d0f225528c6197a7a65e97387197ba8f5115828c4b0194c8e6ce430b",
+    "gemma3_vision": "794595007948c40d0ab9b0a843211d4ebc5b8360c0f443ba50301769717225ef",
+    "gemma4_vision": "3a2adb398068cfadf850dc734eb296ad8244c8592f369aa006e4a05ffc834a86",
+    "gemma4_audio": "834f166efe195b3b8fb3068c702790206ea8f66bbacb39df910217f3ba05eba9"
+  },
+  "accepted_families": [
+    "gemma3_4b_vision",
+    "gemma3_12b",
+    "gemma4_e2b",
+    "gemma4_e4b",
+    "gemma4_31b"
+  ],
+  "capabilities": {
+    "gemma3_4b_vision": ["image"],
+    "gemma3_12b": ["image"],
+    "gemma4_e2b": ["image", "video", "audio"],
+    "gemma4_e4b": ["image", "video", "audio"],
+    "gemma4_31b": ["image", "video"]
+  },
+  "resource_contract": {
+    "role": "CLIP",
+    "retained_components": ["tokenizer", "decoder", "vision", "optional_audio"],
+    "semantic_identity": "family-and-source-bound-component-content",
+    "residency": "size-checked-storage-id-union",
+    "attempt_local_state_excluded": [
+      "prepared_media",
+      "projected_embeddings",
+      "kv_cache",
+      "rng_transaction",
+      "workflow_cache",
+      "publication"
+    ]
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_runtime_oracle_observed": false,
+    "accelerator_numeric_parity": false,
+    "external_server_required": false
+  }
+}

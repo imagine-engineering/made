@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-retained-loader-v1",
+  "truth_mode": "synthetic-glibc-isolated-loader",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "loader_policy_source": "zed-reviewed-glibc-dlmopen-and-live-link-map-proof"
+  },
+  "dependencies": {
+    "codec_dependency_closure_manifest_sha256": "16deaedd063e29d731420cbf51ae744bf1e4468fb9821e46dc8bbcb37ce6a404"
+  },
+  "contract": {
+    "target": "x86_64-unknown-linux-gnu",
+    "profile": "ffmpeg-7.1",
+    "unsafe_owner": "sim_runtime::native_video_codec_ffi",
+    "closure_consumed_and_retained": true,
+    "sealed_descriptor_paths_private": true,
+    "dependency_first_order": true,
+    "first_load_creates_non_base_namespace": true,
+    "remaining_loads_reuse_exact_namespace": true,
+    "runtime_link_map_paths_exact": true,
+    "runtime_soname_and_needed_graph_exact": true,
+    "reviewed_system_sonames_only": true,
+    "reverse_order_handle_cleanup": true,
+    "cancellation_checked_before_and_after_blocking_loads": true,
+    "late_cancellation_discards_unpublished_session": true,
+    "clean_retry": true
+  },
+  "test_oracle": {
+    "kind": "runtime-generated-two-object-gnu-elf-graph",
+    "compiler_command": "cc -shared -fPIC -Wl,-soname,<soname>",
+    "dependency_soname": "libvideo_dependency.so.1",
+    "consumer_soname": "libvideo_consumer.so.1",
+    "consumer_needed": [
+      "libvideo_dependency.so.1"
+    ],
+    "expected_close_order": [
+      "consumer",
+      "dependency"
+    ],
+    "compiler_and_glibc_versions_recorded_by_test_environment": false,
+    "production_package_numeric_or_availability_oracle": false
+  },
+  "claims": {
+    "licensed_ffmpeg_binary": false,
+    "production_package_catalog": false,
+    "native_library_loaded": true,
+    "loader_relocation_binding": true,
+    "library_constructors_or_destructors_may_run": true,
+    "globally_side_effect_free_rollback": false,
+    "explicit_dlsym_or_callable_address_projection": false,
+    "reviewed_ffmpeg_c_layout": false,
+    "encoder_availability_probed": false,
+    "zed_invoked_codec_api": false,
+    "media_allocation": false,
+    "effect_or_cache_publication": false,
+    "persistence_or_recovery": false,
+    "upstream_runtime_numeric_oracle": false
+  }
+}

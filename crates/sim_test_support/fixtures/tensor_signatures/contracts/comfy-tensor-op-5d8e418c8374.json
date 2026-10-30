@@ -1,0 +1,1567 @@
+{
+  "canonical_target": "comfy.ops.disable_weight_init.Linear",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:134:21 (SanaMultiscaleLinearAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:135:21 (SanaMultiscaleLinearAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:136:21 (SanaMultiscaleLinearAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:145:23 (SanaMultiscaleLinearAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:124:24 (ConvNeXtBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:128:24 (ConvNeXtBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:134:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/stage_a.py:136:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:127:30 (ResnetBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:602:21 (MLP.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:603:23 (MLP.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:662:20 (MultiheadCrossAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:663:21 (MultiheadCrossAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:664:23 (MultiheadCrossAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:764:22 (MultiheadAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:765:23 (MultiheadAttention.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:867:27 (CrossAttentionDecoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:869:33 (CrossAttentionDecoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:882:28 (CrossAttentionDecoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:939:24 (ShapeVAE.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:323:30 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:189:30 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:404:17 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:406:17 (Model.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/temporal_ae.py:134:13 (AttnVideoBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/temporal_ae.py:136:13 (AttnVideoBlock.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:134:21 (SanaMultiscaleLinearAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:135:21 (SanaMultiscaleLinearAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:136:21 (SanaMultiscaleLinearAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:145:23 (SanaMultiscaleLinearAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:124:24 (ConvNeXtBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:128:24 (ConvNeXtBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/cascade/stage_a.py:134:13 (ResBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/cascade/stage_a.py:136:13 (ResBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/cogvideo/vae.py:127:30 (ResnetBlock3D.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:602:21 (MLP.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:603:23 (MLP.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:662:20 (MultiheadCrossAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:663:21 (MultiheadCrossAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:664:23 (MultiheadCrossAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        },
+        {
+          "argument": "keyword:bias",
+          "parameter": "bias"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:764:22 (MultiheadAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:765:23 (MultiheadAttention.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:867:27 (CrossAttentionDecoder.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:869:33 (CrossAttentionDecoder.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:882:28 (CrossAttentionDecoder.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/hunyuan3d/vae.py:939:24 (ShapeVAE.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:323:30 (ResnetBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:189:30 (ResnetBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:404:17 (Model.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:406:17 (Model.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/modules/temporal_ae.py:134:13 (AttnVideoBlock.__init__)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "in_features"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "out_features"
+        }
+      ],
+      "site": "comfy/ldm/modules/temporal_ae.py:136:13 (AttnVideoBlock.__init__)",
+      "status": "static-compatible"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-5d8e418c8374-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "in_features",
+      "type": "dynamic"
+    },
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "out_features",
+      "type": "dynamic"
+    },
+    {
+      "default": "True",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "bias",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "device",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "dtype",
+      "type": "dynamic"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-5D8E418C8374",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "9186adb27b3b0907b1abbd504a37dffb58c3e85863b79b68986d50097a1ae032",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/cascade/stage_a.py",
+        "sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/vae.py",
+        "sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7"
+      },
+      {
+        "path": "comfy/ldm/genmo/vae/model.py",
+        "sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+        "sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/ldm/modules/temporal_ae.py",
+        "sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.disable_weight_init.Linear"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-227f5d04687a",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 134,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "inner_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:134:21 (SanaMultiscaleLinearAttention.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 135,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "inner_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:135:21 (SanaMultiscaleLinearAttention.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 136,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "in_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "inner_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:136:21 (SanaMultiscaleLinearAttention.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 145,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "inner_dim * (1 + len(kernel_sizes))",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SanaMultiscaleLinearAttention.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:145:23 (SanaMultiscaleLinearAttention.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 124,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "int(mlp_ratio * dim)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "ConvNeXtBlock.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:124:24 (ConvNeXtBlock.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 128,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "int(mlp_ratio * dim)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ConvNeXtBlock.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:128:24 (ConvNeXtBlock.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 134,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:134:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 136,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "c_hidden",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "c",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/cascade/stage_a.py:136:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/cascade/stage_a.py",
+      "source_sha256": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 127,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "temb_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:127:30 (ResnetBlock3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 602,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width * expand_ratio",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "MLP.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:602:21 (MLP.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 603,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width * expand_ratio",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "output_width if output_width is not None else width",
+          "syntax_kind": "IfExp"
+        }
+      ],
+      "scope": "MLP.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:603:23 (MLP.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "qkv_bias",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 662,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MultiheadCrossAttention.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:662:20 (MultiheadCrossAttention.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "qkv_bias",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 663,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.data_width",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width * 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "MultiheadCrossAttention.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:663:21 (MultiheadCrossAttention.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 664,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MultiheadCrossAttention.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:664:23 (MultiheadCrossAttention.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "bias",
+          "syntax": "qkv_bias",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 764,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width * 3",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "MultiheadAttention.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:764:22 (MultiheadAttention.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 765,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "MultiheadAttention.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:765:23 (MultiheadAttention.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 867,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.fourier_embedder.out_dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CrossAttentionDecoder.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:867:27 (CrossAttentionDecoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 869,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width * downsample_ratio",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CrossAttentionDecoder.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:869:33 (CrossAttentionDecoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 882,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CrossAttentionDecoder.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:882:28 (CrossAttentionDecoder.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 939,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "embed_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ShapeVAE.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:939:24 (ShapeVAE.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 323,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "temb_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:323:30 (ResnetBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 189,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "temb_channels",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "out_channels",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:189:30 (ResnetBlock.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 404,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.ch",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.temb_ch",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:404:17 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 406,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.temb_ch",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.temb_ch",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "Model.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:406:17 (Model.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 134,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.in_channels",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "time_embed_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AttnVideoBlock.__init__",
+      "site": "comfy/ldm/modules/temporal_ae.py:134:13 (AttnVideoBlock.__init__)",
+      "source_path": "comfy/ldm/modules/temporal_ae.py",
+      "source_sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 136,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "time_embed_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.in_channels",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "AttnVideoBlock.__init__",
+      "site": "comfy/ldm/modules/temporal_ae.py:136:13 (AttnVideoBlock.__init__)",
+      "source_path": "comfy/ldm/modules/temporal_ae.py",
+      "source_sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d",
+      "status": "static-call-observed",
+      "target_syntax": "ops.Linear"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "ClassDef",
+    "definition_line": 445,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "declared-initializer",
+    "parameters": [
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "in_features",
+        "type": "dynamic"
+      },
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "out_features",
+        "type": "dynamic"
+      },
+      {
+        "default": "True",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "bias",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "device",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "dtype",
+        "type": "dynamic"
+      }
+    ],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        {
+          "kind": "class-instance",
+          "name": "Linear"
+        }
+      ]
+    }
+  }
+}

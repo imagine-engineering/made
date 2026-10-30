@@ -1,0 +1,1755 @@
+{
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "source": {
+        "catalog_line": 65,
+        "path": "sim_extras/nodes_hunyuan.py",
+        "sha256": "028abde8d150dfe890ae987d8f87b0df439a3e9d068d7c63400d7f442dc4b7d7",
+        "symbol": {
+          "end_line": 78,
+          "kind": "ClassDef",
+          "line": 65,
+          "sha256": "ce7ec75e8433c778d175a3e2ea260a4397aa5507428908b9a32f50fbe9e184c6",
+          "status": "parsed_definition",
+          "symbol": "EmptyHunyuanVideo15Latent"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "77bb677b2b028eb738f8ce779341f1b6e5a1c7c876b8e6965d4f703696f2116b",
+        "definition_sha256": "96689f2d3108776b39a7c21d9619ec5ac7ba9578c7884caa6c7e178b6224ed2f",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 848
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 480
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 25
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "length",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 4
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "96689f2d3108776b39a7c21d9619ec5ac7ba9578c7884caa6c7e178b6224ed2f",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0159",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "Empty HunyuanVideo 1.5 Latent",
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/hunyuan video"
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "source": {
+        "catalog_line": 13,
+        "path": "sim_extras/nodes_audio.py",
+        "sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+        "symbol": {
+          "end_line": 36,
+          "kind": "ClassDef",
+          "line": 13,
+          "sha256": "f5c91c5da79b12e40deb59ff646b5ca50e8d9463ecb197dfeaf818e218eeb8ac",
+          "status": "parsed_definition",
+          "symbol": "EmptyLatentAudio"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "53df507a21a4e13188c438b66ad426077e40f9c57c64a2f826b9b2e6a636233d",
+        "definition_sha256": "1fed895fc3c7745dfa105ff8efd7e5df4ca6fcda3c0e57a94b30e9c7f763c185",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "47.6"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1000.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "multiline": false,
+            "name": "seconds",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.1"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": "The number of latent images in the batch.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "1fed895fc3c7745dfa105ff8efd7e5df4ca6fcda3c0e57a94b30e9c7f763c185",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": "Audio",
+          "extra": [],
+          "feature_id": "COMFY-NODE-0161",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "Empty Latent Audio",
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent"
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "source": {
+        "catalog_line": 10,
+        "path": "sim_extras/nodes_hunyuan3d.py",
+        "sha256": "2294d13e70e634e33be9fc91249260bc25a371df06e282bf00dedde4df7bb7d1",
+        "symbol": {
+          "end_line": 30,
+          "kind": "ClassDef",
+          "line": 10,
+          "sha256": "b2f7d901b87d3d82145ba5172fca9c3a2336f3416e52fdabe63d1ef7af5de81e",
+          "status": "parsed_definition",
+          "symbol": "EmptyLatentHunyuan3Dv2"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "751b7c5825f9c945458e72f3650633d5f80ad3dc5056b5099ab47d1d722e4728",
+        "definition_sha256": "d7a92479b16ef117fdc8dc449348526e69ffd8fc3fe6bb77548c72da0c0f91ed",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 3072
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 8192
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "resolution",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": "The number of latent images in the batch.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "d7a92479b16ef117fdc8dc449348526e69ffd8fc3fe6bb77548c72da0c0f91ed",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0162",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/hunyuan 3d"
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "source": {
+        "catalog_line": 1229,
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+        "symbol": {
+          "end_line": 1249,
+          "kind": "ClassDef",
+          "line": 1229,
+          "sha256": "92ff00c561fe165a41fdb52be513e394546e116493144d469dfacf902af6690a",
+          "status": "parsed_definition",
+          "symbol": "EmptyLatentImage"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "3bc1b3b6b7152bae54d4678df572a969a24f0ee898f26856031a1123ccc6c733",
+        "definition_sha256": "5148f6f34f62b69600c798acb6db90a7758f7fa84161dcdb0069263f6010050d",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 512
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "c591561803da8dec7db7ce621d5bc0a8bf1564d845029ab288215fd452319321",
+              "source": "{\"kind\":\"name\",\"name\":\"MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 8
+            },
+            "tooltip": "The width of the latent images in pixels.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 512
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "c591561803da8dec7db7ce621d5bc0a8bf1564d845029ab288215fd452319321",
+              "source": "{\"kind\":\"name\",\"name\":\"MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 8
+            },
+            "tooltip": "The height of the latent images in pixels.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": "The number of latent images in the batch.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "5148f6f34f62b69600c798acb6db90a7758f7fa84161dcdb0069263f6010050d",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [
+            {
+              "name": "FUNCTION",
+              "value": {
+                "kind": "string",
+                "value": "generate"
+              }
+            },
+            {
+              "name": "CATEGORY",
+              "value": {
+                "kind": "string",
+                "value": "model/latent"
+              }
+            }
+          ],
+          "feature_id": "COMFY-NODE-0163",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v1",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": "Create a new batch of empty latent images to be denoised via sampling.",
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v1",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent"
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "source": {
+        "catalog_line": 60,
+        "path": "sim_extras/nodes_lt.py",
+        "sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+        "symbol": {
+          "end_line": 82,
+          "kind": "ClassDef",
+          "line": 60,
+          "sha256": "8ffcb509822e72756d8b2abb51f3451e595ea09d57b8fc2a972957df50c008e4",
+          "status": "parsed_definition",
+          "symbol": "EmptyLTXVLatentVideo"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "f81ece11a4e84d1d12fe4d4b7d70784a0dabe0e79d0671622373a9e81ccbe194",
+        "definition_sha256": "f882e88d0f8f76a1e300b4fdd0f8d4453b53166eff3ff680c8adb16d6bab879c",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 768
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 64
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 32
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 512
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 64
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 32
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 97
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "length",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 8
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "f882e88d0f8f76a1e300b4fdd0f8d4453b53166eff3ff680c8adb16d6bab879c",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0164",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/ltxv"
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "source": {
+        "catalog_line": 8,
+        "path": "sim_extras/nodes_mochi.py",
+        "sha256": "75f3dc515fde4ba4f9e76a16282b050d2c648736aa41d6615fdf4b968c75cfea",
+        "symbol": {
+          "end_line": 28,
+          "kind": "ClassDef",
+          "line": 8,
+          "sha256": "1774e1b54b429a946172ba9f609b433d99c0ca2ced2d9e0e3b0b85c82e5141b2",
+          "status": "parsed_definition",
+          "symbol": "EmptyMochiLatentVideo"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "748e3f48ff5c40e01927795c7b3b435ac49eb8bca6c2bda8cfcf952ca319b1d0",
+        "definition_sha256": "61b7fd88a37b99c669ac2ba25f5d733139c3b82e6aceef06a023a94593e77e22",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 848
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 480
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 25
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 7
+            },
+            "multiline": false,
+            "name": "length",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 6
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "61b7fd88a37b99c669ac2ba25f5d733139c3b82e6aceef06a023a94593e77e22",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0165",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/mochi"
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "source": {
+        "catalog_line": 109,
+        "path": "sim_extras/nodes_qwen.py",
+        "sha256": "b8d18d9f897c4bd5a4b2651b30643bed277f1808e033c9c376dc21025fed00a5",
+        "symbol": {
+          "end_line": 130,
+          "kind": "ClassDef",
+          "line": 109,
+          "sha256": "5ccac979fcbcefb65f28867a89401c095cb330e09c13270008c32feeeafb1287",
+          "status": "parsed_definition",
+          "symbol": "EmptyQwenImageLayeredLatentImage"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "8c855de163b6d045c255a3072be1f615e38f2fe3d18057109bd11b2b5807e063",
+        "definition_sha256": "d42dbf7c203b8c5feec418916483d439166cbd043ddb5fe975404a0b64037144",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 640
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 640
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 3
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "layers",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "d42dbf7c203b8c5feec418916483d439166cbd043ddb5fe975404a0b64037144",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0166",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "Empty Qwen Image Layered Latent",
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/qwen"
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "source": {
+        "catalog_line": 40,
+        "path": "sim_extras/nodes_sd3.py",
+        "sha256": "90a79847332fed7cc97379abbc7092116e6b1b883a7c9e933ac88167a521f693",
+        "symbol": {
+          "end_line": 61,
+          "kind": "ClassDef",
+          "line": 40,
+          "sha256": "84abbb805b200927e20b6b8d5ed295a0601533b2f102769878ed42327d456eb3",
+          "status": "parsed_definition",
+          "symbol": "EmptySD3LatentImage"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "daae92d9fe87daf129081b93e55f3a61a38fd1a01d4dfba9725071b9bcede799",
+        "definition_sha256": "bdd46276a3684397b49c49a188eda10b9dd6a2d12b399d4ca1614c110292d928",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1024
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1024
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "preserved_expression",
+              "sha256": "6c9a441863fa080908f9dc1d78f0ee67acd33422ba99b3f9ebff6cf1855b2ccf",
+              "source": "{\"kind\":\"attribute\",\"name\":\"nodes.MAX_RESOLUTION\"}"
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 16
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 4096
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "batch_size",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "bdd46276a3684397b49c49a188eda10b9dd6a2d12b399d4ca1614c110292d928",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0167",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/stable diffusion"
+    },
+    {
+      "feature_id": "COMFY-NODE-0233",
+      "class_type": "HunyuanVideo15LatentUpscaleWithModel",
+      "source": {
+        "catalog_line": 226,
+        "path": "sim_extras/nodes_hunyuan.py",
+        "sha256": "028abde8d150dfe890ae987d8f87b0df439a3e9d068d7c63400d7f442dc4b7d7",
+        "symbol": {
+          "end_line": 262,
+          "kind": "ClassDef",
+          "line": 226,
+          "sha256": "71af49eefb010aadd30f8699b751ad901b1ee385d6cbeedd3a83995a1a623516",
+          "status": "parsed_definition",
+          "symbol": "HunyuanVideo15LatentUpscaleWithModel"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "698ed98e22ce127d216dfd9acc8e66758c554d732eba1edd01a87e9be4d8ed88",
+        "definition_sha256": "246f7c5a7ce9272db78dd087c213e4a0006086eda983d7721b9a04bd4c7aa4e6",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "model",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "LATENT_UPSCALE_MODEL"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "samples",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "LATENT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "nearest-exact"
+              },
+              {
+                "kind": "string",
+                "value": "bilinear"
+              },
+              {
+                "kind": "string",
+                "value": "area"
+              },
+              {
+                "kind": "string",
+                "value": "bicubic"
+              },
+              {
+                "kind": "string",
+                "value": "bislerp"
+              }
+            ],
+            "default": {
+              "kind": "string",
+              "value": "bilinear"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "upscale_method",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 1280
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 16384
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "width",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 8
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 720
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 16384
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 0
+            },
+            "multiline": false,
+            "name": "height",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 8
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "disabled"
+              },
+              {
+                "kind": "string",
+                "value": "center"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "crop",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "246f7c5a7ce9272db78dd087c213e4a0006086eda983d7721b9a04bd4c7aa4e6",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0233",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "Hunyuan Video 15 Latent Upscale With Model",
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/hunyhuan video"
+    },
+    {
+      "feature_id": "COMFY-NODE-0310",
+      "class_type": "LatentAdd",
+      "source": {
+        "catalog_line": 19,
+        "path": "sim_extras/nodes_latent.py",
+        "sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+        "symbol": {
+          "end_line": 44,
+          "kind": "ClassDef",
+          "line": 19,
+          "sha256": "d1970e7742be87207ef8f510efea8f8f89d29e006e9e338c92553821b808cc91",
+          "status": "parsed_definition",
+          "symbol": "LatentAdd"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "90474860a925083e87b89893d8ced4dc83b2d0a55de33078551e2f91588ec3eb",
+        "definition_sha256": "bfaec43eaf41924166873b9dea03e90d4daf081259f958de02400027d13d05c2",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "samples1",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "LATENT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "samples2",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "LATENT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "bfaec43eaf41924166873b9dea03e90d4daf081259f958de02400027d13d05c2",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0310",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "LATENT",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      },
+      "category": "model/latent/advanced"
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+    echo "Usage: ${0##*/} <standard|multiplayer> [--dry-run] [--inspect PATH]"
+    echo "Print the canonical Zed feature and artifact policy for a release profile."
+}
+
+if [[ $# -eq 0 ]]; then
+    usage >&2
+    exit 2
+fi
+
+profile=$1
+shift
+dry_run=false
+inspect_path=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            dry_run=true
+            shift
+            ;;
+        --inspect)
+            if [[ $# -lt 2 ]]; then
+                echo "--inspect requires a path" >&2
+                exit 2
+            fi
+            inspect_path=$2
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+case "$profile" in
+    standard)
+        multiplayer_tools=false
+        cargo_feature_arguments="--no-default-features"
+        exclusive_payload_policy="reject"
+        migration_profile="shared-only"
+        ;;
+    multiplayer)
+        multiplayer_tools=true
+        cargo_feature_arguments="--no-default-features --features multiplayer-tools"
+        exclusive_payload_policy="allow"
+        migration_profile="multiplayer-enabled"
+        ;;
+    *)
+        echo "Unknown profile: $profile" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
+
+if [[ -n "$inspect_path" ]]; then
+    if [[ ! -e "$inspect_path" ]]; then
+        echo "Artifact inspection path does not exist: $inspect_path" >&2
+        exit 2
+    fi
+
+    exclusive_pattern='(^|/)(projects/buzz|buzz([-_][^/]*)?|nostr[_-]compat|collaboration[_-]domain)(/|$)|(^|/)deploy/charts/buzz([^/]*)?(/|$)'
+    exclusive_entries=$(
+        find "$inspect_path" \( -type f -o -type l \) -print \
+            | LC_ALL=C sort \
+            | grep -E "$exclusive_pattern" \
+            || true
+    )
+
+    if [[ "$profile" = "standard" && -n "$exclusive_entries" ]]; then
+        echo "Standard profile contains multiplayer-exclusive payloads:" >&2
+        printf '%s\n' "$exclusive_entries" >&2
+        exit 1
+    fi
+
+    if [[ -n "$exclusive_entries" ]]; then
+        exclusive_entry_count=$(printf '%s\n' "$exclusive_entries" | wc -l | tr -d ' ')
+    else
+        exclusive_entry_count=0
+    fi
+else
+    exclusive_entry_count="not-inspected"
+fi
+
+echo "profile=$profile"
+echo "dry_run=$dry_run"
+echo "multiplayer_tools=$multiplayer_tools"
+echo "cargo_package=zed"
+echo "cargo_feature_arguments=$cargo_feature_arguments"
+echo "artifact_capability=multiplayer-tools:$multiplayer_tools"
+echo "exclusive_payload_policy=$exclusive_payload_policy"
+echo "exclusive_entry_count=$exclusive_entry_count"
+echo "migration_profile=$migration_profile"
+echo "shared_collab_deployment=retained"

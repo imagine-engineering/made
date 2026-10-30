@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "truth_mode": "synthetic-typed-symbol-binding-and-runtime-version-admission",
+  "target": "x86_64-unknown-linux-gnu",
+  "reviewed_profile": "FFmpeg 7.1",
+  "official_source": {
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "detached_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8"
+  },
+  "dependency_fixtures": {
+    "codec_dependency_closure": "16deaedd063e29d731420cbf51ae744bf1e4468fb9821e46dc8bbcb37ce6a404",
+    "codec_retained_loader": "2ef96c055442b97635cece8661b7610de669bb437482d880a22888a115875f11",
+    "codec_reviewed_abi": "542a37ba2c6795d2f2b6f509d4aed211036c3d865a0083d9c3639e9219ddd7eb",
+    "codec_callable_symbol_certification": "58a4be305b1704062110366e8f05e483041cbd63437204d090a3600775baff57"
+  },
+  "contract": {
+    "reviewed_symbols_bound": 54,
+    "exact_primary_handle_lookup": true,
+    "gnu_versioned_lookup": true,
+    "retained_path_provider_proof": true,
+    "load_bias_plus_certified_value_proof": true,
+    "private_typed_table": true,
+    "runtime_versions_checked": {
+      "avcodec": "0x3d1364",
+      "avformat": "0x3d0764",
+      "avutil": "0x3b2764",
+      "swresample": "0x050364",
+      "swscale": "0x080364"
+    },
+    "only_version_functions_invoked": true,
+    "cancellation_discards_unpublished_binding": true,
+    "reverse_handle_cleanup_reused": true
+  },
+  "synthetic_fixture": {
+    "source": "runtime-generated tiny C shared objects",
+    "compiler_command": "cc -shared -fPIC -Wl,-soname,<soname> -Wl,--version-script=<map> <source> -o <library>",
+    "version_namespaces": [
+      "LIBAVCODEC_61",
+      "LIBAVFORMAT_61",
+      "LIBAVUTIL_59",
+      "LIBSWRESAMPLE_5",
+      "LIBSWSCALE_8"
+    ],
+    "test_cases": [
+      "exact 54-symbol binding and five-version admission",
+      "runtime version mismatch",
+      "certified address mismatch",
+      "late cancellation and clean retry"
+    ]
+  },
+  "claims": {
+    "licensed_or_installed_ffmpeg_package": false,
+    "production_ffmpeg_availability": false,
+    "encoder_availability_probed": false,
+    "codec_execution": false,
+    "media_allocated": false,
+    "effect_or_output_published": false,
+    "cache_or_persistence_owned": false,
+    "globally_side_effect_free_rollback": false,
+    "loader_constructors_or_destructors_may_run": true
+  }
+}

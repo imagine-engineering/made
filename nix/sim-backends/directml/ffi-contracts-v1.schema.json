@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/directml/ffi-contracts-v1.schema.json",
+  "title": "Zed DirectML native FFI contracts v1",
+  "$comment": "The package validator additionally requires canonical JSON, the exact three reviewed library identities, target-specific DirectML digest, ABI and policy digests, sorted unique symbols, and deterministic row ordering. System image digests are supplied only by a separately reviewed catalog and are never synthesized from an installed Windows runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "backend",
+    "abi_floor",
+    "target",
+    "abi_manifest_sha256",
+    "package_policy_sha256",
+    "libraries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "backend": {
+      "const": "directml"
+    },
+    "abi_floor": {
+      "const": "1.13.1"
+    },
+    "target": {
+      "enum": [
+        "aarch64-pc-windows-msvc",
+        "x86_64-pc-windows-msvc"
+      ]
+    },
+    "abi_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "package_policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "libraries": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/library"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "identity": {
+                "const": "D3D12.dll"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "identity": {
+                "const": "DirectML.dll"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "identity": {
+                "const": "DXGI.dll"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "filename",
+        "sha256",
+        "abi",
+        "required_symbols",
+        "unsafe_owner"
+      ],
+      "properties": {
+        "identity": {
+          "enum": [
+            "D3D12.dll",
+            "DirectML.dll",
+            "DXGI.dll"
+          ]
+        },
+        "filename": {
+          "enum": [
+            "D3D12.dll",
+            "DirectML.dll",
+            "DXGI.dll"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "abi": {
+          "enum": [
+            "1.13.1",
+            "windows-10.0.19041"
+          ]
+        },
+        "required_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+          }
+        },
+        "unsafe_owner": {
+          "const": "sim_backend_directml::loader"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "D3D12.dll"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "D3D12.dll"
+              },
+              "abi": {
+                "const": "windows-10.0.19041"
+              },
+              "required_symbols": {
+                "const": [
+                  "D3D12CreateDevice"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "DirectML.dll"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "DirectML.dll"
+              },
+              "abi": {
+                "const": "1.13.1"
+              },
+              "required_symbols": {
+                "const": [
+                  "DMLCreateDevice",
+                  "DMLCreateDevice1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "const": "DXGI.dll"
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "filename": {
+                "const": "DXGI.dll"
+              },
+              "abi": {
+                "const": "windows-10.0.19041"
+              },
+              "required_symbols": {
+                "const": [
+                  "CreateDXGIFactory2"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

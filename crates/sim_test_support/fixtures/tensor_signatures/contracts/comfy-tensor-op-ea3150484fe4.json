@@ -1,0 +1,283 @@
+{
+  "canonical_target": "torch.manual_seed",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1937:21 (sample_ar_video)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/upscaling.py:48:107 (AbstractLowScaleModel.q_sample)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/sample.py:27:17 (prepare_noise)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:987:25 (KSAMPLER.sample)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_images.py:190:21 (ImageAddNoise.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "discarded"
+      },
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:233:9 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/sampling.py:1937:21 (sample_ar_video)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/upscaling.py:48:107 (AbstractLowScaleModel.q_sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/sample.py:27:17 (prepare_noise)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:987:25 (KSAMPLER.sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:190:21 (ImageAddNoise.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:233:9 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-ea3150484fe4-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-EA3150484FE4",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "9b1e8592b47ce6511d05fa16f512011a3df79d18e3e24c55909d20d9169de6a4",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/upscaling.py",
+        "sha256": "396721fe4d6c8b825f06264aa8b62ec52b399908e8c51d519d67a4d072699084"
+      },
+      {
+        "path": "comfy/sample.py",
+        "sha256": "ee3485747727f9a182b9e7dd5a32a81e9429c329f2dcd248996ea0eba191faea"
+      },
+      {
+        "path": "comfy/samplers.py",
+        "sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649"
+      },
+      {
+        "path": "comfy_extras/nodes_images.py",
+        "sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448"
+      },
+      {
+        "path": "tests-unit/comfy_quant/test_mixed_precision.py",
+        "sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.manual_seed"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "random_number_generation_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-random-number-generation-comfy-tensor-op-095b3e192800",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 1937,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "seed + block_idx * 1000 + i",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "sample_ar_video",
+      "site": "comfy/k_diffusion/sampling.py:1937:21 (sample_ar_video)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.manual_seed"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 107,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "seed",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "AbstractLowScaleModel.q_sample",
+      "site": "comfy/ldm/modules/diffusionmodules/upscaling.py:48:107 (AbstractLowScaleModel.q_sample)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/upscaling.py",
+      "source_sha256": "396721fe4d6c8b825f06264aa8b62ec52b399908e8c51d519d67a4d072699084",
+      "status": "static-call-observed",
+      "target_syntax": "torch.manual_seed"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 27,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "seed",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "prepare_noise",
+      "site": "comfy/sample.py:27:17 (prepare_noise)",
+      "source_path": "comfy/sample.py",
+      "source_sha256": "ee3485747727f9a182b9e7dd5a32a81e9429c329f2dcd248996ea0eba191faea",
+      "status": "static-call-observed",
+      "target_syntax": "torch.manual_seed"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 987,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "extra_args.get('seed', 41) + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "KSAMPLER.sample",
+      "site": "comfy/samplers.py:987:25 (KSAMPLER.sample)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "torch.manual_seed"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 190,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "seed",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ImageAddNoise.execute",
+      "site": "comfy_extras/nodes_images.py:190:21 (ImageAddNoise.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.manual_seed"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "discarded"
+      },
+      "keyword_arguments": [],
+      "line": 233,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "123",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params",
+      "site": "tests-unit/comfy_quant/test_mixed_precision.py:233:9 (TestMixedPrecisionOps.test_int8_convrot_metadata_loads_into_params)",
+      "source_path": "tests-unit/comfy_quant/test_mixed_precision.py",
+      "source_sha256": "e1ce72f5a08c11e20d5e03331543c0497e6055d41626d808ed964f87f27362e7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.manual_seed"
+    }
+  ],
+  "static_definition": null
+}

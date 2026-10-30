@@ -1,0 +1,452 @@
+syntax = "proto3";
+package zed.messages;
+
+import "buffer.proto";
+import "core.proto";
+
+message Channel {
+  uint64 id = 1;
+  string name = 2;
+  ChannelVisibility visibility = 3;
+  int32 channel_order = 4;
+  repeated uint64 parent_path = 5;
+}
+
+enum ChannelVisibility {
+  Public = 0;
+  Members = 1;
+}
+
+message UpdateChannels {
+  repeated Channel channels = 1;
+  repeated uint64 delete_channels = 4;
+  repeated Channel channel_invitations = 5;
+  repeated uint64 remove_channel_invitations = 6;
+  repeated ChannelParticipants channel_participants = 7;
+  repeated ChannelBufferVersion latest_channel_buffer_versions = 9;
+
+  reserved 8;
+  reserved 10 to 15;
+}
+
+message UpdateUserChannels {
+  repeated ChannelBufferVersion observed_channel_buffer_version = 2;
+  repeated ChannelMembership channel_memberships = 3;
+
+  reserved 1;
+}
+
+message ChannelMembership {
+  uint64 channel_id = 1;
+  ChannelRole role = 2;
+}
+
+message ChannelMessageId {
+  uint64 channel_id = 1;
+  uint64 message_id = 2;
+}
+
+message ChannelPermission {
+  uint64 channel_id = 1;
+  ChannelRole role = 3;
+}
+
+message ChannelParticipants {
+  uint64 channel_id = 1;
+  repeated uint64 participant_user_ids = 2;
+}
+
+message JoinChannel {
+  uint64 channel_id = 1;
+}
+
+message DeleteChannel {
+  uint64 channel_id = 1;
+}
+
+message GetChannelMembers {
+  uint64 channel_id = 1;
+  string query = 2;
+  uint64 limit = 3;
+}
+
+message GetChannelMembersResponse {
+  repeated ChannelMember members = 1;
+  repeated User users = 2;
+}
+
+message ChannelMember {
+  uint64 user_id = 1;
+  Kind kind = 3;
+  ChannelRole role = 4;
+
+  enum Kind {
+    Member = 0;
+    Invitee = 1;
+  }
+}
+
+message SubscribeToChannels {}
+
+message CreateChannel {
+  string name = 1;
+  optional uint64 parent_id = 2;
+}
+
+message CreateChannelResponse {
+  Channel channel = 1;
+  optional uint64 parent_id = 2;
+}
+
+message InviteChannelMember {
+  uint64 channel_id = 1;
+  uint64 user_id = 2;
+  ChannelRole role = 4;
+}
+
+message RemoveChannelMember {
+  uint64 channel_id = 1;
+  uint64 user_id = 2;
+}
+
+enum ChannelRole {
+  Admin = 0;
+  Member = 1;
+  Guest = 2;
+  Banned = 3;
+  Talker = 4;
+}
+
+message SetChannelMemberRole {
+  uint64 channel_id = 1;
+  uint64 user_id = 2;
+  ChannelRole role = 3;
+}
+
+message SetChannelVisibility {
+  uint64 channel_id = 1;
+  ChannelVisibility visibility = 2;
+}
+
+message RenameChannel {
+  uint64 channel_id = 1;
+  string name = 2;
+}
+
+message RenameChannelResponse {
+  Channel channel = 1;
+}
+
+message JoinChannelChat {
+  uint64 channel_id = 1;
+}
+
+message JoinChannelChatResponse {
+  repeated ChannelMessage messages = 1;
+  bool done = 2;
+}
+
+message LeaveChannelChat {
+  uint64 channel_id = 1;
+}
+
+message SendChannelMessage {
+  uint64 channel_id = 1;
+  string body = 2;
+  Nonce nonce = 3;
+  repeated ChatMention mentions = 4;
+  optional uint64 reply_to_message_id = 5;
+}
+
+message RemoveChannelMessage {
+  uint64 channel_id = 1;
+  uint64 message_id = 2;
+}
+
+message UpdateChannelMessage {
+  uint64 channel_id = 1;
+  uint64 message_id = 2;
+  Nonce nonce = 4;
+  string body = 5;
+  repeated ChatMention mentions = 6;
+}
+
+message AckChannelMessage {
+  uint64 channel_id = 1;
+  uint64 message_id = 2;
+}
+
+message SendChannelMessageResponse {
+  ChannelMessage message = 1;
+}
+
+message ChannelMessageSent {
+  uint64 channel_id = 1;
+  ChannelMessage message = 2;
+}
+
+message ChannelMessageUpdate {
+  uint64 channel_id = 1;
+  ChannelMessage message = 2;
+}
+
+message GetChannelMessages {
+  uint64 channel_id = 1;
+  uint64 before_message_id = 2;
+}
+
+message GetChannelMessagesResponse {
+  repeated ChannelMessage messages = 1;
+  bool done = 2;
+}
+
+message GetChannelMessagesById {
+  repeated uint64 message_ids = 1;
+}
+
+// Versioned canonical collaboration messaging. The legacy channel-chat messages
+// above remain wire-compatible and are not used as database authority.
+enum CollaborativeMessageErrorCode {
+  CollaborativeMessageErrorNone = 0;
+  CollaborativeMessageErrorDenied = 1;
+  CollaborativeMessageErrorOffline = 2;
+  CollaborativeMessageErrorRetrying = 3;
+  CollaborativeMessageErrorStaleVersion = 4;
+  CollaborativeMessageErrorUnavailable = 5;
+  CollaborativeMessageErrorInvalidRequest = 6;
+  CollaborativeMessageErrorUnsupportedVersion = 7;
+}
+
+enum CollaborativeMessageOperationKind {
+  CollaborativeMessageCreate = 0;
+  CollaborativeMessageEdit = 1;
+  CollaborativeMessageDelete = 2;
+  CollaborativeMessageReactionAdd = 3;
+  CollaborativeMessageReactionRemove = 4;
+  CollaborativeMessageAcknowledge = 5;
+}
+
+message CollaborativeMessageCursor {
+  uint64 snapshot_micros = 1;
+  uint64 message_created_at = 2;
+  bytes source_event_id = 3;
+  uint64 outbox_sequence = 4;
+}
+
+message CollaborativeMessageReaction {
+  string value = 1;
+  bytes actor_principal_id = 2;
+  bytes source_event_id = 3;
+}
+
+message CollaborativeMessageRecord {
+  bytes community_id = 1;
+  bytes channel_id = 2;
+  bytes message_id = 3;
+  bytes source_event_id = 4;
+  bytes current_event_id = 5;
+  bytes author_principal_id = 6;
+  string author_display_name = 7;
+  string author_avatar_url = 8;
+  string body = 9;
+  uint64 created_at = 10;
+  uint64 version = 11;
+  bool edited = 12;
+  bool deleted = 13;
+  bytes reply_to_event_id = 14;
+  repeated CollaborativeMessageReaction reactions = 15;
+  string accepted_operation_id = 16;
+  uint64 outbox_sequence = 17;
+  uint64 reaction_version = 18;
+}
+
+message CollaborativeMessagePage {
+  repeated CollaborativeMessageRecord messages = 1;
+  CollaborativeMessageCursor next_cursor = 2;
+  bool done = 3;
+  uint64 authoritative_outbox_cursor = 4;
+}
+
+message OpenCollaborativeChannel {
+  uint32 contract_version = 1;
+  bytes community_id = 2;
+  bytes channel_id = 3;
+  uint32 page_size = 4;
+  uint64 after_outbox_sequence = 5;
+  bytes signing_public_key = 6;
+}
+
+message OpenCollaborativeChannelResponse {
+  uint32 contract_version = 1;
+  bytes principal_id = 2;
+  CollaborativeMessagePage page = 3;
+  CollaborativeMessageErrorCode error_code = 4;
+}
+
+message CloseCollaborativeChannel {
+  uint32 contract_version = 1;
+  bytes community_id = 2;
+  bytes channel_id = 3;
+}
+
+message GetCollaborativeMessageWindow {
+  uint32 contract_version = 1;
+  bytes community_id = 2;
+  bytes channel_id = 3;
+  bytes thread_root_event_id = 4;
+  uint32 page_size = 5;
+  CollaborativeMessageCursor cursor = 6;
+}
+
+message GetCollaborativeMessageWindowResponse {
+  uint32 contract_version = 1;
+  CollaborativeMessagePage page = 2;
+  CollaborativeMessageErrorCode error_code = 3;
+}
+
+message CollaborativeSignedEvent {
+  bytes claimed_event_id = 1;
+  bytes public_key = 2;
+  uint64 created_at = 3;
+  uint32 kind = 4;
+  repeated CollaborativeEventTag tags = 5;
+  string content = 6;
+  bytes signature = 7;
+}
+
+message CollaborativeEventTag {
+  repeated string values = 1;
+}
+
+message ApplyCollaborativeMessageOperation {
+  uint32 contract_version = 1;
+  bytes community_id = 2;
+  bytes channel_id = 3;
+  bytes message_id = 4;
+  string operation_id = 5;
+  CollaborativeMessageOperationKind kind = 6;
+  uint64 expected_version = 7;
+  string body = 8;
+  bytes reply_to_event_id = 9;
+  string reaction = 10;
+  bytes related_reaction_event_id = 11;
+  CollaborativeSignedEvent signed_event = 12;
+  uint64 acknowledged_outbox_sequence = 13;
+}
+
+message ApplyCollaborativeMessageOperationResponse {
+  uint32 contract_version = 1;
+  bool accepted = 2;
+  bool duplicate = 3;
+  CollaborativeMessageErrorCode error_code = 4;
+  uint64 authoritative_version = 5;
+  CollaborativeMessageRecord message = 6;
+  uint64 retry_after_millis = 7;
+}
+
+message CollaborativeMessageStreamStatus {
+  CollaborativeMessageErrorCode error_code = 1;
+  uint32 retry_after_millis = 2;
+}
+
+message CollaborativeMessageStreamUpdate {
+  uint32 contract_version = 1;
+  bytes community_id = 2;
+  bytes channel_id = 3;
+  uint64 outbox_sequence = 4;
+  CollaborativeMessageRecord message = 5;
+  CollaborativeMessageOperationKind operation_kind = 6;
+  bytes actor_principal_id = 7;
+  uint64 acknowledged_outbox_sequence = 8;
+  // Status frames carry sequence zero so older clients ignore them without acknowledging data.
+  CollaborativeMessageStreamStatus status = 9;
+}
+
+message MoveChannel {
+  uint64 channel_id = 1;
+  uint64 to = 2;
+}
+
+message ReorderChannel {
+  uint64 channel_id = 1;
+  enum Direction {
+    Up = 0;
+    Down = 1;
+  }
+  Direction direction = 2;
+}
+
+message JoinChannelBuffer {
+  uint64 channel_id = 1;
+}
+
+message ChannelBufferVersion {
+  uint64 channel_id = 1;
+  repeated VectorClockEntry version = 2;
+  uint64 epoch = 3;
+}
+
+message UpdateChannelBufferCollaborators {
+  uint64 channel_id = 1;
+  repeated Collaborator collaborators = 2;
+}
+
+message UpdateChannelBuffer {
+  uint64 channel_id = 1;
+  repeated Operation operations = 2;
+}
+
+message ChannelMessage {
+  uint64 id = 1;
+  string body = 2;
+  uint64 timestamp = 3;
+  uint64 sender_id = 4;
+  Nonce nonce = 5;
+  repeated ChatMention mentions = 6;
+  optional uint64 reply_to_message_id = 7;
+  optional uint64 edited_at = 8;
+}
+
+message ChatMention {
+  Range range = 1;
+  uint64 user_id = 2;
+}
+
+message RejoinChannelBuffers {
+  repeated ChannelBufferVersion buffers = 1;
+}
+
+message RejoinChannelBuffersResponse {
+  repeated RejoinedChannelBuffer buffers = 1;
+}
+
+message AckBufferOperation {
+  uint64 buffer_id = 1;
+  uint64 epoch = 2;
+  repeated VectorClockEntry version = 3;
+}
+
+message JoinChannelBufferResponse {
+  uint64 buffer_id = 1;
+  uint32 replica_id = 2;
+  string base_text = 3;
+  repeated Operation operations = 4;
+  repeated Collaborator collaborators = 5;
+  uint64 epoch = 6;
+}
+
+message RejoinedChannelBuffer {
+  uint64 channel_id = 1;
+  repeated VectorClockEntry version = 2;
+  repeated Operation operations = 3;
+  repeated Collaborator collaborators = 4;
+}
+
+message LeaveChannelBuffer {
+  uint64 channel_id = 1;
+}
+
+message RespondToChannelInvite {
+  uint64 channel_id = 1;
+  bool accept = 2;
+}

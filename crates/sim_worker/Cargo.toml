@@ -1,0 +1,47 @@
+[package]
+name = "sim_worker"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_worker.rs"
+[[bin]]
+name = "sim-worker"
+path = "src/sim_worker_main.rs"
+[features]
+default = []
+corex = ["sim_runtime/corex", "sim_tensor/corex"]
+cuda = ["sim_runtime/cuda", "sim_tensor/cuda"]
+directml = ["sim_runtime/directml", "sim_tensor/directml"]
+metal = ["sim_runtime/metal", "sim_tensor/metal"]
+mlu = ["sim_runtime/mlu", "sim_tensor/mlu"]
+npu = ["sim_runtime/npu", "sim_tensor/npu"]
+rocm = ["sim_runtime/rocm", "sim_tensor/rocm"]
+xpu = ["sim_runtime/xpu", "sim_tensor/xpu"]
+[dependencies]
+anyhow.workspace = true
+async-channel.workspace = true
+async-io.workspace = true
+sim_runtime.workspace = true
+sim_nodes.workspace = true
+sim_plugin_host.workspace = true
+sim_plugin_sdk.workspace = true
+sim_tensor.workspace = true
+sim_types.workspace = true
+futures.workspace = true
+postcard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+smol.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+sim_runtime = { workspace = true, features = ["test-support"] }
+sim_media.workspace = true
+tempfile.workspace = true
+uuid.workspace = true

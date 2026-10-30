@@ -1,0 +1,26 @@
+[package]
+name = "collaboration_domain"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[package.metadata.collaboration-boundary]
+layer = "domain"
+allowed-normal-dependencies = ["serde", "sha2", "uuid"]
+forbidden-capabilities = ["gpui", "storage", "transport"]
+
+[lib]
+path = "src/collaboration_domain.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true

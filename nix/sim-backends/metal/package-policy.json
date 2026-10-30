@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "backend": "metal",
+  "abi_floor": "macos-13-metal-3",
+  "allowed_targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin"
+  ],
+  "minimum_macos_version": "13.0",
+  "metal_language_version": "metal3.0",
+  "minimum_metal_family": 5001,
+  "redistributes_apple_frameworks": false,
+  "required_system_frameworks": [
+    "/System/Library/Frameworks/Metal.framework/Metal",
+    "/System/Library/Frameworks/MetalPerformanceShaders.framework/MetalPerformanceShaders",
+    "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/MetalPerformanceShadersGraph"
+  ],
+  "required_entitlements": [],
+  "allowed_payloads": [
+    "abi/symbols-v1.json",
+    "abi/execution-v1.json",
+    "abi/reviewed-execution-bindings-v1.txt",
+    "ffi-contracts-v1.json",
+    "kernels/readiness.metal",
+    "kernels/readiness.metallib",
+    "kernels/tensor_ops.metal",
+    "kernels/tensor_ops.metallib",
+    "LICENSES",
+    "LICENSES.execution",
+    "execution-policy.json",
+    "package-policy.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "required_payloads": [
+    "abi/symbols-v1.json",
+    "abi/execution-v1.json",
+    "abi/reviewed-execution-bindings-v1.txt",
+    "ffi-contracts-v1.json",
+    "kernels/readiness.metal",
+    "kernels/readiness.metallib",
+    "kernels/tensor_ops.metal",
+    "kernels/tensor_ops.metallib",
+    "LICENSES",
+    "LICENSES.execution",
+    "execution-policy.json",
+    "package-policy.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "forbidden_payloads": [
+    "*.framework",
+    "*.dylib",
+    "*.h",
+    "*.air"
+  ],
+  "readiness_function": "zed_sim_metal_readiness_v1",
+  "abi_manifest_sha256": "87d2183104154143d3f79583368d7a924627d40861fbc888e9cf8be9c2354476",
+  "execution_abi_sha256": "5b183c3a01ab5d6cfad93c185a9aafa0fe66ad2db5c70c7ec5458f9c3701017e",
+  "reviewed_execution_bindings_sha256": "3e4499b0597c8e470eed3866d2c60fa72bc4cebe5e58af44873585667a118426",
+  "execution_policy_sha256": "f30631078b1926da9ea3088ad41a2b7a3e7630759975b476ad564d6f2a3e8e16",
+  "readiness_source_sha256": "902b8683ad1464d9bde9055ba9f808fa2d1df7ecb98aa7333662ee0d48b921a8",
+  "readiness_metallib_sha256_by_target": {
+    "aarch64-apple-darwin": "5f4d62997a8aff54306a04038222ac6075e30e40f7cc3ec295160b467a88d370",
+    "x86_64-apple-darwin": "5f4d62997a8aff54306a04038222ac6075e30e40f7cc3ec295160b467a88d370"
+  },
+  "tensor_ops_source_sha256": "1c93eb5fe65f495e02b1132a5de597d7f945c6463ffb5f89c0f03f8aa1dfc91b",
+  "tensor_ops_metallib_sha256_by_target": {
+    "aarch64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b",
+    "x86_64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b"
+  },
+  "license_notice_sha256": "db70c284e85bb6c8c9479689075993882263461093d5015adadb6aa5b2da2f7f",
+  "execution_license_notice_sha256": "a41f64e75ac4c3e527d5beaee1b1359c6d3ea13b2118f60672c8362b5b30c990",
+  "reviewed_sdk_version": "26.2",
+  "reviewed_xcode_build": "17C52",
+  "signature_algorithm": "ed25519",
+  "signature_domain": "zed-sim-metal-package-v1",
+  "signature_payload_format": "domain-nul-u64be-signer-u64be-coverage",
+  "signature_receipt_format": "canonical-json-v1",
+  "signature_coverage": "package-coverage-v1",
+  "signature_coverage_format": "sha256-decimal-size-two-space-path",
+  "signature_coverage_excludes": [
+    "adapter-manifest.sig",
+    "package-coverage.sha256"
+  ],
+  "signature_verifier": "sim_runtime-native-rust-ed25519",
+  "signature_authority": "sim_runtime::MetalPackageVerificationKey",
+  "signature_required_before_install": true,
+  "structural_receipt_required": true,
+  "runtime_authorization_from_structure": false,
+  "final_application_signing_required": true,
+  "runtime_compilation_forbidden": true
+}

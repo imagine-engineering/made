@@ -1,0 +1,119 @@
+{
+  "anthropic_upload": {
+    "source_sha256": "36ca216053c7a84cc847d5a88d971b76a945240e58aef88148efcfb969d62edb",
+    "options": {
+      "max_images": 20,
+      "total_pixels": 2458624,
+      "wait_label": "Uploading reference images"
+    }
+  },
+  "schema_version": 1,
+  "pydantic_version": "2.13.5",
+  "source_sha256": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+  "producer_sha256": "136fbe18a917dde7b133b12fd5c7a7575f3c880aa351dd1aa110b2bc004d1856",
+  "cases": [
+    {
+      "declared_content_type": null,
+      "file_name": "source.png",
+      "bytes_hex": "00ff736f757263650d0a",
+      "storage": {
+        "method": "POST",
+        "path": "/customers/storage",
+        "body": {
+          "file_name": "source.png"
+        },
+        "options": {
+          "final_label_on_success": null,
+          "monitor_progress": false
+        }
+      },
+      "signed_put_headers": {},
+      "skip_auto_headers": [
+        "Content-Type"
+      ]
+    },
+    {
+      "declared_content_type": "image/png",
+      "file_name": "source.png",
+      "bytes_hex": "00ff736f757263650d0a",
+      "storage": {
+        "method": "POST",
+        "path": "/customers/storage",
+        "body": {
+          "file_name": "source.png",
+          "content_type": "image/png"
+        },
+        "options": {
+          "final_label_on_success": null,
+          "monitor_progress": false
+        }
+      },
+      "signed_put_headers": {
+        "Content-Type": "image/png"
+      },
+      "skip_auto_headers": []
+    },
+    {
+      "declared_content_type": "audio/mp4",
+      "file_name": "source.png",
+      "bytes_hex": "00ff736f757263650d0a",
+      "storage": {
+        "method": "POST",
+        "path": "/customers/storage",
+        "body": {
+          "file_name": "source.png",
+          "content_type": "audio/mp4"
+        },
+        "options": {
+          "final_label_on_success": null,
+          "monitor_progress": false
+        }
+      },
+      "signed_put_headers": {
+        "Content-Type": "audio/mp4"
+      },
+      "skip_auto_headers": []
+    },
+    {
+      "declared_content_type": "video/mp4",
+      "file_name": "source.png",
+      "bytes_hex": "00ff736f757263650d0a",
+      "storage": {
+        "method": "POST",
+        "path": "/customers/storage",
+        "body": {
+          "file_name": "source.png",
+          "content_type": "video/mp4"
+        },
+        "options": {
+          "final_label_on_success": null,
+          "monitor_progress": false
+        }
+      },
+      "signed_put_headers": {
+        "Content-Type": "video/mp4"
+      },
+      "skip_auto_headers": []
+    },
+    {
+      "declared_content_type": null,
+      "file_name": "source.png",
+      "bytes_hex": "",
+      "storage": {
+        "method": "POST",
+        "path": "/customers/storage",
+        "body": {
+          "file_name": "source.png"
+        },
+        "options": {
+          "final_label_on_success": null,
+          "monitor_progress": false
+        }
+      },
+      "signed_put_headers": {},
+      "skip_auto_headers": [
+        "Content-Type"
+      ]
+    }
+  ]
+}

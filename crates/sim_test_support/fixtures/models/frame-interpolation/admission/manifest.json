@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "provenance": "code-inferred synthetic reduced exact-weight state",
+  "simui": {
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": {
+    "nodes_frame_interpolation.py": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369",
+    "film_net.py": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+    "ifnet.py": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+  },
+  "profiles": {
+    "film": {
+      "tensor_count": 82,
+      "alignment": 1,
+      "configuration": "fixed source topology"
+    },
+    "rife_default": {
+      "tensor_count": 158,
+      "alignment": 64,
+      "head_channels": 4,
+      "block_channels": [192, 128, 96, 64, 32]
+    },
+    "rife_reduced_test": {
+      "tensor_count": 158,
+      "head_channels": 2,
+      "block_channels": [2, 2, 2, 2, 2],
+      "weight_fill": 0.0,
+      "bias_fill": 0.0,
+      "residual_beta_fill": 1.0
+    }
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "execution_parity": false
+  }
+}

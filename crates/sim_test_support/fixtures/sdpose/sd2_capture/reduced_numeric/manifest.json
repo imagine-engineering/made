@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "provenance_mode": "code-inferred-reduced-exact-topology",
+  "production_manifest": "../production_manifest/manifest.json",
+  "configuration": {
+    "model_channels": 4,
+    "context_dimension": 3,
+    "attention_head_channels": 1,
+    "normalization_groups": 1,
+    "latent_height": 8,
+    "latent_width": 8
+  },
+  "weights": "all-zero-f32-f16-bf16",
+  "expected_capture_output_block": 9,
+  "expected_capture_shape": [1, 8, 8, 8],
+  "expected_output_shape": [1, 4, 8, 8],
+  "scope": "Executes every source block class and capture site. It is not evidence of full-checkpoint numerical parity."
+}

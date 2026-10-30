@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-text-sim-node-0531",
+  "feature_ids": [
+    "COMFY-NODE-0531",
+    "COMFY-NODE-0537",
+    "COMFY-NODE-0641",
+    "COMFY-NODE-0642",
+    "COMFY-NODE-0643",
+    "COMFY-NODE-0644",
+    "COMFY-NODE-0645",
+    "COMFY-NODE-0646",
+    "COMFY-NODE-0647",
+    "COMFY-NODE-0648"
+  ],
+  "sources": [
+    {
+      "catalog_path": "sim_extras/nodes_string.py",
+      "oracle_path": "ComfyUI/sim_extras/nodes_string.py",
+      "sha256": "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1",
+      "byte_length": 17166,
+      "class_lines": {
+        "StringFormat": 9,
+        "StringConcatenate": 39,
+        "StringSubstring": 62,
+        "StringLength": 85,
+        "StringTrim": 139,
+        "StringReplace": 170,
+        "StringContains": 193,
+        "StringCompare": 221,
+        "RegexReplace": 373
+      },
+      "symbol_sha256": {
+        "StringFormat": "72625287533829a8087687bb47f39bc265aced3d5f43066f615326d729725122",
+        "StringConcatenate": "ea6fa7948d07e87b7ea3aeaf4f38c4cfdbfa5c5bd56d9f2935f94f1775686d08",
+        "StringSubstring": "fd3ec23bbfe3a51f5481f1b0fe8b77f66e08469bb2a4bd3e266a7607f014e544",
+        "StringLength": "bfb0cae513e4bd5c179b3cd0071a71a6ad7d67e71891cf1152f8ff9632e6d217",
+        "StringTrim": "b7d0694b752f3017a5f8ee9a6ca1d88260f761576b5960f2cb210e34efb09d18",
+        "StringReplace": "7f384aff132eb6919b58f04163c4611a7b5545e1af9217f9aca60dc416c06d60",
+        "StringContains": "9e85e51bc32c4041a66de8d5b11475aba3120eee1e8c5a37fedfaa470746888c",
+        "StringCompare": "18599228c31543f270afde0f3b838512ee12d1998b8de42c4d3e7852b1a5d8b2",
+        "RegexReplace": "58d4ec055aa5901b0e536bb2ca6993053ea85a9269d09cdcdf584df935d6876d"
+      }
+    },
+    {
+      "catalog_path": "sim_extras/nodes_dataset.py",
+      "oracle_path": "ComfyUI/sim_extras/nodes_dataset.py",
+      "sha256": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+      "byte_length": 59648,
+      "base_class_line": 525,
+      "class_lines": {
+        "ReplaceTextNode": 1014
+      },
+      "symbol_sha256": {
+        "ReplaceTextNode": "38beeabc232b19efedf2dcf4e2490f537d9a07d60c89de2811b7a4bddb98cf57"
+      }
+    }
+  ],
+  "behavior": {
+    "effect": "pure",
+    "cache": "input_identity",
+    "regex_replace": {
+      "engine_owner": "sim_nodes::text_regex::NativeTextRegex",
+      "replacement_templates": "python_re_sub",
+      "default_flags": {
+        "case_insensitive": true,
+        "multiline": false,
+        "dotall": false,
+        "count": 0
+      },
+      "count_range": [0, 100],
+      "invalid_pattern": "failure",
+      "bounded_backtracking": "failure",
+      "cancellation": "execution_interrupted"
+    },
+    "format": {
+      "formatter_owner": "sim_nodes::text_format::NativeTextFormatter",
+      "dynamic_identity": "{name}",
+      "dynamic_names": "a-z",
+      "minimum_count": 0,
+      "maximum_count": 26,
+      "missing_field": "failure"
+    },
+    "unicode": {
+      "length_unit": "unicode_code_point",
+      "substring": "python_slice_with_negative_indices_and_clamping",
+      "trim": "python_unicode_whitespace"
+    },
+    "invalid_inputs": [
+      "missing_required_input",
+      "unknown_input",
+      "wrong_type",
+      "wrong_cardinality",
+      "regex_count_out_of_range",
+      "invalid_regex_pattern",
+      "invalid_regex_replacement",
+      "invalid_format_template",
+      "missing_format_field"
+    ],
+    "persistence": "class_type_dynamic_named_values_and_unicode_primitive_strings_round_trip",
+    "recovery": "a_failed_or_cancelled_execution_does_not_poison_a_fresh_execution"
+  }
+}

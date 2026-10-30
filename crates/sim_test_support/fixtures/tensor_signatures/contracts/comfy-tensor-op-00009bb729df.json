@@ -1,0 +1,6391 @@
+{
+  "canonical_target": "torch.linspace",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:960:19 (create_weights_overlap_linear)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/context_windows.py:964:21 (create_weights_overlap_linear)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:111:28 (NoiseScheduleVP.__init__)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:420:28 (UniPC.get_time_steps)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:423:20 (UniPC.get_time_steps)"
+    },
+    {
+      "expectation": {
+        "attribute": "pow",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/extra_samplers/uni_pc.py:426:17 (UniPC.get_time_steps)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/hooks.py:552:23 (InterpolationMethod.get_weights)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/hooks.py:554:21 (InterpolationMethod.get_weights)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/hooks.py:557:21 (InterpolationMethod.get_weights)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/hooks.py:560:21 (InterpolationMethod.get_weights)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/deis.py:74:24 (get_deis_coeff_list)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:25:12 (get_sigmas_karras)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/k_diffusion/sampling.py:34:14 (get_sigmas_exponential)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:40:12 (get_sigmas_polyexponential)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:47:9 (get_sigmas_vp)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:533:14 (DPMSolver.dpm_solver_fast)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/k_diffusion/sampling.py:55:9 (get_sigmas_laplace)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:217:31 (ConvNeXtEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/audio/embedders.py:48:16 (ExpoFourierFeatures.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/chroma/model.py:289:47 (Chroma._forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/chroma/model.py:290:47 (Chroma._forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/chroma_radiance/layers.py:65:17 (NerfEmbedder.fetch_pos)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/chroma_radiance/layers.py:66:17 (NerfEmbedder.fetch_pos)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/chroma_radiance/layers.py:77:17 (NerfEmbedder.fetch_pos)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/chroma_radiance/model.py:317:47 (ChromaRadiance._forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/chroma_radiance/model.py:318:47 (ChromaRadiance._forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cogvideo/model.py:546:22 (CogVideoXTransformer3DModel._get_rotary_emb)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cogvideo/model.py:547:22 (CogVideoXTransformer3DModel._get_rotary_emb)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/dpt.py:49:16 (_create_uv_grid)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/dpt.py:50:16 (_create_uv_grid)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:166:9 (_unproject_identity)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:167:9 (_unproject_identity)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ernie/model.py:253:29 (ErnieImageModel.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ernie/model.py:271:51 (ErnieImageModel.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/ernie/model.py:272:51 (ErnieImageModel.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:203:45 (ControlNetFlux.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:204:45 (ControlNetFlux.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/math.py:24:13 (rope)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/flux/model.py:340:47 (Flux.process_img)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/flux/model.py:341:47 (Flux.process_img)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/model.py:404:36 (Flux._forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/genmo/joint_model/rope_mixed.py:22:13 (centers)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:437:13 (VanillaVolumeDecoder.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:438:13 (VanillaVolumeDecoder.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:439:13 (VanillaVolumeDecoder.__call__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:513:27 (FourierEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:466:53 (HunyuanVideo.img_ids)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:467:53 (HunyuanVideo.img_ids)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:468:53 (HunyuanVideo.img_ids)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:477:47 (HunyuanVideo.img_ids_2d)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:478:47 (HunyuanVideo.img_ids_2d)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:313:19 (Kandinsky5.rope_encode_1d)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:354:53 (Kandinsky5.rope_encode_3d)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:355:53 (Kandinsky5.rope_encode_3d)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:356:53 (Kandinsky5.rope_encode_3d)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/embeddings_connector.py:227:23 (Embeddings1DConnector.generate_freq_grid)"
+    },
+    {
+      "expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/lightricks/embeddings_connector.py:231:23 (Embeddings1DConnector.generate_freq_grid)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/model.py:623:9 (generate_freq_grid_pytorch)"
+    },
+    {
+      "expectation": {
+        "attribute": "floor",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/lumina/model.py:673:44 (NextDiT.embed_all)"
+    },
+    {
+      "expectation": {
+        "attribute": "floor",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/lumina/model.py:674:44 (NextDiT.embed_all)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:197:125 (get_2d_sincos_pos_embed_torch)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:197:37 (get_2d_sincos_pos_embed_torch)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:113:17 (make_beta_schedule)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:115:17 (make_beta_schedule)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:92:17 (make_beta_schedule)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/geometry.py:19:9 (normalized_view_plane_uv)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/geometry.py:20:9 (normalized_view_plane_uv)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixart/pixartms.py:141:40 (PixArtMS.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/pixeldit/modules.py:34:13 (precompute_freqs_cis_2d)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/pixeldit/modules.py:35:13 (precompute_freqs_cis_2d)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/qwen_image/model.py:421:57 (QwenImageTransformer2DModel.process_img)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/qwen_image/model.py:425:53 (QwenImageTransformer2DModel.process_img)"
+    },
+    {
+      "expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/qwen_image/model.py:426:53 (QwenImageTransformer2DModel.process_img)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/model.py:47:31 (RePo3DRotaryEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/triposplat/model.py:88:16 (PcdAbsolutePositionEmbedder._freqs)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model.py:646:53 (WanModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model.py:647:53 (WanModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model.py:648:53 (WanModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model_wandancer.py:244:57 (WanDancerModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model_wandancer.py:246:53 (WanDancerModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/wan/model_wandancer.py:247:53 (WanDancerModel.rope_encode)"
+    },
+    {
+      "expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/model_sampling.py:241:18 (ModelSamplingContinuousEDM.set_parameters)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy/samplers.py:677:21 (normal_scheduler)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/samplers.py:682:21 (normal_scheduler)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:608:22 (Qwen35VisionModel.fast_pos_embed_interpolate)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen35.py:609:22 (Qwen35VisionModel.fast_pos_embed_interpolate)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:212:17 (FILMNet._build_warp_grids)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:213:17 (FILMNet._build_warp_grids)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:85:13 (IFNet._build_warp_grids)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:86:13 (IFNet._build_warp_grids)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_camera_trajectory.py:97:9 (ray_condition)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_camera_trajectory.py:98:9 (ray_condition)"
+    },
+    {
+      "expectation": {
+        "kind": "subscript"
+      },
+      "site": "comfy_extras/nodes_custom_sampler.py:326:13 (ExtendIntermediateSigmas.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_flux.py:208:17 (get_schedule)"
+    },
+    {
+      "expectation": {
+        "attribute": "round",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:756:14 (_render_gaussian)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_ideogram4.py:29:9 (ideogram4_sigmas)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_images.py:804:39 (ImageMergeTileList.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_images.py:805:39 (ImageMergeTileList.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_lt.py:648:18 (LTXVScheduler.execute)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_post_processing.py:73:27 (gaussian_kernel)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_post_processing.py:73:78 (gaussian_kernel)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_sag.py:94:9 (gaussian_blur_2d)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_video_model.py:100:22 (VideoTriangleCFGGuidance.patch.linear_cfg)"
+    },
+    {
+      "expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_video_model.py:76:21 (VideoLinearCFGGuidance.patch.linear_cfg)"
+    },
+    {
+      "expectation": {
+        "attribute": "long",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_void.py:356:23 (VOIDWarpedNoise.execute)"
+    },
+    {
+      "expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_wan.py:542:14 (process_tracks)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wan.py:629:10 (_patch_motion_single)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wan.py:630:10 (_patch_motion_single)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wanmove.py:372:13 (GenerateTracks.execute)"
+    },
+    {
+      "expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "site": "tests-unit/comfy_api_test/video_bit_depth_test.py:14:12 (gradient_components)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/context_windows.py:960:19 (create_weights_overlap_linear)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/context_windows.py:964:21 (create_weights_overlap_linear)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:111:28 (NoiseScheduleVP.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:420:28 (UniPC.get_time_steps)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:423:20 (UniPC.get_time_steps)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/extra_samplers/uni_pc.py:426:17 (UniPC.get_time_steps)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/hooks.py:552:23 (InterpolationMethod.get_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/hooks.py:554:21 (InterpolationMethod.get_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/hooks.py:557:21 (InterpolationMethod.get_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/hooks.py:560:21 (InterpolationMethod.get_weights)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/deis.py:74:24 (get_deis_coeff_list)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:25:12 (get_sigmas_karras)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:34:14 (get_sigmas_exponential)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:40:12 (get_sigmas_polyexponential)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:47:9 (get_sigmas_vp)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:533:14 (DPMSolver.dpm_solver_fast)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/k_diffusion/sampling.py:55:9 (get_sigmas_laplace)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:217:31 (ConvNeXtEncoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/embedders.py:48:16 (ExpoFourierFeatures.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma/model.py:289:47 (Chroma._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma/model.py:290:47 (Chroma._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma_radiance/layers.py:65:17 (NerfEmbedder.fetch_pos)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma_radiance/layers.py:66:17 (NerfEmbedder.fetch_pos)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma_radiance/layers.py:77:17 (NerfEmbedder.fetch_pos)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma_radiance/model.py:317:47 (ChromaRadiance._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/chroma_radiance/model.py:318:47 (ChromaRadiance._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/model.py:546:22 (CogVideoXTransformer3DModel._get_rotary_emb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/model.py:547:22 (CogVideoXTransformer3DModel._get_rotary_emb)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/dpt.py:49:16 (_create_uv_grid)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/dpt.py:50:16 (_create_uv_grid)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:166:9 (_unproject_identity)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:167:9 (_unproject_identity)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:253:29 (ErnieImageModel.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:271:51 (ErnieImageModel.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:272:51 (ErnieImageModel.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:203:45 (ControlNetFlux.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:204:45 (ControlNetFlux.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/math.py:24:13 (rope)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/model.py:340:47 (Flux.process_img)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/model.py:341:47 (Flux.process_img)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/model.py:404:36 (Flux._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/joint_model/rope_mixed.py:22:13 (centers)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:437:13 (VanillaVolumeDecoder.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:438:13 (VanillaVolumeDecoder.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:439:13 (VanillaVolumeDecoder.__call__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:513:27 (FourierEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:466:53 (HunyuanVideo.img_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:467:53 (HunyuanVideo.img_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:468:53 (HunyuanVideo.img_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:477:47 (HunyuanVideo.img_ids_2d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:478:47 (HunyuanVideo.img_ids_2d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:313:19 (Kandinsky5.rope_encode_1d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:354:53 (Kandinsky5.rope_encode_3d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:355:53 (Kandinsky5.rope_encode_3d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:356:53 (Kandinsky5.rope_encode_3d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/embeddings_connector.py:227:23 (Embeddings1DConnector.generate_freq_grid)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/embeddings_connector.py:231:23 (Embeddings1DConnector.generate_freq_grid)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:623:9 (generate_freq_grid_pytorch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:673:44 (NextDiT.embed_all)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:674:44 (NextDiT.embed_all)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:197:125 (get_2d_sincos_pos_embed_torch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:197:37 (get_2d_sincos_pos_embed_torch)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:113:17 (make_beta_schedule)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:115:17 (make_beta_schedule)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:92:17 (make_beta_schedule)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/geometry.py:19:9 (normalized_view_plane_uv)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/geometry.py:20:9 (normalized_view_plane_uv)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/pixartms.py:141:40 (PixArtMS.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixeldit/modules.py:34:13 (precompute_freqs_cis_2d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixeldit/modules.py:35:13 (precompute_freqs_cis_2d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/qwen_image/model.py:421:57 (QwenImageTransformer2DModel.process_img)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/qwen_image/model.py:425:53 (QwenImageTransformer2DModel.process_img)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/qwen_image/model.py:426:53 (QwenImageTransformer2DModel.process_img)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:47:31 (RePo3DRotaryEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:88:16 (PcdAbsolutePositionEmbedder._freqs)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:646:53 (WanModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:647:53 (WanModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:648:53 (WanModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_wandancer.py:244:57 (WanDancerModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_wandancer.py:246:53 (WanDancerModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_wandancer.py:247:53 (WanDancerModel.rope_encode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_sampling.py:241:18 (ModelSamplingContinuousEDM.set_parameters)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:677:21 (normal_scheduler)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/samplers.py:682:21 (normal_scheduler)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:608:22 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen35.py:609:22 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:212:17 (FILMNet._build_warp_grids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:213:17 (FILMNet._build_warp_grids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:85:13 (IFNet._build_warp_grids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:86:13 (IFNet._build_warp_grids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_camera_trajectory.py:97:9 (ray_condition)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_camera_trajectory.py:98:9 (ray_condition)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_custom_sampler.py:326:13 (ExtendIntermediateSigmas.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_flux.py:208:17 (get_schedule)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:756:14 (_render_gaussian)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_ideogram4.py:29:9 (ideogram4_sigmas)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:804:39 (ImageMergeTileList.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:805:39 (ImageMergeTileList.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_lt.py:648:18 (LTXVScheduler.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_post_processing.py:73:27 (gaussian_kernel)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_post_processing.py:73:78 (gaussian_kernel)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sag.py:94:9 (gaussian_blur_2d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_video_model.py:100:22 (VideoTriangleCFGGuidance.patch.linear_cfg)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_video_model.py:76:21 (VideoLinearCFGGuidance.patch.linear_cfg)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_void.py:356:23 (VOIDWarpedNoise.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:542:14 (process_tracks)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:629:10 (_patch_motion_single)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:630:10 (_patch_motion_single)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wanmove.py:372:13 (GenerateTracks.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/comfy_api_test/video_bit_depth_test.py:14:12 (gradient_components)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-00009bb729df-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_2",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "steps",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-00009BB729DF",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "523f5b6beca58836cdaa4d8dc1dfe05566c5c1d8e15cea707da4739090221212",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/context_windows.py",
+        "sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef"
+      },
+      {
+        "path": "comfy/extra_samplers/uni_pc.py",
+        "sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c"
+      },
+      {
+        "path": "comfy/hooks.py",
+        "sha256": "af4d31e1f70f4e66e145f92d71807649444acdc4bc92bc10e58ba7626a2c38a2"
+      },
+      {
+        "path": "comfy/k_diffusion/deis.py",
+        "sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807"
+      },
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/audio/embedders.py",
+        "sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd"
+      },
+      {
+        "path": "comfy/ldm/chroma/model.py",
+        "sha256": "e8bdf9b0f080c71a5d215a11d5a1344af8ef220b6251466c124e261ccddbfb0e"
+      },
+      {
+        "path": "comfy/ldm/chroma_radiance/layers.py",
+        "sha256": "5fb5db77eb257e40ba4f1a02674bcee96a864dd3779abdf061c66b00f4ef7684"
+      },
+      {
+        "path": "comfy/ldm/chroma_radiance/model.py",
+        "sha256": "c8a356f24b99e4351917fba91d062b819330c89edfa999cf2e7d530b7e473251"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/model.py",
+        "sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/dpt.py",
+        "sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/ray_pose.py",
+        "sha256": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694"
+      },
+      {
+        "path": "comfy/ldm/ernie/model.py",
+        "sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c"
+      },
+      {
+        "path": "comfy/ldm/flux/controlnet.py",
+        "sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742"
+      },
+      {
+        "path": "comfy/ldm/flux/math.py",
+        "sha256": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece"
+      },
+      {
+        "path": "comfy/ldm/flux/model.py",
+        "sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/rope_mixed.py",
+        "sha256": "c5289a2c591f34180fbef7dd709f9a83d5f40a34437250ac2d873883c6925de8"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/model.py",
+        "sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27"
+      },
+      {
+        "path": "comfy/ldm/kandinsky5/model.py",
+        "sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc"
+      },
+      {
+        "path": "comfy/ldm/lightricks/embeddings_connector.py",
+        "sha256": "baf7cded994414160aa57edccfabc94ad185d699d02558465332c12125e69847"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/lumina/model.py",
+        "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+        "sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/util.py",
+        "sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e"
+      },
+      {
+        "path": "comfy/ldm/moge/geometry.py",
+        "sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c"
+      },
+      {
+        "path": "comfy/ldm/pixart/pixartms.py",
+        "sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661"
+      },
+      {
+        "path": "comfy/ldm/pixeldit/modules.py",
+        "sha256": "6b28c1da83f899dc352f017f4b097568b07bd2eaee1a2a27ba17bd7e7237bd9a"
+      },
+      {
+        "path": "comfy/ldm/qwen_image/model.py",
+        "sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28"
+      },
+      {
+        "path": "comfy/ldm/triposplat/model.py",
+        "sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy/ldm/wan/model_wandancer.py",
+        "sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1"
+      },
+      {
+        "path": "comfy/model_sampling.py",
+        "sha256": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717"
+      },
+      {
+        "path": "comfy/samplers.py",
+        "sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649"
+      },
+      {
+        "path": "comfy/text_encoders/qwen35.py",
+        "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/film_net.py",
+        "sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+      },
+      {
+        "path": "comfy_extras/nodes_camera_trajectory.py",
+        "sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77"
+      },
+      {
+        "path": "comfy_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4"
+      },
+      {
+        "path": "comfy_extras/nodes_flux.py",
+        "sha256": "71c9d804a9acfb7a828fecb8fcc4b93e28f4417f0c4259a68910f4027059741f"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_ideogram4.py",
+        "sha256": "2ef584e244ecb5614b7284eacfaaab7bbdfa398f0595c32c1562d99150ebe301"
+      },
+      {
+        "path": "comfy_extras/nodes_images.py",
+        "sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448"
+      },
+      {
+        "path": "comfy_extras/nodes_lt.py",
+        "sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d"
+      },
+      {
+        "path": "comfy_extras/nodes_post_processing.py",
+        "sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575"
+      },
+      {
+        "path": "comfy_extras/nodes_sag.py",
+        "sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0"
+      },
+      {
+        "path": "comfy_extras/nodes_video_model.py",
+        "sha256": "b3d355bc0878fd5d3068ee54edb94fd08ac0f657dafe448654d530a289838947"
+      },
+      {
+        "path": "comfy_extras/nodes_void.py",
+        "sha256": "b80cd0b5831335087fd29f959be2659820b7927c8b7622cb4b3e9c9fde2c6d4f"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      },
+      {
+        "path": "comfy_extras/nodes_wanmove.py",
+        "sha256": "b0a7bdaa04d0aa2e4eac1d9d666d05ad93ee95e406a630ee9a7907c4a81c7dff"
+      },
+      {
+        "path": "tests-unit/comfy_api_test/video_bit_depth_test.py",
+        "sha256": "ef54c6b01e971e052df9632d6e9e88cf55fee3b08eadfe19b534e2441dd3ad81"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.linspace"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "tensor_creation_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-tensor-creation-comfy-tensor-op-00009bb729df",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 960,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1e-37",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "context_overlap",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "create_weights_overlap_linear",
+      "site": "comfy/context_windows.py:960:19 (create_weights_overlap_linear)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 964,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1e-37",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "context_overlap",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "create_weights_overlap_linear",
+      "site": "comfy/context_windows.py:964:21 (create_weights_overlap_linear)",
+      "source_path": "comfy/context_windows.py",
+      "source_sha256": "c7ef6a53784d34ba4f7335d009e8fc54ade9fa22f5a9b33da77d42fda01062ef",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [],
+      "line": 111,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "self.total_N + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "NoiseScheduleVP.__init__",
+      "site": "comfy/extra_samplers/uni_pc.py:111:28 (NoiseScheduleVP.__init__)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 420,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "lambda_T.cpu().item()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "lambda_0.cpu().item()",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "N + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "UniPC.get_time_steps",
+      "site": "comfy/extra_samplers/uni_pc.py:420:28 (UniPC.get_time_steps)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 423,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_T",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_0",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "N + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "UniPC.get_time_steps",
+      "site": "comfy/extra_samplers/uni_pc.py:423:20 (UniPC.get_time_steps)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "attribute": "pow",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 426,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_T ** (1.0 / t_order)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_0 ** (1.0 / t_order)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "N + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "UniPC.get_time_steps",
+      "site": "comfy/extra_samplers/uni_pc.py:426:17 (UniPC.get_time_steps)",
+      "source_path": "comfy/extra_samplers/uni_pc.py",
+      "source_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 552,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "num_from",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "num_to",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "length",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "InterpolationMethod.get_weights",
+      "site": "comfy/hooks.py:552:23 (InterpolationMethod.get_weights)",
+      "source_path": "comfy/hooks.py",
+      "source_sha256": "af4d31e1f70f4e66e145f92d71807649444acdc4bc92bc10e58ba7626a2c38a2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 554,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "length",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "InterpolationMethod.get_weights",
+      "site": "comfy/hooks.py:554:21 (InterpolationMethod.get_weights)",
+      "source_path": "comfy/hooks.py",
+      "source_sha256": "af4d31e1f70f4e66e145f92d71807649444acdc4bc92bc10e58ba7626a2c38a2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 557,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "length",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "InterpolationMethod.get_weights",
+      "site": "comfy/hooks.py:557:21 (InterpolationMethod.get_weights)",
+      "source_path": "comfy/hooks.py",
+      "source_sha256": "af4d31e1f70f4e66e145f92d71807649444acdc4bc92bc10e58ba7626a2c38a2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 560,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "length",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "InterpolationMethod.get_weights",
+      "site": "comfy/hooks.py:560:21 (InterpolationMethod.get_weights)",
+      "source_path": "comfy/hooks.py",
+      "source_sha256": "af4d31e1f70f4e66e145f92d71807649444acdc4bc92bc10e58ba7626a2c38a2",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 74,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_cur",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_next",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "N",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_deis_coeff_list",
+      "site": "comfy/k_diffusion/deis.py:74:24 (get_deis_coeff_list)",
+      "source_path": "comfy/k_diffusion/deis.py",
+      "source_sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 25,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_sigmas_karras",
+      "site": "comfy/k_diffusion/sampling.py:25:12 (get_sigmas_karras)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 34,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "math.log(sigma_max)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "math.log(sigma_min)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_sigmas_exponential",
+      "site": "comfy/k_diffusion/sampling.py:34:14 (get_sigmas_exponential)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 40,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_sigmas_polyexponential",
+      "site": "comfy/k_diffusion/sampling.py:40:12 (get_sigmas_polyexponential)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 47,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "eps_s",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_sigmas_vp",
+      "site": "comfy/k_diffusion/sampling.py:47:9 (get_sigmas_vp)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 533,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "m + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "DPMSolver.dpm_solver_fast",
+      "site": "comfy/k_diffusion/sampling.py:533:14 (DPMSolver.dpm_solver_fast)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 55,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_sigmas_laplace",
+      "site": "comfy/k_diffusion/sampling.py:55:9 (get_sigmas_laplace)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 217,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "drop_path_rate",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "sum(depths)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "ConvNeXtEncoder.__init__",
+      "site": "comfy/ldm/ace/vae/music_vocoder.py:217:31 (ConvNeXtEncoder.__init__)",
+      "source_path": "comfy/ldm/ace/vae/music_vocoder.py",
+      "source_sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "t.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 48,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "half_dim",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ExpoFourierFeatures.forward",
+      "site": "comfy/ldm/audio/embedders.py:48:16 (ExpoFourierFeatures.forward)",
+      "source_path": "comfy/ldm/audio/embedders.py",
+      "source_sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 289,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Chroma._forward",
+      "site": "comfy/ldm/chroma/model.py:289:47 (Chroma._forward)",
+      "source_path": "comfy/ldm/chroma/model.py",
+      "source_sha256": "e8bdf9b0f080c71a5d215a11d5a1344af8ef220b6251466c124e261ccddbfb0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 290,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Chroma._forward",
+      "site": "comfy/ldm/chroma/model.py:290:47 (Chroma._forward)",
+      "source_path": "comfy/ldm/chroma/model.py",
+      "source_sha256": "e8bdf9b0f080c71a5d215a11d5a1344af8ef220b6251466c124e261ccddbfb0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 65,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "patch_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "NerfEmbedder.fetch_pos",
+      "site": "comfy/ldm/chroma_radiance/layers.py:65:17 (NerfEmbedder.fetch_pos)",
+      "source_path": "comfy/ldm/chroma_radiance/layers.py",
+      "source_sha256": "5fb5db77eb257e40ba4f1a02674bcee96a864dd3779abdf061c66b00f4ef7684",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 66,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "patch_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "NerfEmbedder.fetch_pos",
+      "site": "comfy/ldm/chroma_radiance/layers.py:66:17 (NerfEmbedder.fetch_pos)",
+      "source_path": "comfy/ldm/chroma_radiance/layers.py",
+      "source_sha256": "5fb5db77eb257e40ba4f1a02674bcee96a864dd3779abdf061c66b00f4ef7684",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 77,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.max_freqs - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "self.max_freqs",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "NerfEmbedder.fetch_pos",
+      "site": "comfy/ldm/chroma_radiance/layers.py:77:17 (NerfEmbedder.fetch_pos)",
+      "source_path": "comfy/ldm/chroma_radiance/layers.py",
+      "source_sha256": "5fb5db77eb257e40ba4f1a02674bcee96a864dd3779abdf061c66b00f4ef7684",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 317,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ChromaRadiance._forward",
+      "site": "comfy/ldm/chroma_radiance/model.py:317:47 (ChromaRadiance._forward)",
+      "source_path": "comfy/ldm/chroma_radiance/model.py",
+      "source_sha256": "c8a356f24b99e4351917fba91d062b819330c89edfa999cf2e7d530b7e473251",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 318,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ChromaRadiance._forward",
+      "site": "comfy/ldm/chroma_radiance/model.py:318:47 (ChromaRadiance._forward)",
+      "source_path": "comfy/ldm/chroma_radiance/model.py",
+      "source_sha256": "c8a356f24b99e4351917fba91d062b819330c89edfa999cf2e7d530b7e473251",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 546,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "h",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CogVideoXTransformer3DModel._get_rotary_emb",
+      "site": "comfy/ldm/cogvideo/model.py:546:22 (CogVideoXTransformer3DModel._get_rotary_emb)",
+      "source_path": "comfy/ldm/cogvideo/model.py",
+      "source_sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 547,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "CogVideoXTransformer3DModel._get_rotary_emb",
+      "site": "comfy/ldm/cogvideo/model.py:547:22 (CogVideoXTransformer3DModel._get_rotary_emb)",
+      "source_path": "comfy/ldm/cogvideo/model.py",
+      "source_sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "width",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 49,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "left_x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "right_x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_create_uv_grid",
+      "site": "comfy/ldm/depth_anything_3/dpt.py:49:16 (_create_uv_grid)",
+      "source_path": "comfy/ldm/depth_anything_3/dpt.py",
+      "source_sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "height",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 50,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "top_y",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "bottom_y",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_create_uv_grid",
+      "site": "comfy/ldm/depth_anything_3/dpt.py:50:16 (_create_uv_grid)",
+      "source_path": "comfy/ldm/depth_anything_3/dpt.py",
+      "source_sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 166,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-(1 - dy)",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1 - dy",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num_y",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_unproject_identity",
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:166:9 (_unproject_identity)",
+      "source_path": "comfy/ldm/depth_anything_3/ray_pose.py",
+      "source_sha256": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 167,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-(1 - dx)",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1 - dx",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num_x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_unproject_identity",
+      "site": "comfy/ldm/depth_anything_3/ray_pose.py:167:9 (_unproject_identity)",
+      "source_path": "comfy/ldm/depth_anything_3/ray_pose.py",
+      "source_sha256": "a5ed28c0acc2daaeea57754dec4020fe91af60fd2af6548dfa68134713b36694",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "Tmax",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 253,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "Tmax - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ErnieImageModel.forward",
+      "site": "comfy/ldm/ernie/model.py:253:29 (ErnieImageModel.forward)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 51,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "Hp",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 271,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1 + h_offset",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ErnieImageModel.forward",
+      "site": "comfy/ldm/ernie/model.py:271:51 (ErnieImageModel.forward)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 51,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "Wp",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 272,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "w_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1 + w_offset",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ErnieImageModel.forward",
+      "site": "comfy/ldm/ernie/model.py:272:51 (ErnieImageModel.forward)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 203,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ControlNetFlux.forward",
+      "site": "comfy/ldm/flux/controlnet.py:203:45 (ControlNetFlux.forward)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 204,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ControlNetFlux.forward",
+      "site": "comfy/ldm/flux/controlnet.py:204:45 (ControlNetFlux.forward)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "dim // 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 24,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "(dim - 2) / dim",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "rope",
+      "site": "comfy/ldm/flux/math.py:24:13 (rope)",
+      "source_path": "comfy/ldm/flux/math.py",
+      "source_sha256": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_h",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 340,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1 + h_offset",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Flux.process_img",
+      "site": "comfy/ldm/flux/model.py:340:47 (Flux.process_img)",
+      "source_path": "comfy/ldm/flux/model.py",
+      "source_sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 341,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "w_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1 + w_offset",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Flux.process_img",
+      "site": "comfy/ldm/flux/model.py:341:47 (Flux.process_img)",
+      "source_path": "comfy/ldm/flux/model.py",
+      "source_sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "context.shape[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 404,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "context.shape[1] - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Flux._forward",
+      "site": "comfy/ldm/flux/model.py:404:36 (Flux._forward)",
+      "source_path": "comfy/ldm/flux/model.py",
+      "source_sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 22,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "stop",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "centers",
+      "site": "comfy/ldm/genmo/joint_model/rope_mixed.py:22:13 (centers)",
+      "source_path": "comfy/ldm/genmo/joint_model/rope_mixed.py",
+      "source_sha256": "c5289a2c591f34180fbef7dd709f9a83d5f40a34437250ac2d873883c6925de8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 437,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "bbox_min[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "bbox_max[0]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "int(octree_resolution) + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "VanillaVolumeDecoder.__call__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:437:13 (VanillaVolumeDecoder.__call__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 438,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "bbox_min[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "bbox_max[1]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "int(octree_resolution) + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "VanillaVolumeDecoder.__call__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:438:13 (VanillaVolumeDecoder.__call__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 439,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "bbox_min[2]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "bbox_max[2]",
+          "syntax_kind": "Subscript"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "int(octree_resolution) + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "VanillaVolumeDecoder.__call__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:439:13 (VanillaVolumeDecoder.__call__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 513,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2.0 ** (num_freqs - 1)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num_freqs",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "FourierEmbedder.__init__",
+      "site": "comfy/ldm/hunyuan3d/vae.py:513:27 (FourierEmbedder.__init__)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "t_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 466,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "HunyuanVideo.img_ids",
+      "site": "comfy/ldm/hunyuan_video/model.py:466:53 (HunyuanVideo.img_ids)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 467,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "HunyuanVideo.img_ids",
+      "site": "comfy/ldm/hunyuan_video/model.py:467:53 (HunyuanVideo.img_ids)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 468,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "HunyuanVideo.img_ids",
+      "site": "comfy/ldm/hunyuan_video/model.py:468:53 (HunyuanVideo.img_ids)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 477,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "HunyuanVideo.img_ids_2d",
+      "site": "comfy/ldm/hunyuan_video/model.py:477:47 (HunyuanVideo.img_ids_2d)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 478,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "HunyuanVideo.img_ids_2d",
+      "site": "comfy/ldm/hunyuan_video/model.py:478:47 (HunyuanVideo.img_ids_2d)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 313,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "seq_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "seq_start + (seq_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Kandinsky5.rope_encode_1d",
+      "site": "comfy/ldm/kandinsky5/model.py:313:19 (Kandinsky5.rope_encode_1d)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_t",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 354,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_start + (t_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Kandinsky5.rope_encode_3d",
+      "site": "comfy/ldm/kandinsky5/model.py:354:53 (Kandinsky5.rope_encode_3d)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_h",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 355,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_start + (h_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Kandinsky5.rope_encode_3d",
+      "site": "comfy/ldm/kandinsky5/model.py:355:53 (Kandinsky5.rope_encode_3d)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 356,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "w_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_start + (w_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Kandinsky5.rope_encode_3d",
+      "site": "comfy/ldm/kandinsky5/model.py:356:53 (Kandinsky5.rope_encode_3d)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 227,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "dim // n_elem",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Embeddings1DConnector.generate_freq_grid",
+      "site": "comfy/ldm/lightricks/embeddings_connector.py:227:23 (Embeddings1DConnector.generate_freq_grid)",
+      "source_path": "comfy/ldm/lightricks/embeddings_connector.py",
+      "source_sha256": "baf7cded994414160aa57edccfabc94ad185d699d02558465332c12125e69847",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "attribute": "sqrt",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 231,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "start ** 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "end ** 2",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "dim // n_elem",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "Embeddings1DConnector.generate_freq_grid",
+      "site": "comfy/ldm/lightricks/embeddings_connector.py:231:23 (Embeddings1DConnector.generate_freq_grid)",
+      "source_path": "comfy/ldm/lightricks/embeddings_connector.py",
+      "source_sha256": "baf7cded994414160aa57edccfabc94ad185d699d02558465332c12125e69847",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 623,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "math.log(start, theta)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "math.log(end, theta)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "inner_dim // n_elem",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "generate_freq_grid_pytorch",
+      "site": "comfy/ldm/lightricks/model.py:623:9 (generate_freq_grid_pytorch)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "attribute": "floor",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 673,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h * 8 - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "NextDiT.embed_all",
+      "site": "comfy/ldm/lumina/model.py:673:44 (NextDiT.embed_all)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "attribute": "floor",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 674,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w * 8 - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "NextDiT.embed_all",
+      "site": "comfy/ldm/lumina/model.py:674:44 (NextDiT.embed_all)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 125,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 197,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-val_w + val_center",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "val_w + val_center",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_2d_sincos_pos_embed_torch",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:197:125 (get_2d_sincos_pos_embed_torch)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 197,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-val_h + val_center",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "val_h + val_center",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "h",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "get_2d_sincos_pos_embed_torch",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:197:37 (get_2d_sincos_pos_embed_torch)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 113,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "linear_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "linear_end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n_timestep",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "make_beta_schedule",
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:113:17 (make_beta_schedule)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/util.py",
+      "source_sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 115,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "linear_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "linear_end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n_timestep",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "make_beta_schedule",
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:115:17 (make_beta_schedule)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/util.py",
+      "source_sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 92,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "linear_start ** 0.5",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "linear_end ** 0.5",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "n_timestep",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "make_beta_schedule",
+      "site": "comfy/ldm/modules/diffusionmodules/util.py:92:17 (make_beta_schedule)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/util.py",
+      "source_sha256": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 19,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-span_x * (width - 1) / width",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "span_x * (width - 1) / width",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "normalized_view_plane_uv",
+      "site": "comfy/ldm/moge/geometry.py:19:9 (normalized_view_plane_uv)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 20,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-span_y * (height - 1) / height",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "span_y * (height - 1) / height",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "height",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "normalized_view_plane_uv",
+      "site": "comfy/ldm/moge/geometry.py:20:9 (normalized_view_plane_uv)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 40,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 141,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "drop_path",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "depth",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "PixArtMS.__init__",
+      "site": "comfy/ldm/pixart/pixartms.py:141:40 (PixArtMS.__init__)",
+      "source_path": "comfy/ldm/pixart/pixartms.py",
+      "source_sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 34,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "shift_x",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "scale * scale_x + shift_x",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "precompute_freqs_cis_2d",
+      "site": "comfy/ldm/pixeldit/modules.py:34:13 (precompute_freqs_cis_2d)",
+      "source_path": "comfy/ldm/pixeldit/modules.py",
+      "source_sha256": "6b28c1da83f899dc352f017f4b097568b07bd2eaee1a2a27ba17bd7e7237bd9a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 35,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "shift_y",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "scale * scale_y + shift_y",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "height",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "precompute_freqs_cis_2d",
+      "site": "comfy/ldm/pixeldit/modules.py:35:13 (precompute_freqs_cis_2d)",
+      "source_path": "comfy/ldm/pixeldit/modules.py",
+      "source_sha256": "6b28c1da83f899dc352f017f4b097568b07bd2eaee1a2a27ba17bd7e7237bd9a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 57,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "t_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 421,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_len - 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "QwenImageTransformer2DModel.process_img",
+      "site": "comfy/ldm/qwen_image/model.py:421:57 (QwenImageTransformer2DModel.process_img)",
+      "source_path": "comfy/ldm/qwen_image/model.py",
+      "source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "h_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 425,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_len - 1 + h_offset",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "QwenImageTransformer2DModel.process_img",
+      "site": "comfy/ldm/qwen_image/model.py:425:53 (QwenImageTransformer2DModel.process_img)",
+      "source_path": "comfy/ldm/qwen_image/model.py",
+      "source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "unsqueeze",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "w_len",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 426,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "w_offset",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_len - 1 + w_offset",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "QwenImageTransformer2DModel.process_img",
+      "site": "comfy/ldm/qwen_image/model.py:426:53 (QwenImageTransformer2DModel.process_img)",
+      "source_path": "comfy/ldm/qwen_image/model.py",
+      "source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "freq_dim",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 47,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float(max_freq)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "RePo3DRotaryEmbedding.__init__",
+      "site": "comfy/ldm/triposplat/model.py:47:31 (RePo3DRotaryEmbedding.__init__)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "self.freq_dim",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 88,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float(self.max_res)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "PcdAbsolutePositionEmbedder._freqs",
+      "site": "comfy/ldm/triposplat/model.py:88:16 (PcdAbsolutePositionEmbedder._freqs)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_t",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 646,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_start + (t_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WanModel.rope_encode",
+      "site": "comfy/ldm/wan/model.py:646:53 (WanModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_h",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 647,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_start + (h_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WanModel.rope_encode",
+      "site": "comfy/ldm/wan/model.py:647:53 (WanModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 648,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "w_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_start + (w_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WanModel.rope_encode",
+      "site": "comfy/ldm/wan/model.py:648:53 (WanModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 57,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_t",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 244,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "t_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "t_start + (t_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WanDancerModel.rope_encode",
+      "site": "comfy/ldm/wan/model_wandancer.py:244:57 (WanDancerModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model_wandancer.py",
+      "source_sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_h",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 246,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "h_start + (h_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WanDancerModel.rope_encode",
+      "site": "comfy/ldm/wan/model_wandancer.py:246:53 (WanDancerModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model_wandancer.py",
+      "source_sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 53,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "steps_w",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 247,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "w_start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "w_start + (w_len - 1)",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "WanDancerModel.rope_encode",
+      "site": "comfy/ldm/wan/model_wandancer.py:247:53 (WanDancerModel.rope_encode)",
+      "source_path": "comfy/ldm/wan/model_wandancer.py",
+      "source_sha256": "8845cc2cfd273f86a0a851182aa2ccfbc52c565ff97e09524abdc9b938bf17e1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "attribute": "exp",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 241,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "math.log(sigma_min)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "math.log(sigma_max)",
+          "syntax_kind": "Call"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "1000",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ModelSamplingContinuousEDM.set_parameters",
+      "site": "comfy/model_sampling.py:241:18 (ModelSamplingContinuousEDM.set_parameters)",
+      "source_path": "comfy/model_sampling.py",
+      "source_sha256": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [],
+      "line": 677,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "steps + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "normal_scheduler",
+      "site": "comfy/samplers.py:677:21 (normal_scheduler)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 682,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "start",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "end",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "steps",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "normal_scheduler",
+      "site": "comfy/samplers.py:682:21 (normal_scheduler)",
+      "source_path": "comfy/samplers.py",
+      "source_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 608,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.num_grid_per_side - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "h",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Qwen35VisionModel.fast_pos_embed_interpolate",
+      "site": "comfy/text_encoders/qwen35.py:608:22 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 609,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "self.num_grid_per_side - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "w",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Qwen35VisionModel.fast_pos_embed_interpolate",
+      "site": "comfy/text_encoders/qwen35.py:609:22 (Qwen35VisionModel.fast_pos_embed_interpolate)",
+      "source_path": "comfy/text_encoders/qwen35.py",
+      "source_sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 212,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-(1 - 1 / W)",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1 - 1 / W",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "W",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "FILMNet._build_warp_grids",
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:212:17 (FILMNet._build_warp_grids)",
+      "source_path": "comfy_extras/frame_interpolation_models/film_net.py",
+      "source_sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 213,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-(1 - 1 / H)",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1 - 1 / H",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "H",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "FILMNet._build_warp_grids",
+      "site": "comfy_extras/frame_interpolation_models/film_net.py:213:17 (FILMNet._build_warp_grids)",
+      "source_path": "comfy_extras/frame_interpolation_models/film_net.py",
+      "source_sha256": "e4efa6666846cecb5dc83cb4668410b37b6c4ffae6b08e48b74184bc037c4ab1",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 85,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1.0",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "H",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IFNet._build_warp_grids",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:85:13 (IFNet._build_warp_grids)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 86,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1.0",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "W",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IFNet._build_warp_grids",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:86:13 (IFNet._build_warp_grids)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "c2w.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 97,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "H - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "H",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ray_condition",
+      "site": "comfy_extras/nodes_camera_trajectory.py:97:9 (ray_condition)",
+      "source_path": "comfy_extras/nodes_camera_trajectory.py",
+      "source_sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "c2w.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 98,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "W - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "W",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ray_condition",
+      "site": "comfy_extras/nodes_camera_trajectory.py:98:9 (ray_condition)",
+      "source_path": "comfy_extras/nodes_camera_trajectory.py",
+      "source_sha256": "1c01df65d129013d2a7868134f22097a0f3c1317f73073824b166cfc5026dc77",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "subscript"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "sigmas.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 326,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "steps + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ExtendIntermediateSigmas.execute",
+      "site": "comfy_extras/nodes_custom_sampler.py:326:13 (ExtendIntermediateSigmas.execute)",
+      "source_path": "comfy_extras/nodes_custom_sampler.py",
+      "source_sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 208,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num_steps + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "get_schedule",
+      "site": "comfy_extras/nodes_flux.py:208:17 (get_schedule)",
+      "source_path": "comfy_extras/nodes_flux.py",
+      "source_sha256": "71c9d804a9acfb7a828fecb8fcc4b93e28f4417f0c4259a68910f4027059741f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "attribute": "round",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "dev",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 756,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "n",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "ns + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "_render_gaussian",
+      "site": "comfy_extras/nodes_gaussian_splat.py:756:14 (_render_gaussian)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float64",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 29,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num_steps + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "ideogram4_sigmas",
+      "site": "comfy_extras/nodes_ideogram4.py:29:9 (ideogram4_sigmas)",
+      "source_path": "comfy_extras/nodes_ideogram4.py",
+      "source_sha256": "2ef584e244ecb5614b7284eacfaaab7bbdfa398f0595c32c1562d99150ebe301",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 39,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 804,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "t_h",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ImageMergeTileList.execute",
+      "site": "comfy_extras/nodes_images.py:804:39 (ImageMergeTileList.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 39,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 805,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "t_w",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ImageMergeTileList.execute",
+      "site": "comfy_extras/nodes_images.py:805:39 (ImageMergeTileList.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 648,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "steps + 1",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "LTXVScheduler.execute",
+      "site": "comfy_extras/nodes_lt.py:648:18 (LTXVScheduler.execute)",
+      "source_path": "comfy_extras/nodes_lt.py",
+      "source_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 73,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "gaussian_kernel",
+      "site": "comfy_extras/nodes_post_processing.py:73:27 (gaussian_kernel)",
+      "source_path": "comfy_extras/nodes_post_processing.py",
+      "source_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 78,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 73,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "gaussian_kernel",
+      "site": "comfy_extras/nodes_post_processing.py:73:78 (gaussian_kernel)",
+      "source_path": "comfy_extras/nodes_post_processing.py",
+      "source_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "steps",
+          "syntax": "kernel_size",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 94,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-ksize_half",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "ksize_half",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "gaussian_blur_2d",
+      "site": "comfy_extras/nodes_sag.py:94:9 (gaussian_blur_2d)",
+      "source_path": "comfy_extras/nodes_sag.py",
+      "source_sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "cond.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 100,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "cond.shape[0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "VideoTriangleCFGGuidance.patch.linear_cfg",
+      "site": "comfy_extras/nodes_video_model.py:100:22 (VideoTriangleCFGGuidance.patch.linear_cfg)",
+      "source_path": "comfy_extras/nodes_video_model.py",
+      "source_sha256": "b3d355bc0878fd5d3068ee54edb94fd08ac0f657dafe448654d530a289838947",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "attribute": "reshape",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "cond.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 76,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "min_cfg",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "cond_scale",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "cond.shape[0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "VideoLinearCFGGuidance.patch.linear_cfg",
+      "site": "comfy_extras/nodes_video_model.py:76:21 (VideoLinearCFGGuidance.patch.linear_cfg)",
+      "source_path": "comfy_extras/nodes_video_model.py",
+      "source_sha256": "b3d355bc0878fd5d3068ee54edb94fd08ac0f657dafe448654d530a289838947",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "attribute": "long",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 356,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "warped.shape[0] - 1",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "latent_t",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "VOIDWarpedNoise.execute",
+      "site": "comfy_extras/nodes_void.py:356:23 (VOIDWarpedNoise.execute)",
+      "source_path": "comfy_extras/nodes_void.py",
+      "source_sha256": "b80cd0b5831335087fd29f959be2659820b7927c8b7622cb4b3e9c9fde2c6d4f",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 542,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "tracks.shape[0]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "process_tracks",
+      "site": "comfy_extras/nodes_wan.py:542:14 (process_tracks)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 10,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 629,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-W / min(H, W)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "W / min(H, W)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "W",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_patch_motion_single",
+      "site": "comfy_extras/nodes_wan.py:629:10 (_patch_motion_single)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 10,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 630,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-H / min(H, W)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "H / min(H, W)",
+          "syntax_kind": "BinOp"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "H",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_patch_motion_single",
+      "site": "comfy_extras/nodes_wan.py:630:10 (_patch_motion_single)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 372,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "num_frames",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "GenerateTracks.execute",
+      "site": "comfy_extras/nodes_wanmove.py:372:13 (GenerateTracks.execute)",
+      "source_path": "comfy_extras/nodes_wanmove.py",
+      "source_sha256": "b0a7bdaa04d0aa2e4eac1d9d666d05ad93ee95e406a630ee9a7907c4a81c7dff",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "view",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 14,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "0.25",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0.3",
+          "syntax_kind": "Constant"
+        },
+        {
+          "index": 2,
+          "starred": false,
+          "syntax": "width",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "gradient_components",
+      "site": "tests-unit/comfy_api_test/video_bit_depth_test.py:14:12 (gradient_components)",
+      "source_path": "tests-unit/comfy_api_test/video_bit_depth_test.py",
+      "source_sha256": "ef54c6b01e971e052df9632d6e9e88cf55fee3b08eadfe19b534e2441dd3ad81",
+      "status": "static-call-observed",
+      "target_syntax": "torch.linspace"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,41 @@
+{
+  "inputs": [
+    {
+      "Node": {
+        "node_id": 7103,
+        "output_index": 0
+      }
+    },
+    {
+      "Value": {
+        "tagged_value": {
+          "DAffine2": [
+            2.0,
+            0.0,
+            -0.0,
+            2.0,
+            3.0,
+            2.0
+          ]
+        },
+        "exposed": false
+      }
+    }
+  ],
+  "call_argument": {
+    "Concrete": {
+      "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+    }
+  },
+  "implementation": {
+    "ProtoNode": {
+      "name": "transform_nodes::transform_nodes::ReplaceTransformNode"
+    }
+  },
+  "visible": true,
+  "skip_deduplication": false,
+  "context_features": {
+    "extract": "",
+    "inject": "FOOTPRINT"
+  }
+}

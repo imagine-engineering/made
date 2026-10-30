@@ -1,0 +1,88 @@
+{
+  "fixture_id": "chromaradiance-sim-model-0067",
+  "feature_id": "COMFY-MODEL-0067",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale": [2],
+      "model.diffusion_model.img_in_patch.bias": [2],
+      "model.diffusion_model.img_in_patch.weight": [2, 3, 1, 1],
+      "model.diffusion_model.nerf_blocks.0.norm.scale": [2],
+      "model.diffusion_model.nerf_blocks.1.norm.scale": [2],
+      "model.diffusion_model.nerf_blocks.2.norm.scale": [2],
+      "model.diffusion_model.nerf_blocks.3.norm.scale": [2],
+      "model.diffusion_model.nerf_final_layer.linear.bias": [2],
+      "model.diffusion_model.nerf_final_layer.linear.weight": [2, 2],
+      "model.diffusion_model.nerf_final_layer.norm.scale": [2],
+      "model.diffusion_model.txt_in.weight": [128, 4]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0067006700670067006700670067006700670067006700670067006700670067",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.nerf_blocks.0.norm.weight",
+      "shape": [2],
+      "values": [1.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.nerf_final_layer.norm.weight",
+      "shape": [2],
+      "values": [1.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.nerf_final_layer.linear.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.nerf_final_layer.linear.bias",
+      "shape": [2],
+      "values": [0.25, -0.25]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [2.0, -1.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 12,
+  "expected_memory_bytes": 12,
+  "checkpoints": [
+    {
+      "name": "nerf_final_normalization",
+      "values": [0.99999976, -0.99999976]
+    },
+    {
+      "name": "linear_radiance_output",
+      "values": [1.2499998, -1.2499998]
+    }
+  ],
+  "patches": [
+    {
+      "identifier": "chromaradiance-final-bias",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.nerf_final_layer.linear.bias",
+          "expected_shape": [2],
+          "values": [0.5, 0.5],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {
+      "name": "nerf_final_normalization",
+      "values": [0.99999976, -0.99999976]
+    },
+    {
+      "name": "linear_radiance_output",
+      "values": [1.7499998, -0.74999976]
+    }
+  ]
+}

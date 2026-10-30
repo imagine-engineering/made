@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "truth_classification": "source-fingerprinted-library-image-capture-contract",
+  "source_snapshot": {
+    "project": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "dependency_fixtures": {
+    "video/codec-ffi-certification/manifest.json": "f69947e75aae0a17d5b14ca2e100b2bd86f817ddb4e9930b75f4319528947d75"
+  },
+  "capture_contract": {
+    "exact_library_count": 5,
+    "maximum_library_bytes": 2147483648,
+    "hash": "sha256",
+    "final_symlink_following": false,
+    "stable_identity_rechecked": true,
+    "stable_length_rechecked": true,
+    "immutable_snapshot_required": true,
+    "catalog_filename_and_digest_required": true
+  },
+  "claims": {
+    "bounded_file_capture": true,
+    "catalog_digest_binding": true,
+    "immutable_snapshot_retention": true,
+    "native_library_loaded": false,
+    "symbols_resolved": false,
+    "ffi_certificate_issued_by_capture": false,
+    "encoder_availability_probed": false,
+    "codec_execution": false,
+    "installed_ffmpeg_package": false,
+    "licensed_codec_binary": false,
+    "upstream_runtime_numeric_oracle": false,
+    "accelerator_numeric_oracle": false
+  }
+}

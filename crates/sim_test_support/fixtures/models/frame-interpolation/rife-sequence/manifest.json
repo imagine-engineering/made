@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "provenance": "source-derived synthetic reduced exact-weight sequence oracle",
+  "simui": {
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": {
+    "nodes_frame_interpolation.py": "038762ff4e248c91e168685796f590a2e5aa0dc3b3c2922aa5f9d936b1fff369",
+    "frame_interpolation_models/ifnet.py": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+    "ldm/common_dit.py": "5e2459be4a47073a17e6b806f2b93962b4df1cdcaa2ac1890c9573bf942edf82"
+  },
+  "dependencies": {
+    "rife_execution_manifest_sha256": "8231af843ace2626d5ba6cda835ca3fd1e05fbfd17ea5e94f7308f1f56de4cda"
+  },
+  "profile": {
+    "head_channels": 2,
+    "block_channels": [2, 2, 2, 2, 2],
+    "alignment": 64,
+    "weight_fill": 0.0,
+    "bias_fill": 0.0,
+    "residual_beta_fill": 1.0
+  },
+  "case": {
+    "name": "reflection_padding_endpoint_midpoint_order",
+    "input": {
+      "shape": [2, 64, 63, 3],
+      "frame_fills": [0.0, 1.0]
+    },
+    "multiplier": 2,
+    "timesteps": [0.5],
+    "reflection_padding": {
+      "bottom": 0,
+      "right": 1,
+      "padded_shape": [1, 3, 64, 64]
+    },
+    "adjacent_head_feature_reuse": true,
+    "expected": {
+      "shape": [3, 64, 63, 3],
+      "frame_fills": [0.0, 0.5, 1.0],
+      "clamp_range": [0.0, 1.0]
+    }
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "full_production_numeric_parity": false,
+    "film_execution": false,
+    "codec_execution": false,
+    "handle_resolution": false,
+    "native_cache": false,
+    "output_effects": false,
+    "output_publication": false
+  }
+}

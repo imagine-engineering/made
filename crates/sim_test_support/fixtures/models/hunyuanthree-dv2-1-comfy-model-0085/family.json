@@ -1,0 +1,60 @@
+{
+  "fixture_id": "hunyuanthree-dv2-1-sim-model-0085",
+  "feature_id": "COMFY-MODEL-0085",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.x_embedder.weight": [32, 4],
+      "model.diffusion_model.t_embedder.mlp.2.weight": [128, 32],
+      "model.diffusion_model.blocks.0.attn1.k_norm.weight": [2],
+      "model.diffusion_model.blocks.0.attn1.q_proj.weight": [2, 2],
+      "model.diffusion_model.blocks.1.attn1.q_proj.weight": [2, 2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0085008500850085008500850085008500850085008500850085008500850085",
+  "source_weights": [
+    {"key":"model.diffusion_model.x_embedder.weight","shape":[2,2],"values":[1,0,0,1]},
+    {"key":"model.diffusion_model.t_embedder.mlp.0.weight","shape":[2,2],"values":[1,0,0,1]},
+    {"key":"model.diffusion_model.t_embedder.mlp.0.bias","shape":[2],"values":[1,-1]},
+    {"key":"model.diffusion_model.t_embedder.mlp.2.weight","shape":[2,2],"values":[1,0,0,1]},
+    {"key":"model.diffusion_model.t_embedder.mlp.2.bias","shape":[2],"values":[0.25,-0.25]},
+    {"key":"model.diffusion_model.t_embedder.cond_proj.weight","shape":[2,2],"values":[1,0,0,1]},
+    {"key":"model.diffusion_model.t_embedder.cond_proj.bias","shape":[2],"values":[0.25,-0.25]},
+    {"key":"model.diffusion_model.blocks.0.attn1.k_norm.weight","shape":[2],"values":[1,1]},
+    {"key":"model.diffusion_model.blocks.0.attn1.q_proj.weight","shape":[2,2],"values":[1,0,0,1]},
+    {"key":"model.diffusion_model.final_layer.linear.weight","shape":[2,2],"values":[1,0,0,1]},
+    {"key":"model.diffusion_model.final_layer.linear.bias","shape":[2],"values":[0.1,-0.1]}
+  ],
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "expected_memory_bytes": 72,
+  "memory_budget_bytes": 72,
+  "input": {"key":"input","shape":[1,2],"values":[0,0]},
+  "checkpoints": [
+    {"name":"time_projection","values":[1,-1]},
+    {"name":"time_activation","values":[0.7310586,-0.26894143]},
+    {"name":"time_embedding","values":[0.9810586,-0.5189414]},
+    {"name":"latent_projection","values":[0.9810586,-0.5189414]},
+    {"name":"self_attention_projection","values":[0.9810586,-0.5189414]},
+    {"name":"transformer_normalization","values":[0.9999991,-0.9999991]},
+    {"name":"output_projection","values":[1.0999991,-1.0999991]},
+    {"name":"latent_output","values":[0.8004987,-0.8004987]}
+  ],
+  "patches": [{
+    "identifier":"hunyuan3d-v2-1-output-bias",
+    "kind":"lora",
+    "scale":1,
+    "targets":[{"key":"native.final_layer.linear.bias","expected_shape":[2],"values":[0.5,0.5],"application":"add"}]
+  }],
+  "patched_checkpoints": [
+    {"name":"time_projection","values":[1,-1]},
+    {"name":"time_activation","values":[0.7310586,-0.26894143]},
+    {"name":"time_embedding","values":[0.9810586,-0.5189414]},
+    {"name":"latent_projection","values":[0.9810586,-0.5189414]},
+    {"name":"self_attention_projection","values":[0.9810586,-0.5189414]},
+    {"name":"transformer_normalization","values":[0.9999991,-0.9999991]},
+    {"name":"output_projection","values":[1.5999991,-0.5999991]},
+    {"name":"latent_output","values":[0.9216684,-0.53704894]}
+  ]
+}

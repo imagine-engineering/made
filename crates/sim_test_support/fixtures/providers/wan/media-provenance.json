@@ -1,0 +1,74 @@
+{
+  "scope": "encoded actual-source/provenance inputs and injected wrapper boundaries; no native codec allocation",
+  "source_sha256": {
+    "comfy_api_nodes/nodes_wan.py": "2c6f0c74dde9e2000b1c49635d9abe7144f2bb52841d3a2c00a46616ce8bbacb",
+    "comfy_api_nodes/apis/wan.py": "5be2d012a5cb919857af23f4bac30ae12f44283c5d83a3641c6317ef66c76cf1",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+  },
+  "versions": {
+    "python": "3.12.14",
+    "aiohttp": "3.11.8",
+    "numpy": "1.26.4",
+    "pillow": "12.3.0",
+    "pydantic": "2.13.5"
+  },
+  "files": {
+    "source-image.png": {
+      "bytes": 79,
+      "sha256": "1d7093b57aa0d1362fe44d4791a3ebc32981fd75aea818022b36f62efbd8bb03",
+      "producer": "actual tensor_to_base64_string / tensor_to_pil / PIL source AST over float32 [.5,.25,.125,(.375)]",
+      "classification": "actual PIL PNG pixels; NumPy proxy has no native tensor allocation"
+    },
+    "source-image-rgba.png": {
+      "bytes": 77,
+      "sha256": "0fee49f0a2b54663b1b5383b8cfff32f62243c3bc2791ca3f1498306b1b2e7df",
+      "producer": "actual tensor_to_base64_string / tensor_to_pil / PIL source AST over float32 [.5,.25,.125,(.375)]",
+      "classification": "actual PIL PNG pixels; NumPy proxy has no native tensor allocation"
+    },
+    "source-image-large.png": {
+      "bytes": 1391,
+      "sha256": "682e04559d165f751633bd7740fa8e2bb9c67bb1a463bfaf1bb944634349d7ef",
+      "producer": "actual tensor_to_base64_string / tensor_to_pil / PIL source AST over float32 [.5,.25,.125,(.375)]",
+      "classification": "actual PIL PNG pixels; NumPy proxy has no native tensor allocation"
+    },
+    "source-response.mp4": {
+      "bytes": 6163,
+      "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",
+      "producer": "ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+      "classification": "existing encoded input for injected save/encoder wrapper boundary; no parsing/codec/waveform/duration proof"
+    },
+    "source-audio.mp3": {
+      "bytes": 797,
+      "sha256": "52be6a1fcbecb701f207323577bf8f77bbe536b89912db57e99d621a1f5fd7cf",
+      "producer": "ComfyUI-Frontend/src/scripts/metadata/__fixtures__/with_metadata.mp3",
+      "classification": "existing encoded input for injected save/encoder wrapper boundary; no parsing/codec/waveform/duration proof"
+    }
+  },
+  "output_image_source": {
+    "bytes_hex": "89504e470d0a1a0a0000000d4948445200000002000000020802000000fdd49a730000001649444154789c63acb7976760606062606060606000000ae600e118bbaebe0000000049454e44ae426082",
+    "actual_rgba_pixels": {
+      "kind": "IMAGE",
+      "shape": [
+        1,
+        2,
+        2,
+        4
+      ],
+      "pixels": [
+        0.49803921580314636,
+        0.24705882370471954,
+        0.12156862765550613,
+        1.0
+      ]
+    },
+    "native_allocation": "unproved"
+  },
+  "video_wrapper": "actual VideoFromFile.__init__/get_stream_source only; no PyAV parse",
+  "source_history": "no ComfyUI Git metadata or per-file commit history in pinned checkout"
+}

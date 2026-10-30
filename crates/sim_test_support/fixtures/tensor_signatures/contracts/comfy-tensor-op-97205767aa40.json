@@ -1,0 +1,515 @@
+{
+  "canonical_target": "comfy.ops.cast_bias_weight",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/background_removal/birefnet.py:436:38 (DeformableConv2d.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/controlnet.py:384:44 (ControlLoraOps.Linear.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/controlnet.py:426:44 (ControlLoraOps.Conv2d.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/text_encoders/llama.py:864:41 (BaseGenerate.logits)"
+    },
+    {
+      "expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "site": "comfy/text_encoders/llama.py:987:41 (BaseQwen3.logits)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "s"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "input"
+        },
+        {
+          "argument": "keyword:offloadable",
+          "parameter": "offloadable"
+        }
+      ],
+      "site": "comfy/background_removal/birefnet.py:436:38 (DeformableConv2d.forward)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "s"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "input"
+        },
+        {
+          "argument": "keyword:offloadable",
+          "parameter": "offloadable"
+        }
+      ],
+      "site": "comfy/controlnet.py:384:44 (ControlLoraOps.Linear.forward)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "s"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "input"
+        },
+        {
+          "argument": "keyword:offloadable",
+          "parameter": "offloadable"
+        }
+      ],
+      "site": "comfy/controlnet.py:426:44 (ControlLoraOps.Conv2d.forward)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "s"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "input"
+        },
+        {
+          "argument": "keyword:offloadable",
+          "parameter": "offloadable"
+        }
+      ],
+      "site": "comfy/text_encoders/llama.py:864:41 (BaseGenerate.logits)",
+      "status": "static-compatible"
+    },
+    {
+      "bindings": [
+        {
+          "argument": "positional:0",
+          "parameter": "s"
+        },
+        {
+          "argument": "positional:1",
+          "parameter": "input"
+        },
+        {
+          "argument": "keyword:offloadable",
+          "parameter": "offloadable"
+        }
+      ],
+      "site": "comfy/text_encoders/llama.py:987:41 (BaseQwen3.logits)",
+      "status": "static-compatible"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-97205767aa40-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "s",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "input",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "device",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "bias_dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": "False",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "offloadable",
+      "type": "dynamic"
+    },
+    {
+      "default": "None",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "compute_dtype",
+      "type": "dynamic"
+    },
+    {
+      "default": "False",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "want_requant",
+      "type": "dynamic"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-97205767AA40",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "16325db246fd8524e936fedc5d7a59856c11000ed73909224451ff98ffb3b8f5",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/background_removal/birefnet.py",
+        "sha256": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1"
+      },
+      {
+        "path": "comfy/controlnet.py",
+        "sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57"
+      },
+      {
+        "path": "comfy/ops.py",
+        "sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+      },
+      {
+        "path": "comfy/text_encoders/llama.py",
+        "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "comfy.ops.cast_bias_weight"
+  },
+  "resolution": {
+    "blocker_reason": "The checked-in Python definition and reconciled call syntax prove parameter spelling only; dynamic tensor types, delegated external operations, output semantics, values, errors, and gradients require the unavailable versioned development oracle.",
+    "expected_resolution_module": "sim_operator_indirection_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-comfy-operator-indirection-comfy-tensor-op-227f5d04687a",
+    "state": "blocked_missing_oracle_dependency"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "offloadable",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 436,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.regular_conv",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "x",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "DeformableConv2d.forward",
+      "site": "comfy/background_removal/birefnet.py:436:38 (DeformableConv2d.forward)",
+      "source_path": "comfy/background_removal/birefnet.py",
+      "source_sha256": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_bias_weight"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "offloadable",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 384,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "input",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ControlLoraOps.Linear.forward",
+      "site": "comfy/controlnet.py:384:44 (ControlLoraOps.Linear.forward)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_bias_weight"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "offloadable",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 426,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "input",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ControlLoraOps.Conv2d.forward",
+      "site": "comfy/controlnet.py:426:44 (ControlLoraOps.Conv2d.forward)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_bias_weight"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "offloadable",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 864,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "module",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "input",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BaseGenerate.logits",
+      "site": "comfy/text_encoders/llama.py:864:41 (BaseGenerate.logits)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_bias_weight"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "arity": 3,
+        "kind": "destructure"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "offloadable",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 987,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "module",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "input",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "BaseQwen3.logits",
+      "site": "comfy/text_encoders/llama.py:987:41 (BaseQwen3.logits)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "comfy.ops.cast_bias_weight"
+    }
+  ],
+  "static_definition": {
+    "definition_kind": "FunctionDef",
+    "definition_line": 281,
+    "definition_path": "comfy/ops.py",
+    "parameter_source": "declared-function",
+    "parameters": [
+      {
+        "default": null,
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "s",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "input",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "device",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "bias_dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": "False",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "offloadable",
+        "type": "dynamic"
+      },
+      {
+        "default": "None",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "compute_dtype",
+        "type": "dynamic"
+      },
+      {
+        "default": "False",
+        "keyword_only": false,
+        "kind": "positional_or_keyword",
+        "name": "want_requant",
+        "type": "dynamic"
+      }
+    ],
+    "return_annotation": null,
+    "return_contract": {
+      "arities": [
+        1
+      ],
+      "types": [
+        [
+          {
+            "syntax_kind": "Call"
+          }
+        ],
+        [
+          {
+            "syntax_kind": "Call"
+          }
+        ],
+        [
+          {
+            "syntax_kind": "Call"
+          }
+        ]
+      ]
+    }
+  }
+}

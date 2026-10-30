@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "backend": "directml",
+  "abi_floor": "1.13.1",
+  "target_version": "0x6200",
+  "minimum_feature_level": "DML_FEATURE_LEVEL_6_2",
+  "minimum_windows_build": 19041,
+  "targets": [
+    "aarch64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc"
+  ],
+  "reviewed_package": {
+    "id": "Microsoft.AI.DirectML",
+    "version": "1.13.1",
+    "nupkg_sha256": "a38cef0d59f314fbcc0cd6551c5a762db7cfdaf8a977f85df32a0b1e279d3ba7",
+    "source": "https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.13.1"
+  },
+  "headers": [
+    {
+      "path": "include/DirectML.h",
+      "byte_length": 74869,
+      "sha256": "87971f944896fb983d7655a17a913f0417f6b3260eaa78853b3450124dc72239",
+      "source": "Microsoft.AI.DirectML/1.13.1"
+    },
+    {
+      "path": "windows-0.61.3/Win32/AI/MachineLearning/DirectML/mod.rs",
+      "byte_length": 140416,
+      "sha256": "dc72b21a574679ade5b02a08003ea58cb3d766cb7a1b8d75256aaa9e5dda1e9c",
+      "source": "workspace windows 0.61 generated metadata cross-check"
+    },
+    {
+      "path": "windows-0.61.3/Win32/Graphics/Direct3D12/mod.rs",
+      "byte_length": 1073792,
+      "sha256": "a496524f82273e4f9efec04a360799d19b8b30362c75d0c56a1d2ab9bbf069a9",
+      "source": "workspace windows 0.61 generated binding"
+    },
+    {
+      "path": "windows-0.61.3/Win32/Graphics/Dxgi/mod.rs",
+      "byte_length": 387278,
+      "sha256": "9e61e4880c444ad90db534b173daa36cabfb5d26e240299306e923e7fcf30f43",
+      "source": "workspace windows 0.61 generated binding"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "D3D12.dll",
+      "abi_version": "windows-10.0.19041",
+      "discovery": ["system32"],
+      "symbols": [
+        {
+          "name": "D3D12CreateDevice",
+          "signature": "HRESULT(IUnknown*,D3D_FEATURE_LEVEL,REFIID,void**)"
+        }
+      ],
+      "binding_owner": "windows::Win32::Graphics::Direct3D12"
+    },
+    {
+      "name": "DirectML.dll",
+      "abi_version": "1.13.1",
+      "discovery": ["signed_application_package", "compatible_system32_component"],
+      "symbols": [
+        {
+          "name": "DMLCreateDevice",
+          "signature": "HRESULT(ID3D12Device*,DML_CREATE_DEVICE_FLAGS,REFIID,void**)"
+        },
+        {
+          "name": "DMLCreateDevice1",
+          "signature": "HRESULT(ID3D12Device*,DML_CREATE_DEVICE_FLAGS,DML_FEATURE_LEVEL,REFIID,void**)"
+        }
+      ],
+      "binding_owner": "sim_backend_directml::abi"
+    },
+    {
+      "name": "DXGI.dll",
+      "abi_version": "windows-10.0.19041",
+      "discovery": ["system32"],
+      "symbols": [
+        {
+          "name": "CreateDXGIFactory2",
+          "signature": "HRESULT(UINT,REFIID,void**)"
+        }
+      ],
+      "binding_owner": "windows::Win32::Graphics::Dxgi"
+    }
+  ],
+  "interfaces": [
+    {"name":"IDMLObject","iid":"c8263aac-9e0c-4a2d-9b8e-007521a3317c","vtable_slots":7},
+    {"name":"IDMLDevice","iid":"6dbd6437-96fd-423f-a98c-ae5e7c2a573f","vtable_slots":17},
+    {"name":"IDMLDeviceChild","iid":"27e83142-8165-49e3-974e-2fd66e4cb69d","vtable_slots":8},
+    {"name":"IDMLPageable","iid":"b1ab0825-4542-4a4b-8617-6dde6e8f6201","vtable_slots":8},
+    {"name":"IDMLDispatchable","iid":"dcb821a8-1039-441e-9f1c-b1759c2f3cec","vtable_slots":9},
+    {"name":"IDMLOperator","iid":"26caae7a-3081-4633-9581-226fbe57695d","vtable_slots":8},
+    {"name":"IDMLCompiledOperator","iid":"6b15e56a-bf5c-4902-92d8-da3a650afea4","vtable_slots":9},
+    {"name":"IDMLOperatorInitializer","iid":"427c1113-435c-469c-8676-4d5dd072f813","vtable_slots":10},
+    {"name":"IDMLBindingTable","iid":"29c687dc-de74-4e3b-ab00-1168f2fc3cfc","vtable_slots":13},
+    {"name":"IDMLCommandRecorder","iid":"e6857a76-2e3e-4fdd-bff4-5d2ba10fb453","vtable_slots":9}
+  ],
+  "layouts": [
+    {"name":"DML_BINDING_DESC","size":16,"align":8},
+    {"name":"DML_BINDING_PROPERTIES","size":24,"align":8},
+    {"name":"DML_BINDING_TABLE_DESC","size":32,"align":8},
+    {"name":"DML_BUFFER_ARRAY_BINDING","size":16,"align":8},
+    {"name":"DML_BUFFER_BINDING","size":24,"align":8},
+    {"name":"DML_BUFFER_TENSOR_DESC","size":48,"align":8},
+    {"name":"DML_FEATURE_DATA_FEATURE_LEVELS","size":4,"align":4},
+    {"name":"DML_FEATURE_DATA_TENSOR_DATA_TYPE_SUPPORT","size":4,"align":4},
+    {"name":"DML_FEATURE_QUERY_FEATURE_LEVELS","size":16,"align":8},
+    {"name":"DML_FEATURE_QUERY_TENSOR_DATA_TYPE_SUPPORT","size":4,"align":4},
+    {"name":"DML_ELEMENT_WISE_ADD_OPERATOR_DESC","size":24,"align":8},
+    {"name":"DML_OPERATOR_DESC","size":16,"align":8},
+    {"name":"DML_TENSOR_DESC","size":16,"align":8},
+    {"name":"GUID","size":16,"align":4}
+  ],
+  "redistributable": {
+    "file_version": "1.13.1.0",
+    "authenticode_required": true,
+    "final_application_signing_required": true,
+    "architectures": [
+      {
+        "target": "aarch64-pc-windows-msvc",
+        "source_path": "bin/arm64-win/DirectML.dll",
+        "byte_length": 13947936,
+        "sha256": "96a5b8b75c4cd5e47fe9a4a87d0146276930fa58083b0538fd1b503e98b842f4"
+      },
+      {
+        "target": "x86_64-pc-windows-msvc",
+        "source_path": "bin/x64-win/DirectML.dll",
+        "byte_length": 14021152,
+        "sha256": "5ab77cc5db8e1544d386fd28586598317da8dcbef098fb86d8d8a60e739e0e5d"
+      }
+    ],
+    "license_files": [
+      {"path":"LICENSE.txt","sha256":"a05138e3a085ff60a44881eedfa58dccb03ecc1d7b1f6ae888418e8c2fec4b8d"},
+      {"path":"LICENSE-CODE.txt","sha256":"903df5512f7d02609fed0c780a9b704f5a3eeb6e4d84ebe42a29845c81899a3c"},
+      {"path":"ThirdPartyNotices.txt","sha256":"2c95795c13ff48a58b6ed916f37901c23d964b5d9d601af422f17ad2172e7950"}
+    ]
+  },
+  "unsafe_owner": "sim_backend_directml::loader"
+}

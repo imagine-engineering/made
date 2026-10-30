@@ -1,0 +1,71 @@
+no-clearly-defined = true
+private = { ignore = true }
+# Licenses allowed in Zed's dependencies. AGPL should not be added to this list.
+# When adding to this list, please check the following open source license policies:
+#
+# * https://opensource.google/documentation/reference/thirdparty/licenses
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "MIT-0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MPL-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "CC0-1.0",
+    "NCSA",
+    "Unicode-3.0",
+    "OpenSSL",
+    "Zlib",
+    "BSL-1.0",
+    "bzip2-1.0.6",
+    "CDLA-Permissive-2.0",
+    "BlueOak-1.0.0",
+]
+
+[procinfo.clarify]
+license = "MIT"
+[[procinfo.clarify.files]]
+path = 'LICENSE.md'
+checksum = '37db33bbbd7348969eda397b89a16f252d56c1ca7481b6ccaf56ccdcbab5dcca'
+
+[webpki.clarify]
+license = "ISC" # It actually says 'ISC-style' but I don't know the SPDX expression for that.
+[[webpki.clarify.files]]
+path = 'LICENSE'
+checksum = '5b698ca13897be3afdb7174256fa1574f8c6892b8bea1a66dd6469d3fe27885a'
+
+[fuchsia-cprng.clarify]
+license = "BSD-3-Clause"
+[[fuchsia-cprng.clarify.files]]
+path = 'LICENSE'
+checksum = '03b114f53e6587a398931762ee11e2395bfdba252a329940e2c8c9e81813845b'
+
+[zune-jpeg]
+accepted = ["IJG"]
+
+[zune-jpeg.clarify]
+license = "(MIT OR Apache-2.0 OR Zlib) AND IJG"
+
+[[zune-jpeg.clarify.files]]
+path = "LICENSE-APACHE"
+license = "Apache-2.0"
+checksum = "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+
+[[zune-jpeg.clarify.files]]
+path = "LICENSE-MIT"
+license = "MIT"
+checksum = "d30047bca3b516639339a3c279bb84c3483124fb5a9dafe3c75056a85090e745"
+
+[[zune-jpeg.clarify.files]]
+path = "LICENSE-ZLIB"
+license = "Zlib"
+checksum = "d201d14804d3bcd3b944147173175e4abfbd838b7c8069b6bd3452496bf13e6c"
+
+[[zune-jpeg.clarify.files]]
+path = "README.ijg"
+license = "IJG"
+checksum = "19a394f75e5abcc58ebf6da5617a3681ff03a8619d2335d6c4c2248283079229"
+start = "LEGAL ISSUES\n============\n"
+end = "\n\nREFERENCES\n=========="

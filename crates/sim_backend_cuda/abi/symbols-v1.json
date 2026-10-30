@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "backend": "cuda",
+  "abi_floor": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312",
+  "targets": [
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu"
+  ],
+  "discovery_order": [
+    "SIM_CUDA_ROOT",
+    "CUDA_PATH",
+    "signed_package_roots",
+    "installed_driver_library"
+  ],
+  "libraries": [
+    {
+      "id": "cublaslt",
+      "linux_filename": "libcublasLt.so.12",
+      "windows_filename": "cublasLt64_12.dll",
+      "headers": [
+        {"path":"include/cublasLt.h","sha256":"e752b21d073b4fdaf19957cd8a63fd3babe46bc26a05d79b8d928258a65a92de"}
+      ],
+      "reviewed_source": "NVIDIA CUDA Toolkit 12.2.2 cuBLAS 12.2.5.6 documentation and redistribution manifest",
+      "reviewed_source_sha256": "56ccf7ffbe7ea204fbb0c5c4c55829ef3fb81b2e811f8073fcd0bbef438b262e",
+      "symbols": [
+        {"name":"cublasLtCreate","signature":"cublasStatus_t(cublasLtHandle_t*)"},
+        {"name":"cublasLtDestroy","signature":"cublasStatus_t(cublasLtHandle_t)"},
+        {"name":"cublasLtGetCudartVersion","signature":"size_t(void)"},
+        {"name":"cublasLtGetVersion","signature":"size_t(void)"}
+      ]
+    },
+    {
+      "id": "cudnn",
+      "linux_filename": "libcudnn.so.9",
+      "windows_filename": "cudnn64_9.dll",
+      "headers": [
+        {"path":"include/cudnn_v9.h","sha256":"1082d51d3b564bace8ef6fc6ee335b668b2bfa517f57c06efd428263e5c21855"},
+        {"path":"include/cudnn_graph_v9.h","sha256":"6cb707f3e93193c9894c3a9037aa0319d3b5a58f28fe1e3a1c491c1150d3b49a"},
+        {"path":"include/cudnn_version_v9.h","sha256":"6f784db48abd2094e0145cc18e6be42661f6c83a257adf15c9442d365fdf5ffd"}
+      ],
+      "reviewed_source": "NVIDIA cuDNN 9.0.0.312 CUDA 12 documentation and redistribution manifest",
+      "reviewed_source_sha256": "d3890e609d6530ee5b88ff95b60c8e6b1c1ec7fa966ec533925f20f896fcc630",
+      "symbols": [
+        {"name":"cudnnCreate","signature":"cudnnStatus_t(cudnnHandle_t*)"},
+        {"name":"cudnnDestroy","signature":"cudnnStatus_t(cudnnHandle_t)"},
+        {"name":"cudnnGetCudartVersion","signature":"size_t(void)"},
+        {"name":"cudnnGetVersion","signature":"size_t(void)"},
+        {"name":"cudnnSetStream","signature":"cudnnStatus_t(cudnnHandle_t,cudaStream_t)"}
+      ]
+    },
+    {
+      "id": "driver",
+      "linux_filename": "libcuda.so.1",
+      "windows_filename": "nvcuda.dll",
+      "headers": [
+        {"path":"include/cuda.h","sha256":"a2b4436404c3a9a4231d667c811f24e9ddac256ab3f30c7a486120550abd78d5"}
+      ],
+      "reviewed_source": "NVIDIA CUDA 12.2.2 Driver API documentation; the installed driver is never redistributed",
+      "reviewed_source_sha256": "9de29c80cfcae77678bf3bc8f82311d2bd2f33aa7aa8ebd8ecd159d0f021ffab",
+      "symbols": [
+        {"name":"cuCtxCreate_v2","signature":"CUresult(CUcontext*,unsigned int,CUdevice)"},
+        {"name":"cuCtxDestroy_v2","signature":"CUresult(CUcontext)"},
+        {"name":"cuCtxSetCurrent","signature":"CUresult(CUcontext)"},
+        {"name":"cuDeviceGet","signature":"CUresult(CUdevice*,int)"},
+        {"name":"cuDeviceGetCount","signature":"CUresult(int*)"},
+        {"name":"cuDriverGetVersion","signature":"CUresult(int*)"},
+        {"name":"cuEventCreate","signature":"CUresult(CUevent*,unsigned int)"},
+        {"name":"cuEventDestroy_v2","signature":"CUresult(CUevent)"},
+        {"name":"cuEventRecord","signature":"CUresult(CUevent,CUstream)"},
+        {"name":"cuEventSynchronize","signature":"CUresult(CUevent)"},
+        {"name":"cuInit","signature":"CUresult(unsigned int)"},
+        {"name":"cuLaunchKernel","signature":"CUresult(CUfunction,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,CUstream,void**,void**)"},
+        {"name":"cuMemAlloc_v2","signature":"CUresult(CUdeviceptr*,size_t)"},
+        {"name":"cuMemFree_v2","signature":"CUresult(CUdeviceptr)"},
+        {"name":"cuMemGetInfo_v2","signature":"CUresult(size_t*,size_t*)"},
+        {"name":"cuMemcpyDtoHAsync_v2","signature":"CUresult(void*,CUdeviceptr,size_t,CUstream)"},
+        {"name":"cuMemcpyHtoDAsync_v2","signature":"CUresult(CUdeviceptr,const void*,size_t,CUstream)"},
+        {"name":"cuModuleGetFunction","signature":"CUresult(CUfunction*,CUmodule,const char*)"},
+        {"name":"cuModuleLoadData","signature":"CUresult(CUmodule*,const void*)"},
+        {"name":"cuModuleUnload","signature":"CUresult(CUmodule)"},
+        {"name":"cuStreamCreate","signature":"CUresult(CUstream*,unsigned int)"},
+        {"name":"cuStreamDestroy_v2","signature":"CUresult(CUstream)"},
+        {"name":"cuStreamSynchronize","signature":"CUresult(CUstream)"}
+      ]
+    },
+    {
+      "id": "nvrtc",
+      "linux_filename": "libnvrtc.so.12",
+      "windows_filename": "nvrtc64_122_0.dll",
+      "headers": [
+        {"path":"include/nvrtc.h","sha256":"16da88110bccc18283eeb7a2834a059b3656744082469a50b300e5db98c43739"}
+      ],
+      "reviewed_source": "NVIDIA CUDA Toolkit 12.2.2 NVRTC 12.2.140 documentation and redistribution manifest",
+      "reviewed_source_sha256": "d13903b5785f9c2157bec4c0d48f2217bfd9079dae5e9873901e4723a83a31d4",
+      "symbols": [
+        {"name":"nvrtcCompileProgram","signature":"nvrtcResult(nvrtcProgram,int,const char* const*)"},
+        {"name":"nvrtcCreateProgram","signature":"nvrtcResult(nvrtcProgram*,const char*,const char*,int,const char* const*,const char* const*)"},
+        {"name":"nvrtcDestroyProgram","signature":"nvrtcResult(nvrtcProgram*)"},
+        {"name":"nvrtcGetProgramLog","signature":"nvrtcResult(nvrtcProgram,char*)"},
+        {"name":"nvrtcGetProgramLogSize","signature":"nvrtcResult(nvrtcProgram,size_t*)"},
+        {"name":"nvrtcGetPTX","signature":"nvrtcResult(nvrtcProgram,char*)"},
+        {"name":"nvrtcGetPTXSize","signature":"nvrtcResult(nvrtcProgram,size_t*)"},
+        {"name":"nvrtcVersion","signature":"nvrtcResult(int*,int*)"}
+      ]
+    }
+  ],
+  "layouts": [
+    {"name":"CUcontext","size":8,"align":8},
+    {"name":"CUdevice","size":4,"align":4},
+    {"name":"CUdeviceptr","size":8,"align":8},
+    {"name":"CUevent","size":8,"align":8},
+    {"name":"CUfunction","size":8,"align":8},
+    {"name":"CUmodule","size":8,"align":8},
+    {"name":"CUresult","size":4,"align":4},
+    {"name":"CUstream","size":8,"align":8},
+    {"name":"CUuuid","size":16,"align":1},
+    {"name":"cublasLtHandle_t","size":8,"align":8},
+    {"name":"cublasStatus_t","size":4,"align":4},
+    {"name":"cudnnHandle_t","size":8,"align":8},
+    {"name":"cudnnStatus_t","size":4,"align":4},
+    {"name":"nvrtcProgram","size":8,"align":8},
+    {"name":"nvrtcResult","size":4,"align":4}
+  ],
+  "versions": {
+    "cuda_driver_minimum": 12020,
+    "nvrtc_major": 12,
+    "nvrtc_minimum_minor": 2,
+    "cublaslt_minimum": 120205,
+    "cudnn_minimum": 90000,
+    "cudnn_abi_major": 9
+  },
+  "unsafe_owner": "sim_backend_cuda::loader",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+  "package_policy": {
+    "redistribute_driver": false,
+    "approved_redistributables": [],
+    "license_approval_required": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-cuda-package-v1",
+    "runtime_compilation_for_core_kernels": false
+  }
+}

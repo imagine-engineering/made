@@ -1,0 +1,104 @@
+name: collaboration_release_candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collaboration-release-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build collaboration release candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411
+        with:
+          egress-policy: audit
+      - name: Checkout release source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          clean: false
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Configure Cargo
+        run: |
+          mkdir -p ./../.cargo
+          cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+      - name: Install Linux build dependencies
+        run: ./script/linux
+      - name: Download pinned WASI SDK
+        run: ./script/download-wasi-sdk
+      - name: Install cargo-about
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: cargo-about@0.8.2
+      - name: Validate release contract
+        run: script/collaboration-release-contract --dry-run
+      - name: Build canonical Rust artifacts
+        run: |
+          cargo build --locked --release --package collab --bin collab
+          cargo build --locked --release --package pair_relay --bin pair-relay
+          cargo build --locked --release --package push_gateway
+          cargo build --locked --release --manifest-path tools/buzz_compat/Cargo.toml --bin buzz
+      - name: Generate canonical third-party notices
+        run: script/generate-licenses target/collaboration-third-party-notices.md
+      - name: Assemble release candidate
+        run: |
+          script/collaboration-release-contract assemble \
+            --output target/collaboration-release \
+            --source-sha "$GITHUB_SHA" \
+            --collab-binary target/release/collab \
+            --pair-relay-binary target/release/pair-relay \
+            --buzz-binary tools/buzz_compat/target/release/buzz \
+            --notices target/collaboration-third-party-notices.md
+      - name: Verify assembled release candidate
+        run: |
+          script/collaboration-release-contract verify \
+            --manifest target/collaboration-release/release-manifest.json
+      - name: Upload release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: collaboration-release-candidate-${{ github.sha }}
+          path: target/collaboration-release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  attest:
+    name: Sign collaboration release manifest and packages
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411
+        with:
+          egress-policy: audit
+      - name: Checkout release contract
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          clean: false
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: collaboration-release-candidate-${{ github.sha }}
+          path: target/collaboration-release
+      - name: Verify release candidate before signing
+        run: |
+          script/collaboration-release-contract verify \
+            --manifest target/collaboration-release/release-manifest.json
+      - name: Sign release manifest and packages with GitHub OIDC provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
+        with:
+          subject-path: target/collaboration-release/*

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.hunyuan3d",
+  "source_sha256": "b40684e319579f7f1fb43fc513c0a94298602468d777c11a765de728256fbab0",
+  "aliases": [
+    "tencent"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0658",
+      "node_identifier": "Tencent3DPartNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0659",
+      "node_identifier": "Tencent3DTextureEditNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0660",
+      "node_identifier": "TencentImageToModelNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0661",
+      "node_identifier": "TencentModelTo3DUVNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0662",
+      "node_identifier": "TencentSmartTopologyNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0663",
+      "node_identifier": "TencentTextToModelNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0164",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-part",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0165",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-part/query",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0166",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-pro",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0167",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-pro/query",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0168",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0169",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0170",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-texture-edit",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0171",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-texture-edit/query",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0172",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-uv",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0173",
+      "method": "POST",
+      "path": "/proxy/tencent/hunyuan/3d-uv/query",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical media integration pending"
+}

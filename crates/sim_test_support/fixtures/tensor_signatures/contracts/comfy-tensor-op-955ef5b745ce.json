@@ -1,0 +1,371 @@
+{
+  "canonical_target": "torch.std",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/model_detection.py:519:44 (detect_unet_config)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/supported_models.py:112:36 (SD20.model_type)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_audio.py:104:11 (vae_decode_audio)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_latent.py:397:19 (LatentOperationTonemapReinhard.execute.tonemap_reinhard)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_model_advanced.py:295:22 (RescaleCFG.patch.rescale_cfg)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_model_advanced.py:296:22 (RescaleCFG.patch.rescale_cfg)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/model_detection.py:519:44 (detect_unet_config)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/supported_models.py:112:36 (SD20.model_type)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_audio.py:104:11 (vae_decode_audio)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_latent.py:397:19 (LatentOperationTonemapReinhard.execute.tonemap_reinhard)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_model_advanced.py:295:22 (RescaleCFG.patch.rescale_cfg)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_model_advanced.py:296:22 (RescaleCFG.patch.rescale_cfg)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-955ef5b745ce-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match reduced axes, keep-dimension behavior, empty-domain behavior, output rank, and scalar-versus-tensor results.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "unbiased",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-955EF5B745CE",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "0ad8ce70c7096583a4fd3360693c63d740c2f46edfd5cc0f06638756405ce66f",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/model_detection.py",
+        "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+      },
+      {
+        "path": "comfy/supported_models.py",
+        "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+      },
+      {
+        "path": "comfy_extras/nodes_audio.py",
+        "sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4"
+      },
+      {
+        "path": "comfy_extras/nodes_latent.py",
+        "sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961"
+      },
+      {
+        "path": "comfy_extras/nodes_model_advanced.py",
+        "sha256": "ffa70c4bb3568537ba13b368092d2599b861db7c83b1bcfa41347058b40dcba7"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.std"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "reduction_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-reduction-comfy-tensor-op-00e998458e0c",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 44,
+      "consumer_output_expectation": {
+        "attribute": "item",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "unbiased",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 519,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "state_dict['{}layers.{}.ffn_norm1.weight'.format(key_prefix, dit_config['n_layers'] - 2)]",
+          "syntax_kind": "Subscript"
+        }
+      ],
+      "scope": "detect_unet_config",
+      "site": "comfy/model_detection.py:519:44 (detect_unet_config)",
+      "source_path": "comfy/model_detection.py",
+      "source_sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072",
+      "status": "static-call-observed",
+      "target_syntax": "torch.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "unbiased",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 112,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "out",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SD20.model_type",
+      "site": "comfy/supported_models.py:112:36 (SD20.model_type)",
+      "source_path": "comfy/supported_models.py",
+      "source_sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69",
+      "status": "static-call-observed",
+      "target_syntax": "torch.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "[1, 2]",
+          "syntax_kind": "List"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 104,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "audio",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "vae_decode_audio",
+      "site": "comfy_extras/nodes_audio.py:104:11 (vae_decode_audio)",
+      "source_path": "comfy_extras/nodes_audio.py",
+      "source_sha256": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "dims",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 397,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "latent_vector_magnitude",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LatentOperationTonemapReinhard.execute.tonemap_reinhard",
+      "site": "comfy_extras/nodes_latent.py:397:19 (LatentOperationTonemapReinhard.execute.tonemap_reinhard)",
+      "source_path": "comfy_extras/nodes_latent.py",
+      "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+      "status": "static-call-observed",
+      "target_syntax": "torch.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "(1, 2, 3)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 295,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "cond",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "RescaleCFG.patch.rescale_cfg",
+      "site": "comfy_extras/nodes_model_advanced.py:295:22 (RescaleCFG.patch.rescale_cfg)",
+      "source_path": "comfy_extras/nodes_model_advanced.py",
+      "source_sha256": "ffa70c4bb3568537ba13b368092d2599b861db7c83b1bcfa41347058b40dcba7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "(1, 2, 3)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 296,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x_cfg",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "RescaleCFG.patch.rescale_cfg",
+      "site": "comfy_extras/nodes_model_advanced.py:296:22 (RescaleCFG.patch.rescale_cfg)",
+      "source_path": "comfy_extras/nodes_model_advanced.py",
+      "source_sha256": "ffa70c4bb3568537ba13b368092d2599b861db7c83b1bcfa41347058b40dcba7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.std"
+    }
+  ],
+  "static_definition": null
+}

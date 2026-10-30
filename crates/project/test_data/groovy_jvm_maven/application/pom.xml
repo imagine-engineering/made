@@ -1,0 +1,34 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>evidence</groupId>
+    <artifactId>groovy-jvm-maven</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>application</artifactId>
+  <dependencies>
+    <dependency>
+      <groupId>evidence</groupId>
+      <artifactId>library</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+  <profiles><profile><id>parity</id>
+    <dependencies><dependency><groupId>evidence</groupId><artifactId>parity-processor</artifactId><version>${project.version}</version><scope>provided</scope></dependency></dependencies>
+    <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><configuration><proc>full</proc></configuration></plugin></plugins></build>
+  </profile></profiles>
+</project>

@@ -1,0 +1,1166 @@
+{
+  "status": "CAPTURE_DERIVED_TEST_PROPOSAL_NOT_REGENERATED_GOLD",
+  "source_module_sha256": "decb87d9aed1e7c9582284e57a5cd50b9ec7a2abc82d400b43db8a7b08255f56",
+  "source_result_sha256": "f90fde65146aceff90ecc78e16cd804539827820d0d86f1e1a060845ea26eb71",
+  "method": "model_validate",
+  "observed_profile": {
+    "pydantic": "2.13.5",
+    "pydantic_core": "2.46.5"
+  },
+  "cases": [
+    {
+      "id": "retained-0",
+      "raw_json_utf8_hex": "7b2263726561746564223a22323032362d31302d30315430303a30303a30305a222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T00:00:00+00:00",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "retained-1",
+      "raw_json_utf8_hex": "7b2263726561746564223a226e6f742d612d64617465222c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, invalid character in year",
+          "input": "not-a-date",
+          "ctx": {
+            "error": "invalid character in year"
+          }
+        }
+      ]
+    },
+    {
+      "id": "retained-2",
+      "raw_json_utf8_hex": "7b2263726561746564223a34322c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-01-01T00:00:42+00:00",
+        "year": 1970,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 42,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "retained-3",
+      "raw_json_utf8_hex": "7b2263726561746564223a747275652c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_type",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime",
+          "input": true
+        }
+      ]
+    },
+    {
+      "id": "retained-4",
+      "raw_json_utf8_hex": "7b2263726561746564223a6e756c6c2c2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": null,
+      "source_errors": []
+    },
+    {
+      "id": "matrix-omitted",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": null,
+      "source_errors": []
+    },
+    {
+      "id": "matrix-null",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a6e756c6c7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": null,
+      "source_errors": []
+    },
+    {
+      "id": "matrix-bool-true",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a747275657d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_type",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime",
+          "input": true
+        }
+      ]
+    },
+    {
+      "id": "matrix-bool-false",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a66616c73657d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_type",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime",
+          "input": false
+        }
+      ]
+    },
+    {
+      "id": "matrix-iso-z",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31302d30315430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T00:00:00+00:00",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-iso-offset",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31302d30315431323a33343a35362b30353a3330227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T12:34:56+05:30",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 12,
+        "minute": 34,
+        "second": 56,
+        "microsecond": 0,
+        "utc_offset_seconds": 19800.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-iso-negative-offset",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31302d30315431323a33343a35362d30373a3030227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T12:34:56-07:00",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 12,
+        "minute": 34,
+        "second": 56,
+        "microsecond": 0,
+        "utc_offset_seconds": -25200.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-iso-naive",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31302d30315431323a33343a3536227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T12:34:56",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 12,
+        "minute": 34,
+        "second": 56,
+        "microsecond": 0,
+        "utc_offset_seconds": null
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-iso-space",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31302d30312031323a33343a3536227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T12:34:56",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 12,
+        "minute": 34,
+        "second": 56,
+        "microsecond": 0,
+        "utc_offset_seconds": null
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-date-only",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31302d3031227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-10-01T00:00:00",
+        "year": 2026,
+        "month": 10,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": null
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-leap-valid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032342d30322d32395430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2024-02-29T00:00:00+00:00",
+        "year": 2024,
+        "month": 2,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-leap-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032332d30322d32395430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, day value is outside expected range",
+          "input": "2023-02-29T00:00:00Z",
+          "ctx": {
+            "error": "day value is outside expected range"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-century-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22313930302d30322d32395430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, day value is outside expected range",
+          "input": "1900-02-29T00:00:00Z",
+          "ctx": {
+            "error": "day value is outside expected range"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-century-valid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323030302d30322d32395430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2000-02-29T00:00:00+00:00",
+        "year": 2000,
+        "month": 2,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-month-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d31332d30315430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, month value is outside expected range of 1-12",
+          "input": "2026-13-01T00:00:00Z",
+          "ctx": {
+            "error": "month value is outside expected range of 1-12"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-day-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30342d33315430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, day value is outside expected range",
+          "input": "2026-04-31T00:00:00Z",
+          "ctx": {
+            "error": "day value is outside expected range"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-hour-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30315432343a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+          "input": "2026-01-01T24:00:00Z",
+          "ctx": {
+            "error": "unexpected extra characters at the end of the input"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-second-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30315430303a30303a36305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+          "input": "2026-01-01T00:00:60Z",
+          "ctx": {
+            "error": "unexpected extra characters at the end of the input"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-offset-invalid",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30315430303a30303a30302b32343a3030227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+          "input": "2026-01-01T00:00:00+24:00",
+          "ctx": {
+            "error": "unexpected extra characters at the end of the input"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-offset-seconds",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30315430303a30303a30302b30313a30303a3031227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+          "input": "2026-01-01T00:00:00+01:00:01",
+          "ctx": {
+            "error": "unexpected extra characters at the end of the input"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-lower-tz",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30317430303a30303a30307a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-01-01T00:00:00+00:00",
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-compact-offset",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30315430303a30303a30302b30353330227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-01-01T00:00:00+05:30",
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 19800.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-fraction-9",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22323032362d30312d30315430303a30303a30302e3132333435363738395a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2026-01-01T00:00:00.123456+00:00",
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 123456,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-year-min",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22303030312d30312d30315430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "0001-01-01T00:00:00+00:00",
+        "year": 1,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-year-max",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22393939392d31322d33315432333a35393a35392e3939393939395a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "9999-12-31T23:59:59.999999+00:00",
+        "year": 9999,
+        "month": 12,
+        "day": 31,
+        "hour": 23,
+        "minute": 59,
+        "second": 59,
+        "microsecond": 999999,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-year-zero",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22303030302d30312d30315430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, year 0 is out of range",
+          "input": "0000-01-01T00:00:00Z",
+          "ctx": {
+            "error": "year 0 is out of range"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-year-over",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2231303030302d30312d30315430303a30303a30305a227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, invalid date separator, expected `-`",
+          "input": "10000-01-01T00:00:00Z",
+          "ctx": {
+            "error": "invalid date separator, expected `-`"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-whitespace",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2220323032362d30312d30315430303a30303a30305a20227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, invalid character in year",
+          "input": " 2026-01-01T00:00:00Z ",
+          "ctx": {
+            "error": "invalid character in year"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-empty",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, input is too short",
+          "input": "",
+          "ctx": {
+            "error": "input is too short"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-bad",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a226e6f742d612d64617465227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, invalid character in year",
+          "input": "not-a-date",
+          "ctx": {
+            "error": "invalid character in year"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-numeric-text",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a223432227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-01-01T00:00:42+00:00",
+        "year": 1970,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 42,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-numeric-fraction-text",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2234322e3235227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-01-01T00:00:42.250000+00:00",
+        "year": 1970,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 42,
+        "microsecond": 250000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-numeric-exp-text",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22316533227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, input is too short",
+          "input": "1e3",
+          "ctx": {
+            "error": "input is too short"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-epoch-zero",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-01-01T00:00:00+00:00",
+        "year": 1970,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-epoch-seconds",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a34327d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-01-01T00:00:42+00:00",
+        "year": 1970,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 42,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-epoch-negative",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d34327d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1969-12-31T23:59:18+00:00",
+        "year": 1969,
+        "month": 12,
+        "day": 31,
+        "hour": 23,
+        "minute": 59,
+        "second": 18,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-epoch-fraction",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a34322e32357d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-01-01T00:00:42.250000+00:00",
+        "year": 1970,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 42,
+        "microsecond": 250000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-epoch-negative-fraction",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d302e32357d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1969-12-31T23:59:59.250000+00:00",
+        "year": 1969,
+        "month": 12,
+        "day": 31,
+        "hour": 23,
+        "minute": 59,
+        "second": 59,
+        "microsecond": 250000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-epoch-milliseconds",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a313730303030303030303030307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2023-11-14T22:13:20+00:00",
+        "year": 2023,
+        "month": 11,
+        "day": 14,
+        "hour": 22,
+        "minute": 13,
+        "second": 20,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-seconds-millisecond-cutoff",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a32303030303030303030307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2603-10-11T11:33:20+00:00",
+        "year": 2603,
+        "month": 10,
+        "day": 11,
+        "hour": 11,
+        "minute": 33,
+        "second": 20,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-over-cutoff",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a32303030303030303030317d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1970-08-20T11:33:20.001000+00:00",
+        "year": 1970,
+        "month": 8,
+        "day": 20,
+        "hour": 11,
+        "minute": 33,
+        "second": 20,
+        "microsecond": 1000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-negative-cutoff",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d32303030303030303030307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1336-03-23T12:26:40+00:00",
+        "year": 1336,
+        "month": 3,
+        "day": 23,
+        "hour": 12,
+        "minute": 26,
+        "second": 40,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-negative-over-cutoff",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d32303030303030303030317d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1969-05-14T12:26:39.999000+00:00",
+        "year": 1969,
+        "month": 5,
+        "day": 14,
+        "hour": 12,
+        "minute": 26,
+        "second": 39,
+        "microsecond": 999000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-cutoff-fraction",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a32303030303030303030302e357d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "2603-10-11T11:33:20.000500+00:00",
+        "year": 2603,
+        "month": 10,
+        "day": 11,
+        "hour": 11,
+        "minute": 33,
+        "second": 20,
+        "microsecond": 500,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-min-date-seconds",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d36323133353539363830307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1968-01-12T20:06:43.200000+00:00",
+        "year": 1968,
+        "month": 1,
+        "day": 12,
+        "hour": 20,
+        "minute": 6,
+        "second": 43,
+        "microsecond": 200000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-max-date-seconds",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a3235333430323330303739397d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "1978-01-11T21:31:40.799000+00:00",
+        "year": 1978,
+        "month": 1,
+        "day": 11,
+        "hour": 21,
+        "minute": 31,
+        "second": 40,
+        "microsecond": 799000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-min-date-ms",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d36323133353539363830303030307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "0001-01-01T00:00:00+00:00",
+        "year": 1,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "microsecond": 0,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-under-min-ms",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d36323133353539363830303030317d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, year 0 is out of range",
+          "input": -62135596800001,
+          "ctx": {
+            "error": "year 0 is out of range"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-max-date-ms",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a3235333430323330303739393939397d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": true,
+      "datetime": {
+        "isoformat": "9999-12-31T23:59:59.999000+00:00",
+        "year": 9999,
+        "month": 12,
+        "day": 31,
+        "hour": 23,
+        "minute": 59,
+        "second": 59,
+        "microsecond": 999000,
+        "utc_offset_seconds": 0.0
+      },
+      "source_errors": []
+    },
+    {
+      "id": "matrix-over-max-ms",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a3235333430323330303830303030307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+          "input": 253402300800000,
+          "ctx": {
+            "error": "dates after 9999 are not supported as unix timestamps"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-huge-integer",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a31303030303030303030303030303030303030303030303030303030303030303030303030303030307d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+          "input": 10000000000000000000000000000000000000000,
+          "ctx": {
+            "error": "dates after 9999 are not supported as unix timestamps"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-nan",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a4e614e7d",
+      "json_nonfinite_extension": true,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, NaN values not permitted",
+          "input": {
+            "nonfinite_python_float": "nan"
+          },
+          "ctx": {
+            "error": "NaN values not permitted"
+          }
+        }
+      ],
+      "nonfinite_f64": "NaN"
+    },
+    {
+      "id": "matrix-pos-inf",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a496e66696e6974797d",
+      "json_nonfinite_extension": true,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+          "input": {
+            "nonfinite_python_float": "inf"
+          },
+          "ctx": {
+            "error": "dates after 9999 are not supported as unix timestamps"
+          }
+        }
+      ],
+      "nonfinite_f64": "Infinity"
+    },
+    {
+      "id": "matrix-neg-inf",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a2d496e66696e6974797d",
+      "json_nonfinite_extension": true,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime, dates before 0000 are not supported as unix timestamps",
+          "input": {
+            "nonfinite_python_float": "-inf"
+          },
+          "ctx": {
+            "error": "dates before 0000 are not supported as unix timestamps"
+          }
+        }
+      ],
+      "nonfinite_f64": "-Infinity"
+    },
+    {
+      "id": "matrix-nan-text",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a224e614e227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, input is too short",
+          "input": "NaN",
+          "ctx": {
+            "error": "input is too short"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-inf-text",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a22496e66696e697479227d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_from_date_parsing",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime or date, input is too short",
+          "input": "Infinity",
+          "ctx": {
+            "error": "input is too short"
+          }
+        }
+      ]
+    },
+    {
+      "id": "matrix-array",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a5b5d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_type",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime",
+          "input": []
+        }
+      ]
+    },
+    {
+      "id": "matrix-object",
+      "raw_json_utf8_hex": "7b2264617461223a5b7b2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f696d616765222c2273656564223a223432227d5d2c2263726561746564223a7b7d7d",
+      "json_nonfinite_extension": false,
+      "schema_admitted": false,
+      "datetime": null,
+      "source_errors": [
+        {
+          "type": "datetime_type",
+          "loc": [
+            "created"
+          ],
+          "msg": "Input should be a valid datetime",
+          "input": {}
+        }
+      ]
+    }
+  ]
+}

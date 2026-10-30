@@ -1,0 +1,256 @@
+syntax = "proto3";
+package zed.messages;
+
+import "worktree.proto";
+
+message GetCargoWorkspace {
+  uint64 project_id = 1;
+  uint64 request_id = 2;
+  repeated uint64 worktree_ids = 3;
+}
+
+message CancelCargoWorkspace {
+  uint64 project_id = 1;
+  uint64 request_id = 2;
+}
+
+message CargoWorkspaceResponse {
+  uint64 request_id = 1;
+  uint64 revision = 2;
+  repeated CargoWorkspace workspaces = 3;
+  repeated CargoCandidateFailure failures = 4;
+  bool partial = 5;
+  uint64 input_fingerprint = 6;
+}
+
+message CargoWorkspace {
+  ProjectPath root = 1;
+  optional ProjectPath root_manifest = 2;
+  string display_name = 3;
+  bool is_virtual = 4;
+  repeated CargoPackage members = 5;
+  optional CargoWorkspaceConfiguration configuration = 6;
+  optional CargoDependencyGraph dependency_graph = 7;
+}
+
+message CargoDependencyGraph {
+  uint32 format_version = 1;
+  string metadata_identity = 2;
+  optional string lock_identity = 3;
+  repeated CargoDependencyGraphNode nodes = 4;
+  repeated CargoDependencyGraphEdge edges = 5;
+  repeated uint32 roots = 6;
+  bool partial = 7;
+}
+
+message CargoDependencyGraphNode {
+  string identity = 1;
+  string name = 2;
+  string version = 3;
+  CargoDependencySourceKind source_kind = 4;
+  string source_identity = 5;
+  bool crates_io = 6;
+  optional ProjectPath workspace_manifest = 7;
+  repeated string enabled_features = 8;
+  uint32 lock_status = 9;
+}
+
+message CargoDependencyGraphEdge {
+  uint32 parent = 1;
+  uint32 child = 2;
+  string alias = 3;
+  CargoDependencyKind kind = 4;
+  optional string target = 5;
+  optional string version_requirement = 6;
+  bool workspace_inherited = 7;
+}
+
+message CargoWorkspaceConfiguration {
+  repeated CargoProfile profiles = 1;
+  optional CargoToolchain declared_toolchain = 2;
+  optional CargoHostCompiler host_compiler = 3;
+  CargoTargetConfiguration cargo_target = 4;
+  repeated CargoConfigurationDiagnostic diagnostics = 5;
+  bool partial = 6;
+}
+
+message CargoProfile {
+  string name = 1;
+  CargoProfileOrigin origin = 2;
+}
+
+enum CargoProfileOrigin {
+  CARGO_PROFILE_ORIGIN_IMPLICIT = 0;
+  CARGO_PROFILE_ORIGIN_DECLARED = 1;
+}
+
+message CargoToolchain {
+  ProjectPath source_path = 1;
+  CargoToolchainFormat format = 2;
+  optional string channel = 3;
+  repeated string components = 4;
+  repeated string targets = 5;
+}
+
+enum CargoToolchainFormat {
+  CARGO_TOOLCHAIN_FORMAT_TOML = 0;
+  CARGO_TOOLCHAIN_FORMAT_LEGACY = 1;
+}
+
+message CargoHostCompiler {
+  CargoHostCompilerStatus status = 1;
+  optional string release = 2;
+  optional string host_target = 3;
+  bool stale = 4;
+}
+
+enum CargoHostCompilerStatus {
+  CARGO_HOST_COMPILER_STATUS_UNKNOWN = 0;
+  CARGO_HOST_COMPILER_STATUS_AVAILABLE = 1;
+  CARGO_HOST_COMPILER_STATUS_RESTRICTED = 2;
+  CARGO_HOST_COMPILER_STATUS_MISSING = 3;
+  CARGO_HOST_COMPILER_STATUS_FAILED = 4;
+}
+
+enum CargoTargetConfiguration {
+  CARGO_TARGET_CONFIGURATION_UNRESOLVED_CARGO_DEFAULT = 0;
+}
+
+message CargoConfigurationDiagnostic {
+  optional ProjectPath source_path = 1;
+  CargoConfigurationDiagnosticCategory category = 2;
+  string message = 3;
+}
+
+enum CargoConfigurationDiagnosticCategory {
+  CARGO_CONFIGURATION_DIAGNOSTIC_CATEGORY_MANIFEST = 0;
+  CARGO_CONFIGURATION_DIAGNOSTIC_CATEGORY_TOOLCHAIN = 1;
+  CARGO_CONFIGURATION_DIAGNOSTIC_CATEGORY_COMPILER_PROBE = 2;
+}
+
+message CargoPackage {
+  string name = 1;
+  string version = 2;
+  ProjectPath manifest_path = 3;
+  bool is_default_member = 4;
+  repeated CargoTarget targets = 5;
+  repeated CargoFeature features = 6;
+  repeated CargoDependency dependencies = 7;
+}
+
+message CargoTarget {
+  string name = 1;
+  CargoTargetKind kind = 2;
+  string other_kind = 3;
+  repeated string crate_types = 4;
+  optional ProjectPath source_path = 5;
+  optional string source_display_path = 6;
+  repeated string required_features = 7;
+  string edition = 8;
+}
+
+enum CargoTargetKind {
+  CARGO_TARGET_KIND_OTHER = 0;
+  CARGO_TARGET_KIND_LIBRARY = 1;
+  CARGO_TARGET_KIND_BINARY = 2;
+  CARGO_TARGET_KIND_EXAMPLE = 3;
+  CARGO_TARGET_KIND_TEST = 4;
+  CARGO_TARGET_KIND_BENCH = 5;
+  CARGO_TARGET_KIND_BUILD_SCRIPT = 6;
+}
+
+message CargoFeature {
+  string name = 1;
+  bool defined = 2;
+  CargoFeatureEnabled enabled = 3;
+  repeated string expands = 4;
+}
+
+enum CargoFeatureEnabled {
+  CARGO_FEATURE_ENABLED_UNKNOWN = 0;
+  CARGO_FEATURE_ENABLED_YES = 1;
+  CARGO_FEATURE_ENABLED_NO = 2;
+}
+
+message CargoDependency {
+  string declaration_name = 1;
+  optional string rename = 2;
+  CargoDependencyKind kind = 3;
+  string version_requirement = 4;
+  bool optional = 5;
+  bool uses_default_features = 6;
+  repeated string requested_features = 7;
+  optional string target = 8;
+  CargoDependencySourceKind source_kind = 9;
+  optional string resolved_name = 10;
+  optional string resolved_version = 11;
+  optional ProjectPath resolved_workspace_member = 12;
+  optional ProjectPath local_manifest = 13;
+  optional ProjectPath declaration_manifest = 14;
+  CargoDependencyDeclarationOrigin declaration_origin = 15;
+  repeated CargoResolvedDependency resolved_instances = 16;
+  bool resolution_truncated = 17;
+  CargoDependencyFeatureCausality feature_causality = 18;
+  bool cycle_detected = 19;
+}
+
+message CargoResolvedDependency {
+  string name = 1;
+  string version = 2;
+  CargoDependencySourceKind source_kind = 3;
+  repeated string enabled_features = 4;
+  CargoDependencyLockStatus lock_status = 5;
+  optional ProjectPath workspace_member = 6;
+  optional ProjectPath local_manifest = 7;
+}
+
+enum CargoDependencyDeclarationOrigin {
+  CARGO_DEPENDENCY_DECLARATION_ORIGIN_UNKNOWN = 0;
+  CARGO_DEPENDENCY_DECLARATION_ORIGIN_DIRECT = 1;
+  CARGO_DEPENDENCY_DECLARATION_ORIGIN_WORKSPACE_INHERITED = 2;
+}
+
+enum CargoDependencyFeatureCausality {
+  CARGO_DEPENDENCY_FEATURE_CAUSALITY_UNKNOWN = 0;
+  CARGO_DEPENDENCY_FEATURE_CAUSALITY_VALIDATED = 1;
+  CARGO_DEPENDENCY_FEATURE_CAUSALITY_AMBIGUOUS = 2;
+}
+
+enum CargoDependencyLockStatus {
+  CARGO_DEPENDENCY_LOCK_STATUS_UNKNOWN = 0;
+  CARGO_DEPENDENCY_LOCK_STATUS_LOCKED = 1;
+  CARGO_DEPENDENCY_LOCK_STATUS_NOT_LOCKED = 2;
+  CARGO_DEPENDENCY_LOCK_STATUS_MISSING_LOCKFILE = 3;
+}
+
+enum CargoDependencyKind {
+  CARGO_DEPENDENCY_KIND_UNKNOWN = 0;
+  CARGO_DEPENDENCY_KIND_NORMAL = 1;
+  CARGO_DEPENDENCY_KIND_DEVELOPMENT = 2;
+  CARGO_DEPENDENCY_KIND_BUILD = 3;
+}
+
+enum CargoDependencySourceKind {
+  CARGO_DEPENDENCY_SOURCE_KIND_OTHER = 0;
+  CARGO_DEPENDENCY_SOURCE_KIND_PATH = 1;
+  CARGO_DEPENDENCY_SOURCE_KIND_REGISTRY = 2;
+  CARGO_DEPENDENCY_SOURCE_KIND_GIT = 3;
+}
+
+message CargoCandidateFailure {
+  ProjectPath manifest_path = 1;
+  CargoWorkspaceErrorCategory category = 2;
+  string message = 3;
+  bool has_stale_model = 4;
+}
+
+enum CargoWorkspaceErrorCategory {
+  CARGO_WORKSPACE_ERROR_CATEGORY_INTERNAL = 0;
+  CARGO_WORKSPACE_ERROR_CATEGORY_RESTRICTED = 1;
+  CARGO_WORKSPACE_ERROR_CATEGORY_CARGO_NOT_FOUND = 2;
+  CARGO_WORKSPACE_ERROR_CATEGORY_CARGO_FAILED = 3;
+  CARGO_WORKSPACE_ERROR_CATEGORY_INVALID_METADATA = 4;
+  CARGO_WORKSPACE_ERROR_CATEGORY_UNSUPPORTED_METADATA = 5;
+  CARGO_WORKSPACE_ERROR_CATEGORY_DISCONNECTED = 6;
+  CARGO_WORKSPACE_ERROR_CATEGORY_CANCELLED = 7;
+}

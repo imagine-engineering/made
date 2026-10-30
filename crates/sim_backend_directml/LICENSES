@@ -1,0 +1,19 @@
+Zed DirectML adapter package
+
+The Zed adapter source and metadata are licensed GPL-3.0-or-later.
+
+The optional Microsoft.AI.DirectML 1.13.1 redistributable remains governed by
+the Microsoft DirectML license shipped as LICENSE.txt in that package. Release
+packaging is permitted only when the unmodified upstream license and notice
+files accompany the architecture-matched DirectML.dll:
+
+- LICENSE.txt
+  SHA-256 a05138e3a085ff60a44881eedfa58dccb03ecc1d7b1f6ae888418e8c2fec4b8d
+- LICENSE-CODE.txt
+  SHA-256 903df5512f7d02609fed0c780a9b704f5a3eeb6e4d84ebe42a29845c81899a3c
+- ThirdPartyNotices.txt
+  SHA-256 2c95795c13ff48a58b6ed916f37901c23d964b5d9d601af422f17ad2172e7950
+
+D3D12.dll and DXGI.dll are Windows system components and are not redistributed
+by this adapter package. Windows SDK headers and generated workspace bindings
+are not packaged as runtime payloads.

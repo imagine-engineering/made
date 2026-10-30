@@ -1,0 +1,816 @@
+{
+  "canonical_target": "torch.Tensor.type",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/controlnet.py:386:64 (ControlLoraOps.Linear.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/controlnet.py:428:64 (ControlLoraOps.Conv2d.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/controlnet.py:864:35 (load_controlnet_state_dict)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:253:26 (TimestepEmbedder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:259:23 (ResBlock._forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:923:13 (UNetModel._forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:21:16 (sinusoidal_embedding_1d)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:170:31 (LayerNorm.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/t2i_adapter/adapter.py:171:16 (LayerNorm.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/base.py:282:28 (weight_decompose)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/base.py:301:20 (weight_decompose)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/boft.py:129:36 (BOFTAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/glora.py:138:36 (GLoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/loha.py:293:36 (LoHaAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/lokr.py:361:36 (LoKrAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/lora.py:283:36 (LoRAAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/weight_adapter/oft.py:249:36 (OFTAdapter.calculate_weight)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_sag.py:80:9 (create_blur_map)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wan.py:601:36 (merge_final)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wan.py:606:36 (merge_final)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_wan.py:656:9 (_patch_motion_single)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/controlnet.py:386:64 (ControlLoraOps.Linear.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/controlnet.py:428:64 (ControlLoraOps.Conv2d.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/controlnet.py:864:35 (load_controlnet_state_dict)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:253:26 (TimestepEmbedder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:259:23 (ResBlock._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:923:13 (UNetModel._forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:21:16 (sinusoidal_embedding_1d)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:170:31 (LayerNorm.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/t2i_adapter/adapter.py:171:16 (LayerNorm.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/base.py:282:28 (weight_decompose)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/base.py:301:20 (weight_decompose)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/boft.py:129:36 (BOFTAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/glora.py:138:36 (GLoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/loha.py:293:36 (LoHaAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lokr.py:361:36 (LoKrAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/lora.py:283:36 (LoRAAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/weight_adapter/oft.py:249:36 (OFTAdapter.calculate_weight)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_sag.py:80:9 (create_blur_map)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:601:36 (merge_final)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:606:36 (merge_final)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wan.py:656:9 (_patch_motion_single)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-90c921ecd7a0-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-90C921ECD7A0",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "fcae4e79cf3260b3e65aac6c01d30b0b98dd5e87a263a06fd578b24862944a4e",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/controlnet.py",
+        "sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+        "sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+        "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy/t2i_adapter/adapter.py",
+        "sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af"
+      },
+      {
+        "path": "comfy/weight_adapter/base.py",
+        "sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7"
+      },
+      {
+        "path": "comfy/weight_adapter/boft.py",
+        "sha256": "2850e0b4c2295cd87445415e287061fa3bfd69e88bd0aeb3eb16064864bd078d"
+      },
+      {
+        "path": "comfy/weight_adapter/glora.py",
+        "sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09"
+      },
+      {
+        "path": "comfy/weight_adapter/loha.py",
+        "sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5"
+      },
+      {
+        "path": "comfy/weight_adapter/lokr.py",
+        "sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4"
+      },
+      {
+        "path": "comfy/weight_adapter/lora.py",
+        "sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5"
+      },
+      {
+        "path": "comfy/weight_adapter/oft.py",
+        "sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89"
+      },
+      {
+        "path": "comfy_extras/nodes_sag.py",
+        "sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0"
+      },
+      {
+        "path": "comfy_extras/nodes_wan.py",
+        "sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.type"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "storage_dtype_device_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-storage-dtype-device-comfy-tensor-op-00f639d6c8a7",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 64,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 386,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "input.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "ControlLoraOps.Linear.forward",
+      "site": "comfy/controlnet.py:386:64 (ControlLoraOps.Linear.forward)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm(self.up.flatten(start_dim=1), self.down.flatten(start_dim=1)).reshape(self.weight.shape).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 64,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 428,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "input.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "ControlLoraOps.Conv2d.forward",
+      "site": "comfy/controlnet.py:428:64 (ControlLoraOps.Conv2d.forward)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "torch.mm(self.up.flatten(start_dim=1), self.down.flatten(start_dim=1)).reshape(self.weight.shape).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 35,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [],
+      "line": 864,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "cd.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "load_controlnet_state_dict",
+      "site": "comfy/controlnet.py:864:35 (load_controlnet_state_dict)",
+      "source_path": "comfy/controlnet.py",
+      "source_sha256": "efa2dec0eed7ed04da4b91cce0358267afeec9513af02b063a122d3ece093e57",
+      "status": "static-call-observed",
+      "target_syntax": "model_sd[sd_key].type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 253,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "self.mlp[0].weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "TimestepEmbedder.forward",
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:253:26 (TimestepEmbedder.forward)",
+      "source_path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+      "source_sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
+      "status": "static-call-observed",
+      "target_syntax": "self.time_embed(timesteps).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 259,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "h.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "ResBlock._forward",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:259:23 (ResBlock._forward)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "self.emb_layers(emb).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 923,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "UNetModel._forward",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:923:13 (UNetModel._forward)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "h.type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 21,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "sinusoidal_embedding_1d",
+      "site": "comfy/ldm/wan/model.py:21:16 (sinusoidal_embedding_1d)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "position.type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 170,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "LayerNorm.forward",
+      "site": "comfy/t2i_adapter/adapter.py:170:31 (LayerNorm.forward)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "x.type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 171,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "orig_type",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LayerNorm.forward",
+      "site": "comfy/t2i_adapter/adapter.py:171:16 (LayerNorm.forward)",
+      "source_path": "comfy/t2i_adapter/adapter.py",
+      "source_sha256": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+      "status": "static-call-observed",
+      "target_syntax": "ret.type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 282,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "weight_decompose",
+      "site": "comfy/weight_adapter/base.py:282:28 (weight_decompose)",
+      "source_path": "comfy/weight_adapter/base.py",
+      "source_sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "status": "static-call-observed",
+      "target_syntax": "function(lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 301,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "weight_decompose",
+      "site": "comfy/weight_adapter/base.py:301:20 (weight_decompose)",
+      "source_path": "comfy/weight_adapter/base.py",
+      "source_sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "status": "static-call-observed",
+      "target_syntax": "(dora_scale / weight_norm).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 129,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "BOFTAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/boft.py:129:36 (BOFTAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/boft.py",
+      "source_sha256": "2850e0b4c2295cd87445415e287061fa3bfd69e88bd0aeb3eb16064864bd078d",
+      "status": "static-call-observed",
+      "target_syntax": "(strength * lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 138,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "GLoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/glora.py:138:36 (GLoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/glora.py",
+      "source_sha256": "31cdd03f5b0beaa0df055512560128930f4f26b219ba57602d21abb086425b09",
+      "status": "static-call-observed",
+      "target_syntax": "(strength * alpha * lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 293,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "LoHaAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/loha.py:293:36 (LoHaAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/loha.py",
+      "source_sha256": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "status": "static-call-observed",
+      "target_syntax": "(strength * alpha * lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 361,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "LoKrAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lokr.py:361:36 (LoKrAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lokr.py",
+      "source_sha256": "b4763cc32215a47e4d906cfa6cbad9cf893f6a1329ada2225fda81fd99fcfeb4",
+      "status": "static-call-observed",
+      "target_syntax": "(strength * alpha * lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 283,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "LoRAAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/lora.py:283:36 (LoRAAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/lora.py",
+      "source_sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+      "status": "static-call-observed",
+      "target_syntax": "(strength * alpha * lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 249,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "weight.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "OFTAdapter.calculate_weight",
+      "site": "comfy/weight_adapter/oft.py:249:36 (OFTAdapter.calculate_weight)",
+      "source_path": "comfy/weight_adapter/oft.py",
+      "source_sha256": "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89",
+      "status": "static-call-observed",
+      "target_syntax": "(strength * lora_diff).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 80,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "attn.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "create_blur_map",
+      "site": "comfy_extras/nodes_sag.py:80:9 (create_blur_map)",
+      "source_path": "comfy_extras/nodes_sag.py",
+      "source_sha256": "e600938bc4fc7e868bf705fc0c7eb2ddb11d9989a357c88da6c0cc6d6e0be1a0",
+      "status": "static-call-observed",
+      "target_syntax": "mask.reshape(b, x, y).unsqueeze(1).type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 601,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "merge_final",
+      "site": "comfy_extras/nodes_wan.py:601:36 (merge_final)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "vert_assign.type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 606,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "merge_final",
+      "site": "comfy_extras/nodes_wan.py:606:36 (merge_final)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "vert_assign.type"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 656,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "vid.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "_patch_motion_single",
+      "site": "comfy_extras/nodes_wan.py:656:9 (_patch_motion_single)",
+      "source_path": "comfy_extras/nodes_wan.py",
+      "source_sha256": "f292e37a53fc0f2cfcb3e73158dd058ffb0c7a1f329662ea02f171362a60e45a",
+      "status": "static-call-observed",
+      "target_syntax": "tracks_n[:, :1].type"
+    }
+  ],
+  "static_definition": null
+}

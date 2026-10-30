@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-vp9-webm-alpha-v1",
+  "truth_mode": "synthetic-source-compatible-vp9-webm-alpha-execution",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d",
+    "observable": "SaveWEBM selects packed RGBA input and yuva420p output exactly when the IMAGE channel count is four and the codec is VP9"
+  },
+  "ffmpeg_7_1": {
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "signing_key": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "pixfmt_header_sha256": "ace2ebcf84a382269c21ad7a050d69ab293b0dbceab350ac7f728a1b37dc0336",
+    "libvpx_encoder_sha256": "5b5aa7f5d799f21d3f40e600be2c84dfa5c923352bbf16dff5fe410e0c39617a",
+    "matroska_muxer_sha256": "e3e089b27e9a8b49c4243306147764741eb66ef442128b114eee1e0efb974557",
+    "swscale_sha256": "80c8821dd814b21fc36f1e707e31198c1de00fa291f5eb07712f0e9c5e86fc2a",
+    "swscale_unscaled_sha256": "3501cea5c3eaccb37d54947e51f5966cbd6f15d2e496e2aeaf5e67b2e5ae6f48",
+    "rgba_pixel_format": 26,
+    "yuva420p_pixel_format": 33,
+    "reviewed_symbol_count": 54,
+    "new_symbols": 0
+  },
+  "dependencies": {
+    "vp9_alpha_overlay_manifest_sha256": "766d286761651abd80698aa986cb79e2c5022d432573f13e949c851ad10b05c1",
+    "vp9_alpha_verifier_sha256": "975602dca9a40e53498f07c085466af346a3e26fd45de79ca119725437f295a0",
+    "historical_data_plane_manifest_sha256": "c5d4780cac865e9dd327f42f80278e6cfd4d85a94cbdd48cafbc981872b440ec",
+    "container_metadata_overlay_manifest_sha256": "cb989b103743491f19d41a7f451bac06c055496a9ff2cf3d37b12d92b133192d",
+    "codec_suite_admission_manifest_sha256": "fa7e0f02c2e977518205b6025d28e47eeaa9eb10401a250e5cf7fb8f7c83bcc3",
+    "codec_vp9_webm_encode_manifest_sha256": "7aea02100ecf5c9bd9c24f4c004c40a449d223e9a0592cbfff3d1c0da5008dbf",
+    "codec_vp9_webm_sequence_manifest_sha256": "4d5c73e21827ca63445771308876f40b8dca095e5d38c6b43a976ca09ea3682d",
+    "codec_vp9_webm_thread_bridge_manifest_sha256": "a2b0e44560f451445855d02cd2161848258fa48de9dae611cf3acad7fe9697a9",
+    "codec_vp9_webm_crf_manifest_sha256": "25f4f8976cb47da76c1b095892ddb0d3fd124e77684e5e49c185443553b5ab8a",
+    "codec_vp9_webm_container_metadata_manifest_sha256": "736cd651a9c901e2ef9627509ba07f3283fd4b0708c0f4918a4e85a20d876af8"
+  },
+  "contract": {
+    "opaque_profile": "RGB24 to YUV420P with yuv420p",
+    "alpha_profile": "RGBA to YUVA420P with yuva420p",
+    "quantization": "multiply every source channel by 255, clamp to [0,255], then truncate to U8 in packed source order",
+    "batch_lifecycle": "one bounded retained session, increasing frame PTS, one terminal flush, one trailer, and final-only bytes",
+    "metadata": "the existing ordered duplicate-preserving pre-header metadata path is unchanged in both profiles",
+    "actor_transport": "the sole capacity-one retained codec actor returns a fresh exact-length CPU U8 tensor and the checked has_alpha projection",
+    "codec_thread_identity_version": "zed.sim.video-codec-thread.v6"
+  },
+  "vectors": [
+    {
+      "input_rgba": [-0.25, 0.5, 1.0, 1.5],
+      "expected_u8": [0, 127, 255, 255]
+    },
+    {
+      "input_rgba": [0.25, 0.75, 0.125, 0.625],
+      "expected_u8": [63, 191, 31, 159]
+    }
+  ],
+  "claims": {
+    "compiler_verified_supplementary_pixel_formats": true,
+    "historical_abi_prefixes_and_symbol_set_unchanged": true,
+    "source_rgba_quantization_and_profile_reach_retained_session": true,
+    "rgb_profile_is_regression_preserved": true,
+    "ordered_metadata_float_crf_cancellation_cleanup_and_retry_preserved": true,
+    "portable_actor_output_carries_checked_alpha_projection": true,
+    "licensed_or_installed_ffmpeg_or_libvpx_package": false,
+    "production_codec_availability": false,
+    "playable_webm_or_decoded_numeric_alpha_or_color_oracle": false,
+    "python_or_pyav_byte_identity": false,
+    "av1_aac_audio_or_general_video_supported": false,
+    "json_serialization_node_effect_path_ui_or_output_committer_reachable": false,
+    "media_payload_handle_cache_persistence_recovery_or_publication_owned": false,
+    "complete_native_heap_interception_or_measurement": false
+  }
+}

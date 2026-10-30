@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "evidence_mode": "code-inferred",
+  "snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "filtered_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "comfy/text_encoders/qwen35.py",
+      "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "symbols": [
+        "GatedDeltaNet",
+        "GatedAttention",
+        "Qwen35TransformerBlock",
+        "torch_chunk_gated_delta_rule",
+        "torch_causal_conv1d_update"
+      ]
+    },
+    {
+      "path": "comfy/text_encoders/llama.py",
+      "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "symbols": ["RMSNorm", "MLP"]
+    }
+  ],
+  "reduced_fixture": {
+    "dtype": "F32",
+    "device": "CPU",
+    "batch": 1,
+    "tokens": [1, 2, 3],
+    "layer_types": ["linear_attention", "linear_attention", "linear_attention", "full_attention"],
+    "hidden_size": 4,
+    "full_attention_heads": 2,
+    "full_key_value_heads": 2,
+    "full_head_dimension": 2,
+    "partial_rotary_dimension": 2,
+    "linear_key_heads": 1,
+    "linear_value_heads": 2,
+    "linear_key_head_dimension": 2,
+    "linear_value_head_dimension": 2,
+    "convolution_kernel_size": 3,
+    "normalization_epsilon": 0.000001,
+    "normalization_weight_offset": 1.0,
+    "log_decay": [-0.4, 0.1],
+    "time_bias": [0.2, -0.3],
+    "logits_f32le_sha256": "02f4e8afd51de3d86100655bdb69f8c9b673fe42dfc242d47840b74f408ad53c"
+  },
+  "qualification": "Reduced exact-weight hybrid graph fixture; no licensed full Qwen3.5 checkpoint or accelerator numerical certification is claimed."
+}

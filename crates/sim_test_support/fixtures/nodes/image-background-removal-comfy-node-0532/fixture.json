@@ -1,0 +1,192 @@
+{
+  "feature_id": "COMFY-NODE-0532",
+  "class_type": "RemoveBackground",
+  "source": {
+    "catalog_line": 30,
+    "path": "sim_extras/nodes_bg_removal.py",
+    "sha256": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce",
+    "symbol": {
+      "end_line": 49,
+      "kind": "ClassDef",
+      "line": 30,
+      "sha256": "75b415acedaeaa1a694aeba2e4b0367524c6878e3e4a1f48b2a62898c68109f9",
+      "status": "parsed_definition",
+      "symbol": "RemoveBackground"
+    }
+  },
+  "schema": {
+    "catalog_sha256": "a54daa0b71fcca7e54937ea7fdae97125f77b9a7d3f3801629985b5e57795da2",
+    "definition_sha256": "6728996e9a073a2e2576f90d8082b497878ee808a11f22d8303a5a4c430c6552",
+    "dynamic_inputs": [],
+    "hidden": [],
+    "inputs": [
+      {
+        "advanced": false,
+        "choices": [],
+        "default": null,
+        "display_name": null,
+        "extra": [],
+        "force_input": false,
+        "maximum": null,
+        "minimum": null,
+        "multiline": false,
+        "name": "bg_removal_model",
+        "raw_link": false,
+        "requirement": "required",
+        "socketless": false,
+        "source_type_names": [
+          "BACKGROUND_REMOVAL"
+        ],
+        "step": null,
+        "tooltip": "Background removal model used to generate the mask",
+        "upload": null,
+        "widget_type": null
+      },
+      {
+        "advanced": false,
+        "choices": [],
+        "default": null,
+        "display_name": null,
+        "extra": [],
+        "force_input": false,
+        "maximum": null,
+        "minimum": null,
+        "multiline": false,
+        "name": "image",
+        "raw_link": false,
+        "requirement": "required",
+        "socketless": false,
+        "source_type_names": [
+          "IMAGE"
+        ],
+        "step": null,
+        "tooltip": "Input image to remove the background from",
+        "upload": null,
+        "widget_type": null
+      }
+    ],
+    "node": {
+      "accept_all_inputs": false,
+      "api_node": false,
+      "definition_sha256": "6728996e9a073a2e2576f90d8082b497878ee808a11f22d8303a5a4c430c6552",
+      "development_only": false,
+      "enable_expand": false,
+      "essentials_category": null,
+      "extra": [],
+      "feature_id": "COMFY-NODE-0532",
+      "has_intermediate_output": false,
+      "not_idempotent": false,
+      "price_badge": null,
+      "provenance": "source_v3",
+      "schema_version": 2
+    },
+    "outputs": [
+      {
+        "choices": [],
+        "display_name": null,
+        "extra": [],
+        "match_template": null,
+        "ordinal": 0,
+        "source_name": "mask",
+        "source_type_name": "MASK",
+        "tooltip": "Generated foreground mask"
+      }
+    ],
+    "presentation": {
+      "description": "Generates a foreground mask to remove the background from an image using a background removal model.",
+      "display_name": "Remove Background",
+      "is_deprecated": false,
+      "is_experimental": false
+    },
+    "provenance": "source_v3",
+    "schema_version": 2,
+    "unresolved_inputs": [],
+    "unresolved_outputs": []
+  },
+  "behavior": {
+    "equation": "bg_removal_model.encode_image(image)",
+    "output": "foreground mask [batch, height, width]",
+    "effects": [],
+    "cache": "input identity plus canonical artifact and semantic state digests",
+    "recovery": "workflow links persist; attempt-local handles are reacquired after restart",
+    "oracle": "../../models/background-removal-resource-foundation/oracle.json",
+    "oracle_scope": "Deterministic reduced BiRefNet exercises the canonical inference owner; no trained-model quality certification is claimed."
+  },
+  "input_rgba": [
+    0.0,
+    0.1,
+    0.2,
+    0.3,
+    0.25,
+    0.5,
+    0.75,
+    0.0,
+    1.0,
+    0.0,
+    0.5,
+    1.0,
+    0.5019608,
+    0.5,
+    0.49803922,
+    0.75,
+    0.003921569,
+    0.99607843,
+    0.2,
+    0.25,
+    0.1,
+    0.2,
+    0.3,
+    0.4,
+    0.4,
+    0.3,
+    0.2,
+    0.1,
+    0.8,
+    0.6,
+    0.4,
+    0.2,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    0.9,
+    0.7,
+    0.5,
+    0.3,
+    0.05,
+    0.15,
+    0.25,
+    0.35,
+    0.35,
+    0.45,
+    0.55,
+    0.65,
+    0.65,
+    0.55,
+    0.45,
+    0.35,
+    0.95,
+    0.85,
+    0.75,
+    0.65,
+    0.125,
+    0.375,
+    0.625,
+    0.875
+  ],
+  "prompt": {
+    "1": {
+      "class_type": "RemoveBackground",
+      "inputs": {
+        "bg_removal_model": [
+          "2",
+          0
+        ],
+        "image": [
+          "3",
+          0
+        ]
+      }
+    }
+  }
+}

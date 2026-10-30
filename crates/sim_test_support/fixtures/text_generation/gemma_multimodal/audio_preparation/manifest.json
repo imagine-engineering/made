@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-gemma-audio-preparation-foundation",
+  "provenance_mode": "code-inferred-native-cpu",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "regular_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py",
+      "symbols": [
+        "Gemma4_Tokenizer._extract_mel_spectrogram",
+        "Gemma4_Tokenizer._build_mel_filterbank",
+        "Gemma4_Tokenizer.tokenize_with_weights"
+      ],
+      "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6"
+    }
+  ],
+  "contract": {
+    "input": "contiguous finite CPU F32 [1,channels,samples] plus checked AUDIO sample rate 8000..384000",
+    "mono": "arithmetic mean over channels",
+    "resample": "gcd-reduced scipy-compatible Kaiser beta 6.5 rational polyphase projection to 16000 Hz with 160*max(up,down)+1 taps and cutoff 0.96/max(up,down)",
+    "padding": "right to a multiple of 128, then 160 zero samples on the left",
+    "frames": "321-sample admission at hop 160 with the final sample dropped",
+    "window": "periodic Hann length 320",
+    "spectrum": "canonical CPU F64 512-point FFT of windowed F32 samples, complex128 magnitude, first 257 bins",
+    "mel": "128 triangular HTK bins over 0..8000 Hz, natural log after adding 0.001",
+    "mask": "frame end sample is within unpadded resampled audio",
+    "marker_tokens": "source frame-count equation followed by two stride-two projections, capped at 750"
+  },
+  "vectors": {
+    "stereo_silence": {
+      "sample_rate": 16000,
+      "shape": [
+        1,
+        2,
+        640
+      ],
+      "channels": [
+        1.0,
+        -1.0
+      ],
+      "resampled_samples": 640,
+      "feature_shape": [
+        1,
+        3,
+        128
+      ],
+      "frame_mask": [
+        true,
+        true,
+        true
+      ],
+      "marker_tokens": 1,
+      "feature_value": -6.9077554
+    },
+    "resampled_44k1_sine": {
+      "sample_rate": 44100,
+      "frequency_hz": 440,
+      "samples": 2205,
+      "resampled_samples": 800,
+      "feature_shape": [
+        1,
+        5,
+        128
+      ],
+      "frame_mask": [
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "marker_tokens": 1,
+      "first_frame_first_12": [
+        -6.9077554,
+        1.503931,
+        0.31853235,
+        1.3154463,
+        0.8074848,
+        1.2384311,
+        0.96338606,
+        1.3288747,
+        0.9583913,
+        1.535566,
+        0.7444314,
+        1.7973692
+      ],
+      "absolute_tolerance": 2e-06,
+      "native_log_mel_sha256": "ca4e990e5328ecdbbbe5c334e41428889f8ac11612ee72b762235ea022120c80"
+    },
+    "one_sample": {
+      "sample_rate": 16000,
+      "samples": 1,
+      "feature_shape": [
+        1,
+        0,
+        128
+      ],
+      "frame_mask_shape": [
+        1,
+        0
+      ],
+      "marker_tokens": 0
+    }
+  },
+  "limits": {
+    "maximum_filter_taps": 2000001,
+    "maximum_resample_multiply_adds": 250000000,
+    "maximum_marker_tokens": 750
+  },
+  "claims": {
+    "licensed_checkpoint": false,
+    "upstream_python_runtime_observed": false,
+    "accelerator_numeric_parity": false,
+    "external_server": false,
+    "notes": "The fixture pins the source equations and the canonical native CPU projection. It does not claim byte-identical NumPy pocketfft output.",
+    "pinned_source_audio_methods_observed": true
+  },
+  "source_method_oracle": {
+    "path": "source-oracle.json",
+    "sha256": "fabc65d8569e5e4e49ecf5ca6d833be7bafae6c6cb787e6163e5096b5c1e14a0",
+    "generator": "generate_source_oracle.py",
+    "generator_sha256": "c3f9193eb9cdd604e6f756684a64c68264ba61c8e9e2aee3efebe48ac45b3756",
+    "scope": "pinned source audio preparation methods executed independently on Linux x86_64; all 640 values at the existing 2e-6 absolute tolerance; exact same-backend repetition"
+  }
+}

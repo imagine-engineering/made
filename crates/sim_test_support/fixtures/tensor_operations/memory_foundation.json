@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "fixture_id": "comfy-memory-foundation-v1",
+  "allocation_alignment_bytes": 16,
+  "allocation_traces": [
+    { "logical_bytes": 1, "reserved_bytes": 16 },
+    { "logical_bytes": 15, "reserved_bytes": 16 },
+    { "logical_bytes": 16, "reserved_bytes": 16 },
+    { "logical_bytes": 17, "reserved_bytes": 32 }
+  ],
+  "required_foundation_cases": [
+    "aligned_capacity_accounting",
+    "oom_is_atomic",
+    "copy_on_write_is_charged",
+    "canonical_upload_is_charged_and_released",
+    "cancellation_releases_uncommitted_storage",
+    "inner_resize_sampling_is_cancellable",
+    "read_only_views_cannot_escalate",
+    "cross_stream_inputs_fail_before_allocation",
+    "event_tracking_is_constant_space"
+  ],
+  "remaining_release_gates": [
+    "comfy-parity-native-memory-planner",
+    "comfy-parity-final-validation"
+  ]
+}

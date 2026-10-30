@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixture_id": "flux-sim-model-0077",
+  "feature_id": "COMFY-MODEL-0077",
+  "source_symbol": "Flux",
+  "source_ordinal": 28,
+  "source_architecture": "model_base.Flux",
+  "latent_feature_id": "COMFY-MODEL-0029",
+  "latent_identifier": "Flux",
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/flux/model.py",
+      "sha256": "b24635f2d8087844766f9583e3b9bbeba0938223018a20e6649da2e0f7d54368"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/flux/layers.py",
+      "sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/flux.py",
+      "sha256": "c522ad47ccdad9878f0e8ae4c219dadfc4f12409adceaa7e663571766cbbe46b"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/sd3_clip.py",
+      "sha256": "61bde2b4a428779469a01f342a9195d115f2a207c7a3d2c0d6c0a5715fdc03ed"
+    }
+  ],
+  "source_projection": "source_symbol=Flux\nsource_ordinal=28\nunet_config.image_model=flux\nunet_config.guidance_embed=true\nsampling_settings={}\nlatent_format=sim.latent_formats.Flux\nmemory_usage_factor=3.1\nsupported_inference_dtypes=bf16,f16,f32\narchitecture=model_base.Flux\nclip_tokenizer=sim.text_encoders.flux.FluxTokenizer\nclip_model=sim.text_encoders.flux.flux_clip\nclip_configuration=sim.text_encoders.sd3_clip.t5_xxl_detect\nprocess_unet_state_dict=.scale->.weight\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\n",
+  "source_projection_sha256": "787fa07cdaecb7f7fa9f35501f521c967ddfd0d6ab788286b40331ffe6fca50c",
+  "alternate_layout": "unprefixed Flux-native state keys accepted by the pinned detector; no Flux-specific diffusers converter is claimed",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI Flux sources; no production Python dependency"
+}
+

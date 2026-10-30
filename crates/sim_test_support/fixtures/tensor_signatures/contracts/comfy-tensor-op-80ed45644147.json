@@ -1,0 +1,2171 @@
+{
+  "canonical_target": "torch.full",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "attribute": "triu_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/clip_model.py:174:23 (CLIPTextModel_.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/vae_sa3.py:33:9 (_sliding_window_mask)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:26:16 (select_reference_view)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hidream_o1/conditioning.py:153:22 (build_extra_conds)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hidream_o1/conditioning.py:158:19 (build_extra_conds)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hidream_o1/conditioning.py:207:25 (build_extra_conds)"
+    },
+    {
+      "expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:356:28 (load_surface_sharpedge.assemble_tensor)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/hunyuan3d/vae.py:44:21 (fps)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ideogram4/model.py:275:21 (Ideogram4Transformer2DModel._run_image_only)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/model.py:1208:27 (LTXVModel._build_guide_self_attention_mask)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/geometry.py:172:11 (triangulate_grid_mesh)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:1326:23 (SAM31Tracker._encode_new_memory)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:1708:33 (SAM31Tracker.track_video_with_detection)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:1723:37 (SAM31Tracker.track_video_with_detection)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/sam3/tracker.py:1766:25 (SAM31Tracker.track_video_with_detection)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:210:23 (OctreeProbabilityFixedlenDecoder.sample)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:218:26 (OctreeProbabilityFixedlenDecoder.sample)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_multitalk.py:294:16 (SingleStreamMultiAttention.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/model_base.py:2559:23 (CogVideoX.extra_conds)"
+    },
+    {
+      "expectation": {
+        "attribute": "triu_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy/text_encoders/gpt_oss.py:280:12 (_make_full_causal_mask)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/gpt_oss.py:294:75 (_make_sliding_causal_mask)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/gpt_oss.py:545:15 (LensGptOssClipModel._gather_tokens)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/llama.py:640:36 (TransformerBlockGemma2.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:100:24 (IFNet.forward)"
+    },
+    {
+      "expectation": {
+        "attribute": "scatter_reduce_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1330:16 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "attribute": "scatter_reduce_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1331:16 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1340:13 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1427:11 (_surface_nets)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_images.py:422:23 (ImageStitch.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_images.py:479:18 (ResizeAndPadImage.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_lt.py:317:24 (LTXVAddGuide.dilate_latent)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_lt.py:393:20 (LTXVAddGuide.append_keyframe)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_lt.py:413:16 (LTXVAddGuide.replace_latent_frames)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_mask.py:197:15 (SolidMask.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_scail.py:336:36 (SCAIL2ColoredMask.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "nodes.py:1978:13 (EmptyImage.generate)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "nodes.py:1979:13 (EmptyImage.generate)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "nodes.py:1980:13 (EmptyImage.generate)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/clip_model.py:174:23 (CLIPTextModel_.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/vae_sa3.py:33:9 (_sliding_window_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:26:16 (select_reference_view)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/conditioning.py:153:22 (build_extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/conditioning.py:158:19 (build_extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream_o1/conditioning.py:207:25 (build_extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:356:28 (load_surface_sharpedge.assemble_tensor)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3d/vae.py:44:21 (fps)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ideogram4/model.py:275:21 (Ideogram4Transformer2DModel._run_image_only)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:1208:27 (LTXVModel._build_guide_self_attention_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/geometry.py:172:11 (triangulate_grid_mesh)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:1326:23 (SAM31Tracker._encode_new_memory)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:1708:33 (SAM31Tracker.track_video_with_detection)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:1723:37 (SAM31Tracker.track_video_with_detection)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/sam3/tracker.py:1766:25 (SAM31Tracker.track_video_with_detection)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:210:23 (OctreeProbabilityFixedlenDecoder.sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:218:26 (OctreeProbabilityFixedlenDecoder.sample)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_multitalk.py:294:16 (SingleStreamMultiAttention.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/model_base.py:2559:23 (CogVideoX.extra_conds)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gpt_oss.py:280:12 (_make_full_causal_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gpt_oss.py:294:75 (_make_sliding_causal_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gpt_oss.py:545:15 (LensGptOssClipModel._gather_tokens)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/llama.py:640:36 (TransformerBlockGemma2.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:100:24 (IFNet.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1330:16 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1331:16 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1340:13 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1427:11 (_surface_nets)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:422:23 (ImageStitch.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_images.py:479:18 (ResizeAndPadImage.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_lt.py:317:24 (LTXVAddGuide.dilate_latent)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_lt.py:393:20 (LTXVAddGuide.append_keyframe)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_lt.py:413:16 (LTXVAddGuide.replace_latent_frames)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_mask.py:197:15 (SolidMask.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_scail.py:336:36 (SCAIL2ColoredMask.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:1978:13 (EmptyImage.generate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:1979:13 (EmptyImage.generate)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "nodes.py:1980:13 (EmptyImage.generate)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-80ed45644147-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_1",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "device",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dtype",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-80ED45644147",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "979e27c9077cf4a3c56e117b537f5060dd1ba75cea5adef0418c54f372d19f96",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/clip_model.py",
+        "sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845"
+      },
+      {
+        "path": "comfy/ldm/audio/vae_sa3.py",
+        "sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75"
+      },
+      {
+        "path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+        "sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29"
+      },
+      {
+        "path": "comfy/ldm/hidream_o1/conditioning.py",
+        "sha256": "b7ce164db416cc22dcaa8466815fd62d52e3ad60e7b177be24d65e020d74fdc4"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3d/vae.py",
+        "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+      },
+      {
+        "path": "comfy/ldm/ideogram4/model.py",
+        "sha256": "886e9e114fe3546c2e699c8d736816ede5aaca442b09d8bea7ba090279537666"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/moge/geometry.py",
+        "sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c"
+      },
+      {
+        "path": "comfy/ldm/sam3/tracker.py",
+        "sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e"
+      },
+      {
+        "path": "comfy/ldm/triposplat/vae.py",
+        "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+      },
+      {
+        "path": "comfy/ldm/wan/model_multitalk.py",
+        "sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8"
+      },
+      {
+        "path": "comfy/model_base.py",
+        "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+      },
+      {
+        "path": "comfy/text_encoders/gpt_oss.py",
+        "sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc"
+      },
+      {
+        "path": "comfy/text_encoders/llama.py",
+        "sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a"
+      },
+      {
+        "path": "comfy_extras/frame_interpolation_models/ifnet.py",
+        "sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_images.py",
+        "sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448"
+      },
+      {
+        "path": "comfy_extras/nodes_lt.py",
+        "sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d"
+      },
+      {
+        "path": "comfy_extras/nodes_mask.py",
+        "sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc"
+      },
+      {
+        "path": "comfy_extras/nodes_scail.py",
+        "sha256": "4f0de5c18bd40db615d837b2ab0ddea30ed4ac17231c251fd65f770bbec3cd0e"
+      },
+      {
+        "path": "nodes.py",
+        "sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.full"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "tensor_creation_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-tensor-creation-comfy-tensor-op-00009bb729df",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "attribute": "triu_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 174,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(x.shape[1], x.shape[1])",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-torch.finfo(x.dtype).max",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "CLIPTextModel_.forward",
+      "site": "comfy/clip_model.py:174:23 (CLIPTextModel_.forward)",
+      "source_path": "comfy/clip_model.py",
+      "source_sha256": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 33,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(1,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.finfo(dtype).min / 4",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "_sliding_window_mask",
+      "site": "comfy/ldm/audio/vae_sa3.py:33:9 (_sliding_window_mask)",
+      "source_path": "comfy/ldm/audio/vae_sa3.py",
+      "source_sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 26,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(B,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "S // 2",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "select_reference_view",
+      "site": "comfy/ldm/depth_anything_3/reference_view_selector.py:26:16 (select_reference_view)",
+      "source_path": "comfy/ldm/depth_anything_3/reference_view_selector.py",
+      "source_sha256": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "text_input_ids.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "text_input_ids.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 153,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(1, image_len)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "IMAGE_TOKEN_ID",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "build_extra_conds",
+      "site": "comfy/ldm/hidream_o1/conditioning.py:153:22 (build_extra_conds)",
+      "source_path": "comfy/ldm/hidream_o1/conditioning.py",
+      "source_sha256": "b7ce164db416cc22dcaa8466815fd62d52e3ad60e7b177be24d65e020d74fdc4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "text_input_ids.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "text_input_ids.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 158,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(1, rl)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "IMAGE_TOKEN_ID",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "build_extra_conds",
+      "site": "comfy/ldm/hidream_o1/conditioning.py:158:19 (build_extra_conds)",
+      "source_path": "comfy/ldm/hidream_o1/conditioning.py",
+      "source_sha256": "b7ce164db416cc22dcaa8466815fd62d52e3ad60e7b177be24d65e020d74fdc4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "text_input_ids.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "text_input_ids.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 207,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(B, image_len)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "IMAGE_TOKEN_ID",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "build_extra_conds",
+      "site": "comfy/ldm/hidream_o1/conditioning.py:207:25 (build_extra_conds)",
+      "source_path": "comfy/ldm/hidream_o1/conditioning.py",
+      "source_sha256": "b7ce164db416cc22dcaa8466815fd62d52e3ad60e7b177be24d65e020d74fdc4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "attribute": "to",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float16",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 356,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(data.shape[0], 1)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float(label)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "load_surface_sharpedge.assemble_tensor",
+      "site": "comfy/ldm/hunyuan3d/vae.py:356:28 (load_surface_sharpedge.assemble_tensor)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "src.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 44,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(num_points,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float('inf')",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "fps",
+      "site": "comfy/ldm/hunyuan3d/vae.py:44:21 (fps)",
+      "source_path": "comfy/ldm/hunyuan3d/vae.py",
+      "source_sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 275,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(B, L_img)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "OUTPUT_IMAGE_INDICATOR",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "Ideogram4Transformer2DModel._run_image_only",
+      "site": "comfy/ldm/ideogram4/model.py:275:21 (Ideogram4Transformer2DModel._run_image_only)",
+      "source_path": "comfy/ldm/ideogram4/model.py",
+      "source_sha256": "886e9e114fe3546c2e699c8d736816ede5aaca442b09d8bea7ba090279537666",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1208,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(1, surviving)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "strength",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LTXVModel._build_guide_self_attention_mask",
+      "site": "comfy/ldm/lightricks/model.py:1208:27 (LTXVModel._build_guide_self_attention_mask)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 172,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(H * W,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "triangulate_grid_mesh",
+      "site": "comfy/ldm/moge/geometry.py:172:11 (triangulate_grid_mesh)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "mask_for_mem.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "mask_for_mem.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1326,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(N_obj,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "SAM31Tracker._encode_new_memory",
+      "site": "comfy/ldm/sam3/tracker.py:1326:23 (SAM31Tracker._encode_new_memory)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1708,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(mux_state.total_valid_entries,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "SAM31Tracker.track_video_with_detection",
+      "site": "comfy/ldm/sam3/tracker.py:1708:33 (SAM31Tracker.track_video_with_detection)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 37,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1723,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(mux_state.total_valid_entries,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "SAM31Tracker.track_video_with_detection",
+      "site": "comfy/ldm/sam3/tracker.py:1723:37 (SAM31Tracker.track_video_with_detection)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 1766,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(n_added,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "SAM31Tracker.track_video_with_detection",
+      "site": "comfy/ldm/sam3/tracker.py:1766:25 (SAM31Tracker.track_video_with_detection)",
+      "source_path": "comfy/ldm/sam3/tracker.py",
+      "source_sha256": "33c0dbbe3e7a21d0cc487d3bb390d649698e0a89e09730b7405a83bbdd66595e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 210,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(B, 1)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "num_points",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "OctreeProbabilityFixedlenDecoder.sample",
+      "site": "comfy/ldm/triposplat/vae.py:210:23 (OctreeProbabilityFixedlenDecoder.sample)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 218,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(B,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "res",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "OctreeProbabilityFixedlenDecoder.sample",
+      "site": "comfy/ldm/triposplat/vae.py:218:26 (OctreeProbabilityFixedlenDecoder.sample)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "human1.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "human1.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 294,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(x_ref_attn_map.size(1),)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "rope_bak",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SingleStreamMultiAttention.forward",
+      "site": "comfy/ldm/wan/model_multitalk.py:294:16 (SingleStreamMultiAttention.forward)",
+      "source_path": "comfy/ldm/wan/model_multitalk.py",
+      "source_sha256": "a467f5e4b3d8b88bd996ef95dae7074453a4dead2d17671c15cc457757cd2ee8",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "noise.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "noise.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 2559,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(noise.shape[0],)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "2.0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "CogVideoX.extra_conds",
+      "site": "comfy/model_base.py:2559:23 (CogVideoX.extra_conds)",
+      "source_path": "comfy/model_base.py",
+      "source_sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "attribute": "triu_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 280,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(S, S)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "neg",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_make_full_causal_mask",
+      "site": "comfy/text_encoders/gpt_oss.py:280:12 (_make_full_causal_mask)",
+      "source_path": "comfy/text_encoders/gpt_oss.py",
+      "source_sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 75,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 294,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "()",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "neg",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "_make_sliding_causal_mask",
+      "site": "comfy/text_encoders/gpt_oss.py:294:75 (_make_sliding_causal_mask)",
+      "source_path": "comfy/text_encoders/gpt_oss.py",
+      "source_sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.long",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 545,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(len(ids_list), max_len)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pad_id",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "LensGptOssClipModel._gather_tokens",
+      "site": "comfy/text_encoders/gpt_oss.py:545:15 (LensGptOssClipModel._gather_tokens)",
+      "source_path": "comfy/text_encoders/gpt_oss.py",
+      "source_sha256": "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "x.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "x.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 640,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(x.shape[1], x.shape[1])",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "torch.finfo(x.dtype).min",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "scope": "TransformerBlockGemma2.forward",
+      "site": "comfy/text_encoders/llama.py:640:36 (TransformerBlockGemma2.forward)",
+      "source_path": "comfy/text_encoders/llama.py",
+      "source_sha256": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "img0.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "img0.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 100,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(img0.shape[0], 1, img0.shape[2], img0.shape[3])",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "timestep",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "IFNet.forward",
+      "site": "comfy_extras/frame_interpolation_models/ifnet.py:100:24 (IFNet.forward)",
+      "source_path": "comfy_extras/frame_interpolation_models/ifnet.py",
+      "source_sha256": "854b808a425d01a82df2395cb925d7a5dab86669c62485f95fb790736ced11a3",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "attribute": "scatter_reduce_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1330,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(ncomp, 3)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float('inf')",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1330:16 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "attribute": "scatter_reduce_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1331,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(ncomp, 3)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "float('-inf')",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1331:16 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.int64",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1340,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(nv,)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1340:13 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 11,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.int32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1427,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(dx - 1, dy - 1, dz - 1)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "_surface_nets",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1427:11 (_surface_nets)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "image1.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 422,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "spacing_shape",
+          "syntax_kind": "Name"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "0.0",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "ImageStitch.execute",
+      "site": "comfy_extras/nodes_images.py:422:23 (ImageStitch.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "image.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "image.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 479,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(batch_size, channels, target_height, target_width)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "pad_value",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "ResizeAndPadImage.execute",
+      "site": "comfy_extras/nodes_images.py:479:18 (ResizeAndPadImage.execute)",
+      "source_path": "comfy_extras/nodes_images.py",
+      "source_sha256": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "guide_latent.device",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "guide_latent.dtype",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 317,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(dilated.shape[0], 1, dilated.shape[2], dilated.shape[3], dilated.shape[4])",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "-1.0",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "LTXVAddGuide.dilate_latent",
+      "site": "comfy_extras/nodes_lt.py:317:24 (LTXVAddGuide.dilate_latent)",
+      "source_path": "comfy_extras/nodes_lt.py",
+      "source_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "noise_mask.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "noise_mask.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 393,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(noise_mask.shape[0], 1, guiding_latent.shape[2], noise_mask.shape[3], noise_mask.shape[4])",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "max(0.0, 1.0 - strength)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LTXVAddGuide.append_keyframe",
+      "site": "comfy_extras/nodes_lt.py:393:20 (LTXVAddGuide.append_keyframe)",
+      "source_path": "comfy_extras/nodes_lt.py",
+      "source_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "noise_mask.dtype",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "noise_mask.device",
+          "syntax_kind": "Attribute"
+        }
+      ],
+      "line": 413,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(noise_mask.shape[0], 1, cond_length, 1, 1)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "max(0.0, 1.0 - strength)",
+          "syntax_kind": "Call"
+        }
+      ],
+      "scope": "LTXVAddGuide.replace_latent_frames",
+      "site": "comfy_extras/nodes_lt.py:413:16 (LTXVAddGuide.replace_latent_frames)",
+      "source_path": "comfy_extras/nodes_lt.py",
+      "source_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 15,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "torch.float32",
+          "syntax_kind": "Attribute"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "comfy.model_management.intermediate_device()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 197,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(1, height, width)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "value",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SolidMask.execute",
+      "site": "comfy_extras/nodes_mask.py:197:15 (SolidMask.execute)",
+      "source_path": "comfy_extras/nodes_mask.py",
+      "source_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "comfy.model_management.intermediate_device()",
+          "syntax_kind": "Call"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "comfy.model_management.intermediate_dtype()",
+          "syntax_kind": "Call"
+        }
+      ],
+      "line": 336,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "(1, H, W, 3)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "fill_value",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "SCAIL2ColoredMask.execute",
+      "site": "comfy_extras/nodes_scail.py:336:36 (SCAIL2ColoredMask.execute)",
+      "source_path": "comfy_extras/nodes_scail.py",
+      "source_sha256": "4f0de5c18bd40db615d837b2ab0ddea30ed4ac17231c251fd65f770bbec3cd0e",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1978,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[batch_size, height, width, 1]",
+          "syntax_kind": "List"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "(color >> 16 & 255) / 255",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "EmptyImage.generate",
+      "site": "nodes.py:1978:13 (EmptyImage.generate)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1979,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[batch_size, height, width, 1]",
+          "syntax_kind": "List"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "(color >> 8 & 255) / 255",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "EmptyImage.generate",
+      "site": "nodes.py:1979:13 (EmptyImage.generate)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "device",
+          "syntax": "device",
+          "syntax_kind": "Name"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "dtype",
+          "syntax": "dtype",
+          "syntax_kind": "Name"
+        }
+      ],
+      "line": 1980,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "[batch_size, height, width, 1]",
+          "syntax_kind": "List"
+        },
+        {
+          "index": 1,
+          "starred": false,
+          "syntax": "(color & 255) / 255",
+          "syntax_kind": "BinOp"
+        }
+      ],
+      "scope": "EmptyImage.generate",
+      "site": "nodes.py:1980:13 (EmptyImage.generate)",
+      "source_path": "nodes.py",
+      "source_sha256": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+      "status": "static-call-observed",
+      "target_syntax": "torch.full"
+    }
+  ],
+  "static_definition": null
+}

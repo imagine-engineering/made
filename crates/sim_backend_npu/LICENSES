@@ -1,0 +1,15 @@
+Zed Huawei Ascend NPU adapter metadata
+======================================
+
+The Rust adapter, reviewed ABI manifest, packaging scripts, and Nix metadata are
+part of Zed and are licensed under GPL-3.0-or-later.
+
+Huawei CANN and AscendCL are separately installed vendor software. CANN runtime
+libraries are not redistributed by this package. A release may not bundle
+libascendcl.so, libruntime.so, CANN headers, firmware, drivers, or vendor kernels
+without a separately recorded licensing approval. The package contains no
+Huawei source code or binary payload.
+
+The ABI declaration review is based on the Huawei CANN 8.0.RC3 AscendCL public
+API documentation identified in abi/symbols-v1.json. Huawei, Ascend, CANN, and
+AscendCL are marks of their respective owner; no endorsement is implied.

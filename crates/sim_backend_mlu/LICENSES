@@ -1,0 +1,17 @@
+Zed Cambricon MLU adapter metadata
+
+Zed adapter source, checked declarations, package tooling, and metadata are licensed
+GPL-3.0-or-later.
+
+Cambricon CNRT, CNNL, Neuware, SDK headers, libraries, firmware, and kernels are
+proprietary vendor materials and must not be redistributed by Zed without a separately
+recorded license approval. This package contains only Zed-owned metadata and header
+digests. Users install the vendor runtime separately from an authorized source.
+
+Reviewed ABI provenance:
+- cnnl.h from cnnl_1.20.4-1.ubuntu20.04_amd64.deb
+- cnrt.h from cnrt_6.6.0-1.ubuntu20.04_amd64.deb within CNToolkit 3.6.1
+
+The package signature covers the Zed ABI manifest, policy, notices, and adapter
+metadata. It does not certify or authorize separately installed vendor library bytes;
+sim_runtime::NativeFfiRegistry remains the sole runtime certificate issuer.

@@ -1,0 +1,55 @@
+syntax = "proto3";
+package zed.messages;
+
+import "worktree.proto";
+
+message GetSourceCoverage {
+  uint64 project_id = 1;
+  string provider_id = 2;
+  repeated uint64 worktree_ids = 3;
+}
+
+message InterpretRustCoverageArtifact {
+  uint64 project_id = 1;
+  ProjectPath artifact_path = 2;
+  uint64 max_bytes = 3;
+}
+
+message SourceCoverageResponse {
+  uint64 project_generation = 1;
+  string provider_id = 2;
+  uint64 generation = 3;
+  SourceCoverageStatus status = 4;
+  repeated SourceCoverageFile files = 5;
+  bool truncated = 6;
+  optional string diagnostic = 7;
+}
+
+message SourceCoverageFile {
+  ProjectPath path = 1;
+  repeated SourceCoverageRange ranges = 2;
+  uint32 covered_lines = 3;
+  uint32 uncovered_lines = 4;
+  bool truncated = 5;
+}
+
+message SourceCoverageRange {
+  uint32 start_line = 1;
+  uint32 start_column = 2;
+  uint32 end_line = 3;
+  uint32 end_column = 4;
+  uint64 hit_count = 5;
+}
+
+enum SourceCoverageStatus {
+  SOURCE_COVERAGE_STATUS_LOADING = 0;
+  SOURCE_COVERAGE_STATUS_CURRENT = 1;
+  SOURCE_COVERAGE_STATUS_EMPTY = 2;
+  SOURCE_COVERAGE_STATUS_PARTIAL = 3;
+  SOURCE_COVERAGE_STATUS_STALE = 4;
+  SOURCE_COVERAGE_STATUS_ERROR = 5;
+  SOURCE_COVERAGE_STATUS_RESTRICTED = 6;
+  SOURCE_COVERAGE_STATUS_DISCONNECTED = 7;
+  SOURCE_COVERAGE_STATUS_MISMATCH = 8;
+  SOURCE_COVERAGE_STATUS_CANCELLED = 9;
+}

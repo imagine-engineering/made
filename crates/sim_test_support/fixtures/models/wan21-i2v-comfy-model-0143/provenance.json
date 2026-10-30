@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wan21-i2v-sim-model-0143",
+  "feature_id": "COMFY-MODEL-0143",
+  "source_symbol": "WAN21_I2V",
+  "source_ordinal": 53,
+  "source_architecture": "model_base.WAN21",
+  "latent_feature_id": "COMFY-MODEL-0053",
+  "latent_identifier": "Wan21",
+  "catalog_projection_sha256": "2f26687117e802ea8c85f00a77025088829ebd38bc98dfebc5ad2e18e74c04c5",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/wan/model.py", "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/wan.py", "sha256": "e9a6ca356790c76f7a36550842fc8a93c8c584cd175d69615eaddb7b4cd276bc"}
+  ],
+  "source_projection": "source_symbol=WAN21_I2V\nsource_ordinal=53\ninheritance=WAN21_I2V,WAN21_T2V,supported_models_base.BASE\nunet_config.image_model=wan2.1\nunet_config.model_type=i2v\nunet_config.in_dim=36\nsampling_settings.shift=8.0\nlatent_format=sim.latent_formats.Wan21\nmemory_usage_factor.runtime=dim/2222\nsupported_inference_dtypes=f16,bf16,f32\narchitecture=model_base.WAN21(image_to_video=true)\nclip_tokenizer=sim.text_encoders.wan.WanT5Tokenizer\nclip_model=sim.text_encoders.wan.te\nclip_configuration=sim.text_encoders.sd3_clip.t5_xxl_detect(text_encoders.umt5xxl.transformer.)\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\ndetector=head.modulation+img_emb.proj.0.bias+patch_embedding.weight.shape[1]=36\nconcat_conditioning=mask_channels4+image_latent_channels16\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "ffb660c6a5f637132a6353889e6fa63405cb5b3d1b0e30db1e36a92e35db78f4",
+  "alternate_layout": "WAN21_I2V is selected from the source-native image embedder and 36-channel patch input while HuMo audio keys and other dimensions fail closed; Diffusers layouts are unsupported.",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI WAN21_I2V sources; no production scripting dependency"
+}

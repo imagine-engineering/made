@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "identity": "sgm_uniform",
+  "feature_id": "COMFY-MODEL-0210",
+  "source_ordinal": 1,
+  "source": {
+    "path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "equation_lines": [670, 690],
+    "registry_line": 1348,
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "catalog_line": 211
+  },
+  "profile_sigmas": [0.25, 4.0],
+  "tolerance": 0.000002,
+  "cases": [
+    {"name":"sgm_excludes_end","steps":4,"denoise":1.0,"start_step":null,"end_step":null,"expected":[4.0,2.0,1.0,0.5,0.0]},
+    {"name":"single_step","steps":1,"denoise":1.0,"start_step":null,"end_step":null,"expected":[4.0,0.0]},
+    {"name":"partial_denoise_tail","steps":3,"denoise":0.5,"start_step":null,"end_step":null,"expected":[1.0,0.6299605,0.3968503,0.0]},
+    {"name":"explicit_window","steps":4,"denoise":1.0,"start_step":1,"end_step":3,"expected":[2.0,1.0,0.5]}
+  ]
+}

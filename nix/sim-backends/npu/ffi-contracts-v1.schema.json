@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/npu/ffi-contracts-v1.schema.json",
+  "title": "Zed Huawei Ascend NPU native library contracts v1",
+  "$comment": "Callable AscendCL is pinned by exact nonempty symbols. Its dependency-only runtime image is pinned by digest, ABI, owner, and an explicit required_by edge and is never treated as a callable zero-symbol FFI contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "backend", "abi_floor", "target", "abi_manifest_sha256", "package_policy_sha256", "libraries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "backend": { "const": "npu" },
+    "abi_floor": { "const": "CANN-8.0.RC3-AscendCL" },
+    "target": { "enum": ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"] },
+    "abi_manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "package_policy_sha256": { "$ref": "#/$defs/sha256" },
+    "libraries": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "prefixItems": [
+        { "$ref": "#/$defs/ascendcl" },
+        { "$ref": "#/$defs/runtime" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "symbols": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
+    },
+    "ascendcl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "ascendcl" },
+        "filename": { "const": "libascendcl.so" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "CANN-8.0.RC3-AscendCL" },
+        "required_symbols": { "$ref": "#/$defs/symbols" },
+        "unsafe_owner": { "const": "sim_backend_npu::loader" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "filename", "sha256", "abi", "required_symbols", "required_by", "unsafe_owner"],
+      "properties": {
+        "identity": { "const": "runtime" },
+        "filename": { "const": "libruntime.so" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "CANN-8.0.RC3-AscendCL" },
+        "required_symbols": { "type": "array", "maxItems": 0 },
+        "required_by": { "const": "ascendcl" },
+        "unsafe_owner": { "const": "sim_backend_npu::loader" }
+      }
+    }
+  }
+}

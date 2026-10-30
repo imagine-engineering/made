@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-video-save-webm-node-foundation",
+  "feature_id": "COMFY-NODE-0602",
+  "source": {
+    "path": "sim_extras/nodes_video.py",
+    "sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "class_type": "SaveWEBM",
+    "class_line": 12,
+    "execute_line": 38,
+    "definition_sha256": "55496b10af66a908ef035d236f8fab8193c1ae44408dab9d202deadff3be2715",
+    "schema_definition_sha256": "ef34373e1c62347935aabb1b1c7a7551aa64e063dc974b037285e80f0a9c6a84"
+  },
+  "contract": {
+    "category": "video",
+    "display_name": "Save WEBM",
+    "search_aliases": ["export webm"],
+    "visible_inputs": ["images", "filename_prefix", "codec", "fps", "crf"],
+    "hidden_inputs": ["prompt", "extra_pnginfo"],
+    "codecs": ["vp9", "av1"],
+    "fps": {"default": 24.0, "minimum": 0.01, "maximum": 1000.0, "step": 0.01},
+    "crf": {"default": 32.0, "minimum": 0.0, "maximum": 63.0, "step": 1.0},
+    "outputs": ["IMAGE"],
+    "native_output_port": "images",
+    "output_node": true,
+    "effect": "writes_artifact",
+    "cache": "never"
+  },
+  "behavior": {
+    "frame_rate": "python_ties_even_round_fps_times_1000_then_reduce_over_1000",
+    "metadata": "prompt_JSON_first_then_insertion_ordered_extra_pnginfo_JSON_with_duplicate_overwrite_preserved",
+    "encoding": "delegate_checked_IMAGE_codec_rate_crf_and_metadata_to_the_retained_WebM_node_service",
+    "output": "prepare_one_output_namespace_webm_video_webm_file_effect_at_batch_zero",
+    "return": "the_identical_input_IMAGE_handle_plus_PreviewVideo_transaction_projection",
+    "cancellation": "post_prepare_cancellation_rolls_back_the_exact_ticket_before_interrupted_failure",
+    "retry": "invalid_cancelled_or_rejected_attempts_publish_no_handle_and_leave_services_reusable"
+  },
+  "evidence_claims": {
+    "native_node_descriptor_and_execution": true,
+    "source_float_rate_and_ordered_JSON_metadata": true,
+    "retained_VP9_and_AV1_service_dispatch": true,
+    "prepared_output_and_reverse_rollback": true,
+    "identity_preserving_IMAGE_output": true,
+    "output_committer_commit_and_recovery_owner": false,
+    "installed_codec_or_playable_WebM_oracle": false,
+    "filesystem_path_or_filename_counter_identity": false,
+    "handle_cache_persistence_or_restart_owner": false,
+    "complete_process_heap_allocation_interception": false
+  }
+}

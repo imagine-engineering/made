@@ -1,0 +1,11 @@
+{
+  "source_path": "projects/sim/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+  "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",
+  "bytes": 6163,
+  "source_output_constructor": "InputImpl.VideoFromFile(BytesIO(response))",
+  "source_output_nodes": [
+    "LtxvApiTextToVideo",
+    "LtxvApiImageToVideo"
+  ],
+  "scope": "Exact provenance-bound source frontend encoded MP4 bytes for wrapper ordering/canonical callback rejection. Actual parser/runtime decode success is not claimed. No seeded structural VIDEO ABI or 129-byte general-demux structural container."
+}

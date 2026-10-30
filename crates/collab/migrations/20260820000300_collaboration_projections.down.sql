@@ -1,0 +1,2 @@
+DROP TABLE public.collaboration_projection_checkpoints;
+DROP FUNCTION public.guard_collaboration_projection_checkpoint_update();

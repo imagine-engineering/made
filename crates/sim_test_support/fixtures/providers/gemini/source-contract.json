@@ -1,0 +1,2394 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.gemini",
+  "source_sha256": {
+    "sim_api_nodes/nodes_gemini.py": "e760f41dad8e26c44b9e4d5c283c7ffafffb2d1839200c3b471da81992d463db",
+    "sim_api_nodes/apis/gemini.py": "cdd43a44aed3a5117b6d504f5c76c578828108cce0c375156ec48f8a58e6429c",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+  },
+  "scope": "Actual request/helper/response filtering/token price AST. Native encodings and materialization are explicit boundary probes, never decoded outputs.",
+  "contracts": {
+    "GeminiNode": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "images",
+        "audio",
+        "video",
+        "files",
+        "system_prompt"
+      ],
+      "defaults": {
+        "images": null,
+        "audio": null,
+        "video": null,
+        "files": null,
+        "system_prompt": ""
+      },
+      "node_identifier": "GeminiNode",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.String.Output()]"
+    },
+    "GeminiNodeV2": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "system_prompt"
+      ],
+      "defaults": {
+        "system_prompt": ""
+      },
+      "node_identifier": "GeminiNodeV2",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.String.Output()]"
+    },
+    "GeminiInputFiles": {
+      "arguments": [
+        "file",
+        "GEMINI_INPUT_FILES"
+      ],
+      "defaults": {
+        "GEMINI_INPUT_FILES": null
+      },
+      "node_identifier": "GeminiInputFiles",
+      "hidden": "[]",
+      "outputs": "[IO.Custom('GEMINI_INPUT_FILES').Output()]"
+    },
+    "GeminiImage": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "images",
+        "files",
+        "aspect_ratio",
+        "response_modalities",
+        "system_prompt"
+      ],
+      "defaults": {
+        "images": null,
+        "files": null,
+        "aspect_ratio": "auto",
+        "response_modalities": "IMAGE+TEXT",
+        "system_prompt": ""
+      },
+      "node_identifier": "GeminiImageNode",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Image.Output(), IO.String.Output()]"
+    },
+    "GeminiImage2": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "aspect_ratio",
+        "resolution",
+        "response_modalities",
+        "images",
+        "files",
+        "system_prompt"
+      ],
+      "defaults": {
+        "images": null,
+        "files": null,
+        "system_prompt": ""
+      },
+      "node_identifier": "GeminiImage2Node",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Image.Output(), IO.String.Output()]"
+    },
+    "GeminiNanoBanana2": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "aspect_ratio",
+        "resolution",
+        "response_modalities",
+        "thinking_level",
+        "images",
+        "files",
+        "system_prompt"
+      ],
+      "defaults": {
+        "images": null,
+        "files": null,
+        "system_prompt": ""
+      },
+      "node_identifier": "GeminiNanoBanana2",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Image.Output(), IO.String.Output(), IO.Image.Output(display_name='thought_image', tooltip=\"First image from the model's thinking process. Only available with thinking_level HIGH and IMAGE+TEXT modality.\")]"
+    },
+    "GeminiNanoBanana2V2": {
+      "arguments": [
+        "prompt",
+        "model",
+        "seed",
+        "response_modalities",
+        "system_prompt",
+        "temperature",
+        "top_p"
+      ],
+      "defaults": {
+        "system_prompt": "",
+        "temperature": 1.0,
+        "top_p": 0.95
+      },
+      "node_identifier": "GeminiNanoBanana2V2",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Image.Output(), IO.String.Output(), IO.Image.Output(display_name='thought_image', tooltip=\"First image from the model's thinking process. Only available with thinking_level HIGH and IMAGE+TEXT modality.\")]"
+    },
+    "GeminiVideoOmni": {
+      "arguments": [
+        "model",
+        "seed"
+      ],
+      "defaults": {},
+      "node_identifier": "GeminiVideoOmni",
+      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "outputs": "[IO.Video.Output(), IO.String.Output()]"
+    }
+  },
+  "model_maps": {
+    "text_v2": {
+      "Gemini 3.1 Pro": "gemini-3.1-pro-preview",
+      "Gemini 3.1 Flash-Lite": "gemini-3.1-flash-lite-preview"
+    },
+    "omni": {
+      "Omni Flash": "gemini-omni-flash-preview"
+    }
+  },
+  "cases": [
+    {
+      "input": {
+        "node": "GeminiNode",
+        "arguments": {
+          "prompt": " legacy ",
+          "model": "gemini-3-1-pro",
+          "seed": 42,
+          "images": {
+            "native_image": "image",
+            "image_count": 12
+          },
+          "audio": {
+            "waveform": {
+              "native_audio": "audio",
+              "batch_count": 2
+            },
+            "sample_rate": 48000
+          },
+          "video": {
+            "native_video": "video",
+            "duration": 1
+          },
+          "files": [
+            {
+              "inlineData": {
+                "data": "c291cmNlIHRleHQ=",
+                "mimeType": "text/plain"
+              }
+            }
+          ],
+          "system_prompt": "source system"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-pro-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": " legacy "
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/1",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/2",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/3",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/4",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/5",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/6",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/7",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/8",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/9",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:image/10",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:image/11",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-audio-encoding:audio/0",
+                      "mimeType": "audio/mp3"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-audio-encoding:audio/1",
+                      "mimeType": "audio/mp3"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-video-encoding:video",
+                      "mimeType": "video/mp4"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "c291cmNlIHRleHQ=",
+                      "mimeType": "text/plain"
+                    }
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "source system"
+                }
+              ]
+            }
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "count": 10,
+          "wait_label": "Uploading reference images (10+)",
+          "show_batch_index": false
+        },
+        {
+          "operation": "inline_image",
+          "slot": "image/10"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "image/11"
+        },
+        {
+          "operation": "inline_audio",
+          "slot": "audio/0",
+          "container_format": "mp3",
+          "codec_name": "libmp3lame"
+        },
+        {
+          "operation": "inline_audio",
+          "slot": "audio/1",
+          "container_format": "mp3",
+          "codec_name": "libmp3lame"
+        },
+        {
+          "operation": "inline_video",
+          "slot": "video",
+          "container_format": "mp4",
+          "codec": "h264"
+        }
+      ],
+      "outputs": [
+        "first\nsecond"
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiNode",
+        "arguments": {
+          "prompt": "",
+          "model": "gemini-3-1-flash-lite",
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-flash-lite-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": ""
+                  }
+                ],
+                "role": "user"
+              }
+            ]
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [],
+      "outputs": [
+        "first\nsecond"
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiNodeV2",
+        "arguments": {
+          "prompt": " v2 ",
+          "model": {
+            "model": "Gemini 3.1 Pro",
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "max_output_tokens": 32768,
+            "thinking_level": "HIGH",
+            "images": {
+              "image_2": {
+                "native_image": "later",
+                "image_count": 12
+              },
+              "image_1": {
+                "native_image": "earlier",
+                "image_count": 1
+              }
+            },
+            "audio": {
+              "audio_1": {
+                "waveform": {
+                  "native_audio": "audio",
+                  "batch_count": 2
+                },
+                "sample_rate": 48000
+              }
+            },
+            "video": {
+              "video_1": {
+                "native_video": "video",
+                "duration": 1
+              }
+            },
+            "files": [
+              {
+                "inlineData": {
+                  "data": "c291cmNlIHRleHQ=",
+                  "mimeType": "text/plain"
+                }
+              }
+            ]
+          },
+          "seed": 42,
+          "system_prompt": " system "
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-pro-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": " v2 "
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/video",
+                      "mimeType": "video/mp4"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/audio/0",
+                      "mimeType": "audio/mp3"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/audio/1",
+                      "mimeType": "audio/mp3"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/1",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/2",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/3",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/4",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/5",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/later/6",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:later/7",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:later/8",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:later/9",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:later/10",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:later/11",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:earlier/0",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "c291cmNlIHRleHQ=",
+                      "mimeType": "text/plain"
+                    }
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 32768,
+              "seed": 42,
+              "temperature": 1.0,
+              "topP": 0.95,
+              "thinkingConfig": {
+                "thinkingLevel": "HIGH"
+              }
+            },
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": " system "
+                }
+              ]
+            }
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "video",
+          "wait_label": "Uploading video"
+        },
+        {
+          "operation": "upload_audio",
+          "slot": "audio/0",
+          "container_format": "mp3",
+          "codec_name": "libmp3lame",
+          "mime_type": "audio/mp3"
+        },
+        {
+          "operation": "upload_audio",
+          "slot": "audio/1",
+          "container_format": "mp3",
+          "codec_name": "libmp3lame",
+          "mime_type": "audio/mp3"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/0",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/1",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/2",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/3",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/4",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/5",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "later/6",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "later/7",
+          "mime_type": "image/webp"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "later/8",
+          "mime_type": "image/webp"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "later/9",
+          "mime_type": "image/webp"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "later/10",
+          "mime_type": "image/webp"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "later/11",
+          "mime_type": "image/webp"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "earlier/0",
+          "mime_type": "image/webp"
+        }
+      ],
+      "outputs": [
+        "first\nsecond"
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiNodeV2",
+        "arguments": {
+          "prompt": "v2 lite",
+          "model": {
+            "model": "Gemini 3.1 Flash-Lite",
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "max_output_tokens": 32768,
+            "thinking_level": "HIGH"
+          },
+          "seed": 0
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-flash-lite-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "v2 lite"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 32768,
+              "temperature": 1.0,
+              "topP": 0.95,
+              "thinkingConfig": {
+                "thinkingLevel": "HIGH"
+              }
+            }
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [],
+      "outputs": [
+        "first\nsecond"
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiInputFiles",
+        "arguments": {
+          "file": "input.txt",
+          "GEMINI_INPUT_FILES": [
+            {
+              "inlineData": {
+                "data": "c291cmNlIHRleHQ=",
+                "mimeType": "text/plain"
+              }
+            }
+          ]
+        }
+      },
+      "requests": [],
+      "media": [],
+      "outputs": [
+        [
+          {
+            "inlineData": {
+              "data": "c291cmNlIHRleHQgY2Fmw6kK",
+              "mimeType": "text/plain"
+            }
+          },
+          {
+            "inlineData": {
+              "data": "c291cmNlIHRleHQ=",
+              "mimeType": "text/plain"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiImageNode",
+        "arguments": {
+          "prompt": " image ",
+          "model": "gemini-2.5-flash-image",
+          "seed": 42,
+          "images": {
+            "native_image": "one",
+            "image_count": 1
+          },
+          "files": [
+            {
+              "inlineData": {
+                "data": "c291cmNlIHRleHQ=",
+                "mimeType": "text/plain"
+              }
+            }
+          ],
+          "aspect_ratio": "",
+          "response_modalities": "IMAGE",
+          "system_prompt": "sys"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-2.5-flash-image",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": " image "
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "c291cmNlIHRleHQ=",
+                      "mimeType": "text/plain"
+                    }
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "responseModalities": [
+                "IMAGE"
+              ],
+              "imageConfig": {
+                "imageOutputOptions": {
+                  "mimeType": "image/png"
+                }
+              }
+            },
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "sys"
+                }
+              ]
+            },
+            "uploadImagesToStorage": true
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "count": 1,
+          "wait_label": "Uploading reference images"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "thought": false
+        },
+        "first\nsecond"
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiImage2Node",
+        "arguments": {
+          "prompt": "image2",
+          "model": "Nano Banana 2 (Gemini 3.1 Flash Image)",
+          "seed": 18446744073709551615,
+          "aspect_ratio": "16:9",
+          "resolution": "2K",
+          "response_modalities": "IMAGE+TEXT",
+          "images": {
+            "native_image": "image",
+            "image_count": 12
+          },
+          "files": [
+            {
+              "inlineData": {
+                "data": "c291cmNlIHRleHQ=",
+                "mimeType": "text/plain"
+              }
+            }
+          ],
+          "system_prompt": ""
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-flash-image-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "image2"
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/1",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/2",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/3",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/4",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/5",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/6",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/7",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/8",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/9",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:image/10",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:image/11",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "c291cmNlIHRleHQ=",
+                      "mimeType": "text/plain"
+                    }
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "responseModalities": [
+                "TEXT",
+                "IMAGE"
+              ],
+              "imageConfig": {
+                "aspectRatio": "16:9",
+                "imageSize": "2K",
+                "imageOutputOptions": {
+                  "mimeType": "image/png"
+                }
+              }
+            },
+            "uploadImagesToStorage": true
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "count": 10,
+          "wait_label": "Uploading reference images (10+)",
+          "show_batch_index": false
+        },
+        {
+          "operation": "inline_image",
+          "slot": "image/10"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "image/11"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "thought": false
+        },
+        "first\nsecond"
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiNanoBanana2",
+        "arguments": {
+          "prompt": "image2",
+          "model": "Nano Banana 2 (Gemini 3.1 Flash Image)",
+          "seed": 18446744073709551615,
+          "aspect_ratio": "16:9",
+          "resolution": "2K",
+          "response_modalities": "IMAGE+TEXT",
+          "images": {
+            "native_image": "image",
+            "image_count": 12
+          },
+          "files": [
+            {
+              "inlineData": {
+                "data": "c291cmNlIHRleHQ=",
+                "mimeType": "text/plain"
+              }
+            }
+          ],
+          "system_prompt": "",
+          "thinking_level": "HIGH"
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-flash-image-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "image2"
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/1",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/2",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/3",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/4",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/5",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/6",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/7",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/8",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/9",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:image/10",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:image/11",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "c291cmNlIHRleHQ=",
+                      "mimeType": "text/plain"
+                    }
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "HIGH"
+              },
+              "responseModalities": [
+                "TEXT",
+                "IMAGE"
+              ],
+              "imageConfig": {
+                "aspectRatio": "16:9",
+                "imageSize": "2K",
+                "imageOutputOptions": {
+                  "mimeType": "image/png"
+                }
+              }
+            },
+            "uploadImagesToStorage": true
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "count": 10,
+          "wait_label": "Uploading reference images (10+)",
+          "show_batch_index": false
+        },
+        {
+          "operation": "inline_image",
+          "slot": "image/10"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "image/11"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "thought": false
+        },
+        "first\nsecond",
+        {
+          "native_materializer": "image",
+          "thought": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiNanoBanana2V2",
+        "arguments": {
+          "prompt": " nano ",
+          "model": {
+            "model": "Nano Banana 2 Lite",
+            "resolution": "1K",
+            "aspect_ratio": "auto",
+            "thinking_level": "MINIMAL",
+            "images": {
+              "image_2": {
+                "native_image": "second",
+                "image_count": 2
+              },
+              "image_1": {
+                "native_image": "first",
+                "image_count": 1
+              }
+            },
+            "files": [
+              {
+                "inlineData": {
+                  "data": "c291cmNlIHRleHQ=",
+                  "mimeType": "text/plain"
+                }
+              }
+            ]
+          },
+          "seed": 42,
+          "response_modalities": "IMAGE+TEXT",
+          "system_prompt": "",
+          "temperature": 0.5,
+          "top_p": 0.7
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-3.1-flash-lite-image",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": " nano "
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/1",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/image/2",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "c291cmNlIHRleHQ=",
+                      "mimeType": "text/plain"
+                    }
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "temperature": 0.5,
+              "topP": 0.7,
+              "thinkingConfig": {
+                "thinkingLevel": "MINIMAL"
+              },
+              "responseModalities": [
+                "TEXT",
+                "IMAGE"
+              ],
+              "imageConfig": {
+                "imageSize": "1K",
+                "imageOutputOptions": {
+                  "mimeType": "image/png"
+                }
+              }
+            },
+            "uploadImagesToStorage": true
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_images",
+          "count": 3,
+          "wait_label": "Uploading reference images"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "image",
+          "thought": false
+        },
+        "first\nsecond",
+        {
+          "native_materializer": "image",
+          "thought": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "GeminiVideoOmni",
+        "arguments": {
+          "model": {
+            "model": "Omni Flash",
+            "prompt": "generate video",
+            "images": {
+              "image_1": {
+                "native_image": "omni",
+                "image_count": 10
+              }
+            },
+            "videos": {
+              "video_2": {
+                "native_video": "second-video",
+                "duration": 1
+              },
+              "video_1": {
+                "native_video": "first-video",
+                "duration": 1
+              }
+            },
+            "temperature": 0.9,
+            "top_p": 0.8
+          },
+          "seed": 42
+        }
+      },
+      "requests": [
+        {
+          "path": "/proxy/vertexai/gemini/gemini-omni-flash-preview",
+          "method": "POST",
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/second-video",
+                      "mimeType": "video/mp4"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/first-video",
+                      "mimeType": "video/mp4"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/0",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/1",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/2",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/3",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/4",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/5",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/6",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "fileData": {
+                      "fileUri": "https://storage.fixture.invalid/omni/7",
+                      "mimeType": "image/png"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:omni/8",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "inlineData": {
+                      "data": "canonical-image-encoding:omni/9",
+                      "mimeType": "image/webp"
+                    }
+                  },
+                  {
+                    "text": "generate video"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "temperature": 0.9,
+              "topP": 0.8,
+              "responseModalities": [
+                "TEXT",
+                "VIDEO"
+              ]
+            }
+          },
+          "price_extractor": "calculate_tokens_price"
+        }
+      ],
+      "media": [
+        {
+          "operation": "upload_video",
+          "slot": "second-video",
+          "wait_label": "Uploading video"
+        },
+        {
+          "operation": "upload_video",
+          "slot": "first-video",
+          "wait_label": "Uploading video"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/0",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/1",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/2",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/3",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/4",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/5",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/6",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "upload_image",
+          "slot": "omni/7",
+          "mime_type": "image/png",
+          "wait_label": "Uploading image"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "omni/8",
+          "mime_type": "image/webp"
+        },
+        {
+          "operation": "inline_image",
+          "slot": "omni/9",
+          "mime_type": "image/webp"
+        }
+      ],
+      "outputs": [
+        {
+          "native_materializer": "video"
+        },
+        "first\nsecond"
+      ]
+    }
+  ],
+  "preflight_errors": [
+    {
+      "input": {
+        "node": "GeminiNodeV2",
+        "arguments": {
+          "prompt": " ",
+          "model": {
+            "model": "Gemini 3.1 Pro",
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "max_output_tokens": 32768,
+            "thinking_level": "HIGH",
+            "images": {
+              "image_2": {
+                "native_image": "later",
+                "image_count": 12
+              },
+              "image_1": {
+                "native_image": "earlier",
+                "image_count": 1
+              }
+            },
+            "audio": {
+              "audio_1": {
+                "waveform": {
+                  "native_audio": "audio",
+                  "batch_count": 2
+                },
+                "sample_rate": 48000
+              }
+            },
+            "video": {
+              "video_1": {
+                "native_video": "video",
+                "duration": 1
+              }
+            },
+            "files": [
+              {
+                "inlineData": {
+                  "data": "c291cmNlIHRleHQ=",
+                  "mimeType": "text/plain"
+                }
+              }
+            ]
+          },
+          "seed": 42
+        }
+      },
+      "message": "Field 'prompt' cannot be shorter than 1 characters; was 0 characters long.",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "GeminiImage2Node",
+        "arguments": {
+          "prompt": "image2",
+          "model": "Nano Banana 2 (Gemini 3.1 Flash Image)",
+          "seed": 18446744073709551615,
+          "aspect_ratio": "16:9",
+          "resolution": "2K",
+          "response_modalities": "IMAGE+TEXT",
+          "images": {
+            "native_image": "too-many",
+            "image_count": 15
+          },
+          "files": [
+            {
+              "inlineData": {
+                "data": "c291cmNlIHRleHQ=",
+                "mimeType": "text/plain"
+              }
+            }
+          ],
+          "system_prompt": ""
+        }
+      },
+      "message": "The current maximum number of supported images is 14.",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "GeminiNanoBanana2V2",
+        "arguments": {
+          "prompt": " nano ",
+          "model": {
+            "model": "Nano Banana 2 Lite",
+            "resolution": "1K",
+            "aspect_ratio": "auto",
+            "thinking_level": "MINIMAL",
+            "images": {
+              "images": {
+                "native_image": "too-many",
+                "image_count": 15
+              }
+            },
+            "files": [
+              {
+                "inlineData": {
+                  "data": "c291cmNlIHRleHQ=",
+                  "mimeType": "text/plain"
+                }
+              }
+            ]
+          },
+          "seed": 42,
+          "response_modalities": "IMAGE+TEXT",
+          "system_prompt": "",
+          "temperature": 0.5,
+          "top_p": 0.7
+        }
+      },
+      "message": "The current maximum number of supported images is 14.",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "GeminiVideoOmni",
+        "arguments": {
+          "model": {
+            "model": "Omni Flash",
+            "prompt": "generate video",
+            "images": {
+              "image_1": {
+                "native_image": "omni",
+                "image_count": 10
+              }
+            },
+            "videos": {
+              "video_0": {
+                "native_video": "0",
+                "duration": 1
+              },
+              "video_1": {
+                "native_video": "1",
+                "duration": 1
+              },
+              "video_2": {
+                "native_video": "2",
+                "duration": 1
+              },
+              "video_3": {
+                "native_video": "3",
+                "duration": 1
+              }
+            },
+            "temperature": 0.9,
+            "top_p": 0.8
+          },
+          "seed": 42
+        }
+      },
+      "message": "The current maximum number of supported videos is 3.",
+      "requests": [],
+      "media": []
+    },
+    {
+      "input": {
+        "node": "GeminiVideoOmni",
+        "arguments": {
+          "model": {
+            "model": "Omni Flash",
+            "prompt": "generate video",
+            "images": {
+              "image_1": {
+                "native_image": "omni",
+                "image_count": 10
+              }
+            },
+            "videos": {
+              "video_1": {
+                "native_video": "long",
+                "duration": 11
+              }
+            },
+            "temperature": 0.9,
+            "top_p": 0.8
+          },
+          "seed": 42
+        }
+      },
+      "message": "Video duration exceeds 10 seconds",
+      "requests": [],
+      "media": []
+    }
+  ],
+  "price_cases": [
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-2.5-pro"
+      },
+      "usd": 0.00148
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-2.5-flash"
+      },
+      "usd": 0.0003572
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-2.5-flash-image"
+      },
+      "usd": 0.0012872
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3-pro-preview"
+      },
+      "usd": 0.002288
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-pro-preview"
+      },
+      "usd": 0.002288
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-flash-lite-preview"
+      },
+      "usd": 0.000286
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-flash-lite"
+      },
+      "usd": 0.000286
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3-pro-image-preview"
+      },
+      "usd": 0.006008
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3-pro-image"
+      },
+      "usd": 0.006008
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-flash-image-preview"
+      },
+      "usd": 0.002432
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-flash-image"
+      },
+      "usd": 0.002432
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-flash-lite-image"
+      },
+      "usd": 0.001216
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-omni-flash-preview"
+      },
+      "usd": 0.002929355
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "unknown"
+      },
+      "usd": null
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        }
+      },
+      "usd": null
+    }
+  ],
+  "price_failure_policy": "shared client suppresses price-extractor exceptions and continues returning the validated response",
+  "response_cases": [
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "first"
+                },
+                {
+                  "text": "second"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "usageMetadata": {
+          "candidatesTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 17
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 31
+            },
+            {
+              "modality": "VIDEO",
+              "tokenCount": 19
+            }
+          ],
+          "promptTokenCount": 1024,
+          "thoughtsTokenCount": 3
+        },
+        "modelVersion": "gemini-3.1-flash-image-preview"
+      },
+      "result": {
+        "text": "first\nsecond",
+        "image_parts": []
+      }
+    },
+    {
+      "response": {
+        "candidates": [],
+        "promptFeedback": {
+          "blockReason": "SAFETY",
+          "blockReasonMessage": "blocked"
+        }
+      },
+      "result": {
+        "error": "Gemini API blocked the request. Reason: SAFETY (blocked)"
+      }
+    },
+    {
+      "response": {
+        "candidates": []
+      },
+      "result": {
+        "error": "Gemini API returned no response candidates. If you are using the `IMAGE` modality, try changing it to `IMAGE+TEXT` to view the model's reasoning and understand why image generation failed."
+      }
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "blocked"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "IMAGE_PROHIBITED_CONTENT"
+          }
+        ]
+      },
+      "result": {
+        "error": "Gemini API blocked the request. Reasons: ['IMAGE_PROHIBITED_CONTENT']"
+      }
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "reasoning",
+                  "thought": true
+                },
+                {
+                  "text": "final"
+                },
+                {
+                  "fileData": {
+                    "fileUri": "https://fixture.invalid/image.png",
+                    "mimeType": "image/png"
+                  }
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ]
+      },
+      "result": {
+        "text": "reasoning\nfinal",
+        "image_parts": [
+          {
+            "fileData": {
+              "fileUri": "https://fixture.invalid/image.png",
+              "mimeType": "image/png"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

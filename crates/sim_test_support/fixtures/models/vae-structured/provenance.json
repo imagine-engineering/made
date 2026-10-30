@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "oracle_kind": "pinned-source-inspection",
+  "production_dependency": false,
+  "sources": [
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/hunyuan3d/vae.py",
+      "sha256": "a7105097141ea8ca7bee4f5f0ae0b2386c9b55794421df325986a08789baa0b9"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/triposplat/vae.py",
+      "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/triposplat/gaussian.py",
+      "sha256": "a9776ecfc5ec286dd140da3b24fd7ad9f8ff2d85d1ccd125a1c2a62c40c4ba0e"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/triposplat/model.py",
+      "sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0"
+    }
+  ],
+  "observations": {
+    "hunyuan_decode": "complete",
+    "hunyuan_encode": "source-incomplete: ShapeVAE.encode references absent self.pre_kl",
+    "triposplat_decode": "complete and caller-generator-addressable"
+  }
+}

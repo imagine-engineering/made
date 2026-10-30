@@ -1,0 +1,15 @@
+{
+  "events": [
+    "model_loaded",
+    "positive_conditioning_ready",
+    "negative_conditioning_ready",
+    "noise_ready",
+    "sampler_step_0",
+    "sampler_step_1",
+    "sampler_step_2",
+    "sampler_step_3",
+    "vae_decoded",
+    "image_saved"
+  ],
+  "fixture_id": "sd15-tiny-v1"
+}

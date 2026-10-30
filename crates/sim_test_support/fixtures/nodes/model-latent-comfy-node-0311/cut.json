@@ -1,0 +1,86 @@
+{
+  "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+  "class_type": "LatentCut",
+  "cases": [
+    {
+      "dim": "x",
+      "index": 99,
+      "amount": 4,
+      "expected_shape": [
+        2,
+        4,
+        3,
+        5,
+        1
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        2,
+        4,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "dim": "y",
+      "index": -2,
+      "amount": 4,
+      "expected_shape": [
+        2,
+        4,
+        3,
+        2,
+        7
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        2,
+        4,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "dim": "t",
+      "index": -99,
+      "amount": 2,
+      "expected_shape": [
+        2,
+        4,
+        2,
+        5,
+        7
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        2,
+        4,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "dim": "x",
+      "index": 1,
+      "amount": 3,
+      "expected_shape": [
+        2,
+        4,
+        3,
+        5,
+        3
+      ],
+      "retained_extra": "retained",
+      "input_shape": [
+        2,
+        4,
+        3,
+        5,
+        7
+      ]
+    }
+  ]
+}

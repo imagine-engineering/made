@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "source_sha256": {
+    "sim_api_nodes/nodes_veo2.py": "90c1e81fcc00499d43786cf947c07ae7123e8112b88586e324c2952d39468e85",
+    "sim_api_nodes/apis/veo.py": "5f6fdbf413254f290dd0b08e73624fced09818c1646a09132d0d87ac945dbe30",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "sim_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+  },
+  "source_history": "checksum-locked source snapshot; no ComfyUI Git metadata or original per-file history available",
+  "video": {
+    "source": "ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+    "bytes": 6163,
+    "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",
+    "classification": "actual source BytesIO wrapper only; no PyAV parse/native VIDEO success"
+  },
+  "images": {
+    "source-image.png": {
+      "sha256": "1d7093b57aa0d1362fe44d4791a3ebc32981fd75aea818022b36f62efbd8bb03",
+      "bytes": 79,
+      "producer": "actual tensor_to_base64_string/tensor_to_pil/downscale_image_tensor/pil_to_bytesio AST; NumPy float32 proxy and PIL; no Torch/GPU/native allocation",
+      "source_input": {
+        "native_slot": "image",
+        "shape": [
+          1,
+          2,
+          2,
+          3
+        ],
+        "pixels": [
+          0.5,
+          0.25,
+          0.125
+        ]
+      },
+      "expected_PIL_pixels": [
+        127,
+        63,
+        31
+      ]
+    },
+    "source-image-rgba.png": {
+      "sha256": "0fee49f0a2b54663b1b5383b8cfff32f62243c3bc2791ca3f1498306b1b2e7df",
+      "bytes": 77,
+      "producer": "actual tensor_to_base64_string/tensor_to_pil/downscale_image_tensor/pil_to_bytesio AST; NumPy float32 proxy and PIL; no Torch/GPU/native allocation",
+      "source_input": {
+        "native_slot": "image",
+        "shape": [
+          2,
+          2,
+          2,
+          4
+        ],
+        "pixels": [
+          0.5,
+          0.25,
+          0.125,
+          0.375
+        ]
+      },
+      "expected_PIL_pixels": [
+        127,
+        63,
+        31,
+        95
+      ]
+    }
+  },
+  "video_validation": "Actual VideoFromFile.__init__ and get_stream_source only retain/rewind bytes; no parser invoked. PyAV unavailable; injected canonical materializer rejects and publishes zero native output."
+}

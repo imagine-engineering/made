@@ -1,0 +1,13 @@
+**
+!deploy/
+!deploy/collaboration/
+!deploy/collaboration/migrations/
+!deploy/collaboration/migrations/Dockerfile
+!deploy/collaboration/migrations/Dockerfile.dockerignore
+!deploy/collaboration/migrations/migrate.py
+!deploy/collaboration/migrations/manifest.json
+!crates/
+!crates/collab/
+!crates/collab/migrations/
+!crates/collab/migrations/*.up.sql
+!crates/collab/migrations/*.down.sql

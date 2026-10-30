@@ -1,0 +1,2535 @@
+{
+  "format": "sim.source.audio-encoder-loader.v1",
+  "claim": "COMFY-NODE-0012",
+  "source_sha256": {
+    "sim_extras/nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a",
+    "sim/audio_encoders/audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
+    "sim/audio_encoders/wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
+    "sim/audio_encoders/whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
+    "folder_paths.py": "380961714742085363301f980a6c9458f36aca05b1e36ed9b8afa3fb64ccdb50",
+    "sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"
+  },
+  "schema": {
+    "node_id": "AudioEncoderLoader",
+    "display_name": "Load Audio Encoder",
+    "category": "model/loaders",
+    "inputs": [
+      {
+        "name": "audio_encoder_name",
+        "options": [
+          "base.pt",
+          "nested/large.pt"
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "type": "AUDIO_ENCODER"
+      }
+    ]
+  },
+  "torch": "2.8.0+cpu",
+  "execution_scope": "original node/path/safe load/architecture selection; original full constructor unbound; no completed source model",
+  "source_memory_policy": {
+    "aimdo_enabled": false,
+    "MMAP_TORCH_FILES": false,
+    "DISABLE_MMAP": false
+  },
+  "cases": [
+    {
+      "label": "base configuration",
+      "source_name": "base.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "conv_norm": false,
+          "conv_bias": false,
+          "do_normalize": false,
+          "do_stable_layer_norm": false
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "base.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "base.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "conv_norm": false,
+            "conv_bias": false,
+            "do_normalize": false,
+            "do_stable_layer_norm": false
+          }
+        }
+      ]
+    },
+    {
+      "label": "large prefixed configuration",
+      "source_name": "nested/large.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 1024,
+          "num_heads": 16,
+          "num_layers": 24,
+          "conv_norm": true,
+          "conv_bias": true,
+          "do_normalize": true,
+          "do_stable_layer_norm": true
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "nested/large.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "large.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "wav2vec2.encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "wav2vec2.encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 1024,
+            "num_heads": 16,
+            "num_layers": 24,
+            "conv_norm": true,
+            "conv_bias": true,
+            "do_normalize": true,
+            "do_stable_layer_norm": true
+          }
+        }
+      ]
+    },
+    {
+      "label": "whisper configuration",
+      "source_name": "whisper.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "whisper3"
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "whisper.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "whisper.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "model.encoder.embed_positions.weight"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "model.encoder.embed_positions.weight"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "whisper3"
+          }
+        }
+      ]
+    },
+    {
+      "label": "unsupported embedding width",
+      "source_name": "bad-width.pt",
+      "source_error": {
+        "type": "RuntimeError",
+        "message": "ERROR: audio encoder file is invalid or unsupported embed_dim: 512"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "bad-width.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "bad-width.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "wrong marker rank",
+      "source_name": "bad-rank.pt",
+      "source_error": {
+        "type": "RuntimeError",
+        "message": "ERROR: audio encoder file is invalid or unsupported embed_dim: 1"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "bad-rank.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "bad-rank.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "unrecognized state",
+      "source_name": "unknown.pt",
+      "source_error": {
+        "type": "RuntimeError",
+        "message": "ERROR: audio encoder not supported."
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "unknown.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "unknown.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "unrecognized.weight"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "unrecognized.weight"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "empty state",
+      "source_name": "empty.pt",
+      "source_error": {
+        "type": "RuntimeError",
+        "message": "ERROR: audio encoder not supported."
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "empty.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "empty.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": []
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": []
+        }
+      ]
+    },
+    {
+      "label": "missing file",
+      "source_name": "absent.pt",
+      "source_error": {
+        "type": "FileNotFoundError",
+        "message": "Model in folder 'audio_encoders' with filename 'absent.pt' not found."
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "absent.pt"
+        }
+      ]
+    },
+    {
+      "label": "corrupt safe torch file",
+      "source_name": "corrupt.pt",
+      "source_error": {
+        "type": "UnpicklingError",
+        "message": "Weights only load failed. In PyTorch 2.6, we changed the default value of the `weights_only` argument in `torch.load` from `False` to `True`. Re-running `torch.load` with `weights_only` set to `False` will likely succeed, but it can result in arbitrary code execution. Do it only if you got the file from a trusted source.\nPlease file an issue with the following so that we can make `weights_only=True` compatible with your use case: WeightsUnpickler error: Unsupported operand 110\n\nCheck the documentation of torch.load to learn more about types accepted by default with weights_only https://pytorch.org/docs/stable/generated/torch.load.html."
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "corrupt.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "corrupt.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        }
+      ]
+    },
+    {
+      "label": "normalized source filename",
+      "source_name": "./base.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "conv_norm": false,
+          "conv_bias": false,
+          "do_normalize": false,
+          "do_stable_layer_norm": false
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "./base.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "base.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "conv_norm": false,
+            "conv_bias": false,
+            "do_normalize": false,
+            "do_stable_layer_norm": false
+          }
+        }
+      ]
+    },
+    {
+      "label": "original absolute prefix normalization",
+      "source_name": "/base.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "conv_norm": false,
+          "conv_bias": false,
+          "do_normalize": false,
+          "do_stable_layer_norm": false
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "/base.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "base.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "conv_norm": false,
+            "conv_bias": false,
+            "do_normalize": false,
+            "do_stable_layer_norm": false
+          }
+        }
+      ]
+    },
+    {
+      "label": "original traversal normalization",
+      "source_name": "../base.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "conv_norm": false,
+          "conv_bias": false,
+          "do_normalize": false,
+          "do_stable_layer_norm": false
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "../base.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "base.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "conv_norm": false,
+            "conv_bias": false,
+            "do_normalize": false,
+            "do_stable_layer_norm": false
+          }
+        }
+      ]
+    },
+    {
+      "label": "missing nested file",
+      "source_name": "nested/absent.pt",
+      "source_error": {
+        "type": "FileNotFoundError",
+        "message": "Model in folder 'audio_encoders' with filename 'nested/absent.pt' not found."
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "nested/absent.pt"
+        }
+      ]
+    },
+    {
+      "label": "provided F16 marker configuration",
+      "source_name": "half.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "conv_norm": false,
+          "conv_bias": false,
+          "do_normalize": false,
+          "do_stable_layer_norm": false
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "half.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "half.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "conv_norm": false,
+            "conv_bias": false,
+            "do_normalize": false,
+            "do_stable_layer_norm": false
+          }
+        }
+      ]
+    },
+    {
+      "label": "prefix overwrite source constructor",
+      "source_name": "collision.pt",
+      "source_preparation_gate": {
+        "configuration": {
+          "model_type": "wav2vec2",
+          "embed_dim": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "conv_norm": false,
+          "conv_bias": false,
+          "do_normalize": false,
+          "do_stable_layer_norm": false
+        },
+        "reason": "actual full original AudioEncoderModel construction is unbound in the lightweight oracle"
+      },
+      "events": [
+        {
+          "phase": "source_path_request",
+          "category": "audio_encoders",
+          "name": "collision.pt"
+        },
+        {
+          "phase": "source_path_resolved",
+          "name": "collision.pt"
+        },
+        {
+          "phase": "source_torch_load",
+          "safe_load": true
+        },
+        {
+          "phase": "source_state_loaded",
+          "keys": [
+            "wav2vec2.encoder.layer_norm.bias",
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_architecture_selection",
+          "keys": [
+            "wav2vec2.encoder.layer_norm.bias",
+            "encoder.layer_norm.bias"
+          ]
+        },
+        {
+          "phase": "original_model_constructor_boundary",
+          "configuration": {
+            "model_type": "wav2vec2",
+            "embed_dim": 768,
+            "num_heads": 12,
+            "num_layers": 12,
+            "conv_norm": false,
+            "conv_bias": false,
+            "do_normalize": false,
+            "do_stable_layer_norm": false
+          }
+        }
+      ]
+    }
+  ],
+  "acceptance_gaps": [
+    "actual full source model construction and learned artifact numerical proof",
+    "source permissive missing/extra state vs strict canonical admission",
+    "source filename normalization vs canonical strict request policy",
+    "production dtype/device policy",
+    "UI/OS process recovery"
+  ],
+  "full_original_cpu_f32": {
+    "format": "sim.source.audio-encoder-loader.full-original-cpu-f32.v1",
+    "scope": "Genuine pinned module imports, complete original zero-state constructor, real safetensors file/folder transport, actual AudioEncoderLoader and io.NodeOutput; no learned forward",
+    "source_sha256": {
+      "sim_extras/nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a",
+      "sim/audio_encoders/audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
+      "sim/audio_encoders/wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
+      "sim/audio_encoders/whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
+      "folder_paths.py": "380961714742085363301f980a6c9458f36aca05b1e36ed9b8afa3fb64ccdb50",
+      "sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+      "sim/model_patcher.py": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+      "sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+      "sim/memory_management.py": "f624823cbee835506377134cd0e576fdf5c22fa474afab3de6c5ae165f835df5",
+      "sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "sim_api/latest/__init__.py": "5d2c1f3e37ecac36d9a4075a644d43ab211d0bbeab4c86698b6c987523ca072d",
+      "sim_api/latest/_io.py": "ac986092cace7600461b8547e21f770126958d8c15eef59d79d6709cca4b7717",
+      "sim_api/latest/_io_public.py": "c805d754d61aba1ea72ed2d9d5c371de35be9affa5305d35426fb298fcb7c046"
+    },
+    "source_configuration": {
+      "model_type": "wav2vec2",
+      "embed_dim": 768,
+      "num_heads": 12,
+      "num_layers": 12,
+      "conv_norm": false,
+      "conv_bias": false,
+      "do_normalize": false,
+      "do_stable_layer_norm": false
+    },
+    "packages": {
+      "torch": "2.8.0+cpu",
+      "torchaudio": "2.8.0+cpu",
+      "torchvision": "0.23.0+cpu",
+      "safetensors": "0.8.0",
+      "sim-aimdo": "0.4.10",
+      "transformers": "5.18.0",
+      "einops": "0.8.2",
+      "psutil": "7.2.2",
+      "tqdm": "4.70.1",
+      "av": "19.0.0"
+    },
+    "tensor_count": 211,
+    "aggregate_tensor_bytes": 377486848,
+    "manifest": [
+      {
+        "name": "encoder.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.0.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.0.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.0.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.0.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.0.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.0.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.0.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.0.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.1.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.1.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.1.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.1.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.1.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.1.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.1.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.1.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.10.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.10.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.10.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.10.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.10.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.10.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.10.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.10.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.11.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.11.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.11.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.11.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.11.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.11.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.11.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.11.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.2.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.2.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.2.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.2.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.2.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.2.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.2.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.2.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.3.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.3.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.3.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.3.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.3.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.3.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.3.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.3.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.4.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.4.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.4.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.4.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.4.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.4.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.4.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.4.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.5.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.5.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.5.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.5.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.5.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.5.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.5.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.5.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.6.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.6.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.6.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.6.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.6.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.6.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.6.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.6.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.7.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.7.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.7.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.7.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.7.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.7.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.7.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.7.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.8.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.8.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.8.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.8.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.8.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.8.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.8.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.8.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.attention.k_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.attention.k_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.9.attention.out_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.attention.out_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.9.attention.q_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.attention.q_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.9.attention.v_proj.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.attention.v_proj.weight",
+        "shape": [
+          768,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2359296
+      },
+      {
+        "name": "encoder.layers.9.feed_forward.intermediate_dense.bias",
+        "shape": [
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 12288
+      },
+      {
+        "name": "encoder.layers.9.feed_forward.intermediate_dense.weight",
+        "shape": [
+          3072,
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.9.feed_forward.output_dense.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.feed_forward.output_dense.weight",
+        "shape": [
+          768,
+          3072
+        ],
+        "dtype": "torch.float32",
+        "bytes": 9437184
+      },
+      {
+        "name": "encoder.layers.9.final_layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.final_layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.layer_norm.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.layers.9.layer_norm.weight",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.pos_conv_embed.conv.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "encoder.pos_conv_embed.conv.parametrizations.weight.original0",
+        "shape": [
+          1,
+          1,
+          128
+        ],
+        "dtype": "torch.float32",
+        "bytes": 512
+      },
+      {
+        "name": "encoder.pos_conv_embed.conv.parametrizations.weight.original1",
+        "shape": [
+          768,
+          48,
+          128
+        ],
+        "dtype": "torch.float32",
+        "bytes": 18874368
+      },
+      {
+        "name": "feature_extractor.conv_layers.0.conv.weight",
+        "shape": [
+          512,
+          1,
+          10
+        ],
+        "dtype": "torch.float32",
+        "bytes": 20480
+      },
+      {
+        "name": "feature_extractor.conv_layers.0.layer_norm.bias",
+        "shape": [
+          512
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2048
+      },
+      {
+        "name": "feature_extractor.conv_layers.0.layer_norm.weight",
+        "shape": [
+          512
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2048
+      },
+      {
+        "name": "feature_extractor.conv_layers.1.conv.weight",
+        "shape": [
+          512,
+          512,
+          3
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3145728
+      },
+      {
+        "name": "feature_extractor.conv_layers.2.conv.weight",
+        "shape": [
+          512,
+          512,
+          3
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3145728
+      },
+      {
+        "name": "feature_extractor.conv_layers.3.conv.weight",
+        "shape": [
+          512,
+          512,
+          3
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3145728
+      },
+      {
+        "name": "feature_extractor.conv_layers.4.conv.weight",
+        "shape": [
+          512,
+          512,
+          3
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3145728
+      },
+      {
+        "name": "feature_extractor.conv_layers.5.conv.weight",
+        "shape": [
+          512,
+          512,
+          2
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2097152
+      },
+      {
+        "name": "feature_extractor.conv_layers.6.conv.weight",
+        "shape": [
+          512,
+          512,
+          2
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2097152
+      },
+      {
+        "name": "feature_projection.layer_norm.bias",
+        "shape": [
+          512
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2048
+      },
+      {
+        "name": "feature_projection.layer_norm.weight",
+        "shape": [
+          512
+        ],
+        "dtype": "torch.float32",
+        "bytes": 2048
+      },
+      {
+        "name": "feature_projection.projection.bias",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      },
+      {
+        "name": "feature_projection.projection.weight",
+        "shape": [
+          768,
+          512
+        ],
+        "dtype": "torch.float32",
+        "bytes": 1572864
+      },
+      {
+        "name": "masked_spec_embed",
+        "shape": [
+          768
+        ],
+        "dtype": "torch.float32",
+        "bytes": 3072
+      }
+    ],
+    "checkpoint": {
+      "name": "full-base-zero.safetensors",
+      "format": "safetensors",
+      "bytes": 377510600,
+      "sha256": "a26de7b69e5d79af618fd9ff9e5be50ae656abda2d9836c618e920a91ca6f028"
+    },
+    "node_id": "AudioEncoderLoader",
+    "node_output_type": "NodeOutput",
+    "node_output_slots": 1,
+    "missing": [],
+    "unexpected": [],
+    "dtype": "torch.float32",
+    "load_device": "cpu",
+    "offload_device": "cpu",
+    "training": false,
+    "dynamic": false,
+    "model_sample_rate": 16000,
+    "state_all_zero": true,
+    "learned_forward_executed": false,
+    "original_file_memory_policy": {
+      "aimdo_enabled": false,
+      "MMAP_TORCH_FILES": false,
+      "DISABLE_MMAP": false
+    },
+    "acceptance_gaps": [
+      "learned waveform numerical execution",
+      "other architectures and device/dtype policies",
+      "native raw-file parser equivalence",
+      "source permissive state and filename validation equivalence",
+      "UI and OS process recovery"
+    ]
+  }
+}

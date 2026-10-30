@@ -1,0 +1,67 @@
+schema=zed-sim-xpu-reviewed-execution-bindings-v1
+abi_floor=level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0
+level_zero_commit=f35123bead54a471a7e5f3bf8d439a4a44527d8e
+level_zero_header=include/ze_api.h sha256=72108c7826744ed58e1c86e6abfd407d89fdf8e1b09e96ac0439f40c3b6d0175
+onednn_commit=6860e98e71c748f956150f72cdbe14efe6fc2ac2
+onednn_header=include/oneapi/dnnl/dnnl.h sha256=23dc8d9f3f5bcfc5c5500a1c86528fcc67439e8d8fb512e66cb905e4d30eb373
+onednn_header=include/oneapi/dnnl/dnnl_common.h sha256=c8af25f31fecbd810a6b8851a2d764eb29c69efeb4e729c8ad030e973f2b731f
+onednn_header=include/oneapi/dnnl/dnnl_common_types.h sha256=6cc4ae6d144f0f8000e3e9b01875ff06d064ede6f64cd46ead2395844bc33349
+onednn_header=include/oneapi/dnnl/dnnl_types.h sha256=09f99a6b1736e93e0b73c4c75675ccab1bcb4562763f04d3dd879c3a0819a078
+symbol=zeCommandQueueCreate ze_result_t(ze_context_handle_t,ze_device_handle_t,const ze_command_queue_desc_t*,ze_command_queue_handle_t*)
+symbol=zeCommandQueueDestroy ze_result_t(ze_command_queue_handle_t)
+symbol=zeCommandQueueSynchronize ze_result_t(ze_command_queue_handle_t,uint64_t)
+symbol=zeContextCreate ze_result_t(ze_driver_handle_t,const ze_context_desc_t*,ze_context_handle_t*)
+symbol=zeContextDestroy ze_result_t(ze_context_handle_t)
+symbol=zeDeviceGet ze_result_t(ze_driver_handle_t,uint32_t*,ze_device_handle_t*)
+symbol=zeDeviceGetCommandQueueGroupProperties ze_result_t(ze_device_handle_t,uint32_t*,ze_command_queue_group_properties_t*)
+symbol=zeDeviceGetMemoryProperties ze_result_t(ze_device_handle_t,uint32_t*,ze_device_memory_properties_t*)
+symbol=zeDeviceGetProperties ze_result_t(ze_device_handle_t,ze_device_properties_t*)
+symbol=zeDriverGet ze_result_t(uint32_t*,ze_driver_handle_t*)
+symbol=zeDriverGetApiVersion ze_result_t(ze_driver_handle_t,ze_api_version_t*)
+symbol=zeInit ze_result_t(ze_init_flags_t)
+symbol=dnnl_binary_primitive_desc_create dnnl_status_t(dnnl_primitive_desc_t*,dnnl_engine_t,dnnl_alg_kind_t,const_dnnl_memory_desc_t,const_dnnl_memory_desc_t,const_dnnl_memory_desc_t,const_dnnl_primitive_attr_t)
+symbol=dnnl_engine_create dnnl_status_t(dnnl_engine_t*,dnnl_engine_kind_t,size_t)
+symbol=dnnl_engine_destroy dnnl_status_t(dnnl_engine_t)
+symbol=dnnl_engine_get_count size_t(dnnl_engine_kind_t)
+symbol=dnnl_memory_create dnnl_status_t(dnnl_memory_t*,const_dnnl_memory_desc_t,dnnl_engine_t,void*)
+symbol=dnnl_memory_destroy dnnl_status_t(dnnl_memory_t)
+symbol=dnnl_memory_desc_create_with_strides dnnl_status_t(dnnl_memory_desc_t*,int,const dnnl_dim_t*,dnnl_data_type_t,const dnnl_dim_t*)
+symbol=dnnl_memory_desc_destroy dnnl_status_t(dnnl_memory_desc_t)
+symbol=dnnl_memory_map_data dnnl_status_t(const_dnnl_memory_t,void**)
+symbol=dnnl_memory_unmap_data dnnl_status_t(const_dnnl_memory_t,void*)
+symbol=dnnl_primitive_create dnnl_status_t(dnnl_primitive_t*,const_dnnl_primitive_desc_t)
+symbol=dnnl_primitive_desc_destroy dnnl_status_t(dnnl_primitive_desc_t)
+symbol=dnnl_primitive_destroy dnnl_status_t(dnnl_primitive_t)
+symbol=dnnl_primitive_execute dnnl_status_t(const_dnnl_primitive_t,dnnl_stream_t,int,const dnnl_exec_arg_t*)
+symbol=dnnl_stream_create dnnl_status_t(dnnl_stream_t*,dnnl_engine_t,unsigned)
+symbol=dnnl_stream_destroy dnnl_status_t(dnnl_stream_t)
+symbol=dnnl_stream_wait dnnl_status_t(dnnl_stream_t)
+symbol=dnnl_version const dnnl_version_t*(void)
+value=ZE_API_VERSION_1_6 65542
+value=ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES 3
+value=ZE_STRUCTURE_TYPE_COMMAND_QUEUE_GROUP_PROPERTIES 6
+value=ZE_STRUCTURE_TYPE_DEVICE_MEMORY_PROPERTIES 7
+value=ZE_STRUCTURE_TYPE_CONTEXT_DESC 13
+value=ZE_STRUCTURE_TYPE_COMMAND_QUEUE_DESC 14
+value=ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COMPUTE 1
+value=ZE_COMMAND_QUEUE_MODE_ASYNCHRONOUS 2
+value=ZE_COMMAND_QUEUE_PRIORITY_NORMAL 0
+value=ZE_DEVICE_TYPE_GPU 1
+value=dnnl_success 0
+value=dnnl_gpu 2
+value=dnnl_stream_default_flags 1
+value=dnnl_f16 1
+value=dnnl_f32 3
+value=dnnl_binary_add 131056
+value=DNNL_ARG_SRC_0 1
+value=DNNL_ARG_SRC_1 2
+value=DNNL_ARG_DST 17
+value=DNNL_MEMORY_ALLOCATE -1
+layout=ze_context_desc_t size=24 align=8
+layout=ze_command_queue_desc_t size=40 align=8
+layout=ze_command_queue_group_properties_t size=40 align=8
+layout=ze_device_uuid_t size=16 align=1
+layout=ze_device_properties_t size=368 align=8
+layout=ze_device_memory_properties_t size=296 align=8
+layout=dnnl_exec_arg_t size=16 align=8
+layout=dnnl_version_t size=32 align=8

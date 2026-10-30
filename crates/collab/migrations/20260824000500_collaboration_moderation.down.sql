@@ -1,0 +1,9 @@
+DROP TABLE public.collaboration_community_archive_versions;
+DROP TABLE public.collaboration_identity_archive_versions;
+DROP TABLE public.collaboration_personal_mute_versions;
+DROP TABLE public.collaboration_moderation_restriction_versions;
+DROP TABLE public.collaboration_moderation_report_resolutions;
+DROP TABLE public.collaboration_moderation_reports;
+DROP TABLE public.collaboration_moderation_actions;
+DROP FUNCTION public.guard_collaboration_moderation_version_retirement();
+DROP FUNCTION public.reject_collaboration_moderation_history_mutation();

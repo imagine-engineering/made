@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "fixture_id": "boogu-sim-model-0065",
+  "feature_id": "COMFY-MODEL-0065",
+  "source_symbol": "Boogu",
+  "source_ordinal": 76,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models_base.py",
+      "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/boogu/model.py",
+      "sha256": "a9293d6e4fb635ff1cc43477dcf34c633d9a2f4d3205946ded88c869d53356bb"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/omnigen/omnigen2.py",
+      "sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/omnigen2.py",
+      "sha256": "ef76972277b8b2141172ea2e53685bdeb26f2ff383c679946f10ff3396067c92"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/boogu.py",
+      "sha256": "b8ca823a27240a676c896a8116e1c6a5f2238e478e41fdbf2d0a6807bb5d3cd4"
+    },
+    {
+      "path": "crates/sim_model/src/omnigen2_boogu_family.rs",
+      "sha256": "049b3b9066cb8e2bd7e845c0a401f859098346f48eaa900439f8a15f98a86bb2"
+    },
+    {
+      "path": "crates/sim_model/src/latent_formats/flux_sim_model_0029.rs",
+      "sha256": "22c3b314c00dd31a7c4e777c541521c946ab335bb1bdd7b930fd88a6b7c03751"
+    }
+  ],
+  "source_projection": "source_symbol=Boogu\nsource_ordinal=76\ninherits=Omnigen2\nunet_config.image_model=boogu\nsampling_settings.multiplier=1.0\nsampling_settings.shift=3.16\nlatent_format=Flux\nmemory_usage_factor=2.15\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.Boogu\nmodel_type=FLOW\nclip_tokenizer=sim.text_encoders.boogu.BooguTokenizer\nclip_model=sim.text_encoders.boogu.te\nclip_detect=sim.text_encoders.hunyuan_video.llama_detect(text_encoders.qwen3vl_8b.transformer.)\ndetector=double_stream_layers.0.img_instruct_attn.processor.img_to_q.weight+x_embedder.weight+norm_out.linear_2.weight+caption_embedder+bounded-consecutive-stream-and-refiner-blocks\nlayouts=prefixed-native,standalone-native\ndiffusers=unsupported\nconfiguration.patch_size=2\nconfiguration.in_channels=16\nconfiguration.out_channels=16\nconfiguration.hidden_size=key-derived\nconfiguration.num_layers=key-derived-consecutive\nconfiguration.num_double_stream_layers=key-derived-consecutive\nconfiguration.num_refiner_layers=key-derived-consecutive\nconfiguration.num_attention_heads=28\nconfiguration.num_kv_heads=7\nconfiguration.instruction_feat_dim=key-derived\nconfiguration.multiple_of=256\nconfiguration.axes_dim_rope=40,40,40\nconfiguration.axes_lens=2048,1664,1664\nconfiguration.timestep_scale=1000.0\nconditioning=attention-mask,cross-attention,optional-reference-latents\nstate_mapping=canonical-omnigen2-boogu\n",
+  "source_projection_sha256": "3fa974328bf109ea87a9e4506ccb16b18b84a0f657636b04313a62f089a1242d",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

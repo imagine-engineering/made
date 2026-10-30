@@ -1,0 +1,84 @@
+{
+  "fixture_id": "boogu-sim-model-0065",
+  "feature_id": "COMFY-MODEL-0065",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.double_stream_layers.0.img_instruct_attn.processor.img_to_q.weight": [56, 56],
+      "model.diffusion_model.single_stream_layers.0.attn.to_q.weight": [56, 56],
+      "model.diffusion_model.noise_refiner.0.attn.to_q.weight": [56, 56],
+      "model.diffusion_model.time_caption_embed.caption_embedder.0.weight": [56, 4096],
+      "model.diffusion_model.norm_out.linear_2.bias": [64],
+      "model.diffusion_model.norm_out.linear_2.weight": [64, 56],
+      "model.diffusion_model.x_embedder.bias": [56],
+      "model.diffusion_model.x_embedder.weight": [56, 64]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0065006500650065006500650065006500650065006500650065006500650065",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.x_embedder.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.x_embedder.bias",
+      "shape": [2],
+      "values": [1.0, -1.0]
+    },
+    {
+      "key": "model.diffusion_model.double_stream_layers.0.img_instruct_attn.processor.img_to_q.weight",
+      "shape": [2, 2],
+      "values": [2.0, 0.0, 0.0, 0.5]
+    },
+    {
+      "key": "model.diffusion_model.norm_out.linear_2.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.norm_out.linear_2.bias",
+      "shape": [2],
+      "values": [0.25, -0.25]
+    }
+  ],
+  "input": {
+    "key": "input",
+    "shape": [1, 2],
+    "values": [0.0, 0.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 82,
+  "expected_memory_bytes": 82,
+  "checkpoints": [
+    { "name": "patch_embedding", "values": [1.0, -1.0] },
+    { "name": "double_stream_query", "values": [2.0, -0.5] },
+    { "name": "double_stream_activation", "values": [1.7615942, -0.18877034] },
+    { "name": "output_projection", "values": [2.011594, -0.43877035] },
+    { "name": "negated_output", "values": [-2.011594, 0.43877035] }
+  ],
+  "patches": [
+    {
+      "identifier": "boogu-patch-embedding-bias",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.x_embedder.bias",
+          "expected_shape": [2],
+          "values": [0.5, 0.5],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    { "name": "patch_embedding", "values": [1.5, -0.5] },
+    { "name": "double_stream_query", "values": [3.0, -0.25] },
+    { "name": "double_stream_activation", "values": [2.8577223, -0.10945588] },
+    { "name": "output_projection", "values": [3.1077223, -0.35945588] },
+    { "name": "negated_output", "values": [-3.1077223, 0.35945588] }
+  ]
+}

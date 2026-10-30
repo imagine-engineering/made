@@ -1,0 +1,730 @@
+{
+  "classification": "Bounded accidental-secret/static archive integrity scan, not exhaustive security certification",
+  "initial_files": 258,
+  "initial_source_group": 112,
+  "JSON_parsed": 51,
+  "public_archives_reviewed": 46,
+  "public_archive_members": [
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-closed-owner-normal-mp-static-delta-reference-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 14016,
+          "sha256": "c4e74fc952b78ceff9014c114e00298c3aeb88fe0540938ead535fd877e4779d"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "99a35efb9768f525fcf3de79c74053161c9913bd7d1fc65e7f9c352bd3d2734c"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-delta-restored-output-selection-comment-reference-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "OBSERVATIONS.json",
+          "bytes": 7999,
+          "sha256": "b478d4f1bc1deaffa23f1b7d1db50a5795e516614e170fe456e2aac7c50161a7"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 172,
+          "sha256": "2787b1c037c9979863d63e84cc25fe4fc8b41b01713a56f05356ae7fa6cd76d5"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-full-multiplayer-lint-failure-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 2391,
+          "sha256": "842c8a547a9a58a92920ba8c9aa11f5edfb8991bbf1fef01d0eeb369f932aaf3"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 89,
+          "sha256": "b61bdb5b34cd22d132fe918422485761aafd962854f279d994383f09054a1545"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current112-unused-rust198-cache-restored-access-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "OBSERVATIONS.json",
+          "bytes": 3468,
+          "sha256": "f2ca8bb35a9f411e6435394f11ffb69ec64a4a8c9ae1814ae3cf22e51b6ab562"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 172,
+          "sha256": "c6c96ad1f5116a57b6d8e5af18499ae3e9141e08106081ba8db8c3983061de3b"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-closed-selection-fixture-readiness-old-quit-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 7905,
+          "sha256": "9c5a3107db53c0c314e9bd6102a5335269061e28c3f086a17e6676bb12f1a779"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "4f8b98e1b68e37c8a28b45eed9b01010aa3e998a33c763c94200bba806db3cef"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current114-delta-comment-cancel-reentry-reference-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "OBSERVATIONS.json",
+          "bytes": 3338,
+          "sha256": "c63d191dacb72de424c46a65976568564016744487a11d1e2c26e17f7c8bf919"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 172,
+          "sha256": "9e2257e7789618497d04d617664c6b2b72d51817802c40e8ca1ad2de0fe283af"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current115-normal-mp-native-restored-output-before-fix-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 7142,
+          "sha256": "96cd2ecebe90a21f51cb8e475f10caffa0accf4e71f2924d2f0a909fa7382a7d"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "2672aba19cabc6a8eecef081279ecc4bf87454c6ee3cc5af69fdf77ae8c52c70"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current119-compile-failure-delta-comment-restart-reference-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 6759,
+          "sha256": "117d86a96c3147c461fc9d0ff0aaed72c8e64b9d75510ec3af50152d7f35088f"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "c0829bfa3d2eeaad2f5edb8bc40f0464b8ce8598c97293949f95b0d40899a3c3"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-mounted-backend-nine-owner-selection-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 14982,
+          "sha256": "d27ada3cebdc11635dd5ce5baa4b6dcfe693f570d2716cfef06d555f076b9d4e"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "ff4e06f7de37237ea6c665f46d0ab5bec8a57fc9c4496ed88af25dfdace43941"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-closed-normal-mp-affected13-clippy-test-failure-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 6895,
+          "sha256": "2d5a84f67d49274122cb3651ff862e7a94b471f4306cd974ad458511e413819d"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "a6bf9e8e1112593da4998a55c452775d5d39f846e9e9545b361015314c361f46"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current120-native-live-stop-history-restart-failure-delta-access-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 10586,
+          "sha256": "82e7e239ab8f8fe66ca8d573ce6a808838555ed44e4043d9a5dbec5d37039738"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "5a5594f5b965ceb20223bd4c0039869edd62dfc14b9a10ba29fe126762f21715"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current122-closed-clippy-nine-owner-full-mp-custody-limits-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 14899,
+          "sha256": "3d4ab87024af0d3e82179081208593a47f744e216de67552fa3a694c436e8f2e"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "c4679d26429f516d55458da28127fdd0f7c089adda366b7ee238a6181c5c2c16"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-agent-metadata-components-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "component-results.json",
+          "bytes": 12406,
+          "sha256": "8313bc41446d536349958af697be6e9c38ca94c54891704afce63bdcd8a1f75c"
+        },
+        {
+          "name": "source-attribution-review.json",
+          "bytes": 42766,
+          "sha256": "72602223447d57165bce359471c03bdccaad9a4b51a0d2274d328509b49e74df"
+        },
+        {
+          "name": "source124-current-context-review.json",
+          "bytes": 30524,
+          "sha256": "466baea679b04af74ac1617dc8ba70cc723879763a1a07b4b0baf0e01960c54e"
+        },
+        {
+          "name": "owned-identifiers-summary.json",
+          "bytes": 1205,
+          "sha256": "525414b79ce3e5567f080f56d75b3f1e327df9740c8143ee7d2b8f5827ce8ae2"
+        },
+        {
+          "name": "README.md",
+          "bytes": 1157,
+          "sha256": "443da676b63f259d279ed1c0e219d3c24707d2fc1bab99d14e1d5dee32489cf4"
+        },
+        {
+          "name": "manifest.json",
+          "bytes": 2439,
+          "sha256": "c7131cba13a0c05755492e2ba0cb59aea1f198b9cd11d31915a206bd4fd3f43b"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current123-disposable-sql-static-cleanup-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 14847,
+          "sha256": "7ac3715a1269279c59bf3219838704fb23f425e90361cc575382cee3319edd3a"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 1439,
+          "sha256": "f40ce9e28e5e60c8e59101091aa9c793f78e67dcc51ee42521e9fabd13ed8717"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-closed-ten-clippy-normal-full-mp-prior-failures-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 45693,
+          "sha256": "b23912001379561e8699017b5d22114b7846a9131677cbd079eeb624a0c20634"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "a52eb34a1356b059ec7ad0919da0401c3b2a57e80e0fede254af64c225c5792d"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current126-native-history-restart-standard-wiring-failure-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 23091,
+          "sha256": "8e6a1ad69295e9cc95bffcfe1948ab1c42b48f4eb8c6fe69acab83fc903c750f"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "a0f26399c5b0945d852de9cb19a96443ede90c196b08a43ccb02fb07f0bb8937"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-native-reflow-standard-compile-cache-evidence-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 16496,
+          "sha256": "64dc4e1a4bf58523db60cc9e8d6db924b965fa390441a9dadbd320d0e3431287"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "89966623b2b5a88772969153f17d1d42ecec1fbefeab192a6b187c62a571f735"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-primary36-standard-capacity-interruption-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 11081,
+          "sha256": "d9281633bff39f71697363221fffd32592f9c3b57fd95913b722ded84c666e8f"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "86dc597a5ad7ede15658fd2af829b21eaf4c0c61faadf179963d640cff8095d8"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry1-namespace-capacity-cache-recovery-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 12335,
+          "sha256": "93f6520fe235a84a49a283b6da38506359d307388a7c06e44e012ea123ae3611"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "c84d5ec4c4e35245aa28175d19a6dead996e8b6dc5302c836f6119e5bd53ca0c"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current127-standard-warm-retry2-capacity-interruption-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 8438,
+          "sha256": "c16403192673d281f8fca93683cfc62e88b65bf208f04173ad0adaf244ad4aac"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "5b8782b36d4c3a49902835b55b477f2b4d02fbdc99e218789f85a4fe9e6f15c8"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current128-through131-closed-reflow-failures-source132-provenance-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 23143,
+          "sha256": "540deaebf7cfb5bf2c4f19c03efebc2bb26317633ef1a64507fafb7ac0d9a11d"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "001d4b63878e225b54da0b300c73f9c94bd858c0676e2ec1c2997e73c7448ff6"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current132-through134-closed-reflow-delta-source136-provenance-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 16405,
+          "sha256": "06d9466b921659b49b98cda8634b523c14aa326778c01c90b361042206bb033d"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "949671bb1e853b814ce75ec01ff78b5c5d8d7cb034d1f626d952b8ef55003f6d"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-affected15-clippy-closed-lint-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 4421,
+          "sha256": "ba70c16742bce25c16be4031654e0596be65c6ae35a7e2eb634a5c373062d8a6"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "3b86e4efafec91299eb8de6a27efbb45aca611e151756ed3f77c9b9b751bbe8f"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-closed-primary-reflow-gpui-list-component-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 8626,
+          "sha256": "779d5f427c1cb8461b1e7be634a09c37de4921cfa2a8c9e7cf6f0456a21f60b4"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "1bf1442e5fe0e65148d44157190c9ed3455cb20de38e2adde3551159364d7586"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-duplicate-normal-output-retention-and-warm1-absence-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 2970,
+          "sha256": "fc5e335b1307186da701995419fa8f8595065e24332c3cecaa611e28717a7246"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "d740a477168590dc3b034dbec1315f4ea4fb7ec79601fe88c0cc449eb0b602b1"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-exact619-completed-rlib-copy-cleanup-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 2348,
+          "sha256": "abae54b225bf9556146d283f8bf4de709a01d3d328de968b27f155d7d1e92d39"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "c736ac5d189fa46750e71bcd0f2e73deb4275ea5190769c56c10ba7a90de5b1c"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-full-standard-sidebar-failure-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 6932,
+          "sha256": "0a9f01bbe041df31a3e70e055ceea5178ac3dbb9c848f2b083f22327658c6522"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "80098bc907ff8de01c6f0178b05da6d4e5d8c1ec7fb67a50973a14833c409f6b"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-only-list30-closed-component-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 7305,
+          "sha256": "5d9f91e6c8bffef50cabd29f2880495bbafddd0ac17fde45a2a34ca5e65db2ed"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "b0942a6e24fd1b7b445349d24a909ed6dfc125eb1ea8a7d8dca194f448f65d52"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-gpui-warm1-closed-capacity-interruption-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 3000,
+          "sha256": "550ba938d3ebe352bcf37b7dcf6a1b51716e347fc3ebf5cff90346149c596078"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "73a8c5975ab197b638d6b32432ce73424842b77378e97280e4bb9c0690c19a0a"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-normal-copper-mp-closed-build-bundle-provenance-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 5267,
+          "sha256": "37ccf98c4dc3ed7e84a3f54d9f0321be45f9f474645b04208cb38ed5e497f4cf"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "0c1feb3f3fc3ef341ca705e224c3819f60fa6e7f126fc1d9328d929df1941497"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-one-obsolete-mp-test-cache-retention-20261013/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 2441,
+          "sha256": "13491a30a2fe3f7081d45a450b40f2dcecf900f8cd640840d717945788e3eda8"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "99a21113c3a20cf066662008675bf692b98e00527083be7c432c69db0235d4f5"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current136-ten-owner3038-closed-component-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 13142,
+          "sha256": "e59b1c52f61d297d67f179c33a470f3de82fbe7b0e1b82d712ad1d3aca5cd7d1"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "9d6904a19ddb78e8793439a7060eeaad6b2346c502318d406d0b2a60026b10af"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-diagnostic-doctor-cleanup-source138-capacity-access-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 35079,
+          "sha256": "03580872840fc7ab690aa85b8ad2654d83ffc922e53dd98e2becc2e4108f7a87"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 18366,
+          "sha256": "bf76b728d81861d0ff24854f968b51e7039244eb7826eaf2c4ecf74f936e069c"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-multiplayer-closed-profile-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 7911,
+          "sha256": "39eb80eead3af7fdb90fdc90f4a88bfd6868e7c4d9e61b4cc905dc1bd661db73"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "e74a7fe590bfc25c5c5b5001e0c083156a8e4628ebe83e078988c3f40246d347"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-full-standard-closed-draft-discard-profile-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 7997,
+          "sha256": "b4c43c540e610490139f0cf405abe2555f47c07e73133c53562e25e615583587"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "2dfe4d21b1b3c2786713b64afd65e810519dff31c30c3af79583a62e54c9e9f5"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-normal-mp-build-bundle-singleton-launch-blocker-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 6104,
+          "sha256": "746c3df0b564cc4a23b8381b20b4f7ca26dbd30e0a820acc1cc192572c3208d1"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 167,
+          "sha256": "81c7b70caee315bd96d73a25f4216c7721e9285d222d070aef0aa95e3a2463ca"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-settled-native-standard-build-cache-doctor-prior-failure-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 17597,
+          "sha256": "c968045d578dd22ed80c9adce4c0ff0777bef2e337d0e249b95ee2c933b06dcd"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "65963d4b5b39841b51e62aeaed905b2e56d9bb300ed5205070c58a553ab7d7e9"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current137-ten-owner-affected15-clippy-closed-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "SUMMARY.json",
+          "bytes": 13130,
+          "sha256": "47d133fa51ff12419de21ab0bdde07c31c1763481dfb7ee9776f291d4a71fdc5"
+        },
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 168,
+          "sha256": "9268328d74f342479c6f26a383fd23ea32377f74fd72466db40248f102da66c8"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-focused52-clippy15-normal-mp-cleanup-closed-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "CHECKSUMS.json",
+          "bytes": 129,
+          "sha256": "ab13ec4e98d556a0fa676ebaeca1ae22e2ffc062a1e1ad46f3f8778bdb5dd4f2"
+        },
+        {
+          "name": "SUMMARY.json",
+          "bytes": 11885,
+          "sha256": "fb84924c22b5c2b15689dfddb8e5eb86bae51bffc6a4efc4e2b3f58dffde2603"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current139-native-inline-command-keyboard-mismatch-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 8634,
+          "sha256": "450edca4f2f464dbe326953232a4a508e44817fbdb320da474a0eb656cac92b3"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 2457,
+          "sha256": "02ec2f4a36e4578b5a9885b36955cf12203719db4d73d13b7b791ae6fc12fd9b"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current140-141-test-wiring-capacity-and-exact-cache-cleanup-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 10874,
+          "sha256": "d44a4ecab3c89841b8b29ba1168866b6842a4e8fcedb64d7956f1572ccf790e8"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 3333,
+          "sha256": "600a40d3f0e17d90d3ba52e19b2974a2df23f28372786bb410fdac22beb86c57"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-delta-reentry-warmretry1-capacity-and-cleanup2-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 12853,
+          "sha256": "b787d6985b81ba3e0bae4253f5e66fd685dcfe53f1b425e2a10e548a35d608a2"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 3971,
+          "sha256": "bd7b3b702cc3ef758775e1e0d86aaf5d4261c3dd48d2739c35449e77c12c18bc"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current141-keyboard-real-failure-diagnostic-proposal-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 5916,
+          "sha256": "cf159cb8dba617212c0d2731cf54da69a8c8c6e96ed43148234335b3212b1c82"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 898,
+          "sha256": "f194dc6eb4feade1526eabd150072da22ec9826510634a56e3e94b564ecc33e9"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current142145-closed-keyboard-diagnostics-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 12792,
+          "sha256": "ccab726c52ab53ea2ff44f925ea5138747fbdbc7100cf3438b67cb4dd4701f13"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 2828,
+          "sha256": "7a98d2c99bbf12f4b3cb01a2a9ba132dd564a971aca6ab211e3bb3775a60785e"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current145148-matched-native-validation-and-current-preparation-20261014/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 59064,
+          "sha256": "61fb504cce1be1b652e043955fe8823ddc37751bc779d8e1e972e452c947e254"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 29568,
+          "sha256": "a5bb1abe223d036fb7d976081e6efd96c17430f09da7241f09b04b8fef82a49e"
+        }
+      ]
+    },
+    {
+      "path": ".agents/evidence-archives/collaborative-workspace/current148149-closed-owner-build-lint-and-native-20261015/evidence.tar.gz",
+      "members": [
+        {
+          "name": "summary.json",
+          "bytes": 11991,
+          "sha256": "9e0a58c38b1babd7cca61053083951191e5f59ed43e5ef48d0740a2a70f711be"
+        },
+        {
+          "name": "original-checksums.sha256",
+          "bytes": 16173,
+          "sha256": "137553d7dfa984c52a29415314b430a27588d67c0ce4d7f15d2086883de2b6b7"
+        }
+      ]
+    }
+  ],
+  "secret_pattern_alerts": [],
+  "no_caches_or_credentials_staged": true,
+  "all_unique_source_and_evidence_preserved": true,
+  "final_remaining_preservation_scan": {
+    "observed_utc": "2026-10-15T09:44:47.176277+00:00",
+    "plain_JSON_parsed": 59,
+    "compressed_JSON_parsed": 3,
+    "bounded_secret_pattern_alerts": [],
+    "scope": "Explicit WIP source/spec/evidence transfer, no product acceptance",
+    "file_count": 163
+  }
+}

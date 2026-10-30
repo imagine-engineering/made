@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "identity": "res_multistep",
+  "feature_id": "COMFY-MODEL-0193",
+  "source_ordinal": 30,
+  "source": {
+    "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "equation_lines": [1394, 1397, 1398, 1400, 1401, 1402, 1403, 1417, 1418, 1419, 1421, 1422, 1428, 1429, 1430, 1433, 1434, 1435, 1437, 1438, 1439, 1445, 1448, 1449, 1454, 1455, 1459, 1460],
+    "registry_line": 973,
+    "catalog_line": 194
+  },
+  "rng_contract_id": "COMFY-RNG-B35F0F617BFA",
+  "seed": 42,
+  "noise_scale": 0.75,
+  "tolerance": 0.00001,
+  "shape": [2],
+  "sigmas": [4.0, 3.0, 2.0, 1.0, 0.0],
+  "initial": [1.0, -1.0],
+  "rng": {
+    "workflow": "res-multistep-fixture-v1",
+    "attempt": "attempt-0193",
+    "node": "KSampler-29",
+    "output": 29,
+    "execution_ordinal": 193,
+    "batch": 2,
+    "retry": 0
+  },
+  "steps": [
+    {
+      "branch": "euler",
+      "current": [1.0, -1.0],
+      "denoised": [0.5, -0.25],
+      "derivative": [0.125, -0.1875],
+      "h": null,
+      "c2": null,
+      "phi1": null,
+      "phi2": null,
+      "b1": null,
+      "b2": null,
+      "denoised_mix": null,
+      "next": [0.875, -0.8125]
+    },
+    {
+      "branch": "multistep",
+      "current": [0.875, -0.8125],
+      "denoised": [0.25, 0.5],
+      "derivative": null,
+      "h": 0.40546513,
+      "c2": -0.7095112,
+      "phi1": 0.8221011,
+      "phi2": 0.43875262,
+      "b1": 1.4404883,
+      "b2": -0.61838716,
+      "denoised_mix": [0.050928503, 0.87484097],
+      "next": [0.60398304, -0.18694913]
+    },
+    {
+      "branch": "multistep",
+      "current": [0.60398304, -0.18694913],
+      "denoised": [-0.5, 0.75],
+      "derivative": null,
+      "h": 0.6931472,
+      "c2": -0.58496255,
+      "phi1": 0.7213475,
+      "phi2": 0.40201056,
+      "b1": 1.4085891,
+      "b2": -0.68724155,
+      "denoised_mix": [-0.87610495, 0.712821],
+      "next": [-0.30527818, 0.4006153]
+    },
+    {
+      "branch": "euler",
+      "current": [-0.30527818, 0.4006153],
+      "denoised": [0.1, -0.2],
+      "derivative": [-0.40527818, 0.6006153],
+      "h": null,
+      "c2": null,
+      "phi1": null,
+      "phi2": null,
+      "b1": null,
+      "b2": null,
+      "denoised_mix": null,
+      "next": [0.099999994, -0.20000002]
+    }
+  ],
+  "terminal": [0.099999994, -0.20000002]
+}

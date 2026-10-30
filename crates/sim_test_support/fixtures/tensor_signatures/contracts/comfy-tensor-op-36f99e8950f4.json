@@ -1,0 +1,1680 @@
+{
+  "canonical_target": "torch.Tensor.all",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:1057:24 (get_references_by_paths_and_asset_ids)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:1075:22 (get_reference_ids_by_ids)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:352:12 (list_references_page)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:363:33 (list_references_page)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:392:12 (fetch_reference_asset_and_tags)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:615:9 (list_references_by_asset_id)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:636:9 (list_all_file_paths_by_asset_id)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:767:31 (get_unreferenced_unhashed_asset_ids)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:827:12 (get_references_for_prefixes)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/assets/database/queries/asset_reference.py:981:12 (get_unenriched_references)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/assets/database/queries/tags.py:328:12 (list_tags_with_usage)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "app/assets/database/queries/tags.py:378:12 (list_tag_counts_for_filtered_assets)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/tags.py:51:24 (validate_tags_exist)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "app/assets/database/queries/tags.py:74:28 (get_reference_tags)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lightricks/model.py:1222:12 (LTXVModel._build_guide_self_attention_mask)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/moge/geometry.py:153:14 (triangulate_grid_mesh)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/moge/panorama.py:242:41 (merge_panorama_depth)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/moge/panorama.py:242:70 (merge_panorama_depth)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:649:22 (DFINETransformer._gen_anchors)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/gemma4.py:614:29 (Gemma4PatchEmbedder.forward)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/gemma4.py:667:19 (Gemma4VisionEncoder.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/gemma4.py:694:23 (Gemma4VisionEncoder.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/text_encoders/gemma4.py:695:36 (Gemma4VisionEncoder.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_depth_anything_3.py:94:12 (_da3_apply_extrinsic)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1333:20 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1333:59 (_clean_components_gpu)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1366:20 (_clean_components)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_gaussian_splat.py:1366:59 (_clean_components)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_moge.py:195:36 (MoGePanoramaInference.execute)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_moge.py:33:14 (_normals_from_points)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/void_noise_warp.py:232:12 (warp_state)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_asset.py:125:18 (TestBulkInsertAssets.test_inserts_multiple_assets)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:380:16 (TestSetReferenceMetadata.test_sets_metadata)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:400:16 (TestSetReferenceMetadata.test_replaces_existing_metadata)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:421:16 (TestSetReferenceMetadata.test_clears_metadata_with_empty_dict)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:462:16 (TestBulkInsertReferencesIgnoreConflicts.test_inserts_multiple_references)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:499:16 (TestBulkInsertReferencesIgnoreConflicts.test_allows_duplicate_names)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_cache_state.py:241:20 (TestMarkReferencesMissingOutsidePrefixes.test_marks_references_missing_outside_prefixes)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_tags.py:206:17 (TestMissingTagFunctions.test_add_missing_tag_is_idempotent)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_tags.py:331:16 (TestBulkInsertTagsAndMeta.test_inserts_meta)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_tags.py:351:17 (TestBulkInsertTagsAndMeta.test_ignores_conflicts)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_tags.py:46:16 (TestEnsureTagsExist.test_creates_new_tags)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/queries/test_tags.py:60:16 (TestEnsureTagsExist.test_normalizes_tags)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_bulk_ingest.py:36:18 (TestBatchInsertSeedAssets.test_populates_mime_type_for_model_files)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_bulk_ingest.py:63:18 (TestBatchInsertSeedAssets.test_mime_type_none_when_not_provided)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:122:18 (TestIngestFileFromPath.test_idempotent_upsert)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:193:16 (TestRegisterExistingAsset.test_creates_reference_for_existing_asset)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:227:16 (TestRegisterExistingAsset.test_creates_new_reference_even_with_same_name)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:282:42 (TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:286:24 (TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:43:18 (TestIngestFileFromPath.test_creates_asset_and_reference)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:47:16 (TestIngestFileFromPath.test_creates_asset_and_reference)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "tests-unit/assets_test/services/test_ingest.py:89:16 (TestIngestFileFromPath.test_creates_tags_when_provided)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "app/assets/database/queries/asset_reference.py:1057:24 (get_references_by_paths_and_asset_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:1075:22 (get_reference_ids_by_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:352:12 (list_references_page)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:363:33 (list_references_page)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:392:12 (fetch_reference_asset_and_tags)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:615:9 (list_references_by_asset_id)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:636:9 (list_all_file_paths_by_asset_id)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:767:31 (get_unreferenced_unhashed_asset_ids)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:827:12 (get_references_for_prefixes)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/asset_reference.py:981:12 (get_unenriched_references)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/tags.py:328:12 (list_tags_with_usage)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/tags.py:378:12 (list_tag_counts_for_filtered_assets)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/tags.py:51:24 (validate_tags_exist)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "app/assets/database/queries/tags.py:74:28 (get_reference_tags)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:1222:12 (LTXVModel._build_guide_self_attention_mask)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/geometry.py:153:14 (triangulate_grid_mesh)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/panorama.py:242:41 (merge_panorama_depth)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/moge/panorama.py:242:70 (merge_panorama_depth)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:649:22 (DFINETransformer._gen_anchors)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gemma4.py:614:29 (Gemma4PatchEmbedder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gemma4.py:667:19 (Gemma4VisionEncoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gemma4.py:694:23 (Gemma4VisionEncoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/gemma4.py:695:36 (Gemma4VisionEncoder.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_depth_anything_3.py:94:12 (_da3_apply_extrinsic)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1333:20 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1333:59 (_clean_components_gpu)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1366:20 (_clean_components)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_gaussian_splat.py:1366:59 (_clean_components)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_moge.py:195:36 (MoGePanoramaInference.execute)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_moge.py:33:14 (_normals_from_points)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/void_noise_warp.py:232:12 (warp_state)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_asset.py:125:18 (TestBulkInsertAssets.test_inserts_multiple_assets)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:380:16 (TestSetReferenceMetadata.test_sets_metadata)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:400:16 (TestSetReferenceMetadata.test_replaces_existing_metadata)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:421:16 (TestSetReferenceMetadata.test_clears_metadata_with_empty_dict)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:462:16 (TestBulkInsertReferencesIgnoreConflicts.test_inserts_multiple_references)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:499:16 (TestBulkInsertReferencesIgnoreConflicts.test_allows_duplicate_names)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_cache_state.py:241:20 (TestMarkReferencesMissingOutsidePrefixes.test_marks_references_missing_outside_prefixes)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_tags.py:206:17 (TestMissingTagFunctions.test_add_missing_tag_is_idempotent)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_tags.py:331:16 (TestBulkInsertTagsAndMeta.test_inserts_meta)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_tags.py:351:17 (TestBulkInsertTagsAndMeta.test_ignores_conflicts)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_tags.py:46:16 (TestEnsureTagsExist.test_creates_new_tags)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/queries/test_tags.py:60:16 (TestEnsureTagsExist.test_normalizes_tags)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_bulk_ingest.py:36:18 (TestBatchInsertSeedAssets.test_populates_mime_type_for_model_files)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_bulk_ingest.py:63:18 (TestBatchInsertSeedAssets.test_mime_type_none_when_not_provided)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:122:18 (TestIngestFileFromPath.test_idempotent_upsert)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:193:16 (TestRegisterExistingAsset.test_creates_reference_for_existing_asset)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:227:16 (TestRegisterExistingAsset.test_creates_new_reference_even_with_same_name)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:282:42 (TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:286:24 (TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:43:18 (TestIngestFileFromPath.test_creates_asset_and_reference)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:47:16 (TestIngestFileFromPath.test_creates_asset_and_reference)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "tests-unit/assets_test/services/test_ingest.py:89:16 (TestIngestFileFromPath.test_creates_tags_when_provided)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-36f99e8950f4-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match reduced axes, keep-dimension behavior, empty-domain behavior, output rank, and scalar-versus-tensor results.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "axis",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-36F99E8950F4",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "1ab60f95083ad1a36d5916caa2262d57a0b74e72d184e666b08562f14832fd34",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "app/assets/database/queries/asset_reference.py",
+        "sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59"
+      },
+      {
+        "path": "app/assets/database/queries/tags.py",
+        "sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/moge/geometry.py",
+        "sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c"
+      },
+      {
+        "path": "comfy/ldm/moge/panorama.py",
+        "sha256": "d278c70946c82356e786f00af5967cc597b0fdab9720f1a54539af781c2e7881"
+      },
+      {
+        "path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+        "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"
+      },
+      {
+        "path": "comfy/text_encoders/gemma4.py",
+        "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6"
+      },
+      {
+        "path": "comfy_extras/nodes_depth_anything_3.py",
+        "sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02"
+      },
+      {
+        "path": "comfy_extras/nodes_gaussian_splat.py",
+        "sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43"
+      },
+      {
+        "path": "comfy_extras/nodes_moge.py",
+        "sha256": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265"
+      },
+      {
+        "path": "comfy_extras/void_noise_warp.py",
+        "sha256": "4b923f26b69d76b1e17e166fc2671006a16b3a1f09dc0d480e9c8122ab103dbf"
+      },
+      {
+        "path": "tests-unit/assets_test/queries/test_asset.py",
+        "sha256": "5a9736d810bc94cab2f329c06f95b75dae6af4acb8b26c5956adaced87d0fb42"
+      },
+      {
+        "path": "tests-unit/assets_test/queries/test_asset_info.py",
+        "sha256": "7d3a29028196c0dc151f5352fde468b5fb412ff9feb5e8070d14c15c19e604e2"
+      },
+      {
+        "path": "tests-unit/assets_test/queries/test_cache_state.py",
+        "sha256": "581ff943bbbec31527755840165b339beb4df6d2f6a4d64ad9ac8090bc4ea1b1"
+      },
+      {
+        "path": "tests-unit/assets_test/queries/test_tags.py",
+        "sha256": "bd99fb95fc12090a12b9569836e6999fd2ea264e94c177133d9dc31a5e6e970a"
+      },
+      {
+        "path": "tests-unit/assets_test/services/test_bulk_ingest.py",
+        "sha256": "57a94bbc32cfb3526ad921652b211338e69b43d7b6fcb99b449b4568df3809e6"
+      },
+      {
+        "path": "tests-unit/assets_test/services/test_ingest.py",
+        "sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.all"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "reduction_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-reduction-comfy-tensor-op-00e998458e0c",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1057,
+      "positional_arguments": [],
+      "scope": "get_references_by_paths_and_asset_ids",
+      "site": "app/assets/database/queries/asset_reference.py:1057:24 (get_references_by_paths_and_asset_ids)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "result.scalars().all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1075,
+      "positional_arguments": [],
+      "scope": "get_reference_ids_by_ids",
+      "site": "app/assets/database/queries/asset_reference.py:1075:22 (get_reference_ids_by_ids)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "result.scalars().all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 352,
+      "positional_arguments": [],
+      "scope": "list_references_page",
+      "site": "app/assets/database/queries/asset_reference.py:352:12 (list_references_page)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(base).unique().scalars().all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 363,
+      "positional_arguments": [],
+      "scope": "list_references_page",
+      "site": "app/assets/database/queries/asset_reference.py:363:33 (list_references_page)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "rows.all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 392,
+      "positional_arguments": [],
+      "scope": "fetch_reference_asset_and_tags",
+      "site": "app/assets/database/queries/asset_reference.py:392:12 (fetch_reference_asset_and_tags)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(stmt).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 615,
+      "positional_arguments": [],
+      "scope": "list_references_by_asset_id",
+      "site": "app/assets/database/queries/asset_reference.py:615:9 (list_references_by_asset_id)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(select(AssetReference).where(AssetReference.asset_id == asset_id).where(AssetReference.is_missing == False).where(AssetReference.deleted_at.is_(None)).order_by(AssetReference.id.asc())).scalars().all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 9,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 636,
+      "positional_arguments": [],
+      "scope": "list_all_file_paths_by_asset_id",
+      "site": "app/assets/database/queries/asset_reference.py:636:9 (list_all_file_paths_by_asset_id)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(select(AssetReference.file_path).where(AssetReference.asset_id == asset_id).where(AssetReference.file_path.isnot(None))).scalars().all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 31,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 767,
+      "positional_arguments": [],
+      "scope": "get_unreferenced_unhashed_asset_ids",
+      "site": "app/assets/database/queries/asset_reference.py:767:31 (get_unreferenced_unhashed_asset_ids)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(unreferenced_subq).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 827,
+      "positional_arguments": [],
+      "scope": "get_references_for_prefixes",
+      "site": "app/assets/database/queries/asset_reference.py:827:12 (get_references_for_prefixes)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(query.order_by(AssetReference.asset_id.asc(), AssetReference.id.asc())).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 981,
+      "positional_arguments": [],
+      "scope": "get_unenriched_references",
+      "site": "app/assets/database/queries/asset_reference.py:981:12 (get_unenriched_references)",
+      "source_path": "app/assets/database/queries/asset_reference.py",
+      "source_sha256": "ed0faf3a7245107ffaf0b6358ee0e51e87a5b5af50ea8db0d9cd5ac08c564c59",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(query).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 328,
+      "positional_arguments": [],
+      "scope": "list_tags_with_usage",
+      "site": "app/assets/database/queries/tags.py:328:12 (list_tags_with_usage)",
+      "source_path": "app/assets/database/queries/tags.py",
+      "source_sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(q.limit(limit).offset(offset)).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 378,
+      "positional_arguments": [],
+      "scope": "list_tag_counts_for_filtered_assets",
+      "site": "app/assets/database/queries/tags.py:378:12 (list_tag_counts_for_filtered_assets)",
+      "source_path": "app/assets/database/queries/tags.py",
+      "source_sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(q).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 51,
+      "positional_arguments": [],
+      "scope": "validate_tags_exist",
+      "site": "app/assets/database/queries/tags.py:51:24 (validate_tags_exist)",
+      "source_path": "app/assets/database/queries/tags.py",
+      "source_sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(select(Tag.name).where(Tag.name.in_(tags))).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 74,
+      "positional_arguments": [],
+      "scope": "get_reference_tags",
+      "site": "app/assets/database/queries/tags.py:74:28 (get_reference_tags)",
+      "source_path": "app/assets/database/queries/tags.py",
+      "source_sha256": "d8d83a2daa5deaecf08492f93e60b8d37df5b8ebc1325846b2c0e4ad5915626a",
+      "status": "static-call-observed",
+      "target_syntax": "session.execute(select(AssetReferenceTag.tag_name).where(AssetReferenceTag.asset_reference_id == reference_id).order_by(AssetReferenceTag.tag_name.asc())).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1222,
+      "positional_arguments": [],
+      "scope": "LTXVModel._build_guide_self_attention_mask",
+      "site": "comfy/ldm/lightricks/model.py:1222:12 (LTXVModel._build_guide_self_attention_mask)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "(tracked_weights == 1.0).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 153,
+      "positional_arguments": [],
+      "scope": "triangulate_grid_mesh",
+      "site": "comfy/ldm/moge/geometry.py:153:14 (triangulate_grid_mesh)",
+      "source_path": "comfy/ldm/moge/geometry.py",
+      "source_sha256": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite(points).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 242,
+      "positional_arguments": [],
+      "scope": "merge_panorama_depth",
+      "site": "comfy/ldm/moge/panorama.py:242:41 (merge_panorama_depth)",
+      "source_path": "comfy/ldm/moge/panorama.py",
+      "source_sha256": "d278c70946c82356e786f00af5967cc597b0fdab9720f1a54539af781c2e7881",
+      "status": "static-call-observed",
+      "target_syntax": "(proj_uv > 0).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 70,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "axis",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 242,
+      "positional_arguments": [],
+      "scope": "merge_panorama_depth",
+      "site": "comfy/ldm/moge/panorama.py:242:70 (merge_panorama_depth)",
+      "source_path": "comfy/ldm/moge/panorama.py",
+      "source_sha256": "d278c70946c82356e786f00af5967cc597b0fdab9720f1a54539af781c2e7881",
+      "status": "static-call-observed",
+      "target_syntax": "(proj_uv < 1).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 649,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "scope": "DFINETransformer._gen_anchors",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:649:22 (DFINETransformer._gen_anchors)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "((anchors > self.eps) & (anchors < 1 - self.eps)).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 614,
+      "positional_arguments": [],
+      "scope": "Gemma4PatchEmbedder.forward",
+      "site": "comfy/text_encoders/gemma4.py:614:29 (Gemma4PatchEmbedder.forward)",
+      "source_path": "comfy/text_encoders/gemma4.py",
+      "source_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "status": "static-call-observed",
+      "target_syntax": "(pixel_position_ids == -1).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 19,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 667,
+      "positional_arguments": [],
+      "scope": "Gemma4VisionEncoder.forward",
+      "site": "comfy/text_encoders/gemma4.py:667:19 (Gemma4VisionEncoder.forward)",
+      "source_path": "comfy/text_encoders/gemma4.py",
+      "source_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "status": "static-call-observed",
+      "target_syntax": "(position_ids == -1).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 694,
+      "positional_arguments": [],
+      "scope": "Gemma4VisionEncoder.forward",
+      "site": "comfy/text_encoders/gemma4.py:694:23 (Gemma4VisionEncoder.forward)",
+      "source_path": "comfy/text_encoders/gemma4.py",
+      "source_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "status": "static-call-observed",
+      "target_syntax": "(weights == 0).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 695,
+      "positional_arguments": [],
+      "scope": "Gemma4VisionEncoder.forward",
+      "site": "comfy/text_encoders/gemma4.py:695:36 (Gemma4VisionEncoder.forward)",
+      "source_path": "comfy/text_encoders/gemma4.py",
+      "source_sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "status": "static-call-observed",
+      "target_syntax": "valid_out.all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 94,
+      "positional_arguments": [],
+      "scope": "_da3_apply_extrinsic",
+      "site": "comfy_extras/nodes_depth_anything_3.py:94:12 (_da3_apply_extrinsic)",
+      "source_path": "comfy_extras/nodes_depth_anything_3.py",
+      "source_sha256": "adfce28637b6904a08596aa23e22502d20089bc28fff6bcdaabe0b3c35fb7f02",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite(E).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1333,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1333:20 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(cmin >= cmin[largest] - tol).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 59,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1333,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_clean_components_gpu",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1333:59 (_clean_components_gpu)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(cmax <= cmax[largest] + tol).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1366,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_clean_components",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1366:20 (_clean_components)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(cmin >= cmin[largest] - tol).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 59,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1366,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "scope": "_clean_components",
+      "site": "comfy_extras/nodes_gaussian_splat.py:1366:59 (_clean_components)",
+      "source_path": "comfy_extras/nodes_gaussian_splat.py",
+      "source_sha256": "260ebe04393ab2b58c167acc1fe31d829b8b5df34050fb26230f755a7557dd43",
+      "status": "static-call-observed",
+      "target_syntax": "(cmax <= cmax[largest] + tol).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 36,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 195,
+      "positional_arguments": [],
+      "scope": "MoGePanoramaInference.execute",
+      "site": "comfy_extras/nodes_moge.py:195:36 (MoGePanoramaInference.execute)",
+      "source_path": "comfy_extras/nodes_moge.py",
+      "source_sha256": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265",
+      "status": "static-call-observed",
+      "target_syntax": "pano_mask.all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 14,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        }
+      ],
+      "line": 33,
+      "positional_arguments": [],
+      "scope": "_normals_from_points",
+      "site": "comfy_extras/nodes_moge.py:33:14 (_normals_from_points)",
+      "source_path": "comfy_extras/nodes_moge.py",
+      "source_sha256": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265",
+      "status": "static-call-observed",
+      "target_syntax": "torch.isfinite(points).all"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 12,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 232,
+      "positional_arguments": [],
+      "scope": "warp_state",
+      "site": "comfy_extras/void_noise_warp.py:232:12 (warp_state)",
+      "source_path": "comfy_extras/void_noise_warp.py",
+      "source_sha256": "4b923f26b69d76b1e17e166fc2671006a16b3a1f09dc0d480e9c8122ab103dbf",
+      "status": "static-call-observed",
+      "target_syntax": "(state[w_ch] > 0).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 125,
+      "positional_arguments": [],
+      "scope": "TestBulkInsertAssets.test_inserts_multiple_assets",
+      "site": "tests-unit/assets_test/queries/test_asset.py:125:18 (TestBulkInsertAssets.test_inserts_multiple_assets)",
+      "source_path": "tests-unit/assets_test/queries/test_asset.py",
+      "source_sha256": "5a9736d810bc94cab2f329c06f95b75dae6af4acb8b26c5956adaced87d0fb42",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Asset).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 380,
+      "positional_arguments": [],
+      "scope": "TestSetReferenceMetadata.test_sets_metadata",
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:380:16 (TestSetReferenceMetadata.test_sets_metadata)",
+      "source_path": "tests-unit/assets_test/queries/test_asset_info.py",
+      "source_sha256": "7d3a29028196c0dc151f5352fde468b5fb412ff9feb5e8070d14c15c19e604e2",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReferenceMeta).filter_by(asset_reference_id=ref.id).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 400,
+      "positional_arguments": [],
+      "scope": "TestSetReferenceMetadata.test_replaces_existing_metadata",
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:400:16 (TestSetReferenceMetadata.test_replaces_existing_metadata)",
+      "source_path": "tests-unit/assets_test/queries/test_asset_info.py",
+      "source_sha256": "7d3a29028196c0dc151f5352fde468b5fb412ff9feb5e8070d14c15c19e604e2",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReferenceMeta).filter_by(asset_reference_id=ref.id).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 421,
+      "positional_arguments": [],
+      "scope": "TestSetReferenceMetadata.test_clears_metadata_with_empty_dict",
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:421:16 (TestSetReferenceMetadata.test_clears_metadata_with_empty_dict)",
+      "source_path": "tests-unit/assets_test/queries/test_asset_info.py",
+      "source_sha256": "7d3a29028196c0dc151f5352fde468b5fb412ff9feb5e8070d14c15c19e604e2",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReferenceMeta).filter_by(asset_reference_id=ref.id).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 462,
+      "positional_arguments": [],
+      "scope": "TestBulkInsertReferencesIgnoreConflicts.test_inserts_multiple_references",
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:462:16 (TestBulkInsertReferencesIgnoreConflicts.test_inserts_multiple_references)",
+      "source_path": "tests-unit/assets_test/queries/test_asset_info.py",
+      "source_sha256": "7d3a29028196c0dc151f5352fde468b5fb412ff9feb5e8070d14c15c19e604e2",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReference).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 499,
+      "positional_arguments": [],
+      "scope": "TestBulkInsertReferencesIgnoreConflicts.test_allows_duplicate_names",
+      "site": "tests-unit/assets_test/queries/test_asset_info.py:499:16 (TestBulkInsertReferencesIgnoreConflicts.test_allows_duplicate_names)",
+      "source_path": "tests-unit/assets_test/queries/test_asset_info.py",
+      "source_sha256": "7d3a29028196c0dc151f5352fde468b5fb412ff9feb5e8070d14c15c19e604e2",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReference).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 241,
+      "positional_arguments": [],
+      "scope": "TestMarkReferencesMissingOutsidePrefixes.test_marks_references_missing_outside_prefixes",
+      "site": "tests-unit/assets_test/queries/test_cache_state.py:241:20 (TestMarkReferencesMissingOutsidePrefixes.test_marks_references_missing_outside_prefixes)",
+      "source_path": "tests-unit/assets_test/queries/test_cache_state.py",
+      "source_sha256": "581ff943bbbec31527755840165b339beb4df6d2f6a4d64ad9ac8090bc4ea1b1",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReference).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 206,
+      "positional_arguments": [],
+      "scope": "TestMissingTagFunctions.test_add_missing_tag_is_idempotent",
+      "site": "tests-unit/assets_test/queries/test_tags.py:206:17 (TestMissingTagFunctions.test_add_missing_tag_is_idempotent)",
+      "source_path": "tests-unit/assets_test/queries/test_tags.py",
+      "source_sha256": "bd99fb95fc12090a12b9569836e6999fd2ea264e94c177133d9dc31a5e6e970a",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReferenceTag).filter_by(asset_reference_id=ref.id, tag_name='missing').all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 331,
+      "positional_arguments": [],
+      "scope": "TestBulkInsertTagsAndMeta.test_inserts_meta",
+      "site": "tests-unit/assets_test/queries/test_tags.py:331:16 (TestBulkInsertTagsAndMeta.test_inserts_meta)",
+      "source_path": "tests-unit/assets_test/queries/test_tags.py",
+      "source_sha256": "bd99fb95fc12090a12b9569836e6999fd2ea264e94c177133d9dc31a5e6e970a",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReferenceMeta).filter_by(asset_reference_id=ref.id).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 351,
+      "positional_arguments": [],
+      "scope": "TestBulkInsertTagsAndMeta.test_ignores_conflicts",
+      "site": "tests-unit/assets_test/queries/test_tags.py:351:17 (TestBulkInsertTagsAndMeta.test_ignores_conflicts)",
+      "source_path": "tests-unit/assets_test/queries/test_tags.py",
+      "source_sha256": "bd99fb95fc12090a12b9569836e6999fd2ea264e94c177133d9dc31a5e6e970a",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReferenceTag).filter_by(asset_reference_id=ref.id, tag_name='existing-tag').all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 46,
+      "positional_arguments": [],
+      "scope": "TestEnsureTagsExist.test_creates_new_tags",
+      "site": "tests-unit/assets_test/queries/test_tags.py:46:16 (TestEnsureTagsExist.test_creates_new_tags)",
+      "source_path": "tests-unit/assets_test/queries/test_tags.py",
+      "source_sha256": "bd99fb95fc12090a12b9569836e6999fd2ea264e94c177133d9dc31a5e6e970a",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Tag).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 60,
+      "positional_arguments": [],
+      "scope": "TestEnsureTagsExist.test_normalizes_tags",
+      "site": "tests-unit/assets_test/queries/test_tags.py:60:16 (TestEnsureTagsExist.test_normalizes_tags)",
+      "source_path": "tests-unit/assets_test/queries/test_tags.py",
+      "source_sha256": "bd99fb95fc12090a12b9569836e6999fd2ea264e94c177133d9dc31a5e6e970a",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Tag).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 36,
+      "positional_arguments": [],
+      "scope": "TestBatchInsertSeedAssets.test_populates_mime_type_for_model_files",
+      "site": "tests-unit/assets_test/services/test_bulk_ingest.py:36:18 (TestBatchInsertSeedAssets.test_populates_mime_type_for_model_files)",
+      "source_path": "tests-unit/assets_test/services/test_bulk_ingest.py",
+      "source_sha256": "57a94bbc32cfb3526ad921652b211338e69b43d7b6fcb99b449b4568df3809e6",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Asset).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 63,
+      "positional_arguments": [],
+      "scope": "TestBatchInsertSeedAssets.test_mime_type_none_when_not_provided",
+      "site": "tests-unit/assets_test/services/test_bulk_ingest.py:63:18 (TestBatchInsertSeedAssets.test_mime_type_none_when_not_provided)",
+      "source_path": "tests-unit/assets_test/services/test_bulk_ingest.py",
+      "source_sha256": "57a94bbc32cfb3526ad921652b211338e69b43d7b6fcb99b449b4568df3809e6",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Asset).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 122,
+      "positional_arguments": [],
+      "scope": "TestIngestFileFromPath.test_idempotent_upsert",
+      "site": "tests-unit/assets_test/services/test_ingest.py:122:18 (TestIngestFileFromPath.test_idempotent_upsert)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Asset).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 193,
+      "positional_arguments": [],
+      "scope": "TestRegisterExistingAsset.test_creates_reference_for_existing_asset",
+      "site": "tests-unit/assets_test/services/test_ingest.py:193:16 (TestRegisterExistingAsset.test_creates_reference_for_existing_asset)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReference).filter_by(name='Registered Asset').all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 227,
+      "positional_arguments": [],
+      "scope": "TestRegisterExistingAsset.test_creates_new_reference_even_with_same_name",
+      "site": "tests-unit/assets_test/services/test_ingest.py:227:16 (TestRegisterExistingAsset.test_creates_new_reference_even_with_same_name)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReference).filter_by(name='Existing Ref').all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 42,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 282,
+      "positional_arguments": [],
+      "scope": "TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags",
+      "site": "tests-unit/assets_test/services/test_ingest.py:282:42 (TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "sess.query(Tag).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 286,
+      "positional_arguments": [],
+      "scope": "TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags",
+      "site": "tests-unit/assets_test/services/test_ingest.py:286:24 (TestIngestExistingFileTagFK.test_creates_tag_rows_before_reference_tags)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "sess.query(AssetReferenceTag).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 43,
+      "positional_arguments": [],
+      "scope": "TestIngestFileFromPath.test_creates_asset_and_reference",
+      "site": "tests-unit/assets_test/services/test_ingest.py:43:18 (TestIngestFileFromPath.test_creates_asset_and_reference)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Asset).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 47,
+      "positional_arguments": [],
+      "scope": "TestIngestFileFromPath.test_creates_asset_and_reference",
+      "site": "tests-unit/assets_test/services/test_ingest.py:47:16 (TestIngestFileFromPath.test_creates_asset_and_reference)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(AssetReference).all"
+    },
+    {
+      "catalog_field": "test_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 89,
+      "positional_arguments": [],
+      "scope": "TestIngestFileFromPath.test_creates_tags_when_provided",
+      "site": "tests-unit/assets_test/services/test_ingest.py:89:16 (TestIngestFileFromPath.test_creates_tags_when_provided)",
+      "source_path": "tests-unit/assets_test/services/test_ingest.py",
+      "source_sha256": "136bb1890aac617bd16dc426a5e514282c98c852a79e5d78515549a6c8abe5cb",
+      "status": "static-call-observed",
+      "target_syntax": "session.query(Tag).all"
+    }
+  ],
+  "static_definition": null
+}

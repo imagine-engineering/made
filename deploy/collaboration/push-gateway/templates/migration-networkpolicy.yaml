@@ -1,0 +1,28 @@
+{{- if and .Values.deployment.enabled .Values.migration.enabled (not .Values.rollback.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "collaborationPush.name" . }}-migration
+  labels: {{- include "collaborationPush.migrationLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  podSelector:
+    matchLabels: {{- include "collaborationPush.migrationLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.dns.namespaceSelector | nindent 14 }}
+          podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.dns.podSelector | nindent 14 }}
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to:
+      {{- range .Values.networkPolicy.postgresEgressCidrs }}
+        - ipBlock: { cidr: {{ . }} }
+      {{- end }}
+      ports: [{ port: 5432, protocol: TCP }]
+{{- end }}

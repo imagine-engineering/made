@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-component-h264-mp4-backing-service-v1",
+  "truth_mode": "synthetic-component-h264-mp4-backing-service",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9"
+  },
+  "dependencies": {
+    "video_components_manifest_sha256": "c7e79dd1f035304b34d0b0e33aff4e812f89ee395242af407f9a75f1c80a250a",
+    "codec_plan_manifest_sha256": "9ff5dde7b0d4fdde599fc377031e88c455e00afcf428e190069569b0c548704f",
+    "codec_h264_mp4_sequence_encode_manifest_sha256": "518dd998c558cd34b114cf2b979db589992b4792de3634864eceb90d6e1a4794",
+    "codec_h264_mp4_thread_bridge_manifest_sha256": "dea88453625f9d2eaa1146ef6ab98f30a7fb2484cb315d4e87109116aecf5a93"
+  },
+  "contract": {
+    "canonical_owner": "sim_nodes::execution::NativeComponentH264Mp4BackingService",
+    "runtime_adapter": "sim_runtime::native_video_codec_service::NativeComponentH264Mp4CodecRequestService",
+    "request": "one checked canonical materialized component VIDEO with eight-bit contiguous CPU F32 BHWC frames and no audio",
+    "planning": "the runtime derives ComponentMp4 with metadata excluded under fixed planning limits and uses the source ties-even millisecond frame-rate projection",
+    "actor": "the existing single retained native video codec thread and capacity-one request channel",
+    "portable_output": "one moved exact-length contiguous rank-one CPU U8 Tensor plus content and source VIDEO SHA-256, dimensions, reduced frame rate, frame count, MP4, H.264, eight-bit YUV420P identity, and no alpha",
+    "post_actor_copy_count": 0,
+    "service_identity_version": "zed.sim.component-h264-mp4-backing-service.v1",
+    "service_identity_binds_actor_and_all_planning_and_sequence_limits": true,
+    "execution_configuration_component": "h264-mp4"
+  },
+  "synthetic_fixture": {
+    "encoded_bytes": "HMP4",
+    "dimensions": [2, 2],
+    "source_frame_rate": [2997, 100],
+    "encode_frame_rate": [2997, 100],
+    "frame_count": 3,
+    "source_metadata": [["prompt", "source-only"]],
+    "test_cases": [
+      "the checked request preserves the source VIDEO and frame StorageId while rejecting ten-bit or audio inputs",
+      "the internal plan excludes container metadata and discards source alpha without changing the source semantic digest",
+      "the retained H.264 actor receives exact images, reduced rate, limits, caller stream, scratch, and cancellation",
+      "the actor-owned output Tensor is moved into the backing result without a second upload or encoded-byte copy",
+      "the result recomputes its content digest and binds the source VIDEO semantic digest and exact projections",
+      "same actor and limits produce stable service and execution identity while any policy change partitions it",
+      "missing service, cancellation, busy, exhaustion, invalid projection, and actor failure remain typed and retryable"
+    ]
+  },
+  "claims": {
+    "synthetic_component_video_service_and_actor_adapter_executed": true,
+    "actor_owned_tensor_moved_without_second_copy": true,
+    "source_video_semantic_digest_bound": true,
+    "caller_scratch_converges_before_success": true,
+    "licensed_or_installed_ffmpeg_or_libx264_package": false,
+    "production_codec_availability": false,
+    "synthetic_bytes_are_valid_playable_mp4": false,
+    "decoded_numeric_h264_color_or_pyav_encoder_or_byte_identity": false,
+    "ten_bit_video_aac_audio_or_container_metadata": false,
+    "encoded_video_handle_slice_effect_or_output_committer_reachable": false,
+    "path_cache_persistence_recovery_or_publication_owned": false,
+    "all_process_or_native_heap_allocations_intercepted": false
+  }
+}

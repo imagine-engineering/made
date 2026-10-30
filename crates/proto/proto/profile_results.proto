@@ -1,0 +1,108 @@
+syntax = "proto3";
+package zed.messages;
+
+import "worktree.proto";
+
+message PrepareProfileTaskBinding {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  string task_run_id = 3;
+  ProjectPath profile_path = 4;
+  ProjectPath symbols_path = 5;
+  string artifact_format = 6;
+}
+
+message GetProfileTaskBinding {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  string task_run_id = 3;
+}
+
+message CancelProfileTaskBinding {
+  uint64 project_id = 1;
+  string task_run_id = 2;
+}
+
+message ProfileTaskBindingResponse {
+  uint32 protocol_version = 1;
+  string task_run_id = 2;
+  ProfileResultStatus status = 3;
+  bool complete = 4;
+  optional string helper_path = 5;
+  optional string socket_path = 6;
+  optional string token = 7;
+}
+
+message ImportProfileResults {
+  uint64 project_id = 1;
+  uint64 import_id = 2;
+  uint32 protocol_version = 3;
+  ProjectPath profile_path = 4;
+  ProjectPath symbols_path = 5;
+  bool consent_to_transfer = 6;
+  optional string task_run_id = 7;
+  string artifact_format = 8;
+}
+
+message GetProfileResultPage {
+  uint64 project_id = 1;
+  uint64 import_id = 2;
+  uint64 generation = 3;
+  uint32 protocol_version = 4;
+  uint32 page_index = 5;
+}
+
+message CancelProfileImport {
+  uint64 project_id = 1;
+  uint64 import_id = 2;
+  uint64 generation = 3;
+}
+
+message ProfileResultPage {
+  uint64 import_id = 1;
+  uint64 generation = 2;
+  uint32 protocol_version = 3;
+  uint32 page_index = 4;
+  ProfileResultStatus status = 5;
+  optional ProfileResultSummary summary = 6;
+  uint32 frame_offset = 7;
+  repeated ProfileResultFrame frames = 8;
+  uint32 node_offset = 9;
+  repeated ProfileResultNode nodes = 10;
+  bool complete = 11;
+}
+
+message ProfileResultSummary {
+  uint32 frame_count = 1;
+  uint32 node_count = 2;
+  repeated uint32 roots = 3;
+  uint64 total_samples = 4;
+  uint64 unattributed_samples = 5;
+  uint32 unresolved_frames = 6;
+}
+
+message ProfileResultFrame {
+  string label = 1;
+  bool resolved = 2;
+  optional ProjectPath source = 3;
+  optional uint32 source_line = 4;
+}
+
+message ProfileResultNode {
+  uint32 frame = 1;
+  optional uint32 parent = 2;
+  repeated uint32 children = 3;
+  uint64 inclusive_samples = 4;
+  uint64 self_samples = 5;
+}
+
+enum ProfileResultStatus {
+  PROFILE_RESULT_STATUS_UNKNOWN = 0;
+  PROFILE_RESULT_STATUS_READY = 1;
+  PROFILE_RESULT_STATUS_RESTRICTED = 2;
+  PROFILE_RESULT_STATUS_UNSUPPORTED = 3;
+  PROFILE_RESULT_STATUS_CANCELLED = 4;
+  PROFILE_RESULT_STATUS_MISMATCH = 5;
+  PROFILE_RESULT_STATUS_STALE = 6;
+  PROFILE_RESULT_STATUS_ERROR = 7;
+}

@@ -1,0 +1,10 @@
+[
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"rust_fixture","target_kind":"unit","mode":"all","stdout":"unit::works: test\nunit::ignored: test\n2 tests, 0 benchmarks\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"rust_fixture","target_kind":"unit","mode":"ignored","stdout":"unit::ignored: test\n1 test, 0 benchmarks\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"api","target_kind":"integration","mode":"all","stdout":"creates_resource: test\n1 test, 0 benchmarks\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"cli","target_kind":"binary","mode":"all","stdout":"cli::prints_help: test\n1 test, 0 benchmarks\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"demo","target_kind":"example","mode":"all","stdout":"example_harness::runs: test\n1 test, 0 benchmarks\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"throughput","target_kind":"benchmark","mode":"all","stdout":"sorts_small_input: benchmark\n0 tests, 1 benchmark\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"rust_fixture","target_kind":"doctest","mode":"all","stdout":"src/lib.rs - rust_fixture::add (line 4): test\n1 test, 0 benchmarks\n"},
+  {"package_id":"path+file:///fixture#rust-fixture@0.1.0","target_name":"rust_fixture","target_kind":"doctest","mode":"ignored","stdout":"0 tests, 0 benchmarks\n"}
+]

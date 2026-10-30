@@ -1,0 +1,22 @@
+[package]
+name = "sim-plugin-hang-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+rust-version = "1.95"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+path = "guest.rs"
+
+[dependencies]
+wit-bindgen = { version = "=0.41.0", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = "symbols"

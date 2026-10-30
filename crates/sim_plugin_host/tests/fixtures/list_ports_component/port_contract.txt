@@ -1,0 +1,17 @@
+world=zed:sim-plugin@1.0.0
+scalar-single-in|input|sim:string@1|singular|required|visible|eager|inline|legacy_scalar
+scalar-single-out|output|sim:string@1|singular|required|visible|eager|inline|
+scalar-list-in|input|sim:string@1|list|optional|visible|lazy|inline|
+scalar-list-out|output|sim:string@1|list|optional|visible|eager|inline|
+tensor-single-in|input|sim:image@1|singular|required|visible|eager|handle|
+tensor-single-out|output|sim:image@1|singular|required|visible|eager|handle|
+tensor-list-in|input|sim:image@1|list|optional|visible|lazy|handle|
+tensor-list-out|output|sim:image@1|list|optional|visible|eager|handle|
+artifact-single-in|input|sim:svg@1|singular|optional|visible|eager|artifact-reference|
+artifact-single-out|output|sim:svg@1|singular|optional|visible|eager|artifact-reference|
+artifact-list-in|input|sim:svg@1|list|optional|visible|lazy|artifact-reference|
+artifact-list-out|output|sim:svg@1|list|optional|visible|eager|artifact-reference|
+model-single-in|input|sim:model@1|singular|required|hidden|eager|handle|
+model-single-out|output|sim:model@1|singular|required|visible|eager|handle|
+model-list-in|input|sim:model@1|list|optional|visible|lazy|handle|
+model-list-out|output|sim:model@1|list|optional|visible|eager|handle|

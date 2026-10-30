@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "schema_version": 1,
+      "fixture_id": "simui-source-version-0.27.1",
+      "feature_ids": [],
+      "observation_kind": "source_snapshot",
+      "source": {
+        "product": "ComfyUI",
+        "declared_version": "0.27.1",
+        "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+      },
+      "command": {
+        "adapter": "static-source-version-probe-v1",
+        "program": "read-version-declarations",
+        "arguments": [
+          "pyproject.toml",
+          "simui_version.py"
+        ],
+        "configuration": {
+          "fields": [
+            "project.version",
+            "__version__"
+          ],
+          "network": "disabled",
+          "runtime_execution": "not_required"
+        }
+      },
+      "inputs": [
+        {
+          "name": "ComfyUI/pyproject.toml",
+          "sha256": "b3b1e7553e6433dd2dde8d64e82654eed3b1f82f27d1e9497eea0f694bb7d7ab"
+        },
+        {
+          "name": "ComfyUI/simui_version.py",
+          "sha256": "9c02921cf9fe9b81184033d436352787c99a57e7141df5c7da0cdcf900bb7a0f"
+        }
+      ],
+      "environment": {
+        "operating_system": "macos",
+        "architecture": "aarch64",
+        "device": "cpu",
+        "device_details": {
+          "source_execution": "not_required"
+        },
+        "dependencies": {
+          "adapter": "native Rust static source reader",
+          "python": "not invoked"
+        },
+        "network_access": false,
+        "account_access": false
+      },
+      "normalization": {
+        "remove_json_pointers": [],
+        "replacements": {},
+        "unordered_array_pointers": []
+      },
+      "tolerance": {
+        "default": {
+          "kind": "exact"
+        },
+        "json_pointer_overrides": {}
+      },
+      "unresolved_nondeterminism": [],
+      "observation": {
+        "status": "observed",
+        "normalized_output": {
+          "declared_version_pyproject": "0.27.1",
+          "runtime_version": "0.27.1"
+        },
+        "output_sha256": "a759ac5264170ea23b4a9c1f13ef60d5e5c1a2a097bb06323493f46c509e58e6"
+      }
+    },
+    {
+      "schema_version": 1,
+      "fixture_id": "sim-cli-cuda-host-not-observed",
+      "feature_ids": [
+        "COMFY-CLI-ENV-79F23AF44C50"
+      ],
+      "observation_kind": "device_probe",
+      "source": {
+        "product": "Comfy CLI",
+        "declared_version": "0.0.0-ci-placeholder",
+        "tree_sha256": "09d0b5f262bce3105f83777a310f1e391c4624f95142da5e3230626b68a276e6"
+      },
+      "command": {
+        "adapter": "sim-cli-device-probe-v1",
+        "program": "sim-cli-cuda-detect",
+        "arguments": [],
+        "configuration": {
+          "environment_key": "CUDA_VISIBLE_DEVICES",
+          "network": "disabled"
+        }
+      },
+      "inputs": [
+        {
+          "name": "sim-cli/sim_cli/cuda_detect.py",
+          "sha256": "cd4b0d2ea459de7495753c6a446f5aebbfc94698411e6fbd2deb3076df934695"
+        }
+      ],
+      "environment": {
+        "operating_system": "macos",
+        "architecture": "aarch64",
+        "device": "cpu",
+        "device_details": {
+          "cuda_hardware": "unavailable on recording host"
+        },
+        "dependencies": {
+          "source_runtime": "not launched"
+        },
+        "network_access": false,
+        "account_access": false
+      },
+      "normalization": {
+        "remove_json_pointers": [],
+        "replacements": {},
+        "unordered_array_pointers": []
+      },
+      "tolerance": {
+        "default": {
+          "kind": "exact"
+        },
+        "json_pointer_overrides": {}
+      },
+      "unresolved_nondeterminism": [],
+      "observation": {
+        "status": "not_observed",
+        "blocker": "hardware",
+        "detail": "The recording host is macOS on aarch64 with no NVIDIA CUDA device, so source CUDA runtime behavior was not executed.",
+        "evidence": [
+          "recording host uname reported Darwin arm64",
+          "baseline runtime-validation constraints require unavailable hardware to remain not observed"
+        ],
+        "uncertainty": "CUDA driver discovery, device ordering, and failure details remain unobserved until an authorized CUDA host is available."
+      }
+    },
+    {
+      "schema_version": 1,
+      "fixture_id": "sim-cli-cloud-login-not-observed",
+      "feature_ids": [
+        "COMFY-CLI-CMD-8E7E3F798F2B"
+      ],
+      "observation_kind": "provider_account",
+      "source": {
+        "product": "Comfy CLI",
+        "declared_version": "0.0.0-ci-placeholder",
+        "tree_sha256": "09d0b5f262bce3105f83777a310f1e391c4624f95142da5e3230626b68a276e6"
+      },
+      "command": {
+        "adapter": "sim-cli-cloud-login-v1",
+        "program": "sim cloud login",
+        "arguments": [],
+        "configuration": {
+          "oauth": "pkce",
+          "network": "required-by-source"
+        }
+      },
+      "inputs": [
+        {
+          "name": "sim-cli/sim_cli/cloud/command.py",
+          "sha256": "2feb99bf909017c21b86a1a4d43688756a3141f31711efd6b12f7d12f8858954"
+        }
+      ],
+      "environment": {
+        "operating_system": "macos",
+        "architecture": "aarch64",
+        "device": "cpu",
+        "device_details": {},
+        "dependencies": {
+          "source_runtime": "not launched"
+        },
+        "network_access": false,
+        "account_access": false
+      },
+      "normalization": {
+        "remove_json_pointers": [],
+        "replacements": {},
+        "unordered_array_pointers": []
+      },
+      "tolerance": {
+        "default": {
+          "kind": "exact"
+        },
+        "json_pointer_overrides": {}
+      },
+      "unresolved_nondeterminism": [],
+      "observation": {
+        "status": "not_observed",
+        "blocker": "credential",
+        "detail": "No Comfy Cloud account or credential was authorized, so the paid/account-backed login flow was not invoked.",
+        "evidence": [
+          "the specification baseline does not authorize account use, credentials, paid calls, or network access",
+          "the feature catalog classifies sim cloud login as cloud/paid"
+        ],
+        "uncertainty": "OAuth browser, callback, token, cancellation, and provider error behavior remain unobserved and no output is inferred."
+      }
+    }
+  ]
+}

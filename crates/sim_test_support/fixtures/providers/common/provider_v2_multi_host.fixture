@@ -1,0 +1,112 @@
+{
+  "component": "crates/sim_test_support/fixtures/providers/common/provider_v2_multi_component",
+  "malformed_component": "crates/sim_test_support/fixtures/providers/common/provider_v2_multi_malformed_result_component",
+  "oversized_component": "crates/sim_test_support/fixtures/providers/common/provider_v2_multi_oversized_result_component",
+  "namespace": "zed.sim.provider.openrouter",
+  "provenance_source": "fixture://test.provider-streaming-plugin.multi",
+  "provenance_publisher": "Zed multi-node provider streaming fixture",
+  "bindings_sha256": "a46ffa690dd864126f123de514a577957711d43259d653eacf9a4673251f0076",
+  "nodes": [
+    {
+      "id": "OpenRouterLLMNode", "display_name": "OpenRouter LLM", "category": "partner/text/OpenRouter",
+      "ports": [
+        { "id": "prompt", "source_type": "String", "direction": "input", "presence": "required", "cardinality": "singular" },
+        { "id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "direction": "input", "presence": "required", "cardinality": "singular" },
+        { "id": "seed", "source_type": "Int", "direction": "input", "presence": "required", "cardinality": "singular" },
+        { "id": "system_prompt", "source_type": "String", "direction": "input", "presence": "optional", "cardinality": "singular" },
+        { "id": "output_0", "source_type": "String", "direction": "output", "presence": "required", "cardinality": "singular" }
+      ]
+    },
+    {
+      "id": "TypedBatchNode", "display_name": "Typed Batch", "category": "fixture/typed",
+      "ports": [
+        { "id": "items", "source_type": "Int", "direction": "input", "presence": "required", "cardinality": "list" },
+        { "id": "reference_image", "source_type": "Image", "direction": "input", "presence": "required", "cardinality": "list" },
+        { "id": "output_0", "source_type": "Int", "direction": "output", "presence": "required", "cardinality": "singular" },
+        { "id": "output_1", "source_type": "Image", "direction": "output", "presence": "required", "cardinality": "singular" }
+      ]
+    }
+  ],
+  "bindings": [
+    { "feature_id": "COMFY-NODE-0466", "node_id": "OpenRouterLLMNode", "contract_sha256": "2c6dbff1b7f89da063de276e6737f58e1dc98a85ad736f620bea96cab9e0a3d5", "transport_schema": "zed:sim-provider-transport@1", "materializer_schema": "zed:sim-provider-materializer@1" },
+    { "feature_id": "COMFY-NODE-TASK434-MULTI", "node_id": "TypedBatchNode", "contract_sha256": "2222222222222222222222222222222222222222222222222222222222222222", "transport_schema": "zed:sim-provider-transport@1", "materializer_schema": "zed:sim-provider-materializer@1" }
+  ],
+  "capabilities": [
+    { "kind": "network_provider", "scope": "zed.sim.provider.openrouter|https://fixture.invalid/v2/stream", "maximum_operations": 1, "maximum_request_bytes": 16384, "maximum_response_bytes": 65536, "maximum_total_bytes": 81920, "maximum_handles": 1, "timeout_milliseconds": 1000 },
+    { "kind": "secret", "scope": "fixture-secret", "maximum_operations": 1, "maximum_request_bytes": 64, "maximum_response_bytes": 1, "maximum_total_bytes": 65, "maximum_handles": 1, "timeout_milliseconds": 1000 },
+    { "kind": "provider_upload", "scope": "zed.sim.provider.openrouter|https://fixture.invalid/v2/stream", "maximum_operations": 3, "maximum_request_bytes": 8192, "maximum_response_bytes": 3, "maximum_total_bytes": 8195, "maximum_handles": 3, "timeout_milliseconds": 1000 },
+    { "kind": "provider_cost", "scope": "zed.sim.provider.openrouter|https://fixture.invalid/v2/stream", "maximum_operations": 1, "maximum_request_bytes": 512, "maximum_response_bytes": 32781, "maximum_total_bytes": 33293, "maximum_handles": 1, "timeout_milliseconds": 1000 }
+  ],
+  "routes": [
+    { "id": "task434.typed", "method": "POST", "path": "/task434/typed", "maximum_request_bytes": 1024, "maximum_response_bytes": 2048 }
+  ],
+  "streaming": {
+    "methods": ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
+    "maximum_headers": 8, "maximum_header_bytes": 4096, "maximum_request_body_bytes": 16384,
+    "maximum_response_body_bytes": 65536, "maximum_chunk_bytes": 4096,
+    "maximum_ndjson_line_bytes": 4096, "maximum_wait_milliseconds": 1000,
+    "maximum_uploads": 3, "maximum_upload_body_bytes": 8192,
+    "maximum_cost_requests": 1, "maximum_progress_total": 100,
+    "uploads": true, "cost_requests": true
+  },
+  "invocations": [
+    {
+      "node_id": "OpenRouterLLMNode",
+      "inputs": [
+        { "port_id": "prompt", "source_type": "String", "values": [{ "kind": "string", "value": "multi prompt" }] },
+        { "port_id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "values": [{ "kind": "string", "value": "deepseek/deepseek-v3.2" }] },
+        { "port_id": "seed", "source_type": "Int", "values": [{ "kind": "integer", "value": 435 }] }
+      ],
+      "script": [
+        { "operation": "start", "endpoint": "https://fixture.invalid/v2/stream", "secret_id": "fixture-secret", "method": "POST", "headers": [{ "name": "x-first", "value": "1" }, { "name": "x-second", "value": "2" }], "declared_body_bytes": null, "response_slot": 1 },
+        { "operation": "request_chunk", "slot": 1, "sequence": 0, "input_abi": "prompt", "input_index": 0, "bytes_hex": null, "end": true },
+        { "operation": "check_cancelled", "slot": 1 },
+        { "operation": "start_upload", "slot": 1, "port_id": "reference", "media_type": "application/octet-stream", "byte_length": 3, "content_sha256": "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81", "response_slot": 2 },
+        { "operation": "upload_chunk", "slot": 2, "sequence": 0, "bytes_hex": "010203", "end": true },
+        { "operation": "complete_upload", "slot": 2, "download_url": "https://fixture.invalid/storage/reference.bin" },
+        { "operation": "cost", "slot": 1, "operation_id": "fixture", "currency": "USD", "maximum_microunits": 1000, "accepted": true, "approved_microunits": 10, "receipt_hex": "7461736b3433342d636f73742d72656365697074" },
+        { "operation": "progress", "slot": 1, "sequence": 0, "completed": 1, "total": 1, "message": "fixture" },
+        { "operation": "wait_head", "slot": 1, "after_sequence": null, "timeout_milliseconds": 100, "sequence": 0, "status": 200, "headers": [{ "name": "content-type", "value": "application/json" }] },
+        { "operation": "wait_terminal", "slot": 1, "after_sequence": 0, "timeout_milliseconds": 100, "sequence": 1, "receipt_hex": "7461736b3433342d7465726d696e616c2d72656365697074" }
+      ],
+      "outputs": [{ "port_id": "output_0", "source_type": "String", "value": { "kind": "string", "value": "multi prompt" } }],
+      "receipt_hex": "7461736b3433342d7465726d696e616c2d72656365697074"
+    },
+    {
+      "node_id": "TypedBatchNode",
+      "inputs": [
+        { "port_id": "items", "source_type": "Int", "values": [{ "kind": "integer", "value": 7 }, { "kind": "integer", "value": 11 }] },
+        { "port_id": "reference_image", "source_type": "Image", "values": [{ "kind": "tensor", "shape": [2, 1, 1, 4], "dtype": "f32", "device": "cpu", "stream": 0, "byte_length": 32, "digest": "3333333333333333333333333333333333333333333333333333333333333333" }, { "kind": "tensor", "shape": [1, 1, 1, 4], "dtype": "f32", "device": "cpu", "stream": 0, "byte_length": 16, "digest": "4444444444444444444444444444444444444444444444444444444444444444" }], "media": [{ "index": 0, "batch_index": 0, "media_type": "image/png", "bytes_hex": "000102030405060708090a0b0c0d0e0f10111213", "content_sha256": "e7aebf577f60412f0312d442c70a1fa6148c090bf5bab404caec29482ae779e8" }, { "index": 0, "batch_index": 1, "media_type": "image/png", "bytes_hex": "01020304", "content_sha256": "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a" }, { "index": 1, "batch_index": 0, "media_type": "image/png", "bytes_hex": "aabbcc", "content_sha256": "fa22dfe1da9013b3c1145040acae9089e0c08bc1c1a0719614f4b73add6f6ef5" }] }
+      ],
+      "script": [
+        { "operation": "start", "endpoint": "https://fixture.invalid/v2/stream", "secret_id": null, "method": "POST", "headers": [{ "name": "x-node", "value": "typed" }], "declared_body_bytes": null, "response_slot": 1 },
+        { "operation": "request_chunk", "slot": 1, "sequence": 0, "input_abi": "items", "input_index": 0, "bytes_hex": null, "end": true },
+        { "operation": "check_cancelled", "slot": 1 },
+        { "operation": "start_upload", "slot": 1, "port_id": "reference_image", "media_type": "image/png", "byte_length": 20, "content_sha256": "e7aebf577f60412f0312d442c70a1fa6148c090bf5bab404caec29482ae779e8", "response_slot": 2 },
+        { "operation": "upload_chunk", "slot": 2, "sequence": 0, "bytes_hex": "000102030405060708090a0b0c0d0e0f", "end": false },
+        { "operation": "upload_chunk", "slot": 2, "sequence": 1, "bytes_hex": "10111213", "end": true },
+        { "operation": "complete_upload", "slot": 2, "download_url": "https://fixture.invalid/storage/reference.png" },
+        { "operation": "start_upload", "slot": 1, "port_id": "reference_image", "media_type": "image/png", "byte_length": 4, "content_sha256": "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a", "response_slot": 3 },
+        { "operation": "upload_chunk", "slot": 3, "sequence": 0, "bytes_hex": "01020304", "end": true },
+        { "operation": "complete_upload", "slot": 3, "download_url": "https://fixture.invalid/storage/reference-1.png" },
+        { "operation": "start_upload", "slot": 1, "port_id": "reference_image", "media_type": "image/png", "byte_length": 3, "content_sha256": "fa22dfe1da9013b3c1145040acae9089e0c08bc1c1a0719614f4b73add6f6ef5", "response_slot": 4 },
+        { "operation": "upload_chunk", "slot": 4, "sequence": 0, "bytes_hex": "aabbcc", "end": true },
+        { "operation": "complete_upload", "slot": 4, "download_url": "https://fixture.invalid/storage/reference-2.png" },
+        { "operation": "cost", "slot": 1, "operation_id": "typed-batch", "currency": "USD", "maximum_microunits": 2000, "accepted": true, "approved_microunits": 20, "receipt_hex": "74797065642d636f73742d72656365697074" },
+        { "operation": "progress", "slot": 1, "sequence": 0, "completed": 2, "total": 2, "message": "typed" },
+        { "operation": "wait_head", "slot": 1, "after_sequence": null, "timeout_milliseconds": 100, "sequence": 0, "status": 503, "headers": [{ "name": "retry-after", "value": "1" }] },
+        { "operation": "retry", "slot": 1, "delay_milliseconds": 1000, "response_slot": 5 },
+        { "operation": "request_chunk", "slot": 5, "sequence": 0, "input_abi": "items", "input_index": 0, "bytes_hex": null, "end": true },
+        { "operation": "progress", "slot": 5, "sequence": 1, "completed": 2, "total": 2, "message": "typed retry" },
+        { "operation": "wait_head", "slot": 5, "after_sequence": null, "timeout_milliseconds": 100, "sequence": 0, "status": 200, "headers": [{ "name": "content-type", "value": "application/json" }] },
+        { "operation": "wait_chunk", "slot": 5, "after_sequence": 0, "timeout_milliseconds": 100, "sequence": 1, "bytes_hex": "7b7d" },
+        { "operation": "wait_terminal", "slot": 5, "after_sequence": 1, "timeout_milliseconds": 100, "sequence": 2, "receipt_hex": "74797065642d7465726d696e616c" }
+      ],
+      "outputs": [
+        { "port_id": "output_0", "source_type": "Int", "value": { "kind": "integer", "value": 7 } },
+        { "port_id": "output_1", "source_type": "Image", "value": { "kind": "tensor", "shape": [2, 1, 1, 4], "dtype": "f32", "device": "cpu", "stream": 0, "byte_length": 32, "digest": "3333333333333333333333333333333333333333333333333333333333333333" } }
+      ],
+      "receipt_hex": "74797065642d7465726d696e616c"
+    }
+  ]
+}

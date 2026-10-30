@@ -1,0 +1,49 @@
+{
+  "fixture_id": "ltxav-sim-model-0102",
+  "feature_id": "COMFY-MODEL-0102",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.adaln_single.emb.timestep_embedder.linear_1.bias": [64],
+      "model.diffusion_model.patchify_proj.weight": [64, 4],
+      "model.diffusion_model.transformer_blocks.0.attn2.to_k.weight": [64, 2048],
+      "model.diffusion_model.proj_out.weight": [4, 64],
+      "model.diffusion_model.audio_adaln_single.linear.weight": [32, 32],
+      "model.diffusion_model.audio_patchify_proj.weight": [32, 8]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0102010201020102010201020102010201020102010201020102010201020102",
+  "source_weights": [
+    {"key": "model.diffusion_model.adaln_single.emb.timestep_embedder.linear_1.bias", "shape": [1], "values": [0.0]},
+    {"key": "model.diffusion_model.patchify_proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.patchify_proj.bias", "shape": [2], "values": [0.0, 0.0]},
+    {"key": "model.diffusion_model.transformer_blocks.0.attn2.to_k.weight", "shape": [1], "values": [1.0]},
+    {"key": "model.diffusion_model.proj_out.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.proj_out.bias", "shape": [2], "values": [0.0, 0.0]},
+    {"key": "model.diffusion_model.audio_adaln_single.linear.weight", "shape": [1], "values": [1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [0.0, 0.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 34,
+  "expected_memory_bytes": 34,
+  "checkpoints": [
+    {"name": "input.video_patch_projection", "values": [0.0, 0.0]},
+    {"name": "conditioning.timestep_activation", "values": [0.0, 0.0]},
+    {"name": "transformer.block_0_attention", "values": [0.0, 0.0]},
+    {"name": "output.video_projection", "values": [0.0, 0.0]}
+  ],
+  "patches": [{
+    "identifier": "ltxav-output-bias",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{"key": "native.proj_out.bias", "expected_shape": [2], "values": [0.5, -0.5], "application": "add"}]
+  }],
+  "patched_checkpoints": [
+    {"name": "input.video_patch_projection", "values": [0.0, 0.0]},
+    {"name": "conditioning.timestep_activation", "values": [0.0, 0.0]},
+    {"name": "transformer.block_0_attention", "values": [0.0, 0.0]},
+    {"name": "output.video_projection", "values": [0.5, -0.5]}
+  ]
+}

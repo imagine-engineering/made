@@ -1,0 +1,336 @@
+# CODEOWNERS for simtropolis/zed
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ WARNING: This file is auto-generated. DO NOT EDIT MANUALLY.                │
+# │                                                                             │
+# │ Changes made directly to this file will be overwritten by the next         │
+# │ scheduled workflow run. To modify code ownership, update the               │
+# │ team-membership-rules.yml file in the codeowner-coordinator repo:          │
+# │ https://github.com/simtropolis/codeowner-coordinator                    │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# Coverage: 100% (all paths have an owner)
+#
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEFAULT FALLBACK (must be first - CODEOWNERS is last-match-wins)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+* @simtropolis/first-responder
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ai-team
+# LLM integrations, agents, predictions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/assets/prompts/ @simtropolis/ai-team
+/crates/acp_thread/ @simtropolis/ai-team
+/crates/acp_tools/ @simtropolis/ai-team
+/crates/agent/ @simtropolis/ai-team
+/crates/agent_servers/ @simtropolis/ai-team
+/crates/agent_settings/ @simtropolis/ai-team
+/crates/agent_ui/ @simtropolis/ai-team
+/crates/ai_onboarding/ @simtropolis/ai-team
+/crates/anthropic/ @simtropolis/ai-team
+/crates/bedrock/ @simtropolis/ai-team
+/crates/cloud_llm_client/ @simtropolis/ai-team
+/crates/codestral/ @simtropolis/ai-team
+/crates/context_server/ @simtropolis/ai-team
+/crates/copilot/ @simtropolis/ai-team
+/crates/copilot_chat/ @simtropolis/ai-team
+/crates/copilot_ui/ @simtropolis/ai-team
+/crates/deepseek/ @simtropolis/ai-team
+/crates/edit_prediction/ @simtropolis/ai-team
+/crates/edit_prediction_cli/ @simtropolis/ai-team
+/crates/edit_prediction_context/ @simtropolis/ai-team
+/crates/edit_prediction_types/ @simtropolis/ai-team
+/crates/edit_prediction_ui/ @simtropolis/ai-team
+/crates/eval_utils/ @simtropolis/ai-team
+/crates/google_ai/ @simtropolis/ai-team
+/crates/language_model/ @simtropolis/ai-team
+/crates/language_models/ @simtropolis/ai-team
+/crates/lmstudio/ @simtropolis/ai-team
+/crates/mistral/ @simtropolis/ai-team
+/crates/ollama/ @simtropolis/ai-team
+/crates/open_ai/ @simtropolis/ai-team
+/crates/open_router/ @simtropolis/ai-team
+/crates/prompt_store/ @simtropolis/ai-team
+# SUGGESTED: Review needed - based on Richard Feldman (2 commits)
+/crates/shell_command_parser/ @simtropolis/ai-team
+/crates/vercel/ @simtropolis/ai-team
+/crates/x_ai/ @simtropolis/ai-team
+/crates/zeta_prompt/ @simtropolis/ai-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# collab-team
+# Real-time collaboration, channels, calls, remote development
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/crates/call/ @simtropolis/collab-team
+/crates/channel/ @simtropolis/collab-team
+/crates/client/ @simtropolis/collab-team
+/crates/collab/ @simtropolis/collab-team
+/crates/collab_ui/ @simtropolis/collab-team
+/crates/dev_container/ @simtropolis/collab-team
+/crates/livekit_api/ @simtropolis/collab-team
+/crates/livekit_client/ @simtropolis/collab-team
+/crates/proto/ @simtropolis/collab-team
+/crates/remote/ @simtropolis/collab-team
+/crates/remote_server/ @simtropolis/collab-team
+/crates/rpc/ @simtropolis/collab-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# core-team
+# GPUI framework, text editing, vim, buffers, text manipulation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/crates/action_log/ @simtropolis/core-team
+/crates/breadcrumbs/ @simtropolis/core-team
+/crates/buffer_diff/ @simtropolis/core-team
+/crates/editor/ @simtropolis/core-team
+/crates/encoding_selector/ @simtropolis/core-team
+/crates/go_to_line/ @simtropolis/core-team
+/crates/gpui/ @simtropolis/core-team
+/crates/gpui_macros/ @simtropolis/core-team
+/crates/gpui_tokio/ @simtropolis/core-team
+/crates/html_to_markdown/ @simtropolis/core-team
+/crates/journal/ @simtropolis/core-team
+/crates/line_ending_selector/ @simtropolis/core-team
+/crates/multi_buffer/ @simtropolis/core-team
+/crates/outline/ @simtropolis/core-team
+/crates/outline_panel/ @simtropolis/core-team
+/crates/rich_text/ @simtropolis/core-team
+/crates/rope/ @simtropolis/core-team
+/crates/snippet/ @simtropolis/core-team
+/crates/snippet_provider/ @simtropolis/core-team
+/crates/snippets_ui/ @simtropolis/core-team
+/crates/streaming_diff/ @simtropolis/core-team
+/crates/sum_tree/ @simtropolis/core-team
+/crates/text/ @simtropolis/core-team
+/crates/vim/ @simtropolis/core-team
+/crates/vim_mode_setting/ @simtropolis/core-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# developer-tools-team
+# Terminal, REPL, tasks, debugger, DAP, git integration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/crates/dap/ @simtropolis/developer-tools-team
+/crates/dap_adapters/ @simtropolis/developer-tools-team
+/crates/debug_adapter_extension/ @simtropolis/developer-tools-team
+/crates/debugger_tools/ @simtropolis/developer-tools-team
+/crates/debugger_ui/ @simtropolis/developer-tools-team
+/crates/git/ @simtropolis/developer-tools-team
+# SUGGESTED: Review needed - based on Anthony Eid (4 commits)
+/crates/git_graph/ @simtropolis/developer-tools-team
+/crates/git_hosting_providers/ @simtropolis/developer-tools-team
+/crates/git_ui/ @simtropolis/developer-tools-team
+/crates/inspector_ui/ @simtropolis/developer-tools-team
+/crates/miniprofiler_ui/ @simtropolis/developer-tools-team
+/crates/repl/ @simtropolis/developer-tools-team
+/crates/task/ @simtropolis/developer-tools-team
+/crates/tasks_ui/ @simtropolis/developer-tools-team
+/crates/terminal/ @simtropolis/developer-tools-team
+/crates/terminal_view/ @simtropolis/developer-tools-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ecosystem-team
+# Language support, LSP, Tree-sitter, extensions, extension API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/crates/extension/ @simtropolis/ecosystem-team
+/crates/extension_api/ @simtropolis/ecosystem-team
+/crates/extension_cli/ @simtropolis/ecosystem-team
+/crates/extension_host/ @simtropolis/ecosystem-team
+/crates/extensions_ui/ @simtropolis/ecosystem-team
+/crates/json_schema_store/ @simtropolis/ecosystem-team
+/crates/language/ @simtropolis/ecosystem-team
+/crates/language_extension/ @simtropolis/ecosystem-team
+/crates/language_onboarding/ @simtropolis/ecosystem-team
+/crates/language_selector/ @simtropolis/ecosystem-team
+/crates/language_tools/ @simtropolis/ecosystem-team
+/crates/languages/ @simtropolis/ecosystem-team
+/crates/lsp/ @simtropolis/ecosystem-team
+/crates/node_runtime/ @simtropolis/ecosystem-team
+/crates/prettier/ @simtropolis/ecosystem-team
+# SUGGESTED: Review needed - based on Piotr Osiewicz (1 commits)
+/crates/remote_connection/ @simtropolis/ecosystem-team
+/crates/toolchain_selector/ @simtropolis/ecosystem-team
+/extensions/ @simtropolis/ecosystem-team
+/extensions/glsl/ @simtropolis/ecosystem-team
+/extensions/html/ @simtropolis/ecosystem-team
+/extensions/proto/ @simtropolis/ecosystem-team
+/extensions/test-extension/ @simtropolis/ecosystem-team
+/extensions/workflows/ @simtropolis/ecosystem-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# infrastructure-team
+# Core utilities, networking, database, telemetry, reliability
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/crates/aws_http_client/ @simtropolis/infrastructure-team
+/crates/clock/ @simtropolis/infrastructure-team
+/crates/collections/ @simtropolis/infrastructure-team
+/crates/crashes/ @simtropolis/infrastructure-team
+/crates/credentials_provider/ @simtropolis/infrastructure-team
+/crates/db/ @simtropolis/infrastructure-team
+/crates/denoise/ @simtropolis/infrastructure-team
+/crates/feature_flags/ @simtropolis/infrastructure-team
+/crates/fs/ @simtropolis/infrastructure-team
+/crates/fs_benchmarks/ @simtropolis/infrastructure-team
+/crates/http_client/ @simtropolis/infrastructure-team
+/crates/http_client_tls/ @simtropolis/infrastructure-team
+/crates/net/ @simtropolis/infrastructure-team
+/crates/paths/ @simtropolis/infrastructure-team
+/crates/release_channel/ @simtropolis/infrastructure-team
+/crates/reqwest_client/ @simtropolis/infrastructure-team
+/crates/scheduler/ @simtropolis/infrastructure-team
+/crates/session/ @simtropolis/infrastructure-team
+/crates/sqlez/ @simtropolis/infrastructure-team
+/crates/sqlez_macros/ @simtropolis/infrastructure-team
+/crates/telemetry/ @simtropolis/infrastructure-team
+/crates/telemetry_events/ @simtropolis/infrastructure-team
+/crates/time_format/ @simtropolis/infrastructure-team
+/crates/util/ @simtropolis/infrastructure-team
+/crates/util_macros/ @simtropolis/infrastructure-team
+/crates/watch/ @simtropolis/infrastructure-team
+/crates/web_search/ @simtropolis/infrastructure-team
+/crates/web_search_providers/ @simtropolis/infrastructure-team
+/crates/zlog/ @simtropolis/infrastructure-team
+/crates/zlog_settings/ @simtropolis/infrastructure-team
+/crates/ztracing/ @simtropolis/infrastructure-team
+/crates/ztracing_macro/ @simtropolis/infrastructure-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# platform-team
+# App shell, CI/CD, packaging, distribution, build scripts
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/.factory/ @simtropolis/platform-team
+/.zed/ @simtropolis/platform-team
+/assets/badge/ @simtropolis/platform-team
+/assets/settings/ @simtropolis/platform-team
+/ci/ @simtropolis/platform-team
+/crates/askpass/ @simtropolis/platform-team
+/crates/audio/ @simtropolis/platform-team
+/crates/auto_update/ @simtropolis/platform-team
+/crates/auto_update_helper/ @simtropolis/platform-team
+/crates/auto_update_ui/ @simtropolis/platform-team
+/crates/cli/ @simtropolis/platform-team
+/crates/command_palette/ @simtropolis/platform-team
+/crates/command_palette_hooks/ @simtropolis/platform-team
+/crates/docs_preprocessor/ @simtropolis/platform-team
+/crates/feedback/ @simtropolis/platform-team
+/crates/install_cli/ @simtropolis/platform-team
+/crates/keymap_editor/ @simtropolis/platform-team
+/crates/media/ @simtropolis/platform-team
+/crates/migrator/ @simtropolis/platform-team
+/crates/notifications/ @simtropolis/platform-team
+/crates/onboarding/ @simtropolis/platform-team
+# SUGGESTED: Review needed - based on Finn Evers (1 commits)
+/crates/platform_title_bar/ @simtropolis/platform-team
+/crates/schema_generator/ @simtropolis/platform-team
+/crates/settings/ @simtropolis/platform-team
+/crates/settings_content/ @simtropolis/platform-team
+/crates/settings_json/ @simtropolis/platform-team
+/crates/settings_macros/ @simtropolis/platform-team
+/crates/settings_profile_selector/ @simtropolis/platform-team
+/crates/settings_ui/ @simtropolis/platform-team
+# SUGGESTED: Review needed - based on Finn Evers (2 commits)
+/crates/sidebar/ @simtropolis/platform-team
+/crates/system_specs/ @simtropolis/platform-team
+/crates/zed/ @simtropolis/platform-team
+/crates/zed_actions/ @simtropolis/platform-team
+/crates/zed_env_vars/ @simtropolis/platform-team
+/docs/ @simtropolis/platform-team
+/docs/.conventions/ @simtropolis/platform-team
+/docs/.doc-examples/ @simtropolis/platform-team
+/docs/src/ @simtropolis/platform-team
+/docs/theme/ @simtropolis/platform-team
+/nix/ @simtropolis/platform-team
+/script/ @simtropolis/platform-team
+/script/danger/ @simtropolis/platform-team
+/script/flatpak/ @simtropolis/platform-team
+/script/lib/ @simtropolis/platform-team
+/script/licenses/ @simtropolis/platform-team
+/script/terms/ @simtropolis/platform-team
+/script/update_top_ranking_issues/ @simtropolis/platform-team
+/tooling/ @simtropolis/platform-team
+/tooling/perf/ @simtropolis/platform-team
+/tooling/xtask/ @simtropolis/platform-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# project-team
+# Project/workspace management, file navigation, search
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/crates/diagnostics/ @simtropolis/project-team
+/crates/explorer_command_injector/ @simtropolis/project-team
+/crates/file_finder/ @simtropolis/project-team
+/crates/file_icons/ @simtropolis/project-team
+/crates/fuzzy/ @simtropolis/project-team
+/crates/project/ @simtropolis/project-team
+/crates/project_benchmarks/ @simtropolis/project-team
+/crates/project_panel/ @simtropolis/project-team
+/crates/project_symbols/ @simtropolis/project-team
+/crates/recent_projects/ @simtropolis/project-team
+/crates/search/ @simtropolis/project-team
+/crates/workspace/ @simtropolis/project-team
+/crates/worktree/ @simtropolis/project-team
+/crates/worktree_benchmarks/ @simtropolis/project-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ui-team
+# UI components, themes, visual design
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/assets/ @zed-industries/ui-team
+/assets/fonts/ @zed-industries/ui-team
+/assets/icons/ @zed-industries/ui-team
+/assets/images/ @zed-industries/ui-team
+/assets/keymaps/ @zed-industries/ui-team
+/assets/sounds/ @zed-industries/ui-team
+/assets/themes/ @zed-industries/ui-team
+/crates/activity_indicator/ @zed-industries/ui-team
+/crates/assets/ @zed-industries/ui-team
+/crates/component/ @zed-industries/ui-team
+/crates/component_preview/ @zed-industries/ui-team
+/crates/icons/ @zed-industries/ui-team
+/crates/image_viewer/ @zed-industries/ui-team
+/crates/markdown/ @zed-industries/ui-team
+/crates/markdown_preview/ @zed-industries/ui-team
+/crates/menu/ @zed-industries/ui-team
+/crates/panel/ @zed-industries/ui-team
+/crates/picker/ @zed-industries/ui-team
+/crates/refineable/ @zed-industries/ui-team
+/crates/story/ @zed-industries/ui-team
+/crates/svg_preview/ @zed-industries/ui-team
+/crates/tab_switcher/ @zed-industries/ui-team
+/crates/theme/ @zed-industries/ui-team
+/crates/theme_extension/ @zed-industries/ui-team
+/crates/theme_importer/ @zed-industries/ui-team
+/crates/theme_selector/ @zed-industries/ui-team
+/crates/title_bar/ @zed-industries/ui-team
+/crates/ui/ @zed-industries/ui-team
+/crates/ui_input/ @zed-industries/ui-team
+/crates/ui_macros/ @zed-industries/ui-team
+/crates/ui_prompt/ @zed-industries/ui-team
+/crates/which_key/ @zed-industries/ui-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# zed-dev-team
+# Zed website, marketing, documentation site
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# SUGGESTED: Review needed - based on Joseph T. Lyons (1 commits)
+/crates/open_path_prompt/ @simtropolis/zed-dev-team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DIRECT OVERRIDES
+# Paths with specific owner assignments (not derived from team paths)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+/.cloudflare/ @simtropolis/cloud-team
+/crates/cloud_api_client/ @simtropolis/cloud-team
+/crates/cloud_api_types/ @simtropolis/cloud-team
+/legal/ @simtropolis/bizops-team

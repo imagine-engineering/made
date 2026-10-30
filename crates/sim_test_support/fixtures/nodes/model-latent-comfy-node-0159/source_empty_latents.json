@@ -1,0 +1,2486 @@
+{
+  "provenance": "Pinned source execute/generate methods with actual CPU float32 PyTorch allocations; adapters supply only NodeOutput containers and the CPU intermediate device/dtype.",
+  "pytorch_version": "2.7.1",
+  "source_sha256": {
+    "sim_extras/nodes_hunyuan.py": "028abde8d150dfe890ae987d8f87b0df439a3e9d068d7c63400d7f442dc4b7d7",
+    "sim_extras/nodes_audio.py": "f9da5427304479919a743475750e89ec7b72f460aa4ab5fccbed08b788d910f4",
+    "sim_extras/nodes_hunyuan3d.py": "2294d13e70e634e33be9fc91249260bc25a371df06e282bf00dedde4df7bb7d1",
+    "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+    "sim_extras/nodes_lt.py": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "sim_extras/nodes_mochi.py": "75f3dc515fde4ba4f9e76a16282b050d2c648736aa41d6615fdf4b968c75cfea",
+    "sim_extras/nodes_qwen.py": "b8d18d9f897c4bd5a4b2651b30643bed277f1808e033c9c376dc21025fed00a5",
+    "sim_extras/nodes_sd3.py": "90a79847332fed7cc97379abbc7092116e6b1b883a7c9e933ac88167a521f693"
+  },
+  "cases": [
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 1
+      },
+      "shape": [
+        1,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 4
+      },
+      "shape": [
+        1,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 5
+      },
+      "shape": [
+        1,
+        32,
+        2,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 9
+      },
+      "shape": [
+        1,
+        32,
+        3,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 1
+      },
+      "shape": [
+        2,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 4
+      },
+      "shape": [
+        2,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 5
+      },
+      "shape": [
+        2,
+        32,
+        2,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 9
+      },
+      "shape": [
+        2,
+        32,
+        3,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 1
+      },
+      "shape": [
+        1,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 4
+      },
+      "shape": [
+        1,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 5
+      },
+      "shape": [
+        1,
+        32,
+        2,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 9
+      },
+      "shape": [
+        1,
+        32,
+        3,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 1
+      },
+      "shape": [
+        2,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 4
+      },
+      "shape": [
+        2,
+        32,
+        1,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 5
+      },
+      "shape": [
+        2,
+        32,
+        2,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 9
+      },
+      "shape": [
+        2,
+        32,
+        3,
+        4,
+        4
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 1
+      },
+      "shape": [
+        1,
+        32,
+        1,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 4
+      },
+      "shape": [
+        1,
+        32,
+        1,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 5
+      },
+      "shape": [
+        1,
+        32,
+        2,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 9
+      },
+      "shape": [
+        1,
+        32,
+        3,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 1
+      },
+      "shape": [
+        2,
+        32,
+        1,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 4
+      },
+      "shape": [
+        2,
+        32,
+        1,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 5
+      },
+      "shape": [
+        2,
+        32,
+        2,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0159",
+      "class_type": "EmptyHunyuanVideo15Latent",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 9
+      },
+      "shape": [
+        2,
+        32,
+        3,
+        8,
+        6
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 16
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 1.0,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        22
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 1.0,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        22
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 1.02,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        22
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 1.02,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        22
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 1.06,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        22
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 1.06,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        22
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 2.5,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        54
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 2.5,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        54
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 47.6,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        1024
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0161",
+      "class_type": "EmptyLatentAudio",
+      "inputs": {
+        "seconds": 47.6,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        1024
+      ],
+      "metadata": {
+        "type": "audio",
+        "downscale_ratio_temporal": 2048
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 1,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        1
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 1,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        1
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 2,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        2
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 2,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        2
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 33,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        33
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 33,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        33
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 3072,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        64,
+        3072
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0162",
+      "class_type": "EmptyLatentHunyuan3Dv2",
+      "inputs": {
+        "resolution": 3072,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        64,
+        3072
+      ],
+      "metadata": {
+        "type": "hunyuan3dv2"
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        4,
+        16,
+        12
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0163",
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        4,
+        16,
+        12
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 1
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 4
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 5
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 9
+      },
+      "shape": [
+        1,
+        128,
+        2,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 1
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 4
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 5
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 9
+      },
+      "shape": [
+        2,
+        128,
+        2,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 1
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 4
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 5
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 9
+      },
+      "shape": [
+        1,
+        128,
+        2,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 1
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 4
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 5
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 9
+      },
+      "shape": [
+        2,
+        128,
+        2,
+        2,
+        2
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 1
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 4
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 5
+      },
+      "shape": [
+        1,
+        128,
+        1,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 9
+      },
+      "shape": [
+        1,
+        128,
+        2,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 1
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 4
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 5
+      },
+      "shape": [
+        2,
+        128,
+        1,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0164",
+      "class_type": "EmptyLTXVLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 9
+      },
+      "shape": [
+        2,
+        128,
+        2,
+        4,
+        3
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 32
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 7
+      },
+      "shape": [
+        1,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 8
+      },
+      "shape": [
+        1,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 13
+      },
+      "shape": [
+        1,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "length": 14
+      },
+      "shape": [
+        1,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 7
+      },
+      "shape": [
+        2,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 8
+      },
+      "shape": [
+        2,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 13
+      },
+      "shape": [
+        2,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "length": 14
+      },
+      "shape": [
+        2,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 7
+      },
+      "shape": [
+        1,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 8
+      },
+      "shape": [
+        1,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 13
+      },
+      "shape": [
+        1,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "length": 14
+      },
+      "shape": [
+        1,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 7
+      },
+      "shape": [
+        2,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 8
+      },
+      "shape": [
+        2,
+        12,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 13
+      },
+      "shape": [
+        2,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "length": 14
+      },
+      "shape": [
+        2,
+        12,
+        3,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 7
+      },
+      "shape": [
+        1,
+        12,
+        2,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 8
+      },
+      "shape": [
+        1,
+        12,
+        2,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 13
+      },
+      "shape": [
+        1,
+        12,
+        3,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "length": 14
+      },
+      "shape": [
+        1,
+        12,
+        3,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 7
+      },
+      "shape": [
+        2,
+        12,
+        2,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 8
+      },
+      "shape": [
+        2,
+        12,
+        2,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 13
+      },
+      "shape": [
+        2,
+        12,
+        3,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0165",
+      "class_type": "EmptyMochiLatentVideo",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "length": 14
+      },
+      "shape": [
+        2,
+        12,
+        3,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "layers": 0
+      },
+      "shape": [
+        1,
+        16,
+        1,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "layers": 1
+      },
+      "shape": [
+        1,
+        16,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1,
+        "layers": 3
+      },
+      "shape": [
+        1,
+        16,
+        4,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "layers": 0
+      },
+      "shape": [
+        2,
+        16,
+        1,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "layers": 1
+      },
+      "shape": [
+        2,
+        16,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2,
+        "layers": 3
+      },
+      "shape": [
+        2,
+        16,
+        4,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "layers": 0
+      },
+      "shape": [
+        1,
+        16,
+        1,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "layers": 1
+      },
+      "shape": [
+        1,
+        16,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1,
+        "layers": 3
+      },
+      "shape": [
+        1,
+        16,
+        4,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "layers": 0
+      },
+      "shape": [
+        2,
+        16,
+        1,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "layers": 1
+      },
+      "shape": [
+        2,
+        16,
+        2,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2,
+        "layers": 3
+      },
+      "shape": [
+        2,
+        16,
+        4,
+        8,
+        8
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "layers": 0
+      },
+      "shape": [
+        1,
+        16,
+        1,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "layers": 1
+      },
+      "shape": [
+        1,
+        16,
+        2,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1,
+        "layers": 3
+      },
+      "shape": [
+        1,
+        16,
+        4,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "layers": 0
+      },
+      "shape": [
+        2,
+        16,
+        1,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "layers": 1
+      },
+      "shape": [
+        2,
+        16,
+        2,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0166",
+      "class_type": "EmptyQwenImageLayeredLatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2,
+        "layers": 3
+      },
+      "shape": [
+        2,
+        16,
+        4,
+        16,
+        12
+      ],
+      "metadata": {},
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        16,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 64,
+        "height": 64,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        16,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        16,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 65,
+        "height": 67,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        16,
+        8,
+        8
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 1
+      },
+      "shape": [
+        1,
+        16,
+        16,
+        12
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0167",
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 96,
+        "height": 128,
+        "batch_size": 2
+      },
+      "shape": [
+        2,
+        16,
+        16,
+        12
+      ],
+      "metadata": {
+        "downscale_ratio_spacial": 8
+      },
+      "dtype": "torch.float32",
+      "all_zero": true
+    }
+  ]
+}

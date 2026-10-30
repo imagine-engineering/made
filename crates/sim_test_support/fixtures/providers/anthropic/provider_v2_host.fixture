@@ -1,0 +1,123 @@
+{
+  "component": "crates/sim_test_support/fixtures/providers/anthropic/provider_v2_component",
+  "malformed_component": "crates/sim_test_support/fixtures/providers/anthropic/provider_v2_malformed_result_component",
+  "oversized_component": "crates/sim_test_support/fixtures/providers/anthropic/provider_v2_oversized_result_component",
+  "namespace": "zed.sim.provider.anthropic",
+  "provenance_source": "fixture://sim_api_nodes/nodes_anthropic.py",
+  "provenance_publisher": "Zed Anthropic provider fixture",
+  "bindings_sha256": "cf0228cb4b3832a98ab8984f2fd050f5615b575cdecb5fda1446aa8d25fb193b",
+  "present_secrets": ["sim_org.auth_token", "sim_org.api_key"],
+  "credential_scenarios": [
+    { "present_secrets": ["sim_org.auth_token", "sim_org.api_key"], "expected_secret_id": "sim_org.auth_token", "expected_header": { "name": "Authorization", "value": "host-capability:auth_token_sim_org" } },
+    { "present_secrets": ["sim_org.api_key"], "expected_secret_id": "sim_org.api_key", "expected_header": { "name": "X-API-KEY", "value": "host-capability:api_key_sim_org" } },
+    { "present_secrets": [], "expected_secret_id": null, "expected_header": null }
+  ],
+  "exercise_resilience": true,
+  "malformed_trailing_chunk_hex": "78",
+  "nodes": [{
+    "id": "ClaudeNode", "display_name": "Anthropic Claude", "category": "partner/text/Anthropic",
+    "ports": [
+      { "id": "prompt", "source_type": "String", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "seed", "source_type": "Int", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "temperature", "source_type": "Float", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "max_tokens", "source_type": "Int", "direction": "input", "presence": "required", "cardinality": "singular" },
+      { "id": "reasoning_effort", "source_type": "STRING", "direction": "input", "presence": "optional", "cardinality": "singular" },
+      { "id": "system_prompt", "source_type": "String", "direction": "input", "presence": "optional", "cardinality": "singular" },
+      { "id": "images", "source_type": "Image", "direction": "input", "presence": "optional", "cardinality": "list" },
+      { "id": "output_0", "source_type": "String", "direction": "output", "presence": "required", "cardinality": "singular" }
+    ]
+  }],
+  "bindings": [{
+    "feature_id": "COMFY-NODE-0056", "node_id": "ClaudeNode",
+    "contract_sha256": "5bf889c4754da87caf8ace62b5495da1afe895a45aad0b8bdc0d497a8f632bbb",
+    "transport_schema": "zed:sim-provider-transport@1", "materializer_schema": "zed:sim-provider-materializer@1"
+  }],
+  "capabilities": [
+    { "kind": "network_provider", "scope": "zed.sim.provider.anthropic|https://api.comfy.org/proxy/anthropic/v1/messages", "maximum_operations": 32, "maximum_request_bytes": 49172480, "maximum_response_bytes": 16777216, "maximum_total_bytes": 65949696, "maximum_handles": 32, "timeout_milliseconds": 60000 },
+    { "kind": "secret", "scope": "sim_org.auth_token", "maximum_operations": 1, "maximum_request_bytes": 49172480, "maximum_response_bytes": 16777216, "maximum_total_bytes": 65949696, "maximum_handles": 32, "timeout_milliseconds": 60000 },
+    { "kind": "secret", "scope": "sim_org.api_key", "maximum_operations": 1, "maximum_request_bytes": 49172480, "maximum_response_bytes": 16777216, "maximum_total_bytes": 65949696, "maximum_handles": 32, "timeout_milliseconds": 60000 },
+    { "kind": "provider_upload", "scope": "zed.sim.provider.anthropic|https://api.comfy.org/proxy/anthropic/v1/messages", "maximum_operations": 40, "maximum_request_bytes": 49172480, "maximum_response_bytes": 16777216, "maximum_total_bytes": 65949696, "maximum_handles": 32, "timeout_milliseconds": 60000 },
+    { "kind": "provider_cost", "scope": "zed.sim.provider.anthropic|https://api.comfy.org/proxy/anthropic/v1/messages", "maximum_operations": 1, "maximum_request_bytes": 49172480, "maximum_response_bytes": 16777216, "maximum_total_bytes": 65949696, "maximum_handles": 32, "timeout_milliseconds": 60000 }
+  ],
+  "routes": [
+    { "id": "COMFY-API-EXT-0001", "method": "POST", "path": "/proxy/anthropic/v1/messages", "maximum_request_bytes": 1048576, "maximum_response_bytes": 16777216 }
+  ],
+  "streaming": {
+    "methods": ["POST", "PUT"], "maximum_headers": 8, "maximum_header_bytes": 16384,
+    "maximum_request_body_bytes": 1048576, "maximum_response_body_bytes": 16777216,
+    "maximum_chunk_bytes": 65536, "maximum_ndjson_line_bytes": 65536,
+    "maximum_wait_milliseconds": 1000, "maximum_uploads": 20,
+    "maximum_upload_body_bytes": 49172480, "maximum_cost_requests": 1,
+    "maximum_progress_total": 100, "uploads": true, "cost_requests": true
+  },
+  "invocations": [{
+    "node_id": "ClaudeNode",
+    "inputs": [
+      { "port_id": "prompt", "source_type": "String", "values": [{ "kind": "string", "value": "Hello 🌍" }] },
+      { "port_id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "values": [{ "kind": "string", "value": "Sonnet 4.6" }] },
+      { "port_id": "seed", "source_type": "Int", "values": [{ "kind": "integer", "value": 7 }] },
+      { "port_id": "temperature", "source_type": "Float", "values": [{ "kind": "float", "value": 0.25 }] },
+      { "port_id": "max_tokens", "source_type": "Int", "values": [{ "kind": "integer", "value": 32768 }] },
+      { "port_id": "reasoning_effort", "source_type": "STRING", "values": [{ "kind": "string", "value": "high" }] },
+      { "port_id": "system_prompt", "source_type": "String", "values": [{ "kind": "string", "value": "Be concise" }] },
+      { "port_id": "images", "source_type": "Image", "values": [{ "kind": "tensor", "shape": [1, 1, 1, 4], "dtype": "f32", "device": "cpu", "stream": 0, "byte_length": 16, "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1" }], "media": [{ "index": 0, "media_type": "image/png", "bytes_hex": "89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c020000000b4944415478da63fcff1f0002eb01f58f59978b0000000049454e44ae426082", "content_sha256": "be891d69cbb39c8b27a0b9f3ad41b6c2dd8fd032e55f1b3e6ab3f7044615adc3" }] }
+    ],
+    "script": [
+      { "operation": "start", "endpoint": "https://api.comfy.org/proxy/anthropic/v1/messages", "secret_id": "sim_org.auth_token", "method": "POST", "headers": [{ "name": "Accept", "value": "application/json" }, { "name": "Authorization", "value": "host-capability:auth_token_sim_org" }, { "name": "Comfy-Env", "value": "host" }, { "name": "Comfy-Usage-Source", "value": "comfyui-api" }, { "name": "Content-Type", "value": "application/json" }], "declared_body_bytes": null, "response_slot": 1 },
+      { "operation": "start_upload", "slot": 1, "port_id": "images", "media_type": "image/png", "byte_length": 68, "content_sha256": "be891d69cbb39c8b27a0b9f3ad41b6c2dd8fd032e55f1b3e6ab3f7044615adc3", "response_slot": 2 },
+      { "operation": "upload_chunk", "slot": 2, "sequence": 0, "bytes_hex": "89504e470d0a1a0a0000000d49484452", "end": false },
+      { "operation": "upload_chunk", "slot": 2, "sequence": 1, "bytes_hex": "00000001000000010804000000b51c0c", "end": false },
+      { "operation": "upload_chunk", "slot": 2, "sequence": 2, "bytes_hex": "020000000b4944415478da63fcff1f00", "end": false },
+      { "operation": "upload_chunk", "slot": 2, "sequence": 3, "bytes_hex": "02eb01f58f59978b0000000049454e44", "end": false },
+      { "operation": "upload_chunk", "slot": 2, "sequence": 4, "bytes_hex": "ae426082", "end": true },
+      { "operation": "complete_upload", "slot": 2, "download_url": "https://fixture.invalid/download/reference.png" },
+      { "operation": "request_chunk", "slot": 1, "sequence": 0, "input_abi": null, "bytes_hex": "7b226d61785f746f6b656e73223a33323736382c226d65737361676573223a5b7b22636f6e74656e74223a5b7b22736f75726365223a7b2274797065223a2275726c222c2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f646f776e6c6f61642f7265666572656e63652e706e67227d2c2274797065223a22696d616765227d2c7b2274657874223a2248656c6c6f20f09f8c8d222c2274797065223a2274657874227d5d2c22726f6c65223a2275736572227d5d2c226d6f64656c223a22636c617564652d736f6e6e65742d342d36222c226f75747075745f636f6e666967223a7b226566666f7274223a2268696768227d2c2273797374656d223a22426520636f6e63697365222c227468696e6b696e67223a7b2274797065223a226164617074697665227d7d", "end": true },
+      { "operation": "cost", "slot": 1, "operation_id": "anthropic.messages", "currency": "USD", "maximum_microunits": 495552, "accepted": true, "approved_microunits": 624, "receipt_hex": "616e7468726f7069632d636f7374" },
+      { "operation": "progress", "slot": 1, "sequence": 0, "completed": 0, "total": 100, "message": "Waiting for server" },
+      { "operation": "check_cancelled", "slot": 1 },
+      { "operation": "wait_head", "slot": 1, "after_sequence": null, "timeout_milliseconds": 1000, "sequence": 0, "status": 429, "headers": [{ "name": "retry-after", "value": "0" }] },
+      { "operation": "progress", "slot": 1, "sequence": 1, "completed": 0, "total": 100, "message": "Retrying request" },
+      { "operation": "retry", "slot": 1, "delay_milliseconds": 0, "response_slot": 3 },
+      { "operation": "request_chunk", "slot": 3, "sequence": 0, "input_abi": null, "bytes_hex": "7b226d61785f746f6b656e73223a33323736382c226d65737361676573223a5b7b22636f6e74656e74223a5b7b22736f75726365223a7b2274797065223a2275726c222c2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f646f776e6c6f61642f7265666572656e63652e706e67227d2c2274797065223a22696d616765227d2c7b2274657874223a2248656c6c6f20f09f8c8d222c2274797065223a2274657874227d5d2c22726f6c65223a2275736572227d5d2c226d6f64656c223a22636c617564652d736f6e6e65742d342d36222c226f75747075745f636f6e666967223a7b226566666f7274223a2268696768227d2c2273797374656d223a22426520636f6e63697365222c227468696e6b696e67223a7b2274797065223a226164617074697665227d7d", "end": true },
+      { "operation": "check_cancelled", "slot": 3 },
+      { "operation": "wait_head", "slot": 3, "after_sequence": null, "timeout_milliseconds": 1000, "sequence": 0, "status": 503, "headers": [{ "name": "retry-after", "value": "0" }] },
+      { "operation": "progress", "slot": 3, "sequence": 2, "completed": 0, "total": 100, "message": "Retrying request" },
+      { "operation": "retry", "slot": 3, "delay_milliseconds": 0, "response_slot": 4 },
+      { "operation": "request_chunk", "slot": 4, "sequence": 0, "input_abi": null, "bytes_hex": "7b226d61785f746f6b656e73223a33323736382c226d65737361676573223a5b7b22636f6e74656e74223a5b7b22736f75726365223a7b2274797065223a2275726c222c2275726c223a2268747470733a2f2f666978747572652e696e76616c69642f646f776e6c6f61642f7265666572656e63652e706e67227d2c2274797065223a22696d616765227d2c7b2274657874223a2248656c6c6f20f09f8c8d222c2274797065223a2274657874227d5d2c22726f6c65223a2275736572227d5d2c226d6f64656c223a22636c617564652d736f6e6e65742d342d36222c226f75747075745f636f6e666967223a7b226566666f7274223a2268696768227d2c2273797374656d223a22426520636f6e63697365222c227468696e6b696e67223a7b2274797065223a226164617074697665227d7d", "end": true },
+      { "operation": "check_cancelled", "slot": 4 },
+      { "operation": "wait_head", "slot": 4, "after_sequence": null, "timeout_milliseconds": 1000, "sequence": 0, "status": 200, "headers": [{ "name": "content-type", "value": "application/json" }] },
+      { "operation": "check_cancelled", "slot": 4 },
+      { "operation": "wait_chunk", "slot": 4, "after_sequence": 0, "timeout_milliseconds": 1000, "sequence": 1, "bytes_hex": "7b226964223a226d73675f66697874757265222c2274797065223a226d657373616765222c22726f6c65223a22617373697374616e74222c226d6f64656c223a22636c617564652d736f6e6e65742d342d36222c22636f6e74656e74223a5b7b2274797065223a227468696e6b696e67222c227468696e6b696e67223a2270726976617465227d2c7b2274797065223a2274657874222c2274657874223a2248656c6c6f20f09f8c8d227d2c7b2274797065223a2274657874222c2274657874223a22e4b896e7958c227d5d2c227573616765223a7b22696e7075745f746f6b656e73223a3130302c226f75747075745f746f6b656e73223a32302c2263616368655f726561645f696e7075745f746f6b656e73223a31302c2263616368655f6372656174696f6e223a7b22657068656d6572616c5f356d5f696e7075745f746f6b656e73223a342c22657068656d6572616c5f31685f696e7075745f746f6b656e73223a317d7d7d" },
+      { "operation": "check_cancelled", "slot": 4 },
+      { "operation": "wait_terminal", "slot": 4, "after_sequence": 1, "timeout_milliseconds": 1000, "sequence": 2, "receipt_hex": "616e7468726f7069632d7465726d696e616c" },
+      { "operation": "progress", "slot": 4, "sequence": 3, "completed": 100, "total": 100, "message": "Completed" }
+    ],
+    "outputs": [{ "port_id": "output_0", "source_type": "String", "value": { "kind": "string", "value": "Hello 🌍\n世界" } }],
+    "receipt_hex": "616e7468726f7069632d7465726d696e616c"
+  }, {
+    "node_id": "ClaudeNode",
+    "inputs": [
+      { "port_id": "prompt", "source_type": "String", "values": [{ "kind": "string", "value": "hi" }] },
+      { "port_id": "model", "source_type": "COMFY_DYNAMICCOMBO_V3", "values": [{ "kind": "string", "value": "Haiku 4.5" }] },
+      { "port_id": "seed", "source_type": "Int", "values": [{ "kind": "integer", "value": 8 }] },
+      { "port_id": "temperature", "source_type": "Float", "values": [{ "kind": "float", "value": 0.5 }] },
+      { "port_id": "max_tokens", "source_type": "Int", "values": [{ "kind": "integer", "value": 4096 }] }
+    ],
+    "script": [
+      { "operation": "start", "endpoint": "https://api.comfy.org/proxy/anthropic/v1/messages", "secret_id": "sim_org.auth_token", "method": "POST", "headers": [{ "name": "Accept", "value": "application/json" }, { "name": "Authorization", "value": "host-capability:auth_token_sim_org" }, { "name": "Comfy-Env", "value": "host" }, { "name": "Comfy-Usage-Source", "value": "comfyui-api" }, { "name": "Content-Type", "value": "application/json" }], "declared_body_bytes": null, "response_slot": 1 },
+      { "operation": "request_chunk", "slot": 1, "sequence": 0, "input_abi": null, "bytes_hex": "7b226d61785f746f6b656e73223a343039362c226d65737361676573223a5b7b22636f6e74656e74223a5b7b2274657874223a226869222c2274797065223a2274657874227d5d2c22726f6c65223a2275736572227d5d2c226d6f64656c223a22636c617564652d6861696b752d342d352d3230323531303031222c2274656d7065726174757265223a302e357d", "end": true },
+      { "operation": "cost", "slot": 1, "operation_id": "anthropic.messages", "currency": "USD", "maximum_microunits": 21097, "accepted": true, "approved_microunits": 1, "receipt_hex": "6861696b752d636f7374" },
+      { "operation": "progress", "slot": 1, "sequence": 0, "completed": 0, "total": 100, "message": "Waiting for server" },
+      { "operation": "check_cancelled", "slot": 1 },
+      { "operation": "wait_head", "slot": 1, "after_sequence": null, "timeout_milliseconds": 1000, "sequence": 0, "status": 200, "headers": [{ "name": "content-type", "value": "application/json" }] },
+      { "operation": "check_cancelled", "slot": 1 },
+      { "operation": "wait_chunk", "slot": 1, "after_sequence": 0, "timeout_milliseconds": 1000, "sequence": 1, "bytes_hex": "7b7d" },
+      { "operation": "check_cancelled", "slot": 1 },
+      { "operation": "wait_terminal", "slot": 1, "after_sequence": 1, "timeout_milliseconds": 1000, "sequence": 2, "receipt_hex": "6861696b752d7465726d696e616c" },
+      { "operation": "progress", "slot": 1, "sequence": 1, "completed": 100, "total": 100, "message": "Completed" }
+    ],
+    "outputs": [{ "port_id": "output_0", "source_type": "String", "value": { "kind": "string", "value": "Empty response from Claude model." } }],
+    "receipt_hex": "6861696b752d7465726d696e616c"
+  }]
+}

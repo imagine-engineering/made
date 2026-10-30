@@ -1,0 +1,61 @@
+services:
+  collaboration:
+    image: busybox:1.37.0-musl
+    entrypoint: ["sh", "-euc"]
+    command:
+      - mkdir -p /www; printf 'ok\n' >/www/healthz; exec httpd -f -p 8080 -h /www
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
+      start_period: 1s
+
+  collaboration-readiness:
+    image: busybox:1.37.0-musl
+    entrypoint: ["wget"]
+    command: ["-q", "-O", "/dev/null", "http://object-store:8080/healthz"]
+
+  postgres:
+    image: busybox:1.37.0-musl
+    entrypoint: ["sh", "-euc"]
+    command:
+      - mkdir -p /www; printf 'ok\n' >/www/index.html; exec httpd -f -p 5432 -h /www
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5432"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
+      start_period: 1s
+
+  redis:
+    image: busybox:1.37.0-musl
+    entrypoint: ["sh", "-euc"]
+    command:
+      - mkdir -p /www; printf 'ok\n' >/www/index.html; exec httpd -f -p 6379 -h /www
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:6379"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
+      start_period: 1s
+
+  object-store:
+    image: busybox:1.37.0-musl
+    ports: !reset []
+    entrypoint: ["sh", "-euc"]
+    command:
+      - mkdir -p /www; printf 'ok\n' >/www/index.html; exec httpd -f -p 9000 -h /www
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
+      start_period: 1s
+
+  object-store-init:
+    image: busybox:1.37.0-musl
+    entrypoint: ["sh", "-euc"]
+    command: ["touch /data/.bucket-initialized"]
+    volumes:
+      - collaboration-objects:/data

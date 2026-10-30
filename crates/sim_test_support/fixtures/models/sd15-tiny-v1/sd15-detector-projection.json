@@ -1,0 +1,36 @@
+{
+  "feature_id": "COMFY-MODEL-0117",
+  "model_channels": 320,
+  "context_dim": 768,
+  "adm_in_channels": null,
+  "use_linear_in_transformer": false,
+  "use_temporal_attention": false,
+  "source_shapes": {
+    "cond_stage_model.transformer.text_model.embeddings.token_embedding.weight": [
+      49408,
+      768
+    ],
+    "first_stage_model.quant_conv.weight": [
+      8,
+      8,
+      1,
+      1
+    ],
+    "model.diffusion_model.input_blocks.0.0.weight": [
+      320,
+      4,
+      3,
+      3
+    ],
+    "model.diffusion_model.out.2.weight": [
+      4,
+      320,
+      3,
+      3
+    ],
+    "model.diffusion_model.time_embed.0.weight": [
+      1280,
+      320
+    ]
+  }
+}

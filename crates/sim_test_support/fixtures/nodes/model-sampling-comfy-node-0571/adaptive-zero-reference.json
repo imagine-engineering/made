@@ -1,0 +1,93 @@
+{
+  "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+  "provenance": "Pinned DPMSolver/PID AST, NumPy 2.3.5 float32 adapter; temporary 64-callback probe bound; not PyTorch certification",
+  "cases": [
+    {
+      "parameters": {},
+      "status": "complete",
+      "output": [
+        0.4138920307159424,
+        -0.08135145157575607
+      ],
+      "info": {
+        "steps": 5,
+        "nfe": 15,
+        "n_accept": 5,
+        "n_reject": 0
+      }
+    },
+    {
+      "parameters": {
+        "rtol": 0.0
+      },
+      "status": "complete",
+      "output": [
+        0.41378670930862427,
+        -0.08127622306346893
+      ],
+      "info": {
+        "steps": 5,
+        "nfe": 15,
+        "n_accept": 5,
+        "n_reject": 0
+      }
+    },
+    {
+      "parameters": {
+        "atol": 0.0
+      },
+      "status": "complete",
+      "output": [
+        0.4138920307159424,
+        -0.08135145157575607
+      ],
+      "info": {
+        "steps": 5,
+        "nfe": 15,
+        "n_accept": 5,
+        "n_reject": 0
+      }
+    },
+    {
+      "parameters": {
+        "accept_safety": 0.0
+      },
+      "status": "complete",
+      "output": [
+        0.4138920307159424,
+        -0.08135145157575607
+      ],
+      "info": {
+        "steps": 5,
+        "nfe": 15,
+        "n_accept": 5,
+        "n_reject": 0
+      }
+    },
+    {
+      "parameters": {
+        "h_init": 0.0
+      },
+      "status": "source_did_not_converge_within_64_probe_callbacks",
+      "info": {
+        "steps": 64,
+        "nfe": 192,
+        "n_accept": 0,
+        "n_reject": 64
+      }
+    },
+    {
+      "parameters": {
+        "rtol": 0.0,
+        "atol": 0.0
+      },
+      "status": "source_did_not_converge_within_64_probe_callbacks",
+      "info": {
+        "steps": 64,
+        "nfe": 192,
+        "n_accept": 0,
+        "n_reject": 64
+      }
+    }
+  ]
+}

@@ -1,0 +1,350 @@
+{
+  "exports": [
+    {
+      "Node": {
+        "node_id": 7001,
+        "output_index": 0
+      }
+    }
+  ],
+  "nodes": [
+    [
+      7001,
+      {
+        "inputs": [
+          {
+            "Value": {
+              "tagged_value": {
+                "TypeDefault": {
+                  "List": {
+                    "Concrete": {
+                      "name": "graphic_types::artboard::Artboard"
+                    }
+                  }
+                }
+              },
+              "exposed": true
+            }
+          },
+          {
+            "Value": {
+              "tagged_value": {
+                "TypeDefault": {
+                  "List": {
+                    "Concrete": {
+                      "name": "graphic_types::graphic::Graphic"
+                    }
+                  }
+                }
+              },
+              "exposed": true
+            }
+          },
+          {
+            "Value": {
+              "tagged_value": {
+                "DVec2": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "exposed": false
+            }
+          },
+          {
+            "Value": {
+              "tagged_value": {
+                "DVec2": [
+                  1920.0,
+                  1080.0
+                ]
+              },
+              "exposed": false
+            }
+          },
+          {
+            "Value": {
+              "tagged_value": {
+                "Color": {
+                  "red": 1.0,
+                  "green": 1.0,
+                  "blue": 1.0,
+                  "alpha": 1.0,
+                  "linear": true
+                }
+              },
+              "exposed": false
+            }
+          },
+          {
+            "Value": {
+              "tagged_value": {
+                "Bool": true
+              },
+              "exposed": false
+            }
+          }
+        ],
+        "call_argument": {
+          "Concrete": {
+            "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+          }
+        },
+        "implementation": {
+          "Network": {
+            "exports": [
+              {
+                "Node": {
+                  "node_id": 4,
+                  "output_index": 0
+                }
+              }
+            ],
+            "nodes": [
+              [
+                0,
+                {
+                  "inputs": [
+                    {
+                      "Import": {
+                        "import_type": {
+                          "Fn": [
+                            {
+                              "Concrete": {
+                                "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                              }
+                            },
+                            {
+                              "Generic": "T"
+                            }
+                          ]
+                        },
+                        "import_index": 1
+                      }
+                    },
+                    {
+                      "Import": {
+                        "import_type": {
+                          "Item": {
+                            "Concrete": {
+                              "name": "graph_craft::document::value::TaggedValue"
+                            }
+                          }
+                        },
+                        "import_index": 2
+                      }
+                    },
+                    {
+                      "Import": {
+                        "import_type": {
+                          "Item": {
+                            "Concrete": {
+                              "name": "graph_craft::document::value::TaggedValue"
+                            }
+                          }
+                        },
+                        "import_index": 3
+                      }
+                    },
+                    {
+                      "Import": {
+                        "import_type": {
+                          "Item": {
+                            "Concrete": {
+                              "name": "graph_craft::document::value::TaggedValue"
+                            }
+                          }
+                        },
+                        "import_index": 4
+                      }
+                    },
+                    {
+                      "Import": {
+                        "import_type": {
+                          "Item": {
+                            "Concrete": {
+                              "name": "graph_craft::document::value::TaggedValue"
+                            }
+                          }
+                        },
+                        "import_index": 5
+                      }
+                    }
+                  ],
+                  "call_argument": {
+                    "Generic": "T"
+                  },
+                  "implementation": {
+                    "ProtoNode": {
+                      "name": "graphic_nodes::artboard::CreateArtboardNode"
+                    }
+                  },
+                  "visible": true,
+                  "skip_deduplication": false,
+                  "context_features": {
+                    "extract": "",
+                    "inject": ""
+                  }
+                }
+              ],
+              [
+                1,
+                {
+                  "inputs": [
+                    {
+                      "Reflection": "DocumentNodePath"
+                    }
+                  ],
+                  "call_argument": {
+                    "Concrete": {
+                      "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                    }
+                  },
+                  "implementation": {
+                    "ProtoNode": {
+                      "name": "graphic_nodes::graphic::PathOfSubgraphNode"
+                    }
+                  },
+                  "visible": true,
+                  "skip_deduplication": false,
+                  "context_features": {
+                    "extract": "",
+                    "inject": ""
+                  }
+                }
+              ],
+              [
+                2,
+                {
+                  "inputs": [
+                    {
+                      "Node": {
+                        "node_id": 0,
+                        "output_index": 0
+                      }
+                    },
+                    {
+                      "Value": {
+                        "tagged_value": {
+                          "String": "editor:layer_path"
+                        },
+                        "exposed": false
+                      }
+                    },
+                    {
+                      "Node": {
+                        "node_id": 1,
+                        "output_index": 0
+                      }
+                    }
+                  ],
+                  "call_argument": {
+                    "Concrete": {
+                      "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                    }
+                  },
+                  "implementation": {
+                    "ProtoNode": {
+                      "name": "graphic_nodes::graphic::WriteAttributeNode"
+                    }
+                  },
+                  "visible": true,
+                  "skip_deduplication": false,
+                  "context_features": {
+                    "extract": "",
+                    "inject": ""
+                  }
+                }
+              ],
+              [
+                3,
+                {
+                  "inputs": [
+                    {
+                      "Node": {
+                        "node_id": 2,
+                        "output_index": 0
+                      }
+                    }
+                  ],
+                  "call_argument": {
+                    "Generic": "T"
+                  },
+                  "implementation": {
+                    "ProtoNode": {
+                      "name": "graphene_core::memo::MonitorNode"
+                    }
+                  },
+                  "visible": true,
+                  "skip_deduplication": true,
+                  "context_features": {
+                    "extract": "",
+                    "inject": ""
+                  }
+                }
+              ],
+              [
+                4,
+                {
+                  "inputs": [
+                    {
+                      "Import": {
+                        "import_type": {
+                          "Fn": [
+                            {
+                              "Concrete": {
+                                "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                              }
+                            },
+                            {
+                              "List": {
+                                "Concrete": {
+                                  "name": "graphic_types::artboard::Artboard"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "import_index": 0
+                      }
+                    },
+                    {
+                      "Node": {
+                        "node_id": 3,
+                        "output_index": 0
+                      }
+                    }
+                  ],
+                  "call_argument": {
+                    "Concrete": {
+                      "name": "core::option::Option<alloc::sync::Arc<core_types::context::OwnedContextImpl>>"
+                    }
+                  },
+                  "implementation": {
+                    "ProtoNode": {
+                      "name": "graphic_nodes::graphic::ExtendNode"
+                    }
+                  },
+                  "visible": true,
+                  "skip_deduplication": false,
+                  "context_features": {
+                    "extract": "",
+                    "inject": ""
+                  }
+                }
+              ]
+            ],
+            "scope_injections": []
+          }
+        },
+        "visible": true,
+        "skip_deduplication": false,
+        "context_features": {
+          "extract": "",
+          "inject": ""
+        }
+      }
+    ]
+  ],
+  "scope_injections": []
+}

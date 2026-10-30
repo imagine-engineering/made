@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-adjustments-sim-node-0004",
+  "feature_ids": ["COMFY-NODE-0004", "COMFY-NODE-0005"],
+  "source": {
+    "catalog_path": "sim_extras/nodes_dataset.py",
+    "oracle_path": "ComfyUI/sim_extras/nodes_dataset.py",
+    "sha256": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+    "byte_length": 59648,
+    "base_class_line": 354,
+    "brightness_class_line": 830,
+    "contrast_class_line": 851,
+    "extension_registration_line": 1410
+  },
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0004",
+      "class_type": "AdjustBrightness",
+      "display_name": "Adjust Brightness",
+      "category": "image/adjustments",
+      "search_aliases": ["brightness"],
+      "description": "Adjust the brightness of an image.",
+      "factor": { "default": 1.0, "minimum": 0.0, "maximum": 2.0 },
+      "equation": "clamp(image * factor, 0.0, 1.0)"
+    },
+    {
+      "feature_id": "COMFY-NODE-0005",
+      "class_type": "AdjustContrast",
+      "display_name": "Adjust Contrast",
+      "category": "image/adjustments",
+      "search_aliases": ["contrast"],
+      "description": "Adjust the contrast of an image.",
+      "factor": { "default": 1.0, "minimum": 0.0, "maximum": 2.0 },
+      "equation": "clamp((image - 0.5) * factor + 0.5, 0.0, 1.0)"
+    }
+  ],
+  "behavior": {
+    "input_is_list": false,
+    "output_is_list": [false],
+    "lazy_inputs": false,
+    "effect": "pure",
+    "cache": "input_identity",
+    "invalid_inputs": [
+      "missing_images",
+      "missing_factor",
+      "extra_input",
+      "literal_image",
+      "list_image",
+      "wrong_handle_type",
+      "wrong_store",
+      "wrong_generation",
+      "digest_mismatch",
+      "factor_below_minimum",
+      "factor_above_maximum",
+      "non_finite_factor"
+    ],
+    "cancellation": "interrupted_without_output_publication",
+    "persistence": {
+      "nodes": [
+        {
+          "class_type": "AdjustBrightness",
+          "inputs": { "images": [7, 0], "factor": 1.5 },
+          "unknown_data": { "source_extension": "nodes_dataset", "preserve": true }
+        },
+        {
+          "class_type": "AdjustContrast",
+          "inputs": { "images": [8, 0], "factor": 2.0 },
+          "unknown_data": { "source_extension": "nodes_dataset", "preserve": true }
+        }
+      ]
+    },
+    "recovery": "stale_worker_handles_fail_and_fresh_image_handles_succeed"
+  }
+}

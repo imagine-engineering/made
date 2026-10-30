@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "profile": "ffmpeg-7.1-x86_64-gnu-data-plane-v1",
+  "target": "x86_64-unknown-linux-gnu",
+  "source": {
+    "release": "FFmpeg 7.1",
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "headers": {
+      "libavcodec/avcodec.h": { "bytes": 114986, "sha256": "d6dbc9694974237888592f71020092c4594511e762d609b0076a90e9696ad1b1" },
+      "libavcodec/codec.h": { "bytes": 13314, "sha256": "681a5a4551b370e3e6b98ea0101aaf12e73419e96f1096a7377633a8d2ec1340" },
+      "libavcodec/codec_id.h": { "bytes": 18054, "sha256": "de6a2924c58f83da84058fabc715b8838321518cbabc8458b15cb83d202fe14a" },
+      "libavcodec/packet.h": { "bytes": 30025, "sha256": "219679e1ffe55fd22bc81b151fce8315372c87028fea87780be686f2b38f305f" },
+      "libavformat/avformat.h": { "bytes": 119096, "sha256": "6171ac10e35a67fe04aa8ddfbf84263def2d7ae9159019dd71e5597be5dd3944" },
+      "libavformat/avio.h": { "bytes": 31142, "sha256": "b1a25f1465b87b62bf2797870c39fbbf81d2e1b4513ac34a66d57963e8facb6f" },
+      "libavutil/error.h": { "bytes": 5555, "sha256": "bcf4f7e69c7e0d658ad6e81611810f7cf1f0b8334ebe948d27e518c459e4104c" },
+      "libavutil/frame.h": { "bytes": 41581, "sha256": "8218f0295206a6543e7d3974a6fcb1f22100a273b09234d0cb84c60cd1638e75" },
+      "libavutil/mathematics.h": { "bytes": 9563, "sha256": "64fac2eb3a42fd3788f5585ac8e65c7d5cd82711730d1f030042ba0a62fe1a62" },
+      "libavutil/opt.h": { "bytes": 47084, "sha256": "c6aec0aade9cb55696bd10a47294e43a38900208ba060d9f37e32348cf5f1fbf" },
+      "libavutil/pixfmt.h": { "bytes": 41991, "sha256": "ace2ebcf84a382269c21ad7a050d69ab293b0dbceab350ac7f728a1b37dc0336" },
+      "libavutil/version_major.h": { "bytes": 999, "sha256": "de46b2654c135c2d87631e955419a19f5ea315af9788d7aee08344215f198a50" },
+      "libswscale/swscale.h": { "bytes": 16928, "sha256": "42ab58ed743efc74ba2152a049b521d41a0fae31595a9b9c6858742391570ca4" }
+    }
+  },
+  "layout_probe": {
+    "compiler": "gcc 15.2.0",
+    "compiler_target": "x86_64-linux-gnu",
+    "command": "cc -std=c11 -Wall -Wextra -Werror -I<ffmpeg-7.1-source> -c verify-data-plane-bindings.c"
+  },
+  "contract": {
+    "symbol_count": 54,
+    "initial_abi_profile": "ffmpeg-7.1-x86_64-gnu-v1",
+    "prefix_only": true,
+    "opaque_allocation_through_ffmpeg_only": true
+  },
+  "prefixes": {
+    "AVFrame": {
+      "size": 144,
+      "alignment": 8,
+      "offsets": { "data": 0, "linesize": 64, "extended_data": 96, "width": 104, "height": 108, "nb_samples": 112, "format": 116, "key_frame": 120, "pict_type": 124, "sample_aspect_ratio": 128, "pts": 136 }
+    },
+    "AVPacket": {
+      "size": 72,
+      "alignment": 8,
+      "offsets": { "buf": 0, "pts": 8, "dts": 16, "data": 24, "size": 32, "stream_index": 36, "flags": 40, "side_data": 48, "side_data_elems": 56, "duration": 64 }
+    },
+    "AVStream": {
+      "size": 40,
+      "alignment": 8,
+      "offsets": { "av_class": 0, "index": 8, "id": 12, "codecpar": 16, "priv_data": 24, "time_base": 32 }
+    },
+    "AVFormatContext": {
+      "size": 56,
+      "alignment": 8,
+      "offsets": { "av_class": 0, "iformat": 8, "oformat": 16, "priv_data": 24, "pb": 32, "ctx_flags": 40, "nb_streams": 44, "streams": 48 }
+    },
+    "AVIOContext": {
+      "size": 16,
+      "alignment": 8,
+      "offsets": { "av_class": 0, "buffer": 8 }
+    }
+  },
+  "constants": {
+    "AV_NUM_DATA_POINTERS": 8,
+    "AVMEDIA_TYPE_VIDEO": 0,
+    "AV_CODEC_ID_H264": 27,
+    "AV_CODEC_ID_VP9": 167,
+    "AV_CODEC_ID_AV1": 225,
+    "AV_CODEC_ID_AAC": 86018,
+    "AV_PIX_FMT_YUV420P": 0,
+    "AV_PIX_FMT_RGB24": 2,
+    "AV_NOPTS_VALUE": -9223372036854775808,
+    "AVSEEK_SIZE": 65536,
+    "AVSEEK_FORCE": 131072,
+    "AVFMT_FLAG_CUSTOM_IO": 128,
+    "AV_CODEC_FLAG_GLOBAL_HEADER": 4194304,
+    "AV_OPT_SEARCH_CHILDREN": 1,
+    "SWS_BILINEAR": 2,
+    "AVERROR_EAGAIN": -11,
+    "AVERROR_ENOMEM": -12,
+    "AVERROR_EINVAL": -22,
+    "AVERROR_ENOSPC": -28,
+    "AVERROR_EOF": -541478725,
+    "AVERROR_EXIT": -1414092869
+  },
+  "claims": {
+    "licensed_or_installed_ffmpeg_package": false,
+    "native_library_loaded": false,
+    "runtime_symbol_resolved": false,
+    "native_function_invoked": false,
+    "encoder_or_decoder_probed": false,
+    "codec_or_media_executed": false,
+    "effect_cache_persistence_or_publication": false
+  }
+}

@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Stage reviewed llama.cpp runtimes before platform signing; never download model weights."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import sys
+import tarfile
+import tempfile
+import urllib.request
+import zipfile
+
+OWNER = "Copper bundled llama.cpp v1"
+
+
+def digest(path):
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def stage(catalog, platform, destination, cache):
+    selected = [asset for asset in catalog["runtime_assets"] if asset["platform"] in (platform, platform + "-vulkan")]
+    if not selected:
+        raise ValueError("No reviewed runtime for the requested platform")
+    receipt = destination / ".copper-bundled-runtime.json"
+    if destination.exists():
+        if not receipt.is_file() or json.loads(receipt.read_text()).get("owner") != OWNER:
+            raise ValueError("Refusing to replace a runtime directory not owned by Copper packaging")
+        shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(parents=True, exist_ok=True)
+    if shutil.disk_usage(destination.parent).free < sum(asset["bytes"] for asset in selected) * 6 + 512 * 1024**2:
+        raise ValueError("Insufficient free disk for verified runtime extraction")
+    with tempfile.TemporaryDirectory(prefix=".copper-runtime-", dir=destination.parent) as temporary:
+        staging = Path(temporary) / "llama-cpp"
+        staging.mkdir()
+        for asset in selected:
+            if not asset["url"].startswith("https://github.com/ggml-org/llama.cpp/releases/download/" + catalog["runtime_version"] + "/"):
+                raise ValueError("Runtime URL is outside the pinned official release")
+            archive = cache / asset["name"]
+            if not archive.is_file() or archive.stat().st_size != asset["bytes"] or digest(archive) != asset["sha256"]:
+                partial = cache / (asset["name"] + ".partial")
+                try:
+                    with urllib.request.urlopen(asset["url"], timeout=120) as response, partial.open("wb") as output:
+                        shutil.copyfileobj(response, output)
+                    if partial.stat().st_size != asset["bytes"] or digest(partial) != asset["sha256"]:
+                        raise ValueError("Runtime archive failed its pinned size/SHA256 verification")
+                    partial.replace(archive)
+                finally:
+                    partial.unlink(missing_ok=True)
+            extracted = staging / asset["platform"]
+            extracted.mkdir()
+            if asset["name"].endswith(".zip"):
+                with zipfile.ZipFile(archive) as source:
+                    for member in source.infolist():
+                        target = (extracted / member.filename).resolve()
+                        if not target.is_relative_to(extracted.resolve()) or stat.S_ISLNK(member.external_attr >> 16):
+                            raise ValueError("Unsafe runtime archive member")
+                    source.extractall(extracted)
+            else:
+                with tarfile.open(archive) as source:
+                    source.extractall(extracted, filter="data")
+            executables = list(extracted.rglob("llama-server.exe" if platform.startswith("windows") else "llama-server"))
+            if len(executables) != 1:
+                raise ValueError("Reviewed archive must contain exactly one llama-server")
+            if not platform.startswith("windows"):
+                executables[0].chmod(0o755)
+        license_source = Path("crates/llama_cpp/runtime-LICENSE")
+        if digest(license_source) != "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d":
+            raise ValueError("The pinned llama.cpp license differs from the reviewed source revision")
+        shutil.copyfile(license_source, staging / "LICENSE")
+        (staging / ".copper-bundled-runtime.json").write_text(json.dumps({
+            "owner": OWNER, "runtime_version": catalog["runtime_version"],
+            "runtime_revision": catalog["runtime_revision"],
+            "assets": {asset["platform"]: asset["sha256"] for asset in selected},
+        }, indent=2) + "\n")
+        staging.replace(destination)
+    print(f"Staged {catalog['runtime_version']} ({catalog['runtime_revision']}) at {destination}; model weights excluded")
+
+
+def main():
+    if sys.version_info < (3, 12):
+        raise SystemExit("Managed runtime packaging requires Python 3.12 or newer (safe tar extraction); CI pins Python 3.12")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--platform", choices=("macos-aarch64", "linux-x86_64", "windows-x86_64"), required=True)
+    parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--cache", type=Path, default=Path("target/managed-runtime-archives"))
+    arguments = parser.parse_args()
+    catalog = json.loads(Path("crates/llama_cpp/managed_catalog.json").read_text())
+    stage(catalog, arguments.platform, arguments.destination, arguments.cache)
+
+
+if __name__ == "__main__":
+    main()

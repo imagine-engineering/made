@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "fixture_id": "hidream-sim-model-0082",
+  "feature_id": "COMFY-MODEL-0082",
+  "source_symbol": "HiDream",
+  "source_ordinal": 69,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/hidream/model.py",
+      "sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e"
+    },
+    {
+      "path": "crates/sim_model/src/latent_formats/flux_sim_model_0029.rs",
+      "sha256": "22c3b314c00dd31a7c4e777c541521c946ab335bb1bdd7b930fd88a6b7c03751"
+    }
+  ],
+  "source_projection": "source_symbol=HiDream\nsource_ordinal=69\ninherits=supported_models_base.BASE\nunet_config.image_model=hidream\neffective_sampling_settings=empty\nmemory_usage_factor=2.0\nlatent_format=Flux\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.HiDream\nmodel_type=FLOW\ndetector=caption_projection.0.linear.weight\nconfiguration.patch_size=2\nconfiguration.in_channels=16\nconfiguration.out_channels=16\nconfiguration.num_layers=16\nconfiguration.num_single_layers=32\nconfiguration.attention_head_dim=128\nconfiguration.num_attention_heads=20\nconfiguration.caption_channels=4096,4096\nconfiguration.text_emb_dim=2048\nconfiguration.num_routed_experts=4\nconfiguration.num_activated_experts=2\nconfiguration.axes_dims_rope=64,32,32\nconfiguration.max_resolution=128,128\nconfiguration.llama_layers=0..31,31x16\nclip_target=None\n",
+  "source_projection_sha256": "ea914e4a82a8979ffb5b98b98c0f842d2e8820ebed9337f12c00d8cf919561ab",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "fixture_class": "deterministic_offline_structural_input_seed",
+  "certification_status": "pending_real_ffmpeg_7_1_x86_64_linux",
+  "certified_interoperability": false,
+  "cases": [
+    {
+      "id": "h264-8bit-aac-rotation",
+      "path": "inputs/h264-8bit-aac-rotation.mp4",
+      "container": "mp4",
+      "role": "first-video-last-decodable-audio-rotation",
+      "byte_length": 129,
+      "sha256": "8f0d9874427c471aebf36dd65d9dcb8e2e08daac30cce0eaf0d774031d47a528",
+      "video_streams": [
+        {
+          "ordinal": 0,
+          "codec": "h264",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        },
+        {
+          "ordinal": 1,
+          "codec": "h264",
+          "decodable": true,
+          "selected": false,
+          "diagnostic": null
+        }
+      ],
+      "audio_streams": [
+        {
+          "ordinal": 0,
+          "codec": "aac",
+          "decodable": true,
+          "selected": false,
+          "diagnostic": null
+        },
+        {
+          "ordinal": 1,
+          "codec": "apac",
+          "decodable": false,
+          "selected": false,
+          "diagnostic": "unsupported_audio_stream_skipped"
+        },
+        {
+          "ordinal": 2,
+          "codec": "aac",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "expected_disposition": "decode_after_certification"
+    },
+    {
+      "id": "h264-10bit",
+      "path": "inputs/h264-10bit.mp4",
+      "container": "mp4",
+      "role": "ten-bit-depth",
+      "byte_length": 105,
+      "sha256": "bbbcc649e96307b03e91939e0a6ba2bfcf8597ee6d6ee111859e6fda4dcc845d",
+      "video_streams": [
+        {
+          "ordinal": 0,
+          "codec": "h264",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "audio_streams": [],
+      "expected_disposition": "decode_after_certification"
+    },
+    {
+      "id": "vp9-alpha",
+      "path": "inputs/vp9-alpha.webm",
+      "container": "webm",
+      "role": "alpha-detection",
+      "byte_length": 90,
+      "sha256": "cedce073d05cef85d396ce8294ebbbed9297f59a80df9e37ef5ac4277e451f87",
+      "video_streams": [
+        {
+          "ordinal": 0,
+          "codec": "vp9",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "audio_streams": [],
+      "expected_disposition": "decode_after_certification"
+    },
+    {
+      "id": "av1-average-rate-fallback",
+      "path": "inputs/av1-average-rate-fallback.webm",
+      "container": "webm",
+      "role": "av1-one-fps-fallback",
+      "byte_length": 106,
+      "sha256": "27671323586fa37941341cc4a16cbade2116d0fb07c0969f23ae2f131bacf960",
+      "video_streams": [
+        {
+          "ordinal": 0,
+          "codec": "av1",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "audio_streams": [],
+      "expected_disposition": "decode_after_certification"
+    },
+    {
+      "id": "width-non-32-aligned",
+      "path": "inputs/width-non-32-aligned.mp4",
+      "container": "mp4",
+      "role": "pad-smear-crop-even-width",
+      "byte_length": 125,
+      "sha256": "3f68b67eb26551c060ff150029367b59119c19f05ea33d98c7ea8047556bfd93",
+      "video_streams": [
+        {
+          "ordinal": 0,
+          "codec": "h264",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "audio_streams": [],
+      "expected_disposition": "decode_after_certification"
+    },
+    {
+      "id": "height-only-nonalignment",
+      "path": "inputs/height-only-nonalignment.mp4",
+      "container": "mp4",
+      "role": "height-only-does-not-align",
+      "byte_length": 133,
+      "sha256": "1e76ce8f5e4f22bf557706705e84c168dca8f075841aca748b96bfde7724963e",
+      "video_streams": [
+        {
+          "ordinal": 0,
+          "codec": "h264",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "audio_streams": [],
+      "expected_disposition": "decode_after_certification"
+    },
+    {
+      "id": "missing-video-stream",
+      "path": "inputs/missing-video-stream.mp4",
+      "container": "mp4",
+      "role": "missing-video-stream",
+      "byte_length": 97,
+      "sha256": "3a915a763df9956594c0182ec3dd12a734a4d3a870bab2a0b23e803374b63e15",
+      "video_streams": [],
+      "audio_streams": [
+        {
+          "ordinal": 0,
+          "codec": "aac",
+          "decodable": true,
+          "selected": true,
+          "diagnostic": null
+        }
+      ],
+      "expected_disposition": "missing_video_stream"
+    },
+    {
+      "id": "truncated",
+      "path": "inputs/truncated.mp4",
+      "container": "mp4",
+      "role": "truncated-container",
+      "byte_length": 19,
+      "sha256": "ff291e3234690e7d7e7e379520f66ec78d51e287a39296267e01692d56523468",
+      "video_streams": [],
+      "audio_streams": [],
+      "expected_disposition": "invalid_data"
+    },
+    {
+      "id": "malformed",
+      "path": "inputs/malformed.bin",
+      "container": "unknown",
+      "role": "malformed-container",
+      "byte_length": 22,
+      "sha256": "04897e5780ea8bc3c65fe62c44bc1036e51ea729c77d9290ba3fe7127cfd8d87",
+      "video_streams": [],
+      "audio_streams": [],
+      "expected_disposition": "invalid_data"
+    }
+  ],
+  "source_behaviors": [
+    "first_video_stream",
+    "last_decodable_audio_stream_with_skipped_unsupported_diagnostic",
+    "average_frame_rate_then_one_fps_fallback",
+    "bit_depth_from_maximum_component_bits",
+    "alpha_from_component_or_pal8",
+    "non_yuvj_width_alignment_pad_then_smear_then_crop",
+    "height_only_nonalignment_does_not_enter_alignment_branch",
+    "quarter_turn_rotation_after_conversion",
+    "float_planar_audio_resample_then_trim"
+  ]
+}

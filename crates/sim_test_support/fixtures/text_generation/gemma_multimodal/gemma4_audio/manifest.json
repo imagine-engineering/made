@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-gemma4-audio-execution-foundation",
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py",
+      "sha256": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "symbols": [
+        "Gemma4AudioConvSubsampler",
+        "Gemma4AudioFeedForward",
+        "Gemma4AudioRelPositionalEncoding",
+        "Gemma4AudioAttention",
+        "Gemma4AudioLConv1d",
+        "Gemma4AudioLayer",
+        "Gemma4AudioEncoder",
+        "Gemma4AudioProjector"
+      ]
+    }
+  ],
+  "preparation_manifest_sha256": "2ac45ddd5ff9416e6d9706d0234d25a406ffb9cda72ce766306ac590e07e682a",
+  "production_profiles": {
+    "e2b": { "audio_hidden": 1024, "layers": 12, "heads": 8, "text_hidden": 1536 },
+    "e4b": { "audio_hidden": 1024, "layers": 12, "heads": 8, "text_hidden": 2560 },
+    "31b": { "audio": "unsupported" }
+  },
+  "reduced_fixture": {
+    "mel_bins": 128,
+    "conv_channels": [2, 1],
+    "hidden": 4,
+    "intermediate": 6,
+    "layers": 1,
+    "heads": 1,
+    "chunk": 2,
+    "context_left": 3,
+    "encoder_output": 4,
+    "text_output": 3,
+    "input_samples": 640,
+    "output_tokens": 1,
+    "output_f32le_sha256": "69f911e80b4265c6d3ee445a00585da55928e77808c217b9c6c751c679b6c05e"
+  },
+  "claims": {
+    "licensed_checkpoint": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_parity": false,
+    "native_cpu_reduced_exact_graph": true
+  }
+}

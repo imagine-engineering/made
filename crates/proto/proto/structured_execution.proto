@@ -1,0 +1,268 @@
+syntax = "proto3";
+package zed.messages;
+
+import "worktree.proto";
+
+message GetRustTestDiscovery {
+  uint64 project_id = 1;
+  uint64 request_id = 2;
+  uint32 protocol_version = 3;
+  repeated uint64 worktree_ids = 4;
+}
+
+message GetJvmTestDiscovery {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  repeated uint64 worktree_ids = 3;
+  uint64 request_id = 4;
+}
+
+message CancelJvmTestDiscovery {
+  uint64 project_id = 1;
+  uint64 request_id = 2;
+}
+
+message JvmTestDiscoveryResponse {
+  uint32 protocol_version = 1;
+  uint64 discovery_generation = 2;
+  uint64 request_id = 3;
+  StructuredProviderStatus status = 4;
+  optional string diagnostic = 5;
+}
+
+message ResolveJvmTestAction {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 discovery_generation = 3;
+  string node_id = 4;
+  optional string failed_run_id = 5;
+  repeated uint64 worktree_ids = 6;
+  optional uint64 report_maximum_bytes = 7;
+  optional string requested_run_id = 8;
+}
+
+message JvmTestActionPlanResponse {
+  uint32 protocol_version = 1;
+  uint64 discovery_generation = 2;
+  string node_id = 3;
+  string run_id = 4;
+  uint64 worktree_id = 5;
+  string template_json = 6;
+  optional uint64 report_maximum_bytes = 7;
+}
+
+message UpdateJvmTestRun {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 discovery_generation = 3;
+  string run_id = 4;
+  string node_id = 5;
+  string task_id = 6;
+  JvmTestTaskState state = 7;
+  optional uint64 terminal_id = 8;
+  optional int32 exit_code = 9;
+  bool success = 10;
+  bool termination_confirmed = 11;
+  optional string diagnostic = 12;
+  repeated uint64 worktree_ids = 13;
+  bool abandon_unlaunched = 14;
+}
+
+enum JvmTestTaskState {
+  JVM_TEST_TASK_STATE_UNSPECIFIED = 0;
+  JVM_TEST_TASK_STATE_QUEUED = 1;
+  JVM_TEST_TASK_STATE_RUNNING = 2;
+  JVM_TEST_TASK_STATE_COMPLETED = 3;
+  JVM_TEST_TASK_STATE_SPAWN_ERROR = 4;
+  JVM_TEST_TASK_STATE_CANCELLED = 5;
+}
+
+message CancelRustTestDiscovery {
+  uint64 project_id = 1;
+  uint64 request_id = 2;
+}
+
+message RustTestDiscoveryResponse {
+  uint32 protocol_version = 1;
+  uint64 request_id = 2;
+  uint64 discovery_generation = 3;
+  StructuredProviderStatus status = 4;
+  optional string diagnostic = 5;
+}
+
+message ResolveRustTestAction {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 discovery_generation = 3;
+  string node_id = 4;
+  RustTestActionKind action = 5;
+  repeated uint64 worktree_ids = 6;
+  uint64 authorization_generation = 7;
+}
+
+message RustTestActionPlanResponse {
+  uint32 protocol_version = 1;
+  string plan_json = 2;
+  uint64 authorization_generation = 3;
+}
+
+enum RustTestActionKind {
+  RUST_TEST_ACTION_KIND_UNSPECIFIED = 0;
+  RUST_TEST_ACTION_KIND_RUN = 1;
+  RUST_TEST_ACTION_KIND_DEBUG = 2;
+}
+
+message UpdateRustTestRun {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 discovery_generation = 3;
+  string run_id = 4;
+  repeated string scope_node_ids = 5;
+  string task_id = 6;
+  RustTestTaskState state = 7;
+  optional uint64 terminal_id = 8;
+  optional int32 exit_code = 9;
+  bool success = 10;
+  bool termination_confirmed = 11;
+  optional string diagnostic = 12;
+  repeated uint64 worktree_ids = 13;
+  uint64 authorization_generation = 14;
+}
+
+enum RustTestTaskState {
+  RUST_TEST_TASK_STATE_UNSPECIFIED = 0;
+  RUST_TEST_TASK_STATE_QUEUED = 1;
+  RUST_TEST_TASK_STATE_RUNNING = 2;
+  RUST_TEST_TASK_STATE_COMPLETED = 3;
+  RUST_TEST_TASK_STATE_SPAWN_ERROR = 4;
+  RUST_TEST_TASK_STATE_CANCELLED = 5;
+}
+
+message GetStructuredExecutionSnapshot {
+  uint64 project_id = 1;
+  string provider_id = 2;
+  uint64 discovery_generation = 3;
+  uint32 page_start = 4;
+  uint32 page_size = 5;
+  repeated uint64 worktree_ids = 6;
+}
+
+message StructuredExecutionSnapshotPage {
+  uint32 protocol_version = 1;
+  uint64 project_generation = 2;
+  string provider_id = 3;
+  uint64 discovery_generation = 4;
+  StructuredProviderStatus status = 5;
+  repeated StructuredExecutionNode nodes = 6;
+  uint32 next_page_start = 7;
+  bool partial = 8;
+  optional string diagnostic = 9;
+  optional StructuredExecutionRun current_run = 10;
+  optional StructuredExecutionRun last_complete_run = 11;
+}
+
+message GetStructuredExecutionEvents {
+  uint64 project_id = 1;
+  string provider_id = 2;
+  string run_id = 3;
+  uint64 start_sequence = 4;
+  uint32 chunk_size = 5;
+  repeated uint64 worktree_ids = 6;
+}
+
+message StructuredExecutionEventChunk {
+  uint32 protocol_version = 1;
+  uint64 project_generation = 2;
+  string provider_id = 3;
+  string run_id = 4;
+  uint64 discovery_generation = 5;
+  repeated StructuredExecutionEvent events = 6;
+  uint64 next_sequence = 7;
+  bool complete = 8;
+  bool truncated = 9;
+}
+
+message StructuredExecutionNode {
+  string node_id = 1;
+  optional string parent_id = 2;
+  string label = 3;
+  StructuredExecutionNodeKind kind = 4;
+  optional ProjectPath path = 5;
+  optional StructuredExecutionDebugCapability debug_capability = 6;
+  optional string experimental_feature = 7;
+  optional bool experimental_feature_enabled = 8;
+}
+
+message StructuredExecutionDebugCapability {
+  bool supported = 1;
+  optional string reason = 2;
+}
+
+enum StructuredExecutionNodeKind {
+  STRUCTURED_EXECUTION_NODE_KIND_UNSPECIFIED = 0;
+  STRUCTURED_EXECUTION_NODE_KIND_PROVIDER = 1;
+  STRUCTURED_EXECUTION_NODE_KIND_SUITE = 2;
+  STRUCTURED_EXECUTION_NODE_KIND_GROUP = 3;
+  STRUCTURED_EXECUTION_NODE_KIND_CASE = 4;
+}
+
+enum StructuredProviderStatus {
+  STRUCTURED_PROVIDER_STATUS_UNSPECIFIED = 0;
+  STRUCTURED_PROVIDER_STATUS_LOADING = 1;
+  STRUCTURED_PROVIDER_STATUS_CURRENT = 2;
+  STRUCTURED_PROVIDER_STATUS_EMPTY = 3;
+  STRUCTURED_PROVIDER_STATUS_PARTIAL = 4;
+  STRUCTURED_PROVIDER_STATUS_STALE = 5;
+  STRUCTURED_PROVIDER_STATUS_ERROR = 6;
+  STRUCTURED_PROVIDER_STATUS_RESTRICTED = 7;
+  STRUCTURED_PROVIDER_STATUS_DISCONNECTED = 8;
+  STRUCTURED_PROVIDER_STATUS_MISMATCH = 9;
+}
+
+message StructuredExecutionRun {
+  string run_id = 1;
+  uint64 discovery_generation = 2;
+  StructuredRunPhase phase = 3;
+  repeated string scope_node_ids = 4;
+  StructuredExecutionSummary summary = 5;
+  bool truncated = 6;
+  optional string diagnostic = 7;
+}
+
+enum StructuredRunPhase {
+  STRUCTURED_RUN_PHASE_UNSPECIFIED = 0;
+  STRUCTURED_RUN_PHASE_QUEUED = 1;
+  STRUCTURED_RUN_PHASE_RUNNING = 2;
+  STRUCTURED_RUN_PHASE_COMPLETED = 3;
+  STRUCTURED_RUN_PHASE_CANCELLED = 4;
+  STRUCTURED_RUN_PHASE_SPAWN_ERROR = 5;
+}
+
+message StructuredExecutionSummary {
+  uint32 total = 1;
+  uint32 queued = 2;
+  uint32 running = 3;
+  uint32 passed = 4;
+  uint32 failed = 5;
+  uint32 skipped = 6;
+  uint32 cancelled = 7;
+}
+
+message StructuredExecutionEvent {
+  uint64 sequence = 1;
+  string node_id = 2;
+  StructuredExecutionNodeState state = 3;
+  optional uint64 duration_millis = 4;
+  optional string message = 5;
+  optional ProjectPath location = 6;
+}
+
+enum StructuredExecutionNodeState {
+  STRUCTURED_EXECUTION_NODE_STATE_UNSPECIFIED = 0;
+  STRUCTURED_EXECUTION_NODE_STATE_QUEUED = 1;
+  STRUCTURED_EXECUTION_NODE_STATE_RUNNING = 2;
+  STRUCTURED_EXECUTION_NODE_STATE_PASSED = 3;
+  STRUCTURED_EXECUTION_NODE_STATE_FAILED = 4;
+  STRUCTURED_EXECUTION_NODE_STATE_SKIPPED = 5;
+  STRUCTURED_EXECUTION_NODE_STATE_CANCELLED = 6;
+}

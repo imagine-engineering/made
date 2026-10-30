@@ -1,0 +1,21 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=$APP_NAME
+GenericName=Text Editor
+Comment=A high-performance, multiplayer code editor.
+TryExec=$APP_CLI
+StartupNotify=$DO_STARTUP_NOTIFY
+Exec=$APP_CLI $APP_ARGS
+Icon=$APP_ICON
+Categories=Utility;TextEditor;Development;IDE;
+Keywords=rust;cargo;ide;
+# To add the application to the "Open Folder With..." context menu, add `inode/directory` to the MimeType field (semicolon separated).
+# Arch Linux users have reported this setting the editor as the default file browser.
+# If this happens to you, an unconfirmed fix may be to install Arch's `gnome-defaults-list` package.
+MimeType=text/plain;application/x-zerosize;x-scheme-handler/$APP_URL_SCHEME;
+Actions=NewWorkspace;
+
+[Desktop Action NewWorkspace]
+Exec=$APP_CLI --new $APP_ARGS
+Name=Open a new workspace

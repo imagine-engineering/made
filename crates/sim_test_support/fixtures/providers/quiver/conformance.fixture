@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.quiver",
+  "source_sha256": "5ab37aba355046eb66dc2f36c5edec4ff5e42fec17cbb0195fd90f4ee3115e0d",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0501",
+      "node_identifier": "QuiverImageToSVGNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0502",
+      "node_identifier": "QuiverTextToSVGNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0134",
+      "method": "POST",
+      "path": "/proxy/quiver/v1/svgs/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0135",
+      "method": "POST",
+      "path": "/proxy/quiver/v1/svgs/vectorizations",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending"
+}

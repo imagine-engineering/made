@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "fixture_id": "depthanything3-sim-model-0075",
+  "feature_id": "COMFY-MODEL-0075",
+  "source_symbol": "DepthAnything3",
+  "source_ordinal": 93,
+  "source_architecture": "model_base.DepthAnything3",
+  "latent_feature_id": "COMFY-MODEL-0075",
+  "latent_identifier": "LatentFormat",
+  "catalog_projection_sha256": "8388072289c3c98d37af62d1ba2de8528785e60e477208c83001b8cc4219627e",
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models_base.py",
+      "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/depth_anything_3/model.py",
+      "sha256": "6f05ba0c22a34304f6bd6cde7e6dd26ceef474a99ad51d6632940f8d2decf6b0"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/depth_anything_3/dpt.py",
+      "sha256": "756fa18408e161cb2ddf8adde82902d9fe3aa555be8252b60d045cbc76513ee5"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/depth_anything_3/camera.py",
+      "sha256": "b9c1bc79862c8f2b59a6058da1bf47c1aaef84ca75ec5131805fbdf2f81dca9a"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/image_encoders/dino2.py",
+      "sha256": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579"
+    }
+  ],
+  "source_projection": "source_symbol=DepthAnything3\nsource_ordinal=93\ninheritance=DepthAnything3,supported_models_base.BASE\nunet_config.image_model=DepthAnything3\nlatent_format=sim.latent_formats.LatentFormat\nmemory_usage_factor=2.0\nsupported_inference_dtypes=f16,bf16,f32\narchitecture=model_base.DepthAnything3\nclip_target=None\nvae_key_prefix=first_stage_model.\ntext_encoder_key_prefix=cond_stage_model.\nunet_key_prefix=model.diffusion_model.\nstate_dict_transform=identity\ndetector_marker=backbone.embeddings.patch_embeddings.projection.weight\nbackbone_presets=vits:384:12:6,vitb:768:12:12,vitl:1024:24:16,vitg:1536:40:24\npatch_size=14\nimage_size=518\nhead_types=dpt,dualdpt\ncamera_extensions=optional\nalternate_layout=none\n",
+  "source_projection_sha256": "4799e412d8fdfe0ae988355113ca9b03d19d25e018362fa2f4b7e213a57b5597",
+  "alternate_layout": "none; the pinned source detects repackaged native DINOv2 keys and provides no DepthAnything3 diffusers converter",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI DepthAnything3 sources; no production Python dependency"
+}

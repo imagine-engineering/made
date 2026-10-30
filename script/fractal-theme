@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Generate Made's theme from the pinned Fractal GPUI semantic contract."""
+
+import argparse
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SOURCE = ROOT / "assets/design_systems/fractal-neutral.json"
+OUTPUT = ROOT / "assets/themes/fractal-neutral/fractal-neutral.json"
+
+
+def alpha(color, opacity):
+    return color[:7] + f"{round(opacity * 255):02x}"
+
+
+def theme(source):
+    semantic = source["semantic"]
+    colors, states, syntax = (
+        semantic["colors"], semantic["states"], semantic["syntax"]
+    )
+    surface = colors["background.surface"]
+    body = colors["background.body"]
+    text = colors["text.primary"]
+    muted = colors["text.secondary"]
+    accent = colors["accent"]
+    border = colors["border"]
+    transparent = "#00000000"
+    selection = alpha(accent, 0.16)
+    style = {}
+
+    def assign(value, *keys):
+        for key in keys:
+            style[key] = value
+
+    assign(border, "border", "border.variant", "border.disabled", "pane_group.border",
+           "panel.indent_guide", "editor.indent_guide", "editor.wrap_guide",
+           "scrollbar.thumb.border", "scrollbar.track.border")
+    assign(accent, "border.focused", "border.selected", "drop_target.border",
+           "panel.focused_border", "pane.focused_border", "text.accent", "icon.accent",
+           "link_text.hover", "editor.indent_guide_active", "panel.indent_guide_active",
+           "editor.active_wrap_guide", "debugger.accent")
+    assign(transparent, "border.transparent", "ghost_element.background",
+           "ghost_element.disabled", "scrollbar.track.background")
+    assign(body, "background", "title_bar.background", "title_bar.inactive_background",
+           "status_bar.background", "tab_bar.background", "tab.inactive_background")
+    assign(surface, "surface.background", "panel.background", "toolbar.background",
+           "tab.active_background", "editor.subheader.background", "terminal.background",
+           "terminal.ansi.background")
+    assign(colors["background.popover"], "elevated_surface.background")
+    assign(colors["background.muted"], "element.background", "element.disabled")
+    assign(states["hover"], "ghost_element.hover", "editor.active_line.background",
+           "panel.overlay_hover", "editor.highlighted_line.background")
+    assign(states["active"], "ghost_element.active")
+    assign(selection, "element.selected", "element.selection_background",
+           "ghost_element.selected", "drop_target.background", "search.match_background",
+           "editor.document_highlight.read_background", "editor.document_highlight.write_background",
+           "editor.document_highlight.bracket_background")
+    assign(alpha(accent, 0.08), "element.hover")
+    assign(alpha(accent, 0.12), "element.active")
+    assign(alpha(accent, 0.28), "search.active_match_background")
+    assign(colors["overlay"], "panel.overlay_background")
+    assign(text, "text", "icon", "editor.foreground", "terminal.foreground",
+           "terminal.bright_foreground", "editor.active_line_number", "editor.hover_line_number")
+    assign(muted, "text.muted", "text.placeholder", "icon.placeholder",
+           "editor.line_number", "terminal.dim_foreground", "editor.invisible")
+    assign(colors["icon.secondary"], "icon.muted")
+    assign(colors["text.disabled"], "text.disabled")
+    assign(colors["icon.disabled"], "icon.disabled")
+    assign(syntax["background"], "editor.background", "editor.gutter.background")
+    assign(colors["border.emphasized"], "panel.indent_guide_hover")
+    for prefix in ["scrollbar", "minimap"]:
+        assign(alpha(accent, 0.18), f"{prefix}.thumb.background")
+        assign(alpha(accent, 0.3), f"{prefix}.thumb.hover_background")
+        assign(alpha(accent, 0.4), f"{prefix}.thumb.active_background")
+        assign(border, f"{prefix}.thumb.border")
+
+    status = {
+        "conflict": colors["status.warning"], "created": colors["status.success"],
+        "deleted": colors["status.error"], "error": colors["status.error"],
+        "hidden": muted, "hint": muted, "ignored": muted,
+        "info": syntax["function"], "modified": colors["status.warning"],
+        "predictive": muted, "renamed": syntax["property"],
+        "success": colors["status.success"], "unreachable": muted,
+        "warning": colors["status.warning"],
+    }
+    for name, color in status.items():
+        assign(color, name)
+        assign(alpha(color, 0.12), f"{name}.background")
+        assign(alpha(color, 0.4), f"{name}.border")
+    for name, status_name in [("added", "created"), ("deleted", "deleted"),
+                              ("modified", "modified"), ("renamed", "renamed"),
+                              ("conflict", "conflict"), ("ignored", "ignored")]:
+        assign(status[status_name], f"version_control.{name}")
+    assign(alpha(status["created"], 0.18), "version_control.word_added",
+           "version_control.conflict_marker.ours")
+    assign(alpha(status["deleted"], 0.18), "version_control.word_deleted")
+    assign(alpha(status["modified"], 0.18), "version_control.conflict_marker.theirs")
+    assign(alpha(status["modified"], 0.12), "editor.debugger_active_line.background")
+    for kind, status_name in [("added", "created"), ("deleted", "deleted")]:
+        assign(alpha(status[status_name], 0.12), f"editor.diff_hunk.{kind}.background")
+        assign(transparent, f"editor.diff_hunk.{kind}.hollow_background")
+        assign(alpha(status[status_name], 0.4), f"editor.diff_hunk.{kind}.hollow_border")
+    for mode, color in {
+        "normal": accent, "insert": status["success"], "replace": status["error"],
+        "visual": syntax["keyword"], "visual_line": syntax["keyword"],
+        "visual_block": syntax["keyword"], "helix_normal": accent,
+        "helix_select": syntax["keyword"],
+    }.items():
+        assign(alpha(color, 0.16), f"vim.{mode}.background")
+        assign(color, f"vim.{mode}.foreground")
+    assign(selection, "vim.yank.background")
+    assign(text, "vim.helix_jump_label.foreground")
+
+    ansi = dict(black=muted, red=syntax["tag"], green=syntax["string"],
+                yellow=syntax["attribute"], blue=syntax["function"],
+                magenta=syntax["keyword"], cyan=syntax["property"], white=text)
+    for name, color in ansi.items():
+        assign(color, f"terminal.ansi.{name}", f"terminal.ansi.bright_{name}")
+        assign(alpha(color, 0.7), f"terminal.ansi.dim_{name}")
+
+    player_colors = [accent, syntax["function"], syntax["string"], syntax["keyword"],
+                     syntax["number"], syntax["tag"], syntax["property"], syntax["attribute"]]
+    style["players"] = [dict(cursor=color, background=color, selection=alpha(color, 0.2))
+                        for color in player_colors]
+    style["accents"] = player_colors
+    # Fractal's muted punctuation is too faint for editable code; use the
+    # readable secondary foreground while retaining all chromatic syntax tokens.
+    syntax = {**syntax, "punctuation": muted, "operator": muted}
+    style["syntax"] = {name: {"color": color} for name, color in syntax.items()
+                       if name != "background"}
+    for name, parent in {
+        "boolean": "constant", "comment.doc": "comment", "constructor": "type",
+        "enum": "type", "function.method": "function", "label": "property",
+        "link_text": "function", "link_uri": "property", "namespace": "type",
+        "punctuation.bracket": "punctuation", "punctuation.delimiter": "punctuation",
+        "punctuation.special": "punctuation", "string.escape": "number",
+        "string.regex": "number", "string.special": "string", "variable.special": "variable",
+        "variant": "constant", "emphasis": "variable", "emphasis.strong": "variable",
+        "embedded": "variable", "predictive": "comment", "preproc": "keyword",
+        "primary": "variable", "title": "function",
+    }.items():
+        style["syntax"][name] = {"color": syntax[parent]}
+    return dict(name=f"Fractal Neutral {source['mode'].title()}",
+                appearance=source["mode"], style=style)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    source = json.loads(SOURCE.read_text())
+    result = {"$schema": "https://zed.dev/schema/themes/v0.2.0.json",
+              "name": "Fractal Neutral", "author": "Fractal contributors; Made adaptation",
+              "themes": [theme(item) for item in source["themes"]]}
+    rendered = json.dumps(result, indent=2) + "\n"
+    if args.check:
+        if OUTPUT.read_text() != rendered:
+            raise SystemExit("Fractal theme is stale; run python3 script/fractal-theme")
+        print(f"Fractal Neutral matches pinned source {source['revision']}")
+    else:
+        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT.write_text(rendered)
+
+
+if __name__ == "__main__":
+    main()

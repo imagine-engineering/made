@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    { "id": 258880, "content": "<|image|>", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true },
+    { "id": 258881, "content": "<|audio|>", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true },
+    { "id": 258884, "content": "<|video|>", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true },
+    { "id": 258885, "content": "<|channel>thought\n", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": false },
+    { "id": 258886, "content": "<channel|>", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": false },
+    { "id": 258887, "content": "<turn|>", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true },
+    { "id": 258888, "content": "<eos>", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true }
+  ],
+  "normalizer": {
+    "type": "Sequence",
+    "normalizers": [
+      { "type": "NFC" },
+      { "type": "Replace", "pattern": { "String": " " }, "content": "▁" },
+      { "type": "Prepend", "prepend": "▁" }
+    ]
+  },
+  "pre_tokenizer": null,
+  "post_processor": null,
+  "decoder": { "type": "Metaspace", "replacement": "▁", "prepend_scheme": "always", "split": true },
+  "model": {
+    "type": "Unigram",
+    "unk_id": 3,
+    "byte_fallback": false,
+    "vocab": [
+      ["<pad>", 0.0],
+      ["<eos>", 0.0],
+      ["<bos>", 0.0],
+      ["<unk>", -10.0],
+      ["▁", -1.0],
+      ["hello", 5.0],
+      ["world", 4.0],
+      ["!", 1.0]
+    ]
+  }
+}

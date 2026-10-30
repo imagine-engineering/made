@@ -1,0 +1,810 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.beeble",
+  "source_sha256": "a7d98292ba01564a4a8519ba3c8caa30d9e0aaf42bf16ca55e29944222896812",
+  "validation_sha256": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+  "api_sha256": "19a0a82f85ee6bc1f514a0af5174029ee868c4650d0e5f35343a8bca1188e356",
+  "cases": [
+    {
+      "name": "image-auto-False",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "prompt": "A new look",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_image"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-auto-True",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "auto",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "source_image",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-fill-False",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "fill",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "fill",
+        "prompt": "A new look",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_image"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-fill-True",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "fill",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "fill",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "source_image",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-select-False",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "select",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": 3
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "select",
+        "prompt": "A new look",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "keyframe",
+        "source_image"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-select-True",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "select",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": 3
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "select",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "keyframe",
+        "source_image",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-custom-False",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "custom",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": 3
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "custom",
+        "prompt": "A new look",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "alpha_image",
+        "source_image"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "image-custom-True",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "custom",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": 3
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "custom",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "alpha_image",
+        "source_image",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-auto-False",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "prompt": "A new look",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_video"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-auto-True",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "auto",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "source_video",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-fill-False",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "fill",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "fill",
+        "prompt": "A new look",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_video"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-fill-True",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "fill",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "fill",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "source_video",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-select-False",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "select",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": 30
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "select",
+        "prompt": "A new look",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "keyframe",
+        "source_video"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-select-True",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "select",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": 30
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "select",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "keyframe",
+        "source_video",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-custom-False",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "custom",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": 30
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "custom",
+        "prompt": "A new look",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "alpha_video",
+        "source_video"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-custom-True",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": true,
+        "alpha_mode": "custom",
+        "max_resolution": "1080p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": 30
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "custom",
+        "prompt": "A new look",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 1080
+      },
+      "expected_uploads": [
+        "alpha_video",
+        "source_video",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "reference-only",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c\u001f　",
+        "reference_image": true,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "reference_image_uri": "https://fixture.invalid/reference",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_image",
+        "reference"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "missing-prompt-and-reference",
+      "input": {
+        "generation_type": "image",
+        "prompt": null,
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": null,
+      "expected_uploads": [],
+      "expected_error": true
+    },
+    {
+      "name": "unicode-limit",
+      "input": {
+        "generation_type": "image",
+        "prompt": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀",
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "image",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "prompt": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_image"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "unicode-over-limit",
+      "input": {
+        "generation_type": "image",
+        "prompt": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀",
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": null,
+      "expected_uploads": [],
+      "expected_error": true
+    },
+    {
+      "name": "video-limit",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 240,
+        "mask_frame_count": null
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "auto",
+        "prompt": "A new look",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "source_video"
+      ],
+      "expected_error": false
+    },
+    {
+      "name": "video-over-limit",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "auto",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 241,
+        "mask_frame_count": null
+      },
+      "expected_request": null,
+      "expected_uploads": [],
+      "expected_error": true
+    },
+    {
+      "name": "custom-count-mismatch",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "custom",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": 29
+      },
+      "expected_request": null,
+      "expected_uploads": [],
+      "expected_error": true
+    },
+    {
+      "name": "missing-keyframe",
+      "input": {
+        "generation_type": "image",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "select",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 1,
+        "mask_frame_count": null
+      },
+      "expected_request": null,
+      "expected_uploads": [],
+      "expected_error": true
+    },
+    {
+      "name": "select-uses-first-mask",
+      "input": {
+        "generation_type": "video",
+        "prompt": " \u001c A new look 　",
+        "reference_image": false,
+        "alpha_mode": "select",
+        "max_resolution": "720p",
+        "seed": 7,
+        "source_frame_count": 30,
+        "mask_frame_count": 2
+      },
+      "expected_request": {
+        "generation_type": "video",
+        "source_uri": "https://fixture.invalid/source",
+        "alpha_mode": "select",
+        "prompt": "A new look",
+        "alpha_uri": "https://fixture.invalid/alpha",
+        "max_resolution": 720
+      },
+      "expected_uploads": [
+        "keyframe",
+        "source_video"
+      ],
+      "expected_error": false
+    }
+  ],
+  "responses": [
+    {
+      "mode": "auto",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": null
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "auto",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {}
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "auto",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        null
+      ]
+    },
+    {
+      "mode": "auto",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render",
+          "alpha": "https://fixture.invalid/alpha"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        "https://fixture.invalid/alpha"
+      ]
+    },
+    {
+      "mode": "fill",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": null
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "fill",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {}
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "fill",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        null
+      ]
+    },
+    {
+      "mode": "fill",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render",
+          "alpha": "https://fixture.invalid/alpha"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        null
+      ]
+    },
+    {
+      "mode": "select",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": null
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "select",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {}
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "select",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        null
+      ]
+    },
+    {
+      "mode": "select",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render",
+          "alpha": "https://fixture.invalid/alpha"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        "https://fixture.invalid/alpha"
+      ]
+    },
+    {
+      "mode": "custom",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": null
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "custom",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {}
+      },
+      "expected_urls": null
+    },
+    {
+      "mode": "custom",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        null
+      ]
+    },
+    {
+      "mode": "custom",
+      "response": {
+        "id": "job-1",
+        "status": "completed",
+        "progress": 100,
+        "output": {
+          "render": "https://fixture.invalid/render",
+          "alpha": "https://fixture.invalid/alpha"
+        }
+      },
+      "expected_urls": [
+        "https://fixture.invalid/render",
+        "https://fixture.invalid/alpha"
+      ]
+    }
+  ]
+}

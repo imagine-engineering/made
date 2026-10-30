@@ -1,0 +1,5196 @@
+{
+  "canonical_target": "torch.nn.SiLU",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:155:13 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:169:25 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:187:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:189:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:191:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:193:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:195:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:197:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/cldm/cldm.py:199:21 (ControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/gligen.py:164:13 (PositionNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/gligen.py:166:13 (PositionNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/image_encoders/dino3.py:114:23 (DINOv3ViTGatedMLP.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/ace_step15.py:122:23 (MLP.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/ace_step15.py:132:21 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/ace_step15.py:135:21 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/attention.py:533:24 (ConvLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/attention.py:567:24 (GLUMBConv.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/model.py:220:38 (ACEStepTransformer2DModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/model.py:238:17 (ACEStepTransformer2DModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/model.py:240:17 (ACEStepTransformer2DModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:267:29 (GLUMBConv.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "returned"
+      },
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:45:16 (get_activation)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/audio/dit.py:245:22 (FeedForward.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:470:34 (ConformerModule.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/audio/dit.py:473:22 (ConformerModule.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:579:17 (TransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:588:17 (TransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:716:17 (ContinuousTransformer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:862:13 (AudioDiffusionTransformer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:872:17 (AudioDiffusionTransformer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:883:17 (AudioDiffusionTransformer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/dit.py:891:17 (AudioDiffusionTransformer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/vae_sa3.py:173:41 (FeedForward.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:189:17 (MMDiTBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:194:17 (MMDiTBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:202:13 (MMDiTBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:250:13 (DiTBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:280:13 (TimestepEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/aura/mmdit.py:358:13 (MMDiT.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cascade/common.py:113:13 (AttnBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/model.py:213:21 (CogVideoXLayerNormZero.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/model.py:228:21 (CogVideoXAdaLayerNorm.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/model.py:391:35 (CogVideoXTransformer3DModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/model.py:398:38 (CogVideoXTransformer3DModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:111:33 (ResnetBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:113:33 (ResnetBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:115:33 (ResnetBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:336:25 (Encoder3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cogvideo/vae.py:393:25 (Decoder3D.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/blocks.py:301:27 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/blocks.py:457:17 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/blocks.py:463:17 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/blocks.py:656:17 (DITBuildingBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/blocks.py:661:51 (DITBuildingBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:226:27 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:339:17 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:345:17 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:428:17 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:433:17 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:438:17 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:443:61 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:444:62 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/cosmos/predict2.py:445:55 (Block.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ernie/model.py:225:13 (ErnieImageModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/ernie/model.py:76:20 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:101:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:103:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:105:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:19:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:21:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:23:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:25:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:27:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:29:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:31:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:33:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:35:13 (MistolineCondDownsamplBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:46:20 (MistolineControlnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:93:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:95:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:97:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/controlnet.py:99:21 (ControlNetFlux.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/layers.py:156:24 (SiLUActivation.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/layers.py:299:28 (SingleStreamBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/flux/layers.py:363:47 (LastLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/layers.py:54:21 (MLPEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/flux/layers.py:68:23 (YakMLP.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/genmo/joint_model/layers.py:44:13 (TimestepEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/genmo/vae/model.py:176:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/genmo/vae/model.py:187:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hidream/model.py:377:13 (HiDreamImageSingleTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hidream/model.py:450:13 (HiDreamImageTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:460:17 (HunYuanDiTBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:70:13 (TokenRefinerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan_video/model.py:81:13 (TokenRefinerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:14:13 (SRResidualCausalBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:16:13 (SRResidualCausalBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hydit/controlnet.py:161:13 (HunYuanControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hydit/controlnet.py:99:13 (HunYuanControlNet.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hydit/models.py:132:13 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hydit/models.py:219:13 (HunYuanDiT.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hydit/models.py:247:13 (HunYuanDiT.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/hydit/models.py:71:13 (HunYuanDiTBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:43:27 (TimeEmbeddings.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/kandinsky5/model.py:91:27 (Modulation.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lens/model.py:217:13 (LensTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lens/model.py:225:13 (LensTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:134:27 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:186:35 (LatentUpsampler.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/model.py:124:20 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/model.py:229:21 (AdaLayerNormSingle.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/model.py:264:26 (PixArtAlphaTextProjection.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:320:30 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:462:30 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:633:30 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:212:25 (Encoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:489:25 (Decoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:945:30 (ResnetBlock3D.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lumina/model.py:288:21 (JointTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lumina/model.py:382:13 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lumina/model.py:536:17 (NextDiT.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lumina/model.py:881:13 (PixelResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/lumina/model.py:885:13 (PixelResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/attention.py:1129:13 (SpatialVideoTransformer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:220:13 (TimestepEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:241:13 (VectorEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:485:13 (DismantledBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:700:13 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:181:22 (ResnetBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:191:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:212:17 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:220:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:506:13 (UNetModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:521:25 (UNetModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:824:13 (UNetModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/sdpose.py:41:21 (HeatmapHead.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/sdpose.py:57:21 (HeatmapHead.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/modules/temporal_ae.py:135:13 (AttnVideoBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/omnigen/omnigen2.py:32:20 (TimestepEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/omnigen/omnigen2.py:45:21 (LuminaRMSNormZero.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/omnigen/omnigen2.py:59:21 (LuminaLayerNormContinuous.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixart/blocks.py:188:13 (FinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixart/blocks.py:225:13 (MaskFinalLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixart/blocks.py:244:13 (DecoderLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixart/blocks.py:262:13 (SizeEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixart/pixartms.py:110:13 (PixArtMS.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixeldit/pid.py:43:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixeldit/pid.py:46:13 (ResBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/pixeldit/pid.py:93:13 (LQProjection2D.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/qwen_image/model.py:223:13 (QwenImageTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/qwen_image/model.py:231:13 (QwenImageTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/qwen_image/model.py:330:21 (LastLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:149:21 (ConvNormLayer.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:160:21 (VGGBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:427:17 (MLP.forward)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/supir/supir_modules.py:116:13 (GLVControl.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/supir/supir_modules.py:123:17 (GLVControl.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/supir/supir_modules.py:22:13 (ZeroSFT.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/model.py:171:21 (UnifiedTransformerBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/model.py:195:13 (TimestepEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/model.py:242:51 (LatentSeqMMFlowModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/triposplat/model.py:38:20 (RePo3DRotaryEmbedding.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:110:13 (LevelEmbedder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:144:17 (ModulatedTransformerCrossOnlyBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/triposplat/vae.py:175:17 (OctreeProbabilityFixedlenDecoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:1080:20 (CausalAudioEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:1099:21 (AdaLayerNorm.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/model.py:496:127 (WanModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/model.py:497:46 (WanModel.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model.py:989:20 (MotionEncoder_tc.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/ldm/wan/model_animate.py:35:20 (FaceEncoder.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:163:45 (ResidualBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:165:46 (ResidualBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:266:46 (Encoder3d.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae.py:360:46 (Decoder3d.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:127:13 (ResidualBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:130:13 (ResidualBlock.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:437:13 (Encoder3d.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/wan/vae2_2.py:549:13 (Decoder3d.__init__)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy/text_encoders/qwen_vl.py:255:23 (VisionMLP.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_model_patch.py:104:13 (SigLIPMultiFeatProjModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_model_patch.py:114:13 (SigLIPMultiFeatProjModel.__init__)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_model_patch.py:94:13 (SigLIPMultiFeatProjModel.__init__)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/cldm/cldm.py:155:13 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:169:25 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:187:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:189:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:191:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:193:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:195:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:197:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/cldm/cldm.py:199:21 (ControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/gligen.py:164:13 (PositionNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/gligen.py:166:13 (PositionNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/image_encoders/dino3.py:114:23 (DINOv3ViTGatedMLP.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/ace_step15.py:122:23 (MLP.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/ace_step15.py:132:21 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/ace_step15.py:135:21 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/attention.py:533:24 (ConvLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/attention.py:567:24 (GLUMBConv.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/model.py:220:38 (ACEStepTransformer2DModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/model.py:238:17 (ACEStepTransformer2DModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/model.py:240:17 (ACEStepTransformer2DModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:267:29 (GLUMBConv.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:45:16 (get_activation)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:245:22 (FeedForward.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:470:34 (ConformerModule.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:473:22 (ConformerModule.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:579:17 (TransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:588:17 (TransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:716:17 (ContinuousTransformer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:862:13 (AudioDiffusionTransformer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:872:17 (AudioDiffusionTransformer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:883:17 (AudioDiffusionTransformer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/dit.py:891:17 (AudioDiffusionTransformer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/vae_sa3.py:173:41 (FeedForward.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:189:17 (MMDiTBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:194:17 (MMDiTBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:202:13 (MMDiTBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:250:13 (DiTBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:280:13 (TimestepEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/aura/mmdit.py:358:13 (MMDiT.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cascade/common.py:113:13 (AttnBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/model.py:213:21 (CogVideoXLayerNormZero.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/model.py:228:21 (CogVideoXAdaLayerNorm.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/model.py:391:35 (CogVideoXTransformer3DModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/model.py:398:38 (CogVideoXTransformer3DModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:111:33 (ResnetBlock3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:113:33 (ResnetBlock3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:115:33 (ResnetBlock3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:336:25 (Encoder3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cogvideo/vae.py:393:25 (Decoder3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/blocks.py:301:27 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/blocks.py:457:17 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/blocks.py:463:17 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/blocks.py:656:17 (DITBuildingBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/blocks.py:661:51 (DITBuildingBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:226:27 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:339:17 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:345:17 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:428:17 (Block.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:433:17 (Block.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:438:17 (Block.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:443:61 (Block.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:444:62 (Block.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/cosmos/predict2.py:445:55 (Block.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:225:13 (ErnieImageModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ernie/model.py:76:20 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:101:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:103:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:105:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:19:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:21:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:23:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:25:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:27:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:29:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:31:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:33:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:35:13 (MistolineCondDownsamplBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:46:20 (MistolineControlnetBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:93:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:95:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:97:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/controlnet.py:99:21 (ControlNetFlux.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:156:24 (SiLUActivation.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:299:28 (SingleStreamBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:363:47 (LastLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:54:21 (MLPEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/flux/layers.py:68:23 (YakMLP.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/joint_model/layers.py:44:13 (TimestepEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/vae/model.py:176:13 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/genmo/vae/model.py:187:13 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream/model.py:377:13 (HiDreamImageSingleTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hidream/model.py:450:13 (HiDreamImageTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:460:17 (HunYuanDiTBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:70:13 (TokenRefinerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/model.py:81:13 (TokenRefinerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:14:13 (SRResidualCausalBlock3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:16:13 (SRResidualCausalBlock3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/controlnet.py:161:13 (HunYuanControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/controlnet.py:99:13 (HunYuanControlNet.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/models.py:132:13 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/models.py:219:13 (HunYuanDiT.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/models.py:247:13 (HunYuanDiT.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/hydit/models.py:71:13 (HunYuanDiTBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:43:27 (TimeEmbeddings.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/kandinsky5/model.py:91:27 (Modulation.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lens/model.py:217:13 (LensTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lens/model.py:225:13 (LensTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:134:27 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:186:35 (LatentUpsampler.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:124:20 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:229:21 (AdaLayerNormSingle.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/model.py:264:26 (PixArtAlphaTextProjection.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:320:30 (ResnetBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:462:30 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:633:30 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:212:25 (Encoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:489:25 (Decoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:945:30 (ResnetBlock3D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:288:21 (JointTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:382:13 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:536:17 (NextDiT.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:881:13 (PixelResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/lumina/model.py:885:13 (PixelResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/attention.py:1129:13 (SpatialVideoTransformer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:220:13 (TimestepEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:241:13 (VectorEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:485:13 (DismantledBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:700:13 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:181:22 (ResnetBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:191:13 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:212:17 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:220:13 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:506:13 (UNetModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:521:25 (UNetModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:824:13 (UNetModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/sdpose.py:41:21 (HeatmapHead.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/sdpose.py:57:21 (HeatmapHead.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/modules/temporal_ae.py:135:13 (AttnVideoBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/omnigen/omnigen2.py:32:20 (TimestepEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/omnigen/omnigen2.py:45:21 (LuminaRMSNormZero.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/omnigen/omnigen2.py:59:21 (LuminaLayerNormContinuous.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/blocks.py:188:13 (FinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/blocks.py:225:13 (MaskFinalLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/blocks.py:244:13 (DecoderLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/blocks.py:262:13 (SizeEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixart/pixartms.py:110:13 (PixArtMS.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixeldit/pid.py:43:13 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixeldit/pid.py:46:13 (ResBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/pixeldit/pid.py:93:13 (LQProjection2D.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/qwen_image/model.py:223:13 (QwenImageTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/qwen_image/model.py:231:13 (QwenImageTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/qwen_image/model.py:330:21 (LastLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:149:21 (ConvNormLayer.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:160:21 (VGGBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:427:17 (MLP.forward)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/supir/supir_modules.py:116:13 (GLVControl.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/supir/supir_modules.py:123:17 (GLVControl.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/supir/supir_modules.py:22:13 (ZeroSFT.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:171:21 (UnifiedTransformerBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:195:13 (TimestepEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:242:51 (LatentSeqMMFlowModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/model.py:38:20 (RePo3DRotaryEmbedding.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:110:13 (LevelEmbedder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:144:17 (ModulatedTransformerCrossOnlyBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/triposplat/vae.py:175:17 (OctreeProbabilityFixedlenDecoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:1080:20 (CausalAudioEncoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:1099:21 (AdaLayerNorm.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:496:127 (WanModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:497:46 (WanModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model.py:989:20 (MotionEncoder_tc.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/model_animate.py:35:20 (FaceEncoder.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:163:45 (ResidualBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:165:46 (ResidualBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:266:46 (Encoder3d.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae.py:360:46 (Decoder3d.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:127:13 (ResidualBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:130:13 (ResidualBlock.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:437:13 (Encoder3d.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/wan/vae2_2.py:549:13 (Decoder3d.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/text_encoders/qwen_vl.py:255:23 (VisionMLP.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_model_patch.py:104:13 (SigLIPMultiFeatProjModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_model_patch.py:114:13 (SigLIPMultiFeatProjModel.__init__)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_model_patch.py:94:13 (SigLIPMultiFeatProjModel.__init__)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-46daf04a6b91-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match PyTorch-visible rank, shape, broadcasting, axis, scalar, empty-input, and invalid-shape behavior at all cataloged call sites.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "inplace",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-46DAF04A6B91",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "fa78c88cef2a5b133b6c6c45e673a8c979bcc18bc1dd3e60aa67b50d98d19288",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/cldm/cldm.py",
+        "sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d"
+      },
+      {
+        "path": "comfy/gligen.py",
+        "sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c"
+      },
+      {
+        "path": "comfy/image_encoders/dino3.py",
+        "sha256": "8140f477c73fbdc8c94c005340809aa756d0c518964ff9404f9ba461f7a29df7"
+      },
+      {
+        "path": "comfy/ldm/ace/ace_step15.py",
+        "sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e"
+      },
+      {
+        "path": "comfy/ldm/ace/attention.py",
+        "sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f"
+      },
+      {
+        "path": "comfy/ldm/ace/model.py",
+        "sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+        "sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47"
+      },
+      {
+        "path": "comfy/ldm/ace/vae/music_vocoder.py",
+        "sha256": "8e36c57b90456110756264cd9a81898dbec98992f4c5a3e6487682f234626f37"
+      },
+      {
+        "path": "comfy/ldm/audio/dit.py",
+        "sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c"
+      },
+      {
+        "path": "comfy/ldm/audio/vae_sa3.py",
+        "sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75"
+      },
+      {
+        "path": "comfy/ldm/aura/mmdit.py",
+        "sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1"
+      },
+      {
+        "path": "comfy/ldm/cascade/common.py",
+        "sha256": "a89d6aff5ae6fc5362bb2c312a41d673c931ee992a874b3d7a76b3d496038d49"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/model.py",
+        "sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0"
+      },
+      {
+        "path": "comfy/ldm/cogvideo/vae.py",
+        "sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7"
+      },
+      {
+        "path": "comfy/ldm/cosmos/blocks.py",
+        "sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b"
+      },
+      {
+        "path": "comfy/ldm/cosmos/predict2.py",
+        "sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b"
+      },
+      {
+        "path": "comfy/ldm/ernie/model.py",
+        "sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c"
+      },
+      {
+        "path": "comfy/ldm/flux/controlnet.py",
+        "sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742"
+      },
+      {
+        "path": "comfy/ldm/flux/layers.py",
+        "sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc"
+      },
+      {
+        "path": "comfy/ldm/genmo/joint_model/layers.py",
+        "sha256": "bb0ae6cc4dee093547688f667e307bc37d83697d7342dc944f20499682321c95"
+      },
+      {
+        "path": "comfy/ldm/genmo/vae/model.py",
+        "sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce"
+      },
+      {
+        "path": "comfy/ldm/hidream/model.py",
+        "sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e"
+      },
+      {
+        "path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+        "sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/model.py",
+        "sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27"
+      },
+      {
+        "path": "comfy/ldm/hunyuan_video/upsampler.py",
+        "sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75"
+      },
+      {
+        "path": "comfy/ldm/hydit/controlnet.py",
+        "sha256": "9032da47faac4f9c6720a038ee253bac29037d53918e0ce51e8b8e90269e5402"
+      },
+      {
+        "path": "comfy/ldm/hydit/models.py",
+        "sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2"
+      },
+      {
+        "path": "comfy/ldm/kandinsky5/model.py",
+        "sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc"
+      },
+      {
+        "path": "comfy/ldm/lens/model.py",
+        "sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002"
+      },
+      {
+        "path": "comfy/ldm/lightricks/latent_upsampler.py",
+        "sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207"
+      },
+      {
+        "path": "comfy/ldm/lightricks/model.py",
+        "sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+        "sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964"
+      },
+      {
+        "path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+        "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"
+      },
+      {
+        "path": "comfy/ldm/lumina/model.py",
+        "sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9"
+      },
+      {
+        "path": "comfy/ldm/modules/attention.py",
+        "sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+        "sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/model.py",
+        "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
+      },
+      {
+        "path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+        "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"
+      },
+      {
+        "path": "comfy/ldm/modules/sdpose.py",
+        "sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a"
+      },
+      {
+        "path": "comfy/ldm/modules/temporal_ae.py",
+        "sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d"
+      },
+      {
+        "path": "comfy/ldm/omnigen/omnigen2.py",
+        "sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3"
+      },
+      {
+        "path": "comfy/ldm/pixart/blocks.py",
+        "sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281"
+      },
+      {
+        "path": "comfy/ldm/pixart/pixartms.py",
+        "sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661"
+      },
+      {
+        "path": "comfy/ldm/pixeldit/pid.py",
+        "sha256": "e85c99e74d566b3850d0208f6078d8fbc36e389e1308a9fe417c60223c5a2a04"
+      },
+      {
+        "path": "comfy/ldm/qwen_image/model.py",
+        "sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28"
+      },
+      {
+        "path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+        "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"
+      },
+      {
+        "path": "comfy/ldm/supir/supir_modules.py",
+        "sha256": "d91113036b86f05796ec56297c4533271f8cc67555c0f8abe371f81a7365c8cf"
+      },
+      {
+        "path": "comfy/ldm/triposplat/model.py",
+        "sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0"
+      },
+      {
+        "path": "comfy/ldm/triposplat/vae.py",
+        "sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3"
+      },
+      {
+        "path": "comfy/ldm/wan/model.py",
+        "sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c"
+      },
+      {
+        "path": "comfy/ldm/wan/model_animate.py",
+        "sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449"
+      },
+      {
+        "path": "comfy/ldm/wan/vae.py",
+        "sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4"
+      },
+      {
+        "path": "comfy/ldm/wan/vae2_2.py",
+        "sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5"
+      },
+      {
+        "path": "comfy/text_encoders/qwen_vl.py",
+        "sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f"
+      },
+      {
+        "path": "comfy_extras/nodes_model_patch.py",
+        "sha256": "dcfcaf1bea6213bdde670a46a29c5f6fd0ad0866bd9e42ee50908e25be7be170"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.nn.SiLU"
+  },
+  "resolution": {
+    "blocker_reason": "The baseline identifies the external target and exact static call syntax but does not pin the dependency version whose overload, defaults, values, errors, and gradients define this contract.",
+    "expected_resolution_module": "neural_network_module_01",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-neural-network-module-comfy-tensor-op-0e602e58360a",
+    "state": "blocked_missing_semantics_profile"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 155,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:155:13 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 169,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:169:25 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 187,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:187:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 189,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:189:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 191,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:191:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 193,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:193:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 195,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:195:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 197,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:197:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 199,
+      "positional_arguments": [],
+      "scope": "ControlNet.__init__",
+      "site": "comfy/cldm/cldm.py:199:21 (ControlNet.__init__)",
+      "source_path": "comfy/cldm/cldm.py",
+      "source_sha256": "8d189e4d12a40fa13b9355804cc5091c71f2493f71d2deefcd108b6c49ad8e5d",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 164,
+      "positional_arguments": [],
+      "scope": "PositionNet.__init__",
+      "site": "comfy/gligen.py:164:13 (PositionNet.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 166,
+      "positional_arguments": [],
+      "scope": "PositionNet.__init__",
+      "site": "comfy/gligen.py:166:13 (PositionNet.__init__)",
+      "source_path": "comfy/gligen.py",
+      "source_sha256": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 114,
+      "positional_arguments": [],
+      "scope": "DINOv3ViTGatedMLP.__init__",
+      "site": "comfy/image_encoders/dino3.py:114:23 (DINOv3ViTGatedMLP.__init__)",
+      "source_path": "comfy/image_encoders/dino3.py",
+      "source_sha256": "8140f477c73fbdc8c94c005340809aa756d0c518964ff9404f9ba461f7a29df7",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 122,
+      "positional_arguments": [],
+      "scope": "MLP.__init__",
+      "site": "comfy/ldm/ace/ace_step15.py:122:23 (MLP.__init__)",
+      "source_path": "comfy/ldm/ace/ace_step15.py",
+      "source_sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 132,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/ace/ace_step15.py:132:21 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/ace/ace_step15.py",
+      "source_sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 135,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/ace/ace_step15.py:135:21 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/ace/ace_step15.py",
+      "source_sha256": "1ab2798eab1e28510afb9aeb7cf381d22bfb8e8f7e1a9d365020f751c19d277e",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 533,
+      "positional_arguments": [],
+      "scope": "ConvLayer.__init__",
+      "site": "comfy/ldm/ace/attention.py:533:24 (ConvLayer.__init__)",
+      "source_path": "comfy/ldm/ace/attention.py",
+      "source_sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 567,
+      "positional_arguments": [],
+      "scope": "GLUMBConv.__init__",
+      "site": "comfy/ldm/ace/attention.py:567:24 (GLUMBConv.__init__)",
+      "source_path": "comfy/ldm/ace/attention.py",
+      "source_sha256": "7d50970bd668e25b8d09f9fb8e70d0b0b2b852d3ad236af89832efd9ced25d8f",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 220,
+      "positional_arguments": [],
+      "scope": "ACEStepTransformer2DModel.__init__",
+      "site": "comfy/ldm/ace/model.py:220:38 (ACEStepTransformer2DModel.__init__)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 238,
+      "positional_arguments": [],
+      "scope": "ACEStepTransformer2DModel.__init__",
+      "site": "comfy/ldm/ace/model.py:238:17 (ACEStepTransformer2DModel.__init__)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 240,
+      "positional_arguments": [],
+      "scope": "ACEStepTransformer2DModel.__init__",
+      "site": "comfy/ldm/ace/model.py:240:17 (ACEStepTransformer2DModel.__init__)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 29,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 267,
+      "positional_arguments": [],
+      "scope": "GLUMBConv.__init__",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:267:29 (GLUMBConv.__init__)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 16,
+      "consumer_output_expectation": {
+        "kind": "returned"
+      },
+      "keyword_arguments": [],
+      "line": 45,
+      "positional_arguments": [],
+      "scope": "get_activation",
+      "site": "comfy/ldm/ace/vae/autoencoder_dc.py:45:16 (get_activation)",
+      "source_path": "comfy/ldm/ace/vae/autoencoder_dc.py",
+      "source_sha256": "6a3f8fde53ff086b38fcf39ed2cc6cd6b5ccac04d253793a7df1d0110e69fb47",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 245,
+      "positional_arguments": [],
+      "scope": "FeedForward.__init__",
+      "site": "comfy/ldm/audio/dit.py:245:22 (FeedForward.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 34,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 470,
+      "positional_arguments": [],
+      "scope": "ConformerModule.__init__",
+      "site": "comfy/ldm/audio/dit.py:470:34 (ConformerModule.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 473,
+      "positional_arguments": [],
+      "scope": "ConformerModule.__init__",
+      "site": "comfy/ldm/audio/dit.py:473:22 (ConformerModule.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 579,
+      "positional_arguments": [],
+      "scope": "TransformerBlock.__init__",
+      "site": "comfy/ldm/audio/dit.py:579:17 (TransformerBlock.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 588,
+      "positional_arguments": [],
+      "scope": "TransformerBlock.__init__",
+      "site": "comfy/ldm/audio/dit.py:588:17 (TransformerBlock.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 716,
+      "positional_arguments": [],
+      "scope": "ContinuousTransformer.__init__",
+      "site": "comfy/ldm/audio/dit.py:716:17 (ContinuousTransformer.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 862,
+      "positional_arguments": [],
+      "scope": "AudioDiffusionTransformer.__init__",
+      "site": "comfy/ldm/audio/dit.py:862:13 (AudioDiffusionTransformer.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 872,
+      "positional_arguments": [],
+      "scope": "AudioDiffusionTransformer.__init__",
+      "site": "comfy/ldm/audio/dit.py:872:17 (AudioDiffusionTransformer.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 883,
+      "positional_arguments": [],
+      "scope": "AudioDiffusionTransformer.__init__",
+      "site": "comfy/ldm/audio/dit.py:883:17 (AudioDiffusionTransformer.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 891,
+      "positional_arguments": [],
+      "scope": "AudioDiffusionTransformer.__init__",
+      "site": "comfy/ldm/audio/dit.py:891:17 (AudioDiffusionTransformer.__init__)",
+      "source_path": "comfy/ldm/audio/dit.py",
+      "source_sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 41,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 173,
+      "positional_arguments": [],
+      "scope": "FeedForward.__init__",
+      "site": "comfy/ldm/audio/vae_sa3.py:173:41 (FeedForward.__init__)",
+      "source_path": "comfy/ldm/audio/vae_sa3.py",
+      "source_sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 189,
+      "positional_arguments": [],
+      "scope": "MMDiTBlock.__init__",
+      "site": "comfy/ldm/aura/mmdit.py:189:17 (MMDiTBlock.__init__)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 194,
+      "positional_arguments": [],
+      "scope": "MMDiTBlock.__init__",
+      "site": "comfy/ldm/aura/mmdit.py:194:17 (MMDiTBlock.__init__)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 202,
+      "positional_arguments": [],
+      "scope": "MMDiTBlock.__init__",
+      "site": "comfy/ldm/aura/mmdit.py:202:13 (MMDiTBlock.__init__)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 250,
+      "positional_arguments": [],
+      "scope": "DiTBlock.__init__",
+      "site": "comfy/ldm/aura/mmdit.py:250:13 (DiTBlock.__init__)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 280,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedder.__init__",
+      "site": "comfy/ldm/aura/mmdit.py:280:13 (TimestepEmbedder.__init__)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 358,
+      "positional_arguments": [],
+      "scope": "MMDiT.__init__",
+      "site": "comfy/ldm/aura/mmdit.py:358:13 (MMDiT.__init__)",
+      "source_path": "comfy/ldm/aura/mmdit.py",
+      "source_sha256": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 113,
+      "positional_arguments": [],
+      "scope": "AttnBlock.__init__",
+      "site": "comfy/ldm/cascade/common.py:113:13 (AttnBlock.__init__)",
+      "source_path": "comfy/ldm/cascade/common.py",
+      "source_sha256": "a89d6aff5ae6fc5362bb2c312a41d673c931ee992a874b3d7a76b3d496038d49",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 213,
+      "positional_arguments": [],
+      "scope": "CogVideoXLayerNormZero.__init__",
+      "site": "comfy/ldm/cogvideo/model.py:213:21 (CogVideoXLayerNormZero.__init__)",
+      "source_path": "comfy/ldm/cogvideo/model.py",
+      "source_sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 228,
+      "positional_arguments": [],
+      "scope": "CogVideoXAdaLayerNorm.__init__",
+      "site": "comfy/ldm/cogvideo/model.py:228:21 (CogVideoXAdaLayerNorm.__init__)",
+      "source_path": "comfy/ldm/cogvideo/model.py",
+      "source_sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 35,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 391,
+      "positional_arguments": [],
+      "scope": "CogVideoXTransformer3DModel.__init__",
+      "site": "comfy/ldm/cogvideo/model.py:391:35 (CogVideoXTransformer3DModel.__init__)",
+      "source_path": "comfy/ldm/cogvideo/model.py",
+      "source_sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 38,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 398,
+      "positional_arguments": [],
+      "scope": "CogVideoXTransformer3DModel.__init__",
+      "site": "comfy/ldm/cogvideo/model.py:398:38 (CogVideoXTransformer3DModel.__init__)",
+      "source_path": "comfy/ldm/cogvideo/model.py",
+      "source_sha256": "388cbf61894498232695f3eaf5faba18a02d118b72091ada98d262516d4be7b0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 111,
+      "positional_arguments": [],
+      "scope": "ResnetBlock3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:111:33 (ResnetBlock3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 113,
+      "positional_arguments": [],
+      "scope": "ResnetBlock3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:113:33 (ResnetBlock3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 115,
+      "positional_arguments": [],
+      "scope": "ResnetBlock3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:115:33 (ResnetBlock3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 336,
+      "positional_arguments": [],
+      "scope": "Encoder3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:336:25 (Encoder3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 393,
+      "positional_arguments": [],
+      "scope": "Decoder3D.__init__",
+      "site": "comfy/ldm/cogvideo/vae.py:393:25 (Decoder3D.__init__)",
+      "source_path": "comfy/ldm/cogvideo/vae.py",
+      "source_sha256": "b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 301,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/cosmos/blocks.py:301:27 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/cosmos/blocks.py",
+      "source_sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 457,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/cosmos/blocks.py:457:17 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/cosmos/blocks.py",
+      "source_sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 463,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/cosmos/blocks.py:463:17 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/cosmos/blocks.py",
+      "source_sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 656,
+      "positional_arguments": [],
+      "scope": "DITBuildingBlock.__init__",
+      "site": "comfy/ldm/cosmos/blocks.py:656:17 (DITBuildingBlock.__init__)",
+      "source_path": "comfy/ldm/cosmos/blocks.py",
+      "source_sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 51,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 661,
+      "positional_arguments": [],
+      "scope": "DITBuildingBlock.__init__",
+      "site": "comfy/ldm/cosmos/blocks.py:661:51 (DITBuildingBlock.__init__)",
+      "source_path": "comfy/ldm/cosmos/blocks.py",
+      "source_sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 226,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:226:27 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 339,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:339:17 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 345,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:345:17 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 428,
+      "positional_arguments": [],
+      "scope": "Block.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:428:17 (Block.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 433,
+      "positional_arguments": [],
+      "scope": "Block.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:433:17 (Block.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 438,
+      "positional_arguments": [],
+      "scope": "Block.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:438:17 (Block.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 61,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 443,
+      "positional_arguments": [],
+      "scope": "Block.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:443:61 (Block.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 62,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 444,
+      "positional_arguments": [],
+      "scope": "Block.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:444:62 (Block.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 55,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 445,
+      "positional_arguments": [],
+      "scope": "Block.__init__",
+      "site": "comfy/ldm/cosmos/predict2.py:445:55 (Block.__init__)",
+      "source_path": "comfy/ldm/cosmos/predict2.py",
+      "source_sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 225,
+      "positional_arguments": [],
+      "scope": "ErnieImageModel.__init__",
+      "site": "comfy/ldm/ernie/model.py:225:13 (ErnieImageModel.__init__)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 76,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/ernie/model.py:76:20 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/ernie/model.py",
+      "source_sha256": "cdb5cec2f01abdac06f0e3da836009d11f467ced7981bc2b36065636f16c1f4c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 101,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:101:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 103,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:103:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 105,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:105:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 19,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:19:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 21,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:21:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 23,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:23:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 25,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:25:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 27,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:27:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 29,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:29:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 31,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:31:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 33,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:33:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 35,
+      "positional_arguments": [],
+      "scope": "MistolineCondDownsamplBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:35:13 (MistolineCondDownsamplBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 46,
+      "positional_arguments": [],
+      "scope": "MistolineControlnetBlock.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:46:20 (MistolineControlnetBlock.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 93,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:93:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 95,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:95:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 97,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:97:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 99,
+      "positional_arguments": [],
+      "scope": "ControlNetFlux.__init__",
+      "site": "comfy/ldm/flux/controlnet.py:99:21 (ControlNetFlux.__init__)",
+      "source_path": "comfy/ldm/flux/controlnet.py",
+      "source_sha256": "a96fb5494200b424cfb3f26d754b58f5e0f6d9bd126c3fd4ca9499934aab1742",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 24,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 156,
+      "positional_arguments": [],
+      "scope": "SiLUActivation.__init__",
+      "site": "comfy/ldm/flux/layers.py:156:24 (SiLUActivation.__init__)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 299,
+      "positional_arguments": [],
+      "scope": "SingleStreamBlock.__init__",
+      "site": "comfy/ldm/flux/layers.py:299:28 (SingleStreamBlock.__init__)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 47,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 363,
+      "positional_arguments": [],
+      "scope": "LastLayer.__init__",
+      "site": "comfy/ldm/flux/layers.py:363:47 (LastLayer.__init__)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 54,
+      "positional_arguments": [],
+      "scope": "MLPEmbedder.__init__",
+      "site": "comfy/ldm/flux/layers.py:54:21 (MLPEmbedder.__init__)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 68,
+      "positional_arguments": [],
+      "scope": "YakMLP.__init__",
+      "site": "comfy/ldm/flux/layers.py:68:23 (YakMLP.__init__)",
+      "source_path": "comfy/ldm/flux/layers.py",
+      "source_sha256": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 44,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedder.__init__",
+      "site": "comfy/ldm/genmo/joint_model/layers.py:44:13 (TimestepEmbedder.__init__)",
+      "source_path": "comfy/ldm/genmo/joint_model/layers.py",
+      "source_sha256": "bb0ae6cc4dee093547688f667e307bc37d83697d7342dc944f20499682321c95",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 176,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/genmo/vae/model.py:176:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/genmo/vae/model.py",
+      "source_sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 187,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/genmo/vae/model.py:187:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/genmo/vae/model.py",
+      "source_sha256": "31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 377,
+      "positional_arguments": [],
+      "scope": "HiDreamImageSingleTransformerBlock.__init__",
+      "site": "comfy/ldm/hidream/model.py:377:13 (HiDreamImageSingleTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/hidream/model.py",
+      "source_sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 450,
+      "positional_arguments": [],
+      "scope": "HiDreamImageTransformerBlock.__init__",
+      "site": "comfy/ldm/hidream/model.py:450:13 (HiDreamImageTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/hidream/model.py",
+      "source_sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 460,
+      "positional_arguments": [],
+      "scope": "HunYuanDiTBlock.__init__",
+      "site": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py:460:17 (HunYuanDiTBlock.__init__)",
+      "source_path": "comfy/ldm/hunyuan3dv2_1/hunyuandit.py",
+      "source_sha256": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 70,
+      "positional_arguments": [],
+      "scope": "TokenRefinerBlock.__init__",
+      "site": "comfy/ldm/hunyuan_video/model.py:70:13 (TokenRefinerBlock.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 81,
+      "positional_arguments": [],
+      "scope": "TokenRefinerBlock.__init__",
+      "site": "comfy/ldm/hunyuan_video/model.py:81:13 (TokenRefinerBlock.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/model.py",
+      "source_sha256": "08d7d536baf000f6bd3f4e9426ab92911249293af6535f65865aabc05a73ec27",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 14,
+      "positional_arguments": [],
+      "scope": "SRResidualCausalBlock3D.__init__",
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:14:13 (SRResidualCausalBlock3D.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/upsampler.py",
+      "source_sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 16,
+      "positional_arguments": [],
+      "scope": "SRResidualCausalBlock3D.__init__",
+      "site": "comfy/ldm/hunyuan_video/upsampler.py:16:13 (SRResidualCausalBlock3D.__init__)",
+      "source_path": "comfy/ldm/hunyuan_video/upsampler.py",
+      "source_sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 161,
+      "positional_arguments": [],
+      "scope": "HunYuanControlNet.__init__",
+      "site": "comfy/ldm/hydit/controlnet.py:161:13 (HunYuanControlNet.__init__)",
+      "source_path": "comfy/ldm/hydit/controlnet.py",
+      "source_sha256": "9032da47faac4f9c6720a038ee253bac29037d53918e0ce51e8b8e90269e5402",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 99,
+      "positional_arguments": [],
+      "scope": "HunYuanControlNet.__init__",
+      "site": "comfy/ldm/hydit/controlnet.py:99:13 (HunYuanControlNet.__init__)",
+      "source_path": "comfy/ldm/hydit/controlnet.py",
+      "source_sha256": "9032da47faac4f9c6720a038ee253bac29037d53918e0ce51e8b8e90269e5402",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 132,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/hydit/models.py:132:13 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/hydit/models.py",
+      "source_sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 219,
+      "positional_arguments": [],
+      "scope": "HunYuanDiT.__init__",
+      "site": "comfy/ldm/hydit/models.py:219:13 (HunYuanDiT.__init__)",
+      "source_path": "comfy/ldm/hydit/models.py",
+      "source_sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 247,
+      "positional_arguments": [],
+      "scope": "HunYuanDiT.__init__",
+      "site": "comfy/ldm/hydit/models.py:247:13 (HunYuanDiT.__init__)",
+      "source_path": "comfy/ldm/hydit/models.py",
+      "source_sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 71,
+      "positional_arguments": [],
+      "scope": "HunYuanDiTBlock.__init__",
+      "site": "comfy/ldm/hydit/models.py:71:13 (HunYuanDiTBlock.__init__)",
+      "source_path": "comfy/ldm/hydit/models.py",
+      "source_sha256": "6eae0dc6cfd470f6780aea14a5937d64fc4c79f42695ad5a1a27d04878631ee2",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 43,
+      "positional_arguments": [],
+      "scope": "TimeEmbeddings.__init__",
+      "site": "comfy/ldm/kandinsky5/model.py:43:27 (TimeEmbeddings.__init__)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 91,
+      "positional_arguments": [],
+      "scope": "Modulation.__init__",
+      "site": "comfy/ldm/kandinsky5/model.py:91:27 (Modulation.__init__)",
+      "source_path": "comfy/ldm/kandinsky5/model.py",
+      "source_sha256": "b15df50678b81907069126d4a8112e4a966122447c11766658e380845ee77efc",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 217,
+      "positional_arguments": [],
+      "scope": "LensTransformerBlock.__init__",
+      "site": "comfy/ldm/lens/model.py:217:13 (LensTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/lens/model.py",
+      "source_sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 225,
+      "positional_arguments": [],
+      "scope": "LensTransformerBlock.__init__",
+      "site": "comfy/ldm/lens/model.py:225:13 (LensTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/lens/model.py",
+      "source_sha256": "f10bd24dd6d1ead8768ff24e39803a454dd05afd73cf217cbae1efb171387002",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 27,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 134,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:134:27 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/latent_upsampler.py",
+      "source_sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 35,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 186,
+      "positional_arguments": [],
+      "scope": "LatentUpsampler.__init__",
+      "site": "comfy/ldm/lightricks/latent_upsampler.py:186:35 (LatentUpsampler.__init__)",
+      "source_path": "comfy/ldm/lightricks/latent_upsampler.py",
+      "source_sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 124,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/lightricks/model.py:124:20 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 229,
+      "positional_arguments": [],
+      "scope": "AdaLayerNormSingle.__init__",
+      "site": "comfy/ldm/lightricks/model.py:229:21 (AdaLayerNormSingle.__init__)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 264,
+      "positional_arguments": [],
+      "scope": "PixArtAlphaTextProjection.__init__",
+      "site": "comfy/ldm/lightricks/model.py:264:26 (PixArtAlphaTextProjection.__init__)",
+      "source_path": "comfy/ldm/lightricks/model.py",
+      "source_sha256": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 320,
+      "positional_arguments": [],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:320:30 (ResnetBlock.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 462,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:462:30 (Encoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 633,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py:633:30 (Decoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_audio_autoencoder.py",
+      "source_sha256": "661ce071dc1b557e2c30017b02103d43d88bb2e7e0dede7610df21e43e5c5964",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 212,
+      "positional_arguments": [],
+      "scope": "Encoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:212:25 (Encoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 489,
+      "positional_arguments": [],
+      "scope": "Decoder.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:489:25 (Decoder.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 945,
+      "positional_arguments": [],
+      "scope": "ResnetBlock3D.__init__",
+      "site": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py:945:30 (ResnetBlock3D.__init__)",
+      "source_path": "comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "source_sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 288,
+      "positional_arguments": [],
+      "scope": "JointTransformerBlock.__init__",
+      "site": "comfy/ldm/lumina/model.py:288:21 (JointTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 382,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/lumina/model.py:382:13 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 536,
+      "positional_arguments": [],
+      "scope": "NextDiT.__init__",
+      "site": "comfy/ldm/lumina/model.py:536:17 (NextDiT.__init__)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 881,
+      "positional_arguments": [],
+      "scope": "PixelResBlock.__init__",
+      "site": "comfy/ldm/lumina/model.py:881:13 (PixelResBlock.__init__)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 885,
+      "positional_arguments": [],
+      "scope": "PixelResBlock.__init__",
+      "site": "comfy/ldm/lumina/model.py:885:13 (PixelResBlock.__init__)",
+      "source_path": "comfy/ldm/lumina/model.py",
+      "source_sha256": "a42a293434fafd60d33b15b99e93f35fc20d8bf63cdedf6ae9e901a75783b7c9",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1129,
+      "positional_arguments": [],
+      "scope": "SpatialVideoTransformer.__init__",
+      "site": "comfy/ldm/modules/attention.py:1129:13 (SpatialVideoTransformer.__init__)",
+      "source_path": "comfy/ldm/modules/attention.py",
+      "source_sha256": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 220,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedder.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:220:13 (TimestepEmbedder.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 241,
+      "positional_arguments": [],
+      "scope": "VectorEmbedder.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:241:13 (VectorEmbedder.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 485,
+      "positional_arguments": [],
+      "scope": "DismantledBlock.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:485:13 (DismantledBlock.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 700,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/mmdit.py:700:13 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/mmdit.py",
+      "source_sha256": "ef210feb9939670ea148f977e4bc4d5f90dee56e2c131428ffd991beaf92d6b5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 22,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 181,
+      "positional_arguments": [],
+      "scope": "ResnetBlock.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/model.py:181:22 (ResnetBlock.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/model.py",
+      "source_sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 191,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:191:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 212,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:212:17 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 220,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:220:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 506,
+      "positional_arguments": [],
+      "scope": "UNetModel.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:506:13 (UNetModel.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 25,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 521,
+      "positional_arguments": [],
+      "scope": "UNetModel.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:521:25 (UNetModel.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 824,
+      "positional_arguments": [],
+      "scope": "UNetModel.__init__",
+      "site": "comfy/ldm/modules/diffusionmodules/openaimodel.py:824:13 (UNetModel.__init__)",
+      "source_path": "comfy/ldm/modules/diffusionmodules/openaimodel.py",
+      "source_sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 41,
+      "positional_arguments": [],
+      "scope": "HeatmapHead.__init__",
+      "site": "comfy/ldm/modules/sdpose.py:41:21 (HeatmapHead.__init__)",
+      "source_path": "comfy/ldm/modules/sdpose.py",
+      "source_sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "inplace",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 57,
+      "positional_arguments": [],
+      "scope": "HeatmapHead.__init__",
+      "site": "comfy/ldm/modules/sdpose.py:57:21 (HeatmapHead.__init__)",
+      "source_path": "comfy/ldm/modules/sdpose.py",
+      "source_sha256": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 135,
+      "positional_arguments": [],
+      "scope": "AttnVideoBlock.__init__",
+      "site": "comfy/ldm/modules/temporal_ae.py:135:13 (AttnVideoBlock.__init__)",
+      "source_path": "comfy/ldm/modules/temporal_ae.py",
+      "source_sha256": "f39314a670256eeed4a6b558eb29f1340569a0b0e4d42b2fe887271839ab822d",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 32,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedding.__init__",
+      "site": "comfy/ldm/omnigen/omnigen2.py:32:20 (TimestepEmbedding.__init__)",
+      "source_path": "comfy/ldm/omnigen/omnigen2.py",
+      "source_sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 45,
+      "positional_arguments": [],
+      "scope": "LuminaRMSNormZero.__init__",
+      "site": "comfy/ldm/omnigen/omnigen2.py:45:21 (LuminaRMSNormZero.__init__)",
+      "source_path": "comfy/ldm/omnigen/omnigen2.py",
+      "source_sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 59,
+      "positional_arguments": [],
+      "scope": "LuminaLayerNormContinuous.__init__",
+      "site": "comfy/ldm/omnigen/omnigen2.py:59:21 (LuminaLayerNormContinuous.__init__)",
+      "source_path": "comfy/ldm/omnigen/omnigen2.py",
+      "source_sha256": "38d017960a3caabf1e2785c551c77169accec54d50037a3c1c3cc82d9c7afdb3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 188,
+      "positional_arguments": [],
+      "scope": "FinalLayer.__init__",
+      "site": "comfy/ldm/pixart/blocks.py:188:13 (FinalLayer.__init__)",
+      "source_path": "comfy/ldm/pixart/blocks.py",
+      "source_sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 225,
+      "positional_arguments": [],
+      "scope": "MaskFinalLayer.__init__",
+      "site": "comfy/ldm/pixart/blocks.py:225:13 (MaskFinalLayer.__init__)",
+      "source_path": "comfy/ldm/pixart/blocks.py",
+      "source_sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 244,
+      "positional_arguments": [],
+      "scope": "DecoderLayer.__init__",
+      "site": "comfy/ldm/pixart/blocks.py:244:13 (DecoderLayer.__init__)",
+      "source_path": "comfy/ldm/pixart/blocks.py",
+      "source_sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 262,
+      "positional_arguments": [],
+      "scope": "SizeEmbedder.__init__",
+      "site": "comfy/ldm/pixart/blocks.py:262:13 (SizeEmbedder.__init__)",
+      "source_path": "comfy/ldm/pixart/blocks.py",
+      "source_sha256": "82d610edcde7a7a52bccdbeb5b2312e9ff20ff530eacf91e29592be1a02cc281",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 110,
+      "positional_arguments": [],
+      "scope": "PixArtMS.__init__",
+      "site": "comfy/ldm/pixart/pixartms.py:110:13 (PixArtMS.__init__)",
+      "source_path": "comfy/ldm/pixart/pixartms.py",
+      "source_sha256": "a3b24e4e3c3c4d6a31ec9835d8ea269c0742551afe3b16cef2a8c44390c82661",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 43,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/pixeldit/pid.py:43:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/pixeldit/pid.py",
+      "source_sha256": "e85c99e74d566b3850d0208f6078d8fbc36e389e1308a9fe417c60223c5a2a04",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 46,
+      "positional_arguments": [],
+      "scope": "ResBlock.__init__",
+      "site": "comfy/ldm/pixeldit/pid.py:46:13 (ResBlock.__init__)",
+      "source_path": "comfy/ldm/pixeldit/pid.py",
+      "source_sha256": "e85c99e74d566b3850d0208f6078d8fbc36e389e1308a9fe417c60223c5a2a04",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 93,
+      "positional_arguments": [],
+      "scope": "LQProjection2D.__init__",
+      "site": "comfy/ldm/pixeldit/pid.py:93:13 (LQProjection2D.__init__)",
+      "source_path": "comfy/ldm/pixeldit/pid.py",
+      "source_sha256": "e85c99e74d566b3850d0208f6078d8fbc36e389e1308a9fe417c60223c5a2a04",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 223,
+      "positional_arguments": [],
+      "scope": "QwenImageTransformerBlock.__init__",
+      "site": "comfy/ldm/qwen_image/model.py:223:13 (QwenImageTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/qwen_image/model.py",
+      "source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 231,
+      "positional_arguments": [],
+      "scope": "QwenImageTransformerBlock.__init__",
+      "site": "comfy/ldm/qwen_image/model.py:231:13 (QwenImageTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/qwen_image/model.py",
+      "source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 330,
+      "positional_arguments": [],
+      "scope": "LastLayer.__init__",
+      "site": "comfy/ldm/qwen_image/model.py:330:21 (LastLayer.__init__)",
+      "source_path": "comfy/ldm/qwen_image/model.py",
+      "source_sha256": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 149,
+      "positional_arguments": [],
+      "scope": "ConvNormLayer.__init__",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:149:21 (ConvNormLayer.__init__)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 160,
+      "positional_arguments": [],
+      "scope": "VGGBlock.__init__",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:160:21 (VGGBlock.__init__)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 427,
+      "positional_arguments": [],
+      "scope": "MLP.forward",
+      "site": "comfy/ldm/rt_detr/rtdetr_v4.py:427:17 (MLP.forward)",
+      "source_path": "comfy/ldm/rt_detr/rtdetr_v4.py",
+      "source_sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 116,
+      "positional_arguments": [],
+      "scope": "GLVControl.__init__",
+      "site": "comfy/ldm/supir/supir_modules.py:116:13 (GLVControl.__init__)",
+      "source_path": "comfy/ldm/supir/supir_modules.py",
+      "source_sha256": "d91113036b86f05796ec56297c4533271f8cc67555c0f8abe371f81a7365c8cf",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 123,
+      "positional_arguments": [],
+      "scope": "GLVControl.__init__",
+      "site": "comfy/ldm/supir/supir_modules.py:123:17 (GLVControl.__init__)",
+      "source_path": "comfy/ldm/supir/supir_modules.py",
+      "source_sha256": "d91113036b86f05796ec56297c4533271f8cc67555c0f8abe371f81a7365c8cf",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 22,
+      "positional_arguments": [],
+      "scope": "ZeroSFT.__init__",
+      "site": "comfy/ldm/supir/supir_modules.py:22:13 (ZeroSFT.__init__)",
+      "source_path": "comfy/ldm/supir/supir_modules.py",
+      "source_sha256": "d91113036b86f05796ec56297c4533271f8cc67555c0f8abe371f81a7365c8cf",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 171,
+      "positional_arguments": [],
+      "scope": "UnifiedTransformerBlock.__init__",
+      "site": "comfy/ldm/triposplat/model.py:171:21 (UnifiedTransformerBlock.__init__)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 195,
+      "positional_arguments": [],
+      "scope": "TimestepEmbedder.__init__",
+      "site": "comfy/ldm/triposplat/model.py:195:13 (TimestepEmbedder.__init__)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 51,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 242,
+      "positional_arguments": [],
+      "scope": "LatentSeqMMFlowModel.__init__",
+      "site": "comfy/ldm/triposplat/model.py:242:51 (LatentSeqMMFlowModel.__init__)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 38,
+      "positional_arguments": [],
+      "scope": "RePo3DRotaryEmbedding.__init__",
+      "site": "comfy/ldm/triposplat/model.py:38:20 (RePo3DRotaryEmbedding.__init__)",
+      "source_path": "comfy/ldm/triposplat/model.py",
+      "source_sha256": "dfe102c452e2eae16c1d66f24ae5da6ba49ea5f1698a0598808dcae5ca7003c0",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 110,
+      "positional_arguments": [],
+      "scope": "LevelEmbedder.__init__",
+      "site": "comfy/ldm/triposplat/vae.py:110:13 (LevelEmbedder.__init__)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 144,
+      "positional_arguments": [],
+      "scope": "ModulatedTransformerCrossOnlyBlock.__init__",
+      "site": "comfy/ldm/triposplat/vae.py:144:17 (ModulatedTransformerCrossOnlyBlock.__init__)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 175,
+      "positional_arguments": [],
+      "scope": "OctreeProbabilityFixedlenDecoder.__init__",
+      "site": "comfy/ldm/triposplat/vae.py:175:17 (OctreeProbabilityFixedlenDecoder.__init__)",
+      "source_path": "comfy/ldm/triposplat/vae.py",
+      "source_sha256": "73c2bbb0733086c906e6882bef823d17a97cd61788465b0bde83a9916d09aac3",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1080,
+      "positional_arguments": [],
+      "scope": "CausalAudioEncoder.__init__",
+      "site": "comfy/ldm/wan/model.py:1080:20 (CausalAudioEncoder.__init__)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "torch.nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 21,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 1099,
+      "positional_arguments": [],
+      "scope": "AdaLayerNorm.__init__",
+      "site": "comfy/ldm/wan/model.py:1099:21 (AdaLayerNorm.__init__)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 127,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 496,
+      "positional_arguments": [],
+      "scope": "WanModel.__init__",
+      "site": "comfy/ldm/wan/model.py:496:127 (WanModel.__init__)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 497,
+      "positional_arguments": [],
+      "scope": "WanModel.__init__",
+      "site": "comfy/ldm/wan/model.py:497:46 (WanModel.__init__)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 989,
+      "positional_arguments": [],
+      "scope": "MotionEncoder_tc.__init__",
+      "site": "comfy/ldm/wan/model.py:989:20 (MotionEncoder_tc.__init__)",
+      "source_path": "comfy/ldm/wan/model.py",
+      "source_sha256": "c36a6e9d1e5f2ca8e1b2a18cf8bb490392b3dc3a85a2b6daa0683e15bd077a5c",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 20,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 35,
+      "positional_arguments": [],
+      "scope": "FaceEncoder.__init__",
+      "site": "comfy/ldm/wan/model_animate.py:35:20 (FaceEncoder.__init__)",
+      "source_path": "comfy/ldm/wan/model_animate.py",
+      "source_sha256": "291c35a2b327aa68454d458681b35ba69746dcce84185d6b2337b27182324449",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 163,
+      "positional_arguments": [],
+      "scope": "ResidualBlock.__init__",
+      "site": "comfy/ldm/wan/vae.py:163:45 (ResidualBlock.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 165,
+      "positional_arguments": [],
+      "scope": "ResidualBlock.__init__",
+      "site": "comfy/ldm/wan/vae.py:165:46 (ResidualBlock.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 266,
+      "positional_arguments": [],
+      "scope": "Encoder3d.__init__",
+      "site": "comfy/ldm/wan/vae.py:266:46 (Encoder3d.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 46,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 360,
+      "positional_arguments": [],
+      "scope": "Decoder3d.__init__",
+      "site": "comfy/ldm/wan/vae.py:360:46 (Decoder3d.__init__)",
+      "source_path": "comfy/ldm/wan/vae.py",
+      "source_sha256": "b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 127,
+      "positional_arguments": [],
+      "scope": "ResidualBlock.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:127:13 (ResidualBlock.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 130,
+      "positional_arguments": [],
+      "scope": "ResidualBlock.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:130:13 (ResidualBlock.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 437,
+      "positional_arguments": [],
+      "scope": "Encoder3d.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:437:13 (Encoder3d.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 549,
+      "positional_arguments": [],
+      "scope": "Decoder3d.__init__",
+      "site": "comfy/ldm/wan/vae2_2.py:549:13 (Decoder3d.__init__)",
+      "source_path": "comfy/ldm/wan/vae2_2.py",
+      "source_sha256": "951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 23,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [],
+      "line": 255,
+      "positional_arguments": [],
+      "scope": "VisionMLP.__init__",
+      "site": "comfy/text_encoders/qwen_vl.py:255:23 (VisionMLP.__init__)",
+      "source_path": "comfy/text_encoders/qwen_vl.py",
+      "source_sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 104,
+      "positional_arguments": [],
+      "scope": "SigLIPMultiFeatProjModel.__init__",
+      "site": "comfy_extras/nodes_model_patch.py:104:13 (SigLIPMultiFeatProjModel.__init__)",
+      "source_path": "comfy_extras/nodes_model_patch.py",
+      "source_sha256": "dcfcaf1bea6213bdde670a46a29c5f6fd0ad0866bd9e42ee50908e25be7be170",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 114,
+      "positional_arguments": [],
+      "scope": "SigLIPMultiFeatProjModel.__init__",
+      "site": "comfy_extras/nodes_model_patch.py:114:13 (SigLIPMultiFeatProjModel.__init__)",
+      "source_path": "comfy_extras/nodes_model_patch.py",
+      "source_sha256": "dcfcaf1bea6213bdde670a46a29c5f6fd0ad0866bd9e42ee50908e25be7be170",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 13,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 94,
+      "positional_arguments": [],
+      "scope": "SigLIPMultiFeatProjModel.__init__",
+      "site": "comfy_extras/nodes_model_patch.py:94:13 (SigLIPMultiFeatProjModel.__init__)",
+      "source_path": "comfy_extras/nodes_model_patch.py",
+      "source_sha256": "dcfcaf1bea6213bdde670a46a29c5f6fd0ad0866bd9e42ee50908e25be7be170",
+      "status": "static-call-observed",
+      "target_syntax": "nn.SiLU"
+    }
+  ],
+  "static_definition": null
+}

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+agent_packages=(
+  acp_thread
+  acp_tools
+  agent
+  agent-client-protocol
+  agent_settings
+  agent_servers
+  agent_skills
+  agent_ui
+  language_models
+  prompt_store
+  sidebar
+  web_search
+  web_search_providers
+)
+
+participating_crates=(
+  ai_onboarding
+  auto_update_ui
+  diagnostics
+  editor
+  git_ui
+  onboarding
+  settings_ui
+  terminal_view
+  title_bar
+  workspace
+  zed_actions
+)
+
+disabled_normal_tree=$(cargo tree -p zed --no-default-features -e normal --prefix none)
+enabled_normal_tree=$(cargo tree -p zed --no-default-features --features agentic-tools -e normal --prefix none)
+
+for package in "${agent_packages[@]}"; do
+  if grep -Eq "^${package//-/\\-} v" <<<"$disabled_normal_tree"; then
+    echo "agent-only package is present in the disabled graph: $package" >&2
+    exit 1
+  fi
+done
+
+for package in "${agent_packages[@]}"; do
+  if ! grep -Eq "^${package//-/\\-} v" <<<"$enabled_normal_tree"; then
+    echo "agent-only package is missing from the enabled graph: $package" >&2
+    exit 1
+  fi
+done
+
+for package in "${participating_crates[@]}"; do
+  disabled_features=$(cargo tree -p zed --no-default-features -e features -i "$package" --prefix none)
+  if grep -Fq "$package feature \"agentic\"" <<<"$disabled_features"; then
+    echo "Cargo feature unification enabled $package/agentic in the disabled graph" >&2
+    exit 1
+  fi
+
+  enabled_features=$(
+    cargo tree -p zed --no-default-features --features agentic-tools -e features -i "$package" --prefix none
+  )
+  if ! grep -Fq "$package feature \"agentic\"" <<<"$enabled_features"; then
+    echo "$package/agentic is not forwarded by the enabled application graph" >&2
+    exit 1
+  fi
+done
+
+cargo test -p zed --no-default-features \
+  zed::tests::test_action_namespaces -- --exact
+cargo test -p zed --no-default-features \
+  zed::open_listener::tests::test_agentic_urls_are_rejected_when_agentic_is_disabled -- --exact
+
+echo "agentic feature boundary checks passed"

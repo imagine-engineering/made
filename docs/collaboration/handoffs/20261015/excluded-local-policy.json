@@ -1,0 +1,432 @@
+{
+  "classification": "PRESERVE_LOCAL_EXCLUDED_FROM_GIT_NOT_A_CLEANUP_LIST",
+  "exclusions": [
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/target",
+      "reason": "Reproducible Rust build/test cache and binaries; preserve warm cache locally, rebuild on new machine; retained certified executables referenced separately optional historical replay"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/.build/cache-recovery",
+      "reason": "Historical generated-cache recovery custody; preserved locally; transfer only if exact historical cache recovery is needed"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/.build/retained-rust-equivalents-20261006",
+      "reason": "Lossless historical generated executable/archive equivalents; optional recovery originals, not required to compile current source; preserved locally"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/.build/collaborative-heavy-queue.lock",
+      "reason": "Machine-specific queue lock; recreate on destination, never transfer lock ownership"
+    },
+    {
+      "path": "/private/tmp/current*-copper-*/profile and /private/tmp/current*-copper-*/profiles",
+      "reason": "Machine/provider profile, databases and sign-in state; excluded without inspecting credentials; fresh isolated profile and provider sign-in required"
+    },
+    {
+      "path": "macOS Keychain, provider credentials, ~/.ssh, ~/.aws, local .env files",
+      "reason": "Credentials and machine state excluded; provision fresh authorization separately"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace excluding private-checkpoints",
+      "reason": "Raw evidence preserved locally; exact locators in ignored-raw-evidence-locators.json, transfer unique unmatched files only after evidence-agent retained-member reconciliation"
+    }
+  ],
+  "no_files_removed": true,
+  "reference_snapshot_exclusions": [
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/.DS_Store",
+      "bytes": 10244,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/.claude/skills/desktop-screenshot/SKILL.md",
+      "bytes": null,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/.claude/skills/sprout-cli/SKILL.md",
+      "bytes": null,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/.codex/skills/desktop-screenshot/SKILL.md",
+      "bytes": null,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/.codex/skills/sprout-cli/SKILL.md",
+      "bytes": null,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/.vscode/settings.json",
+      "bytes": 44,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/desktop/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/desktop/src/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/mobile/.env.json.example",
+      "bytes": 95,
+      "reason": "Credential or sensitive-looking configuration/fixture: preserved, requires explicit content review/provisioning; not copied or read"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/buzz/perf/__pycache__",
+      "reason": "Reproducible dependency/build/cache or Git metadata; preserved locally, contents not enumerated",
+      "prefix_exclusion": true
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI/comfy/__pycache__",
+      "reason": "Reproducible dependency/build/cache or Git metadata; preserved locally, contents not enumerated",
+      "prefix_exclusion": true
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI/comfy_api/__pycache__",
+      "reason": "Reproducible dependency/build/cache or Git metadata; preserved locally, contents not enumerated",
+      "prefix_exclusion": true
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/add-missing-i18n.md",
+      "bytes": 1612,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/adr-compliance-audit.md",
+      "bytes": 3981,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/comprehensive-pr-review.md",
+      "bytes": 13803,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/create-frontend-release.md",
+      "bytes": 25407,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/create-hotfix-release.md",
+      "bytes": 14542,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/pr.md",
+      "bytes": 3358,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/setup_repo.md",
+      "bytes": 3770,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/commands/verify-visually.md",
+      "bytes": 2306,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/add-model-page/SKILL.md",
+      "bytes": 6169,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/adding-deprecation-warnings/SKILL.md",
+      "bytes": 3114,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/backport-management/SKILL.md",
+      "bytes": 21652,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/backport-management/reference/analysis.md",
+      "bytes": 7366,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/backport-management/reference/discovery.md",
+      "bytes": 2572,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/backport-management/reference/execution.md",
+      "bytes": 18119,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/backport-management/reference/logging.md",
+      "bytes": 3191,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/contain-audit/SKILL.md",
+      "bytes": 4783,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/hardening-flaky-e2e-tests/SKILL.md",
+      "bytes": 10760,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/layer-audit/SKILL.md",
+      "bytes": 3171,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/perf-fix-with-proof/SKILL.md",
+      "bytes": 6646,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/red-green-fix/SKILL.md",
+      "bytes": 7568,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/red-green-fix/reference/testing-anti-patterns.md",
+      "bytes": 6497,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/regenerating-screenshots/SKILL.md",
+      "bytes": 2578,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/reviewing-unit-tests/SKILL.md",
+      "bytes": 12744,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/writing-playwright-tests/SKILL.md",
+      "bytes": 8558,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/writing-storybook-stories/SKILL.md",
+      "bytes": 6494,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.claude/skills/writing-storybook-stories/agents/openai.yaml",
+      "bytes": 241,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.env_example",
+      "bytes": 2528,
+      "reason": "Credential or sensitive-looking configuration/fixture: preserved, requires explicit content review/provisioning; not copied or read"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.vscode/custom-css.json",
+      "bytes": 1588,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.vscode/extensions.json",
+      "bytes": 430,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.vscode/launch.json.default",
+      "bytes": 519,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.vscode/settings.json.default",
+      "bytes": 89,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/.vscode/tailwind.json",
+      "bytes": 3448,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/ComfyUI-Frontend/tools/devtools/fake_model.safetensors",
+      "bytes": 43,
+      "reason": "Model-weight payload excluded from source-only transfer inventory; preserved locally, provision from authorized verified artifact source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/comfy-cli/comfy_cli/schemas/auth.json",
+      "bytes": 1038,
+      "reason": "Credential or sensitive-looking configuration/fixture: preserved, requires explicit content review/provisioning; not copied or read"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/docs/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/docs/.claude/commands/create-pr.md",
+      "bytes": 633,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/docs/.claude/commands/verify-visually.md",
+      "bytes": 2372,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/docs/.env.local.example",
+      "bytes": 3201,
+      "reason": "Credential or sensitive-looking configuration/fixture: preserved, requires explicit content review/provisioning; not copied or read"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/embedded-docs/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/embedded-docs/comfyui_embedded_docs/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/comfy/embedded-docs/comfyui_embedded_docs/__pycache__",
+      "reason": "Reproducible dependency/build/cache or Git metadata; preserved locally, contents not enumerated",
+      "prefix_exclusion": true
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/core/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/doc/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/drivers/.DS_Store",
+      "bytes": 10244,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/editor/.DS_Store",
+      "bytes": 10244,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/misc/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/modules/.DS_Store",
+      "bytes": 16388,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/modules/gdscript/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/modules/gdscript/tests/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/platform/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/scene/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/servers/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/tests/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/tests/data/models/cube.bin",
+      "bytes": 1224,
+      "reason": "Model-weight payload excluded from source-only transfer inventory; preserved locally, provision from authorized verified artifact source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/godot/thirdparty/.DS_Store",
+      "bytes": 18436,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/.DS_Store",
+      "bytes": 10244,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/crates/.DS_Store",
+      "bytes": 10244,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/documentation/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/examples/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/oidc-proxy/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/scripts/.DS_Store",
+      "bytes": 6148,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/ui/.DS_Store",
+      "bytes": 8196,
+      "reason": "Machine/editor/agent state, preserved locally; not needed as reference source"
+    },
+    {
+      "path": "/Users/ahmad.vegah/repos/imagineerings/zed/projects/goose/ui/desktop/.env",
+      "bytes": 132,
+      "reason": "Credential or sensitive-looking configuration/fixture: preserved, requires explicit content review/provisioning; not copied or read"
+    }
+  ],
+  "exact_current_isolated_profiles_excluded_without_reading_credentials": [
+    "/private/tmp/current92-copper-native-20261011/profile",
+    "/private/tmp/current149-copper-canonical-native-20261015/profile"
+  ],
+  "private_support_capsule": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current153-transfer-support-and-unmatched-evidence-wip-20261015/private-originals.tar.gz",
+  "local_only_manifest": "local-only-files.json.gz"
+}

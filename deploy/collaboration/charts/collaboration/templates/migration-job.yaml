@@ -1,0 +1,38 @@
+{{- if and .Values.deployment.enabled .Values.migration.enabled (not .Values.rollback.enabled) }}
+{{- include "collaboration.validate" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "collaboration.name" . }}-migrate
+  labels: {{- include "collaboration.migrationLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    collaboration.zed.dev/required-schema-version: {{ .Values.migration.requiredSchemaVersion | quote }}
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels: {{- include "collaboration.migrationLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "collaboration.migrationImage" . | quote }}
+          imagePullPolicy: {{ .Values.migration.image.pullPolicy }}
+          args: ["up"]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          env:
+            - { name: COLLABORATION_REQUIRED_SCHEMA_VERSION, value: {{ .Values.migration.requiredSchemaVersion | quote }} }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.migration.secretName }}, key: {{ .Values.migration.databaseUrlKey }} } }
+          resources: {{- toYaml .Values.migration.resources | nindent 12 }}
+{{- end }}

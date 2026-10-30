@@ -1,0 +1,104 @@
+{
+  "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+  "class_type": "LatentCutToBatch",
+  "cases": [
+    {
+      "shape": [
+        2,
+        4,
+        5,
+        3,
+        3
+      ],
+      "dim": "t",
+      "slice_size": 2,
+      "batch_index": [
+        9,
+        10
+      ],
+      "expected_shape": [
+        4,
+        4,
+        2,
+        3,
+        3
+      ],
+      "expected_batch_index": [
+        9,
+        10
+      ],
+      "returns_original": false,
+      "retained_extra": "retained"
+    },
+    {
+      "shape": [
+        2,
+        4,
+        5,
+        3,
+        3
+      ],
+      "dim": "x",
+      "slice_size": 2,
+      "batch_index": null,
+      "expected_shape": [
+        2,
+        4,
+        5,
+        3,
+        2
+      ],
+      "expected_batch_index": null,
+      "returns_original": false,
+      "retained_extra": "retained"
+    },
+    {
+      "shape": [
+        2,
+        4,
+        5,
+        3,
+        3
+      ],
+      "dim": "y",
+      "slice_size": 9,
+      "batch_index": null,
+      "expected_shape": [
+        2,
+        4,
+        5,
+        3,
+        3
+      ],
+      "expected_batch_index": null,
+      "returns_original": false,
+      "retained_extra": "retained"
+    },
+    {
+      "shape": [
+        2,
+        4,
+        3,
+        3
+      ],
+      "dim": "t",
+      "slice_size": 2,
+      "batch_index": [
+        9,
+        10
+      ],
+      "expected_shape": [
+        2,
+        4,
+        3,
+        3
+      ],
+      "expected_batch_index": [
+        9,
+        10
+      ],
+      "returns_original": true,
+      "retained_extra": "retained"
+    }
+  ]
+}

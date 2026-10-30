@@ -1,0 +1,74 @@
+{
+  "command": {
+    "adapter": "static-tensor-contract-resolution-v1",
+    "arguments": [
+      "catalogs/backend-tensor-operations.csv"
+    ],
+    "configuration": {
+      "live_source_runtime": "not_launched",
+      "network": "disabled",
+      "resolution_policy": "static evidence or explicit blocker"
+    },
+    "program": "generate_tensor_operation_contracts.py"
+  },
+  "environment": {
+    "account_access": false,
+    "architecture": "aarch64",
+    "dependencies": {
+      "python_source_runtime": "not launched",
+      "torch_profile": "not pinned by source baseline"
+    },
+    "device": "cpu",
+    "device_details": {
+      "external_accelerators": "not required for static classification"
+    },
+    "network_access": false,
+    "operating_system": "macos"
+  },
+  "feature_ids": [],
+  "fixture_id": "tensor-signature-resolution-environment-v1",
+  "inputs": [
+    {
+      "name": "catalogs/backend-tensor-operations.csv",
+      "sha256": "e60844bdf259418b8f808f1122408edaeac11bffdf03a65d205a79b251e9911b"
+    },
+    {
+      "name": "ComfyUI/requirements.txt",
+      "sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e"
+    },
+    {
+      "name": "ComfyUI/README.md",
+      "sha256": "6b203923511185b28e247d07c1cf018518818a1b403cea873e98ff6182737372"
+    }
+  ],
+  "normalization": {
+    "remove_json_pointers": [],
+    "replacements": {},
+    "unordered_array_pointers": []
+  },
+  "observation": {
+    "blocker": "dependency",
+    "detail": "The source snapshot permits PyTorch 2.4 and newer but does not pin an exact PyTorch, torchvision, torchaudio, torchsde, Kornia, xFormers, FlashAttention, or accelerator-extension semantics profile; no approved Python 3.10+ source environment with those dependencies is present.",
+    "evidence": [
+      "ComfyUI requirements.txt names torch and companion packages without versions",
+      "ComfyUI README states that torch 2.4 and newer are supported and recommends newer versions",
+      "the baseline forbids inferring unobserved runtime output or installing dependencies during catalog discovery"
+    ],
+    "status": "not_observed",
+    "uncertainty": "Exact external overloads, defaults, error text, values, gradients, and version-dependent behavior remain release blockers until a versioned development-only oracle profile is approved and recorded."
+  },
+  "observation_kind": "tensor_signature_and_value_oracle",
+  "schema_version": 1,
+  "source": {
+    "declared_version": "0.27.1",
+    "product": "ComfyUI",
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "tolerance": {
+    "default": {
+      "kind": "exact"
+    },
+    "json_pointer_overrides": {}
+  },
+  "unresolved_nondeterminism": []
+}

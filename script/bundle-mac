@@ -1,0 +1,606 @@
+#!/usr/bin/env bash
+
+set +x
+set -euo pipefail
+source script/lib/blob-store.sh
+source script/lib/macos-signing.sh
+
+build_flag="--release"
+target_dir="release"
+open_result=false
+local_install=false
+can_code_sign=false
+sim=false
+rust_tools=false
+dry_run=false
+
+filtered_arguments=()
+for argument in "$@"; do
+    case "$argument" in
+        --sim) sim=true ;;
+        --rust-tools) rust_tools=true ;;
+        --dry-run) dry_run=true ;;
+        *) filtered_arguments+=("$argument") ;;
+    esac
+done
+if [[ ${#filtered_arguments[@]} -gt 0 ]]; then
+    set -- "${filtered_arguments[@]}"
+else
+    set --
+fi
+
+IDENTITY="${MACOS_SIGNING_IDENTITY:-}"
+
+# Function for displaying help info
+help_info() {
+  echo "
+Usage: ${0##*/} [options] [architecture=host]
+Build the application bundle for macOS.
+
+Options:
+  --sim  Include the Sim integration, Metal backend, worker, and assets.
+  --rust-tools  Include the Cargo tool window and matching remote-server support.
+  --dry-run  Print the selected package plan without building it.
+  -d    Compile in debug mode
+  -o    Open dir with the resulting DMG or launch the app itself in local mode.
+  -i    Install the resulting DMG into /Applications.
+  -h    Display this help and exit.
+  "
+}
+
+while getopts 'dloih' flag
+do
+    case "${flag}" in
+        o) open_result=true;;
+        d)
+            export CARGO_INCREMENTAL=true
+            export CARGO_BUNDLE_SKIP_BUILD=true
+            build_flag="";
+            target_dir="debug"
+            ;;
+        i) local_install=true;;
+        h)
+           help_info
+           exit 0
+           ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
+if [[ "$dry_run" = true ]]; then
+    zed_features="none"
+    remote_features="none"
+    if [[ "$rust_tools" = true ]]; then
+        zed_features="rust-tools"
+        remote_features="rust-tools"
+    fi
+    if [[ "$sim" = true ]]; then
+        if [[ "$rust_tools" = true ]]; then
+            zed_features="sim,metal,rust-tools"
+        else
+            zed_features="sim,metal"
+        fi
+        echo "mode=sim packages=zed,cli,sim_worker zed_features=${zed_features} remote_features=${remote_features} worker_features=metal include_sim_worker=true rust_tools=${rust_tools}"
+    else
+        echo "mode=default packages=zed,cli zed_features=${zed_features} remote_features=${remote_features} include_sim_worker=false rust_tools=${rust_tools}"
+    fi
+    if [[ "$rust_tools" = true ]]; then
+        echo "native_runtime_helper=native-cargo-runtime-observer helper_roles=checked-cargo-runtime,internal-runtime-observer helper_runtime=true helper_library_validation=true"
+    fi
+    exit 0
+fi
+
+
+# Get release channel
+channel="${ZED_RELEASE_CHANNEL:-$(<crates/zed/RELEASE_CHANNEL)}"
+export ZED_RELEASE_CHANNEL="${channel}"
+
+export ZED_BUNDLE=true
+
+required_product_variables=(
+    ZED_PRODUCT_ID ZED_PRODUCT_DISPLAY_NAME ZED_PRODUCT_EXECUTABLE
+    ZED_PRODUCT_BUNDLE_ID ZED_PRODUCT_URL_SCHEME ZED_PRODUCT_ICON_SET
+    ZED_PRODUCT_APP_FEATURES ZED_PRODUCT_REMOTE_FEATURES ZED_PRODUCT_ARTIFACT_NAME
+)
+for variable_name in "${required_product_variables[@]}"; do
+    if [[ -z "${!variable_name:-}" ]]; then
+        echo "Missing resolved product variable: ${variable_name}. Run cargo xtask bundle --product <id>." >&2
+        exit 1
+    fi
+done
+case ",${ZED_PRODUCT_APP_FEATURES}," in
+    *,rust-tools,*) rust_tools=true ;;
+esac
+native_runtime_helper_entitlements="crates/native_task_helper/resources/native-cargo-runtime-observer.entitlements"
+cargo_target_dir="${CARGO_TARGET_DIR:-target}"
+if [[ "${cargo_target_dir}" != /* ]]; then
+    cargo_target_dir="${PWD}/${cargo_target_dir}"
+fi
+export CARGO_TARGET_DIR="${cargo_target_dir}"
+bundle_phase="${ZED_BUNDLE_PHASE:-all}"
+case "$bundle_phase" in
+    all|application|remote-server|package) ;;
+    *)
+        echo "Unsupported bundle phase: $bundle_phase" >&2
+        exit 1
+        ;;
+esac
+
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "package" ]]; then
+    signing_mode=$(python3 script/check-signing-environment --platform macos)
+    if [[ "$signing_mode" == "production" ]]; then
+        can_code_sign=true
+    fi
+fi
+
+# Deal with versions of macOS that don't include libstdc++ headers
+export CXXFLAGS="-stdlib=libc++"
+
+version_info=$(rustc --version --verbose)
+host_line=$(echo "$version_info" | grep host)
+target_triple=${host_line#*: }
+if [[ $# -gt 0 && -n "$1" ]]; then
+    target_triple="$1"
+fi
+arch_suffix=""
+
+if [[ "$target_triple" = "x86_64-apple-darwin" ]]; then
+    arch_suffix="x86_64"
+elif [[ "$target_triple" = "aarch64-apple-darwin" ]]; then
+    arch_suffix="aarch64"
+else
+    echo "Unsupported architecture $target_triple"
+    exit 1
+fi
+
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
+    if [[ -n "${ZED_PREGENERATED_LICENSES:-}" ]]; then
+        test -s assets/licenses.md
+    else
+        script/generate-licenses
+    fi
+fi
+
+if [[ "$bundle_phase" != "package" ]]; then
+    rustup target add "$target_triple"
+fi
+
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
+    echo "Compiling zed binaries"
+    if [[ "$sim" = true ]]; then
+        zed_build_features="$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//'),zed/sim,zed/metal,sim_worker/metal"
+        if [[ "$rust_tools" = true ]]; then
+            zed_build_features="${zed_build_features},zed/rust-tools"
+        fi
+        cargo build ${build_flag} --package zed --package cli --package sim_worker --no-default-features --features "${zed_build_features}" --target "$target_triple"
+    else
+        application_features=$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//')
+        cargo build ${build_flag} --package zed --package cli --no-default-features --features "${application_features}" --target "$target_triple"
+    fi
+fi
+# Build remote_server in separate invocation to prevent feature unification from other crates
+# from influencing dynamic libraries required by it.
+if [[ "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ]]; then
+    if [[ -n "${ZED_PRODUCT_REMOTE_FEATURES}" ]]; then
+        cargo build ${build_flag} --package remote_server --no-default-features --features "${ZED_PRODUCT_REMOTE_FEATURES}" --target "$target_triple"
+    else
+        cargo build ${build_flag} --package remote_server --no-default-features --target "$target_triple"
+    fi
+fi
+
+if [[ "$rust_tools" = true && ( "$bundle_phase" == "all" || "$bundle_phase" == "application" ) ]]; then
+    CARGO_NET_OFFLINE=true RUSTUP_AUTO_INSTALL=0 cargo build ${build_flag} --package native_task_helper --bin native-cargo-runtime-observer --no-default-features --features runtime-helper --target "$target_triple"
+fi
+
+if [[ "$rust_tools" = true && "$bundle_phase" != "remote-server" ]]; then
+    test -x "${cargo_target_dir}/${target_triple}/${target_dir}/native-cargo-runtime-observer"
+    test -f "${native_runtime_helper_entitlements}"
+fi
+
+if [[ "$bundle_phase" == "application" ]]; then
+    test -x "${cargo_target_dir}/${target_triple}/${target_dir}/zed"
+    test -x "${cargo_target_dir}/${target_triple}/${target_dir}/cli"
+    exit 0
+elif [[ "$bundle_phase" == "remote-server" ]]; then
+    test -x "${cargo_target_dir}/${target_triple}/${target_dir}/remote_server"
+    exit 0
+fi
+
+test -s assets/licenses.md
+test -x "${cargo_target_dir}/${target_triple}/${target_dir}/zed"
+test -x "${cargo_target_dir}/${target_triple}/${target_dir}/cli"
+test -x "${cargo_target_dir}/${target_triple}/${target_dir}/remote_server"
+
+cargo_bundle_version=$(cargo-bundle --version 2>/dev/null || echo "")
+if [ "$cargo_bundle_version" != "cargo-bundle v0.11.0" ]; then
+    cargo install cargo-bundle --version 0.11.0 --locked --force
+else
+    echo "Reusing $cargo_bundle_version"
+fi
+if [[ "$bundle_phase" == "package" ]]; then
+    export CARGO_BUNDLE_SKIP_BUILD=true
+fi
+
+bundle_application_features="${ZED_PRODUCT_APP_FEATURES}"
+if [[ "$sim" = true ]]; then
+    bundle_application_features="${bundle_application_features},sim,metal"
+fi
+if [[ "$rust_tools" = true ]]; then
+    bundle_application_features="${bundle_application_features},rust-tools"
+fi
+
+echo "Creating application bundle"
+pushd crates/zed
+app_path=$(
+    cargo bundle ${build_flag} --format osx --no-default-features --features "${bundle_application_features}" --target "$target_triple" |
+        sed -n 's/^[[:space:]]*\(.*\.app\)$/\1/p'
+)
+popd
+if [[ -z "${app_path}" || "${app_path}" == *$'\n'* || ! -d "${app_path}" ]]; then
+    echo "Expected cargo-bundle to produce exactly one macOS application bundle, got: ${app_path}" >&2
+    exit 1
+fi
+echo "Bundled ${app_path}"
+
+product_app_path="$(dirname "${app_path}")/${ZED_PRODUCT_DISPLAY_NAME}.app"
+if [[ "${app_path}" != "${product_app_path}" ]]; then
+    rm -rf "${product_app_path}"
+    mv "${app_path}" "${product_app_path}"
+    app_path="${product_app_path}"
+fi
+plist="${app_path}/Contents/Info.plist"
+mv "${app_path}/Contents/MacOS/zed" "${app_path}/Contents/MacOS/${ZED_PRODUCT_EXECUTABLE}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName ${ZED_PRODUCT_DISPLAY_NAME}" "${plist}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${ZED_PRODUCT_DISPLAY_NAME}" "${plist}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${ZED_PRODUCT_BUNDLE_ID}" "${plist}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${ZED_PRODUCT_EXECUTABLE}" "${plist}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${RELEASE_VERSION}" "${plist}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${RELEASE_VERSION}" "${plist}"
+python3 - "${plist}" "${ZED_PRODUCT_DISPLAY_NAME}" <<'PY'
+import pathlib
+import plistlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+display_name = sys.argv[2]
+metadata = plistlib.loads(path.read_bytes())
+for key, value in metadata.items():
+    if key.startswith("NS") and key.endswith("UsageDescription") and isinstance(value, str):
+        metadata[key] = value.replace("Zed", display_name)
+for document in metadata.get("CFBundleDocumentTypes", []):
+    name = document.get("CFBundleTypeName")
+    if isinstance(name, str):
+        document["CFBundleTypeName"] = name.replace("Zed", display_name)
+path.write_bytes(plistlib.dumps(metadata))
+PY
+/usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "${plist}" || true
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "${plist}"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "${plist}"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "${plist}"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string ${ZED_PRODUCT_URL_SCHEME}" "${plist}"
+cp "${ZED_PRODUCT_ICON_SET}/app-icon.png" "${app_path}/Contents/Resources/product-app-icon.png"
+cp LICENSE-GPL "${app_path}/Contents/Resources/COPYING"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile product-app-icon.png" "${plist}"
+if [[ -f "${ZED_PRODUCT_ICON_SET}/app-icon.icns" ]]; then
+    cp "${ZED_PRODUCT_ICON_SET}/app-icon.icns" "${app_path}/Contents/Resources/product-app-icon.icns"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile product-app-icon.icns" "${plist}"
+fi
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "${plist}")" == "${ZED_PRODUCT_DISPLAY_NAME}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${plist}")" == "${ZED_PRODUCT_BUNDLE_ID}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "${plist}")" == "${ZED_PRODUCT_EXECUTABLE}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")" == "${RELEASE_VERSION}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")" == "${RELEASE_VERSION}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "${plist}")" == "${ZED_PRODUCT_URL_SCHEME}" ]]
+
+document_icon_source="${ZED_PRODUCT_ICON_SET}/app-icon.icns"
+if [[ ! -f "${document_icon_source}" ]]; then
+    document_icon_source="crates/zed/resources/Document.icns"
+fi
+document_icon_target="${app_path}/Contents/Resources/Document.icns"
+if [[ -f "${document_icon_source}" ]]; then
+    mkdir -p "$(dirname "${document_icon_target}")"
+    cp "${document_icon_source}" "${document_icon_target}"
+else
+    echo "cargo::warning=Missing ${document_icon_source}; macOS document icons may not appear in Finder."
+fi
+
+if [[ "$can_code_sign" == true ]]; then
+    setup_production_signing
+fi
+
+GIT_RELEASE_TAG="v2.56.0-2"
+GIT_VERSION="v2.56.0"
+GIT_VERSION_SHA="a44aeca"
+GIT_MACOS_ARM64_SHA256="1110de343de11cc6f469b782b60f36217b9199b5e06875dd65baa26dd60563c7"
+GIT_MACOS_X64_SHA256="52cc663281e1ec2f1d76ba781193ca4847e62dbbf767f6c99ec9ec5b978a7659"
+
+function download_and_unpack() {
+    local url=$1
+    local target_path=$2
+    local expected_sha256=$3
+    local temp_dir
+    local archive_path
+
+    temp_dir=$(mktemp -d)
+    archive_path="${temp_dir}/archive.tar.gz"
+
+    if ! command -v curl &> /dev/null; then
+        echo "curl is not installed. Please install curl to continue."
+        exit 1
+    fi
+
+    curl --silent --show-error --fail --location --retry 3 --retry-all-errors --output "$archive_path" "$url"
+    printf '%s  %s\n' "$expected_sha256" "$archive_path" | shasum -a 256 --check
+    mkdir "${temp_dir}/runtime"
+    tar -xz -C "${temp_dir}/runtime" -f "$archive_path" ./bin/git ./libexec/git-core ./share/git-core
+    mv "${temp_dir}/runtime" "$target_path"
+
+    rm -rf "$temp_dir"
+}
+
+function download_git() {
+    local architecture=$1
+    local target_binary=$2
+
+    local git_runtime="${app_path}/Contents/Resources/git"
+
+    case "$architecture" in
+        aarch64-apple-darwin)
+            download_and_unpack "https://github.com/desktop/dugite-native/releases/download/${GIT_RELEASE_TAG}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-arm64.tar.gz" "$git_runtime" "$GIT_MACOS_ARM64_SHA256"
+            ;;
+        x86_64-apple-darwin)
+            download_and_unpack "https://github.com/desktop/dugite-native/releases/download/${GIT_RELEASE_TAG}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-x64.tar.gz" "$git_runtime" "$GIT_MACOS_X64_SHA256"
+            ;;
+        *)
+            echo "Unsupported architecture: $architecture"
+            exit 1
+            ;;
+    esac
+
+    cp script/licenses/bundled-git-COPYING "${git_runtime}/COPYING"
+    # The vendor binary has a fixed exec prefix; its HTTPS helpers need explicit paths.
+    cat > "$target_binary" <<'GIT_LAUNCHER'
+#!/bin/sh
+git_runtime="$(CDPATH= cd -- "$(dirname -- "$0")/../Resources/git" && pwd)" || exit 1
+export GIT_EXEC_PATH="${GIT_EXEC_PATH:-$git_runtime/libexec/git-core}"
+export GIT_TEMPLATE_DIR="${GIT_TEMPLATE_DIR:-$git_runtime/share/git-core/templates}"
+exec "$git_runtime/bin/git" "$@"
+GIT_LAUNCHER
+    chmod 755 "$target_binary"
+    [[ "$("${target_binary}" --version)" == "git version ${GIT_VERSION#v}" ]]
+}
+
+function sign_git_runtime() {
+    local signing_arguments=(--force --options runtime --identifier "${ZED_PRODUCT_BUNDLE_ID}.git-runtime")
+    if [[ "$can_code_sign" = true ]]; then
+        signing_arguments+=(--timestamp --sign "$IDENTITY" "${signing_keychain_arguments[@]}")
+    else
+        signing_arguments+=(--timestamp=none --sign "${MACOS_SIGNING_KEY:--}")
+    fi
+    while IFS= read -r -d '' binary_path; do
+        if [[ "$(/usr/bin/file -b "$binary_path")" == *Mach-O* ]]; then
+            /usr/bin/codesign "${signing_arguments[@]}" "$binary_path"
+        fi
+    done < <(find "${app_path}/Contents/Resources/git" -type f -print0)
+}
+
+function sign_native_cargo_runtime_helper() {
+    local helper_path="${app_path}/Contents/MacOS/native-cargo-runtime-observer"
+    local helper_identifier="${ZED_PRODUCT_BUNDLE_ID}.native-cargo-runtime-observer"
+    if [[ "$can_code_sign" = true ]]; then
+        /usr/bin/codesign --force --timestamp --options runtime --identifier "$helper_identifier" --entitlements "$native_runtime_helper_entitlements" --sign "$IDENTITY" "${signing_keychain_arguments[@]}" "$helper_path" -v
+    else
+        /usr/bin/codesign --force --timestamp=none --options runtime --identifier "$helper_identifier" --entitlements "$native_runtime_helper_entitlements" --sign "${MACOS_SIGNING_KEY:--}" "$helper_path" -v
+    fi
+}
+
+function verify_native_cargo_runtime_helper() {
+    local helper_path="${app_path}/Contents/MacOS/native-cargo-runtime-observer"
+    /usr/bin/codesign --verify --strict --verbose=4 "$helper_path"
+    local helper_signature
+    helper_signature=$(/usr/bin/codesign --display --verbose=4 "$helper_path" 2>&1)
+    local application_signature
+    application_signature=$(/usr/bin/codesign --display --verbose=4 "${app_path}/Contents/MacOS/${ZED_PRODUCT_EXECUTABLE}" 2>&1)
+    local helper_entitlements
+    helper_entitlements=$(/usr/bin/codesign --display --entitlements - --xml "$helper_path")
+    local helper_architectures
+    helper_architectures=$(/usr/bin/lipo -archs "$helper_path")
+    local helper_load_commands
+    helper_load_commands=$(/usr/bin/otool -l "$helper_path")
+    local helper_libraries
+    helper_libraries=$(/usr/bin/otool -L "$helper_path")
+    python3 - "$helper_signature" "$application_signature" "$helper_entitlements" "$helper_architectures" "$helper_libraries" "$helper_load_commands" "$can_code_sign" "$arch_suffix" "${ZED_PRODUCT_BUNDLE_ID}.native-cargo-runtime-observer" <<'NATIVE_HELPER_POLICY'
+import plistlib
+import re
+import sys
+
+helper_signature, application_signature, entitlements, architectures, libraries, load_commands, shipping, architecture, identifier = sys.argv[1:]
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit("Native Cargo runtime helper: " + message)
+
+def signature_field(signature, name):
+    match = re.search(r"^" + re.escape(name) + r"=(.*)$", signature, re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+flags = re.search(r"\bflags=(0x[0-9a-fA-F]+)", helper_signature)
+require(flags is not None and int(flags.group(1), 16) & 0x10000, "hardened runtime is required")
+require(signature_field(helper_signature, "Identifier") == identifier, "unexpected helper signing identifier")
+try:
+    actual_entitlements = plistlib.loads(entitlements.encode())
+except (plistlib.InvalidFileException, ValueError):
+    raise SystemExit("Native Cargo runtime helper: invalid entitlement output")
+require(actual_entitlements == {"com.apple.security.cs.allow-dyld-environment-variables": True} and type(actual_entitlements.get("com.apple.security.cs.allow-dyld-environment-variables")) is bool, "exact allow-DYLD-only Boolean entitlement is required")
+helper_team = signature_field(helper_signature, "TeamIdentifier")
+application_team = signature_field(application_signature, "TeamIdentifier")
+if shipping == "true":
+    require(helper_team not in (None, "not set", ""), "shipping Team identifier is missing")
+    require("Signature=adhoc" not in helper_signature, "shipping helper cannot be ad-hoc signed")
+    authority = signature_field(helper_signature, "Authority")
+    require(authority is not None and authority.startswith("Developer ID Application:"), "shipping helper requires Developer ID Application signing")
+    require(signature_field(helper_signature, "Timestamp") not in (None, ""), "shipping helper timestamp is missing")
+require(helper_team == application_team and helper_team is not None, "helper and application signing Teams differ")
+expected_architecture = "arm64" if architecture == "aarch64" else "x86_64"
+require(architectures.split() == [expected_architecture], "helper architecture differs from package target")
+dependencies = []
+for line in libraries.splitlines():
+    if not line.startswith((" ", "\t")):
+        continue
+    dependency = line.strip().split(" (compatibility version ", 1)[0]
+    require(dependency.startswith(("/usr/lib/", "/System/Library/")), "non-system linked dependency is unsupported")
+    require(".." not in dependency.split("/"), "non-canonical linked dependency is unsupported")
+    dependencies.append(dependency)
+require(bool(dependencies), "linked dependency inventory is empty")
+commands = re.findall(r"^\s*cmd (LC_\S+)\s*$", load_commands, re.MULTILINE)
+require(bool(commands), "load command inventory is empty")
+supported_commands = {"LC_SEGMENT_64", "LC_SYMTAB", "LC_DYSYMTAB", "LC_LOAD_DYLINKER", "LC_UUID", "LC_BUILD_VERSION", "LC_VERSION_MIN_MACOSX", "LC_MAIN", "LC_SOURCE_VERSION", "LC_LOAD_DYLIB", "LC_DYLD_INFO", "LC_DYLD_INFO_ONLY", "LC_FUNCTION_STARTS", "LC_DATA_IN_CODE", "LC_CODE_SIGNATURE", "LC_DYLD_EXPORTS_TRIE", "LC_DYLD_CHAINED_FIXUPS", "LC_LINKER_OPTIMIZATION_HINT"}
+require(all(command in supported_commands for command in commands), "unknown or unsupported Mach-O command")
+require(re.search(r"^\s*name /usr/lib/dyld \(offset \d+\)\s*$", load_commands, re.MULTILINE) is not None, "unsupported dynamic linker")
+require(not any(command in {"LC_RPATH", "LC_DYLD_ENVIRONMENT", "LC_FILESET_ENTRY", "LC_ENCRYPTION_INFO", "LC_ENCRYPTION_INFO_64", "LC_LOAD_WEAK_DYLIB", "LC_REEXPORT_DYLIB", "LC_LAZY_LOAD_DYLIB", "LC_LOAD_UPWARD_DYLIB"} for command in commands), "unsupported loader command")
+require(commands.count("LC_UUID") == 1, "one helper UUID is required")
+require(len(re.findall(r"^\s*uuid [0-9A-Fa-f-]{36}\s*$", load_commands, re.MULTILINE)) == 1, "invalid helper UUID")
+blocks = re.split(r"Load command \d+\n", load_commands)
+deployment = [block for block in blocks if re.search(r"^\s*cmd (LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX)\s*$", block, re.MULTILINE)]
+require(len(deployment) == 1, "one macOS deployment command is required")
+block = deployment[0]
+if "LC_BUILD_VERSION" in block:
+    require(re.search(r"^\s*platform (?:1|MACOS|macos)\s*$", block, re.MULTILINE) is not None, "helper target must be macOS")
+version_field = "minos" if "LC_BUILD_VERSION" in block else "version"
+minimum = re.findall(r"^\s*" + version_field + r" (\d+\.\d+(?:\.\d+)?)\s*$", block, re.MULTILINE)
+require(len(minimum) == 1, "invalid helper deployment version")
+version = tuple((list(map(int, minimum[0].split('.'))) + [0, 0])[:3])
+require(version <= ((11, 0, 0) if expected_architecture == "arm64" else (10, 15, 7)), "helper raises the existing architecture deployment floor")
+print("Native Cargo runtime helper package checks passed; runtime admission remains unqualified; shipping=" + shipping)
+NATIVE_HELPER_POLICY
+}
+
+function sign_app_binaries() {
+    mkdir -p "${app_path}/Contents/Frameworks"
+
+    if [[ ",${ZED_PRODUCT_APP_FEATURES}," == *,agentic-tools,* ]]; then
+        python3 script/bundle-managed-runtime --platform "macos-${arch_suffix}" --destination "${app_path}/Contents/Frameworks/llama-cpp"
+    fi
+
+    echo "Downloading git binary"
+    download_git "${target_triple}" "${app_path}/Contents/MacOS/git"
+
+    if [[ $can_code_sign = true ]]; then
+        echo "Code signing binaries"
+        while IFS= read -r -d '' binary_path; do
+            if [[ "$(/usr/bin/file -b "$binary_path")" == *Mach-O* ]]; then
+                /usr/bin/codesign --force --timestamp --options runtime --sign "$IDENTITY" "${signing_keychain_arguments[@]}" "$binary_path"
+            fi
+        done < <(find "${app_path}" -type f -print0)
+        if [[ "$rust_tools" = true ]]; then
+            sign_native_cargo_runtime_helper
+        fi
+        /usr/bin/codesign --force --timestamp --options runtime --entitlements crates/zed/resources/zed.entitlements --sign "$IDENTITY" "${signing_keychain_arguments[@]}" "${app_path}" -v
+    else
+        echo "One or more of the following variables are missing: MACOS_CERTIFICATE, MACOS_CERTIFICATE_PASSWORD, APPLE_NOTARIZATION_KEY, APPLE_NOTARIZATION_KEY_ID, APPLE_NOTARIZATION_ISSUER_ID"
+
+        echo "====== WARNING ======"
+        echo "This bundle is being signed without all entitlements, some features (e.g. universal links) will not work"
+        echo "====== WARNING ======"
+
+        # Development bundles use ad-hoc signing and omit the production-only
+        # associated-domains entitlement.
+        cat crates/zed/resources/zed.entitlements | sed '/com.apple.developer.associated-domains/,+1d' > "${app_path}/Contents/Resources/zed.entitlements"
+
+        codesign --force --deep --entitlements "${app_path}/Contents/Resources/zed.entitlements" --sign ${MACOS_SIGNING_KEY:- -} "${app_path}" -v
+        sign_git_runtime
+        if [[ "$rust_tools" = true ]]; then
+            # The existing deep development signing overwrites nested entitlements.
+            sign_native_cargo_runtime_helper
+        fi
+        /usr/bin/codesign --force --entitlements "${app_path}/Contents/Resources/zed.entitlements" --sign "${MACOS_SIGNING_KEY:--}" "${app_path}" -v
+    fi
+    if [[ "$rust_tools" = true ]]; then
+        verify_native_cargo_runtime_helper
+    fi
+
+    bundle_name=$(basename "$app_path")
+
+    if [ "$local_install" = true ]; then
+        rm -rf "/Applications/$bundle_name"
+        mv "$app_path" "/Applications/$bundle_name"
+        echo "Installed application bundle: /Applications/$bundle_name"
+        if [ "$open_result" = true ]; then
+            echo "Opening /Applications/$bundle_name"
+            open "/Applications/$bundle_name"
+        fi
+    elif [ "$open_result" = true ]; then
+        open "$app_path"
+    fi
+
+    if [[ "$target_dir" = "debug" ]]; then
+        echo "Debug build detected - skipping DMG creation and signing"
+        if [ "$local_install" = false ]; then
+            echo "Created application bundle:"
+            echo "$app_path"
+        fi
+    else
+        dmg_target_directory="${cargo_target_dir}/${target_triple}/${target_dir}"
+        dmg_source_directory="${dmg_target_directory}/dmg"
+        dmg_file_path="${cargo_target_dir}/release/${ZED_PRODUCT_ARTIFACT_NAME}"
+        xcode_bin_dir_path="$(xcode-select -p)/usr/bin"
+
+        rm -rf "${dmg_source_directory}"
+        mkdir -p "${dmg_source_directory}"
+        mv "${app_path}" "${dmg_source_directory}"
+
+        app_path="${dmg_source_directory}/${bundle_name}"
+        if [[ "$can_code_sign" == true ]]; then
+            python3 script/verify-macos-signature "$app_path" --entitlements crates/zed/resources/zed.entitlements
+            ditto -c -k --keepParent "$app_path" "$signing_temporary_directory/application.zip"
+            notarize_and_staple "$signing_temporary_directory/application.zip" "$app_path" application
+            python3 script/verify-macos-signature "$app_path" --entitlements crates/zed/resources/zed.entitlements --notarized
+        fi
+
+        echo "Adding symlink to /Applications to ${dmg_source_directory}"
+        ln -s /Applications "${dmg_source_directory}"
+
+        echo "Creating final DMG at ${dmg_file_path} using ${dmg_source_directory}"
+        mkdir -p "$(dirname "${dmg_file_path}")"
+        hdiutil create -volname "${ZED_PRODUCT_DISPLAY_NAME}" -srcfolder "${dmg_source_directory}" -ov -format UDZO "${dmg_file_path}"
+
+        # If someone runs this bundle script locally, a symlink will be placed in `dmg_source_directory`.
+        # This symlink causes CPU issues with Zed if the Zed codebase is the project being worked on, so we simply remove it for now.
+        echo "Removing symlink to /Applications from ${dmg_source_directory}"
+        rm "${dmg_source_directory}/Applications"
+
+        if [[ $can_code_sign = true ]]; then
+            /usr/bin/codesign --force --timestamp --sign "$IDENTITY" "${signing_keychain_arguments[@]}" "${dmg_file_path}"
+            notarize_and_staple "$dmg_file_path" "$dmg_file_path" installer
+            python3 script/verify-macos-signature "$dmg_file_path" --notarized
+
+        fi
+
+        if [ "$open_result" = true ]; then
+            open "$dmg_target_directory"
+        fi
+    fi
+}
+
+function sign_binary() {
+    local binary_path=$1
+
+    if [[ $can_code_sign = true ]]; then
+        echo "Code signing executable $binary_path"
+        /usr/bin/codesign --force --timestamp --options runtime --sign "$IDENTITY" "${signing_keychain_arguments[@]}" "${binary_path}" -v
+    fi
+}
+
+cp "${cargo_target_dir}/${target_triple}/${target_dir}/zed" "${app_path}/Contents/MacOS/${ZED_PRODUCT_EXECUTABLE}"
+cp "${cargo_target_dir}/${target_triple}/${target_dir}/cli" "${app_path}/Contents/MacOS/cli"
+if [[ "$sim" = true ]]; then
+    cp "${cargo_target_dir}/${target_triple}/${target_dir}/sim-worker" "${app_path}/Contents/MacOS/sim-worker"
+fi
+if [[ "$rust_tools" = true ]]; then
+    cp "${cargo_target_dir}/${target_triple}/${target_dir}/native-cargo-runtime-observer" "${app_path}/Contents/MacOS/native-cargo-runtime-observer"
+fi
+sign_app_binaries
+
+sign_binary "${cargo_target_dir}/${target_triple}/release/remote_server"
+gzip -f --stdout --best "${cargo_target_dir}/${target_triple}/release/remote_server" > "${cargo_target_dir}/${ZED_PRODUCT_ID}-remote-server-macos-$arch_suffix.gz"

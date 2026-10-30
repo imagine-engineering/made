@@ -1,0 +1,137 @@
+use sim_model::{
+    ModelFamilyError, Sd2ConditioningFact, Sd2Layout, Sd2ModelType, Sd2Variant,
+    describe_model_family,
+    generated_sd20_sim_model_0119 as sd20,
+    generated_sd21uncliph_sim_model_0120 as unclip_h,
+};
+use sim_types::DeviceKind;
+
+use super::generated_sd20_sim_model_0119 as sd20_test;
+
+#[test]
+fn val_model_family_row_001_sd21_unclip_h_configuration_precedence_and_provenance()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(unclip_h::MODEL_FAMILY_IDENTIFIER, "SD21UnclipH");
+    assert_eq!(unclip_h::MODEL_FAMILY_FEATURE_ID, "COMFY-MODEL-0120");
+    assert_eq!(unclip_h::MODEL_FAMILY_SOURCE_ORDINAL, 6);
+    assert_eq!(unclip_h::MODEL_FAMILY_REGISTRATION.source_ordinal, 6);
+    assert_eq!(
+        unclip_h::MODEL_FAMILY_REGISTRATION.source_architecture,
+        "model_base.SD21UNCLIP"
+    );
+    assert_eq!(unclip_h::SOURCE_ADM_IN_CHANNELS, 2_048);
+    assert_eq!(unclip_h::SOURCE_TIMESTEP_DIMENSION, 1_024);
+    let descriptor = describe_model_family(&unclip_h::MODEL_FAMILY)?;
+    assert_eq!(descriptor.architecture_version, "sd21-unclip-h-native-v1");
+    assert_eq!(descriptor.latent_format, "SD15");
+
+    for (probe, layout) in [
+        (
+            sd20_test::standard_native_probe(Some(2_048), false, 4),
+            Sd2Layout::PrefixedNative,
+        ),
+        (
+            sd20_test::standard_diffusers_probe(Some(2_048), false),
+            Sd2Layout::Diffusers,
+        ),
+    ] {
+        let configuration = unclip_h::configuration_for_probe(&probe, None)?;
+        assert_eq!(configuration.variant, Sd2Variant::Sd21UnclipH);
+        assert_eq!(configuration.layout, layout);
+        assert_eq!(configuration.model_type, Sd2ModelType::Eps);
+        assert_eq!(configuration.adm_in_channels, Some(2_048));
+        let unclip = configuration.unclip.ok_or("unCLIP-H config is missing")?;
+        assert_eq!(unclip.timestep_dimension, 1_024);
+        assert_eq!(unclip.timesteps, 1_000);
+        assert_eq!(unclip.beta_schedule, "squaredcos_cap_v2");
+        assert_eq!(unclip.seed_offset, -10);
+        assert!(
+            configuration
+                .conditioning
+                .contains(&Sd2ConditioningFact::UnclipVisionEmbedding)
+        );
+        assert!(
+            configuration
+                .conditioning
+                .contains(&Sd2ConditioningFact::UnclipNoiseLevelEmbedding)
+        );
+        assert!(
+            configuration
+                .conditioning
+                .contains(&Sd2ConditioningFact::UnclipZeroFallback)
+        );
+    }
+    let registry = sd20_test::registry()?;
+    let resolved = registry.resolve(&sd20_test::execution_probe(Some(2_048)))?;
+    assert_eq!(
+        resolved.detection().identity.feature_id(),
+        unclip_h::MODEL_FAMILY_FEATURE_ID
+    );
+    assert_eq!(resolved.detection().score, 1_600);
+    assert_eq!(resolved.profile().supported_devices, [DeviceKind::Cpu]);
+    assert_eq!(
+        registry
+            .resolve(&sd20_test::probe_through_model_store(Some(2_048))?)?
+            .detection()
+            .identity
+            .feature_id(),
+        unclip_h::MODEL_FAMILY_FEATURE_ID
+    );
+    sd20_test::exercise_registered_runtime(2_048, unclip_h::MODEL_FAMILY_FEATURE_ID)?;
+
+    let statistic_probe = sd20_test::standard_native_probe(Some(2_048), true, 4);
+    assert!(unclip_h::weight_statistic_request_for_probe(&statistic_probe)?.is_some());
+    let high = sd20_test::observe_statistic(&[-0.15, -0.05, 0.05, 0.15])?;
+    assert_eq!(
+        unclip_h::configuration_for_probe(&statistic_probe, Some(&high))?.model_type,
+        Sd2ModelType::VPrediction
+    );
+
+    assert!(matches!(
+        unclip_h::configuration_for_probe(
+            &sd20_test::standard_native_probe(Some(1_536), false, 4),
+            None,
+        ),
+        Err(ModelFamilyError::InvalidSelectorOutput(message))
+            if message.contains("expected Sd21UnclipH")
+    ));
+    assert!(matches!(
+        registry.resolve(&sd20_test::execution_probe(Some(1_536))),
+        Ok(resolved)
+            if resolved.detection().identity.feature_id() != unclip_h::MODEL_FAMILY_FEATURE_ID
+    ));
+    assert!(matches!(
+        sd20::configuration_for_probe(
+            &sd20_test::standard_native_probe(Some(2_048), false, 4),
+            None,
+        ),
+        Err(ModelFamilyError::InvalidSelectorOutput(message))
+            if message.contains("expected Sd20")
+    ));
+
+    sd20_test::validate_provenance_and_catalog(
+        unclip_h::MODEL_FAMILY_FIXTURE,
+        unclip_h::MODEL_FAMILY_IDENTIFIER,
+        unclip_h::MODEL_FAMILY_FEATURE_ID,
+        unclip_h::MODEL_FAMILY_SOURCE_ORDINAL,
+        unclip_h::MODEL_FAMILY_PROJECTION_SHA256,
+        "model_base.SD21UNCLIP",
+        Some(2_048),
+        Some(1_024),
+    )?;
+    super::write_model_family_row_artifact(
+        unclip_h::MODEL_FAMILY_FIXTURE,
+        unclip_h::MODEL_FAMILY_FEATURE_ID,
+        unclip_h::MODEL_FAMILY_IDENTIFIER,
+        unclip_h::MODEL_FAMILY_SOURCE_ORDINAL,
+        "sd21uncliph_comfy_model_0120",
+        &[
+            "source-provenance-catalog-registration",
+            "native-and-diffusers-adm-2048-configuration",
+            "unclip-vision-noise-zero-fallback-conditioning",
+            "sd20-unclip-l-unclip-h-precedence-and-fail-closed-routing",
+            "shared-sd2-state-forward-statistic-memory-device-semantics",
+        ],
+    )?;
+    Ok(())
+}

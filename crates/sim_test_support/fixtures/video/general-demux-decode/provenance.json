@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "generator_sha256": "582919c4d49a2b2f3ceb3f132c4df911ff58090d3c08d0b58db69d24242daa1f",
+  "fixture_manifest_sha256": "63d218529b8e7c715c35fa5e2b4cdaa20cfd8356ce24466073f60450a3d23c70",
+  "numeric_oracle_sha256": "f22c70c3d39603e78cd79cf83c7d4028bf42ac6e9fdac26747f0b2506925aeef",
+  "input_coverage_sha256": "22973bf4ef73ce060f9eb6e868d203f74bdd648e593f1f1137e9988f1a53add9",
+  "certification_status": "pending_real_ffmpeg_7_1_x86_64_linux",
+  "certified_interoperability": false,
+  "host_codec_used": false,
+  "compiler_used": false,
+  "subprocess_used": false,
+  "network_used": false,
+  "credential_used": false,
+  "sources": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy_api/latest/_input_impl/video_types.py",
+      "sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy_api/latest/_input/video_types.py",
+      "sha256": "6cba96f1f254094436de6c3e64c0a7b469e7cbaf3578c234c18eea88cf93926d"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy_api/latest/_input/basic_types.py",
+      "sha256": "99251ecb404c881f28a413d4c0829fdf5345a1897dfac76ed6199863601098b1"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy_api/latest/_util/video_types.py",
+      "sha256": "5d2f7dd2b82aecec3c05f8f5bd9519530736825d33590207ea0aa32b8cc8627f"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/requirements.txt",
+      "sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e"
+    },
+    {
+      "path": ".agents/specs/comfy-parity/baseline.md",
+      "sha256": "7779e10ec20426f6c5e4e23e22290ee6bc6776d70e9cdc1712c7c8887e116cdd"
+    }
+  ]
+}

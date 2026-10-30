@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-component-h264-mp4-10bit-backing-v1",
+  "truth_mode": "synthetic-component-h264-mp4-eight-and-ten-bit-backing",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+  },
+  "dependencies": {
+    "component_backing_service_manifest_sha256": "9635836a06059bd41c255910acf07d7813988a0678151c2a1b5fd233b8b449d5",
+    "encoded_video_backing_manifest_sha256": "b3b012d64c953ccab4002b8cde8a64f573cb5574728dbdf00b98f6361d484270",
+    "ten_bit_thread_bridge_manifest_sha256": "2f01ec8d48633ab6b4085102bcc6284f7c0fd7633b5efe6b252067728d5868ea"
+  },
+  "contract": {
+    "canonical_media_owner": "sim_media::NativeVideoPayload",
+    "canonical_service_owner": "sim_nodes::execution::NativeComponentH264Mp4BackingService",
+    "runtime_adapter": "sim_runtime::native_video_codec_service::NativeComponentH264Mp4CodecRequestService",
+    "service_identity_version": "zed.sim.component-h264-mp4-backing-service.v2",
+    "accepted_profiles": [
+      "Eight/Yuv420p",
+      "Ten/Yuv420p10le"
+    ],
+    "source_depth_is_authoritative": true,
+    "actor_owned_tensor_moved_without_second_copy": true,
+    "source_video_semantic_digest_bound": true,
+    "content_digest_dimensions_rate_and_frame_count_bound": true,
+    "eight_bit_semantic_identity_byte_stable": true,
+    "audio_and_container_metadata_admitted": false
+  },
+  "synthetic_fixture": {
+    "dimensions": [2, 2],
+    "frame_rate": [2997, 100],
+    "frame_count": 3,
+    "eight_bit_encoded_bytes": "HMP4",
+    "ten_bit_encoded_bytes": "H10P4",
+    "test_cases": [
+      "one service accepts checked audio-free component VIDEO at both closed depths",
+      "the planner and actor select Yuv420p for Eight and Yuv420p10le for Ten",
+      "the actor output Tensor StorageId is retained by canonical encoded VIDEO without another copy",
+      "actual depth and pixel projection mismatches fail before encoded VIDEO construction",
+      "cancellation or exhaustion drops candidate output and an explicit retry succeeds"
+    ]
+  },
+  "claims": {
+    "synthetic_depth_exact_backing_service_and_payload_execution": true,
+    "licensed_or_installed_ffmpeg_or_libx264_package": false,
+    "synthetic_bytes_are_valid_playable_mp4": false,
+    "decoded_numeric_or_pyav_encoder_or_byte_identity": false,
+    "aac_audio_or_container_metadata": false,
+    "demux_decode_path_or_load_video": false,
+    "trim_window_video_slice_or_save_video_effect": false,
+    "handle_cache_persistence_recovery_or_publication": false,
+    "all_native_heap_allocations_intercepted": false
+  }
+}

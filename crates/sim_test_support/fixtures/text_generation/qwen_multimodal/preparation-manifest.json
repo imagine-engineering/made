@@ -1,0 +1,94 @@
+{
+  "fixture_kind": "code-inferred-native-qwen3vl-preparation",
+  "oracle_observation": "Static source-derived contract; no licensed Qwen checkpoint or upstream runtime output was used.",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen3vl.py",
+      "sha256": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06",
+      "symbols": ["Qwen3VLTokenizer", "Qwen3VL.preprocess_embed", "Qwen3VL.build_image_inputs"]
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen_vl.py",
+      "sha256": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f",
+      "symbols": ["process_qwen2vl_images", "qwen2vl_mrope_position_ids"]
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen35.py",
+      "sha256": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+      "symbols": ["Qwen35VisionModel.fast_pos_embed_interpolate", "Qwen35VisionModel.rot_pos_emb"]
+    }
+  ],
+  "tokenizer_artifacts": [
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen25_tokenizer/tokenizer_config.json",
+      "sha256": "49292bd4a58a43382bf01311bc3ed7a151a7f16fe07d155e900ea1af281555db"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen25_tokenizer/vocab.json",
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    },
+    {
+      "path": "projects/comfy/ComfyUI/comfy/text_encoders/qwen25_tokenizer/merges.txt",
+      "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+    }
+  ],
+  "configuration": {
+    "image_pad_token": 151655,
+    "minimum_pixels": 3136,
+    "maximum_pixels": 12845056,
+    "patch_size": 16,
+    "temporal_patch_size": 2,
+    "spatial_merge_size": 2,
+    "normalization_mean": [0.5, 0.5, 0.5],
+    "normalization_standard_deviation": [0.5, 0.5, 0.5],
+    "resize_mode": "bilinear-align-corners-false",
+    "native_backend": "cpu-f32"
+  },
+  "deterministic_cases": [
+    {
+      "name": "two-image-batch-17x31",
+      "input_shape": [2, 17, 31, 3],
+      "target_shape_per_image": [1, 64, 96, 3],
+      "grid_thw_per_image": [1, 4, 6],
+      "patch_shape_per_image": [24, 3, 2, 16, 16],
+      "merged_tokens_per_image": 6
+    },
+    {
+      "name": "two-marker-unequal-spans",
+      "input_tokens": [10, 151655, 11, 151655, 12],
+      "grid_thw": [[1, 4, 4], [1, 6, 4]],
+      "spans": [{"start": 1, "size": 4}, {"start": 6, "size": 6}],
+      "expanded_length": 13,
+      "visual_true_count": 10
+    },
+    {
+      "name": "spatial-merge-patch-order-sentinels",
+      "input_shape": [1, 64, 64, 3],
+      "patch_shape": [16, 3, 2, 16, 16],
+      "background_input": 0.5,
+      "input_sentinels_yxc": [[0, 0, 0, 0.75], [0, 16, 1, 0.25], [16, 0, 2, 1.0], [0, 32, 1, 0.0]],
+      "normalized_flat_output_sentinels": [[0, 0.5], [256, 0.5], [2048, -0.5], [2304, -0.5], [4096, 1.0], [4352, 1.0], [6656, -1.0], [6912, -1.0]],
+      "nonzero_output_count": 8
+    },
+    {
+      "name": "single-image-mrope",
+      "sequence_length": 10,
+      "span": {"start": 2, "size": 4, "grid_thw": [1, 4, 4]},
+      "temporal": [0, 1, 2, 2, 2, 2, 4, 5, 6, 7],
+      "height": [0, 1, 2, 2, 3, 3, 4, 5, 6, 7],
+      "width": [0, 1, 2, 3, 2, 3, 4, 5, 6, 7]
+    }
+  ],
+  "validation": {
+    "exact": true,
+    "numeric_tolerance": 0.0,
+    "nondeterminism": "none",
+    "runtime_oracle_available": false
+  }
+}

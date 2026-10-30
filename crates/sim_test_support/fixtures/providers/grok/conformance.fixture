@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.grok",
+  "source_sha256": "b74dd5886965e2f98d8ae46ec207b13c820c4ee366d4b6486c545780b07c19c7",
+  "aliases": [
+    "xai"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0212",
+      "node_identifier": "GrokImageEditNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0213",
+      "node_identifier": "GrokImageEditNodeV2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0214",
+      "node_identifier": "GrokImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0215",
+      "node_identifier": "GrokVideoEditNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0216",
+      "node_identifier": "GrokVideoExtendNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0217",
+      "node_identifier": "GrokVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0218",
+      "node_identifier": "GrokVideoReferenceNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0211",
+      "method": "POST",
+      "path": "/proxy/xai/v1/images/edits",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0212",
+      "method": "POST",
+      "path": "/proxy/xai/v1/images/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0213",
+      "method": "GET",
+      "path": "/proxy/xai/v1/videos/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0214",
+      "method": "POST",
+      "path": "/proxy/xai/v1/videos/edits",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0215",
+      "method": "POST",
+      "path": "/proxy/xai/v1/videos/extensions",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0216",
+      "method": "POST",
+      "path": "/proxy/xai/v1/videos/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0217",
+      "method": "GET",
+      "path": "/proxy/xai/v1/videos/{initial_response.request_id}",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending",
+  "source_validation": {
+    "python_strip_control_separators": [
+      28,
+      29,
+      30,
+      31
+    ],
+    "zero_width_space_is_whitespace": false,
+    "prompt_preserves_original": true,
+    "validation_utils_sha256": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "client_sha256": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc"
+  }
+}

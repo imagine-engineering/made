@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-dependency-contract-v1",
+  "truth_mode": "synthetic-signed-dependency-contract",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d"
+  },
+  "dependencies": {
+    "codec_ffi_certification_manifest_sha256": "f69947e75aae0a17d5b14ca2e100b2bd86f817ddb4e9930b75f4319528947d75",
+    "codec_package_capture_manifest_sha256": "808de8318a888e8101e0deb8b458492ac68562859aba8e239d295868b1d086b0",
+    "codec_elf_inspection_manifest_sha256": "326bf18151f9e069b19aa4e18a0b832e84e03d4c11474f0d11e81153e24b0a52",
+    "codec_inspected_certification_manifest_sha256": "193c29b0d0bda210b28df23c6ca44dd43d89e573ccb3c2ec8cb13dc720963b5a"
+  },
+  "contract": {
+    "target": "x86_64-unknown-linux-gnu",
+    "profile": "ffmpeg-7.1",
+    "encoding": "canonical-json-with-trailing-newline",
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-video-codec-dependency-contract-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_runtime::native_video_codec_ffi",
+    "primary_catalog_digest_bound": true,
+    "source_build_license_digests_bound": true,
+    "dependency_soname_digest_abi_sponsor_bound": true,
+    "complete_consumer_edges_bound": true,
+    "reviewed_system_soname_policy_exact": true,
+    "encoder_provider_mapping": [
+      "aac",
+      "libsvtav1",
+      "libvpx-vp9",
+      "libx264"
+    ],
+    "dependency_contracts_non_callable": true,
+    "runtime_compilation_forbidden": true,
+    "redistributes_codec_libraries": false,
+    "cancellation_before_contract_publication": true
+  },
+  "claims": {
+    "licensed_ffmpeg_binary": false,
+    "production_package_catalog": false,
+    "dependency_image_captured": false,
+    "dependency_certificate_issued": false,
+    "native_library_loaded": false,
+    "runtime_symbol_address_resolved": false,
+    "encoder_availability_probed": false,
+    "codec_execution": false,
+    "media_allocation": false,
+    "effect_or_cache_publication": false,
+    "persistence": false,
+    "upstream_runtime_numeric_oracle": false
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "fixture_id": "sim-native-video-vae-source-manifests-v1",
+  "oracle_kind": "development-time-source-conformance",
+  "production_dependency": false,
+  "sources": [
+    {"path":"projects/sim/ComfyUI/sim/sd.py","sha256":"9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/models/autoencoder.py","sha256":"24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/genmo/vae/model.py","sha256":"31969951bb82ca2a074dbcfd4f68a71699b973c7233b55908fb209b939b950ce"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/lightricks/vae/causal_video_autoencoder.py","sha256":"83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/hunyuan_video/vae_refiner.py","sha256":"8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/cogvideo/vae.py","sha256":"b0e89fdabf91ea0a6deeb27fd32bf3e9a3f2789ce0ef5b9d7e26bb8ddc53c7f7"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/cosmos/vae.py","sha256":"3a61205726e35fb1d7235d75a470ae118f32e564d49f1c38b7575884f74f6734"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/wan/vae.py","sha256":"b18fdd6d95d9c7093fbc8f2c831dfb36322aa1951c2dd17d32733dac53d689e4"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/wan/vae2_2.py","sha256":"951acd5ef15de85a923ca471659acf02adb281a13ce754bdf7ff0d4c547214a5"},
+    {"path":"projects/sim/ComfyUI/sim/taesd/taehv.py","sha256":"4e4dd693cc68226dd8f9794ef60f68032266452b18e8703f5a2bb08e234bacc9"}
+  ]
+}

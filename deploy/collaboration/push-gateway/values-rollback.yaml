@@ -1,0 +1,9 @@
+# Rollback never runs migrations. The operator must inject the previous signed
+# image digest and the maximum schema version that binary accepts.
+deployment:
+  enabled: true
+  production: true
+rollback:
+  enabled: true
+  targetImageDigest: ""
+  maximumSchemaVersion: "0"

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "profile": "ffmpeg-7.1-x86_64-gnu-vp9-alpha-v1",
+  "target": "x86_64-unknown-linux-gnu",
+  "source": {
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "header": {
+      "path": "libavutil/pixfmt.h",
+      "sha256": "ace2ebcf84a382269c21ad7a050d69ab293b0dbceab350ac7f728a1b37dc0336"
+    }
+  },
+  "contract": {
+    "symbol_count": 54,
+    "new_symbols": 0
+  },
+  "pixel_formats": {
+    "AV_PIX_FMT_RGBA": 26,
+    "AV_PIX_FMT_YUVA420P": 33
+  }
+}

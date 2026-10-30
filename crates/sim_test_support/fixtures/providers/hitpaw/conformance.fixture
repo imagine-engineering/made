@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.hitpaw",
+  "source_sha256": "8f479c2060c399b3e5a57c0770a623dd4be6a00c711f2ce9c10ccdd55651fc6e",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0226",
+      "node_identifier": "HitPawGeneralImageEnhance"
+    },
+    {
+      "feature_id": "COMFY-NODE-0227",
+      "node_identifier": "HitPawVideoEnhance"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0049",
+      "method": "POST",
+      "path": "/proxy/hitpaw/api/photo-enhancer",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0050",
+      "method": "POST",
+      "path": "/proxy/hitpaw/api/task-status",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0051",
+      "method": "POST",
+      "path": "/proxy/hitpaw/api/video-enhancer",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending"
+}

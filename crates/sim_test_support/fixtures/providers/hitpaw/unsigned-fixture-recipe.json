@@ -1,0 +1,28 @@
+{
+  "state": "VALIDATED_UNSIGNED_IMAGE_INPUT_PROBE",
+  "artifact_destination": "crates/sim_test_support/fixtures/providers/hitpaw/provider_v2_image_input_probe_component",
+  "requires_canonical_binding_producer": "SIM_HITPAW_BINDING_RECIPE_PATH=<Root target evidence JSON> cargo test --locked --offline -p sim_plugin_host --test provider_component_conformance hitpaw_image_input_probe::hitpaw_image_input_probe_binding_recipe_uses_canonical_source_contract -- --exact --test-threads=1",
+  "mandatory_guest_environment": [
+    "SIM_HITPAW_NATIVE_CONTRACT_SHA256",
+    "SIM_HITPAW_BINDINGS_SHA256"
+  ],
+  "canonical_receipt_unproduced": false,
+  "build_command": "python3 build_unsigned_probe.py --repository <installed intended checkout> --binding-recipe <validated canonical producer JSON> --target-dir <isolated ignored wasm target> --execute",
+  "component_key": "unsigned only; existing test publisher signs exact artifact at invocation",
+  "discovery": "Distinct input-probe filename; no provider_v2*_host.fixture; not auto-discovered as complete provider",
+  "library_dependencies": "Exact locked serde_json/wit-bindgen dependencies and native wit-component builder; unused direct serde root edge removed. All 73 registry package records/checksums remain byte-equivalent to v2/Anthropic; transitive serde stays where required. Actual builds and normal Clippy used this unchanged73-package lock with --locked --offline; no lock resolution or update was allowed.",
+  "run_status": "Actual locked offline Wasm/native encoder builds, current host12 conformance, host/nested guest Clippy and workspace/guest formatting passed; full Task443 remains partial.",
+  "artifact_validation": "Core module must have exact Wasm v1 header; ComponentEncoder::validate(true) invokes canonical wasmparser Validator.validate_all; resulting artifact must have exact component-model v13/kind1 header, then real PluginHost compile/preflight compares all manifest/WIT/binding fields.",
+  "admission_scope": "Single0226 direct canonical-input\u2192compiled-WIT host admission/cancellation probe only. Cannot activate full HitPaw production namespace, which requires both0226image and0227video nodes.",
+  "retained_preparation_status": {
+    "state": "PREPARED_ONLY_NO_COMPONENT_ARTIFACT",
+    "canonical_receipt_unproduced": true,
+    "run_status": "Cargo/WASM/native UNRUN"
+  },
+  "component_bytes": 77045,
+  "component_sha256": "2a86ebffbfb586a20380333838a354b9797f11f211019e1ff1ce9646bffe6205",
+  "native_contract_sha256": "c594ad89286f46040eaf09a5bc9ea6aa0443f534188fff8cedf32870c59077aa",
+  "bindings_sha256": "1685633a465f9cb2111af57cbff3a27c558e4ab757e737cd2ab84ceb62a1c62a",
+  "validation_evidence": ".agents/specs/sim-parity/audit/2026-10-04-hitpaw-compiled-input-probe.md",
+  "sim_rename_rebuild": "Rebuilt from canonical Sim WIT and native binding contracts; historical validation references describe the prior artifact. Run host conformance against this artifact."
+}

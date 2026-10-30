@@ -1,0 +1,99 @@
+# Generated from xtask::workflows::hosted_collab_tests
+# Rebuild with `cargo xtask workflows`.
+name: hosted_collab_tests
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+  CARGO_INCREMENTAL: '0'
+on:
+  pull_request:
+    paths:
+    - .github/workflows/hosted_collab_tests.yml
+    - crates/collab/**
+    - crates/collaboration_domain/**
+    - crates/collaboration_workflow/**
+    - crates/proto/**
+    - crates/rpc/**
+    - deploy/collaboration/**
+    - tooling/xtask/src/tasks/workflows.rs
+    - tooling/xtask/src/tasks/workflows/hosted_collab_tests.rs
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/hosted_collab_tests.yml
+    - crates/collab/**
+    - crates/collaboration_domain/**
+    - crates/collaboration_workflow/**
+    - crates/proto/**
+    - crates/rpc/**
+    - deploy/collaboration/**
+    - tooling/xtask/src/tasks/workflows.rs
+    - tooling/xtask/src/tasks/workflows/hosted_collab_tests.rs
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  hosted_collab_tests:
+    runs-on: ubuntu-22.04
+    env:
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      COLLAB_TEST_DATABASE_URL: postgres://postgres@localhost/postgres
+      CC: clang
+      CXX: clang++
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+    - name: steps::free_linux_disk_space
+      run: |
+        sudo swapoff -a
+        sudo rm -rf -- \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/dotnet \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache \
+            /usr/share/swift \
+            /opt/az \
+            /opt/microsoft \
+            /usr/share/miniconda \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium
+        sudo rm -f -- /mnt/swapfile
+        df -h /
+    - name: steps::setup_cargo_config
+      run: |
+        mkdir -p ./../.cargo
+        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
+    - name: steps::setup_linux
+      run: ./script/linux
+    - name: steps::download_wasi_sdk
+      run: ./script/download-wasi-sdk
+    - name: steps::cargo_install_nextest
+      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+      with:
+        tool: nextest
+    - name: hosted_collab_tests::hosted_collab_tests
+      run: cargo nextest run --package collab --features test-support --test collab_tests --no-fail-fast --no-tests=warn
+    - name: steps::cleanup_cargo_config
+      if: always()
+      run: |
+        rm -rf ./../.cargo
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:15@sha256:1b92e7a80c021647bf70f5d3eb66066a998e4f5cf43c07bb9dc9f729782cf88e
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+        - 5432:5432
+        options: --health-cmd pg_isready --health-interval 500ms --health-timeout 5s --health-retries 10
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.ref_name == 'main' && github.sha || 'anysha' }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}

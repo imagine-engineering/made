@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+workspace_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$workspace_root"
+
+python3 -c '
+import pathlib
+import tomllib
+
+root = pathlib.Path.cwd()
+zed = tomllib.loads((root / "crates/zed/Cargo.toml").read_text())
+project = tomllib.loads((root / "crates/project/Cargo.toml").read_text())
+remote = tomllib.loads((root / "crates/remote_server/Cargo.toml").read_text())
+cargo_ui = tomllib.loads((root / "crates/cargo_ui/Cargo.toml").read_text())
+settings = tomllib.loads((root / "crates/settings/Cargo.toml").read_text())
+settings_content = tomllib.loads((root / "crates/settings_content/Cargo.toml").read_text())
+tasks_ui = tomllib.loads((root / "crates/tasks_ui/Cargo.toml").read_text())
+terminal_view = tomllib.loads((root / "crates/terminal_view/Cargo.toml").read_text())
+diagnostics = tomllib.loads((root / "crates/diagnostics/Cargo.toml").read_text())
+agent_ui = tomllib.loads((root / "crates/agent_ui/Cargo.toml").read_text())
+
+assert "rust-tools" not in zed["features"]["default"], (
+    "rust-tools must remain outside zed default features"
+)
+assert zed["features"]["rust-tools"] == [
+    "dep:cargo_ui", "tasks_ui/rust-test-actions", "diagnostics/rust-tools"
+]
+assert diagnostics["features"]["default"] == []
+assert "project/rust-tests" in diagnostics["features"]["rust-tools"]
+assert agent_ui["dev-dependencies"]["diagnostics"]["features"] == ["test-support", "agentic"], (
+    "AgentUI Doctor fixtures require the canonical agent probe, without Rust/JVM tooling"
+)
+assert not set(agent_ui["dependencies"]["diagnostics"].get("features", [])) & {
+    "agentic", "rust-tools", "jvm-tools"
+}, "Doctor fixture features must not become ordinary AgentUI dependencies"
+assert "diagnostics/rust-tools" in agent_ui["features"]["doctor-dependency-test"]
+assert zed["dependencies"]["cargo_ui"].get("optional") is True
+assert zed["dependencies"]["graphics_ui"].get("optional") is True
+assert "dep:graphics_ui" in zed["features"]["sim"]
+for feature in ["default", "rust-tools", "jvm-tools"]:
+    assert "comfy" not in zed["features"][feature]
+    assert "dep:graphics_ui" not in zed["features"][feature]
+assert project["features"]["cargo-workspace"] == ["dep:cargo_metadata"]
+assert project["features"]["rust-tests"] == ["cargo-workspace", "structured-execution"]
+assert project["features"]["rust-coverage"] == ["structured-execution"]
+assert project["dependencies"]["cargo_metadata"].get("optional") is True
+assert remote["features"]["rust-tools"] == ["project/rust-tests", "project/rust-coverage"]
+assert settings["features"]["rust-tools"] == ["settings_content/rust-tools"]
+assert "rust-tools" in settings_content["features"]
+assert terminal_view["features"]["default"] == []
+assert terminal_view["features"]["rust-coverage"] == ["project/rust-coverage"]
+assert tasks_ui["features"]["default"] == []
+assert tasks_ui["features"]["rust-test-actions"] == ["test-explorer", "project/rust-tests"]
+assert "settings/test-explorer" in tasks_ui["features"]["test-explorer"]
+assert "cargo-workspace" in cargo_ui["dependencies"]["project"]["features"]
+assert "rust-coverage" in cargo_ui["dependencies"]["project"]["features"]
+assert "rust-tools" in cargo_ui["dependencies"]["settings"]["features"]
+
+language_tools_manifest = (root / "crates/language_tools/Cargo.toml").read_text()
+language_tools_source = (root / "crates/language_tools/src/language_tool_tree.rs").read_text()
+structured_source = (root / "crates/project/src/structured_execution.rs").read_text().split("#[cfg(test)]", 1)[0]
+assert "cargo_metadata" not in language_tools_manifest
+assert "cargo_ui" not in language_tools_manifest
+assert "CargoPackage" not in language_tools_source
+assert "CargoTarget" not in language_tools_source
+for forbidden in ["cargo_metadata", "CargoWorkspace", "RustTestProvider"]:
+    assert forbidden not in structured_source, f"generic structured execution leaks {forbidden}"
+assert "metal_cargo" not in "\n".join(
+    path.read_text(errors="ignore")
+    for path in [
+        root / "crates/zed/Cargo.toml",
+        root / "crates/project/Cargo.toml",
+        root / "crates/cargo_ui/Cargo.toml",
+    ]
+)
+assert "cargo_panel" not in (root / "assets/settings/default.json").read_text()
+assert "languages::init" in (root / "crates/remote_server/src/headless_project.rs").read_text(), (
+    "existing Rust language initialization remains outside this Cargo-only boundary"
+)
+
+for path in [
+    root / "crates/zed/src/main.rs",
+    root / "crates/zed/src/zed.rs",
+    root / "crates/zed/src/zed/app_menus.rs",
+]:
+    source = path.read_text()
+    assert "rust-tools" in source, f"{path} must gate Cargo UI integration"
+
+headless = (root / "crates/remote_server/src/headless_project.rs").read_text()
+assert "#[cfg(feature = \"rust-tools\")]" in headless
+for capability in ["CargoWorkspaceStore::init", "StructuredExecutionStore::init", "RustTestProviderStore::init", "RustCoverageProviderStore::init"]:
+    assert capability in headless, f"headless rust-tools path misses {capability}"
+
+tasks_ui_source = (root / "crates/tasks_ui/src/tasks_ui.rs").read_text()
+assert "#[cfg(feature = \"test-explorer\")]" in tasks_ui_source
+assert "test_explorer::init(cx)" in tasks_ui_source
+
+zed_proto = (root / "crates/proto/proto/zed.proto").read_text()
+assert all(capability in zed_proto for capability in [
+    "GetRustTestDiscovery",
+    "ResolveRustTestAction",
+    "UpdateRustTestRun",
+    "GetStructuredExecutionSnapshot",
+]), (
+    "bounded protocol definitions intentionally remain inert in disabled builds"
+)
+'
+
+zed_tree=$(cargo tree --locked -p zed --no-default-features -e normal --prefix none)
+zed_default_tree=$(cargo tree --locked -p zed -e normal --prefix none)
+remote_tree=$(cargo tree --locked -p remote_server --no-default-features -e normal --prefix none)
+project_tree=$(cargo tree --locked -p project --no-default-features -e normal --prefix none)
+terminal_tree=$(cargo tree --locked -p terminal_view --no-default-features -e normal --prefix none)
+terminal_coverage_tree=$(cargo tree --locked -p terminal_view --no-default-features --features rust-coverage -e normal --prefix none)
+diagnostics_tree=$(cargo tree --locked -p diagnostics --no-default-features -e normal --prefix none)
+language_tools_tree=$(cargo tree --locked -p language_tools -e normal --prefix none)
+agent_ui_test_tree=$(cargo tree --locked -p agent_ui --no-default-features -e normal,dev --prefix none)
+doctor_dependency_test_tree=$(cargo tree --locked -p agent_ui --no-default-features --features doctor-dependency-test -e normal,dev --prefix none)
+
+for tree in "$zed_tree" "$zed_default_tree" "$remote_tree" "$project_tree" "$terminal_tree" "$terminal_coverage_tree" "$diagnostics_tree" "$agent_ui_test_tree"; do
+    if printf '%s\n' "$tree" | grep -E '^(cargo_ui|cargo_metadata)[[:space:]]' >/dev/null; then
+        printf '%s\n' "disabled dependency graph contains Cargo tooling dependencies" >&2
+        printf '%s\n' "$tree" | grep -E '^(cargo_ui|cargo_metadata)[[:space:]]' >&2
+        exit 1
+    fi
+done
+
+if ! printf '%s\n' "$doctor_dependency_test_tree" | grep -E '^cargo_metadata[[:space:]]' >/dev/null; then
+    printf '%s\n' "explicit Doctor dependency test graph misses its Cargo owner" >&2
+    exit 1
+fi
+
+if printf '%s\n' "$language_tools_tree" | grep -E '^(cargo_ui|cargo_metadata)[[:space:]]' >/dev/null; then
+    printf '%s\n' "language_tools dependency graph contains Cargo tooling dependencies" >&2
+    exit 1
+fi
+
+for plan in \
+    "$(./script/bundle-mac --rust-tools --dry-run)" \
+    "$(./script/bundle-linux --rust-tools --dry-run)" \
+    "$(./script/bundle-freebsd --rust-tools --dry-run)"; do
+    [[ "$plan" == *"rust_tools=true"* ]]
+    [[ "$plan" == *"remote_features=rust-tools"* ]]
+done
+
+for plan in \
+    "$(./script/bundle-mac --dry-run)" \
+    "$(./script/bundle-linux --dry-run)" \
+    "$(./script/bundle-freebsd --dry-run)"; do
+    [[ "$plan" == *"rust_tools=false"* ]]
+    [[ "$plan" == *"remote_features=none"* ]]
+done
+
+python3 -c '
+import pathlib
+root = pathlib.Path.cwd()
+windows = (root / "script/bundle-windows.ps1").read_text()
+assert "[Parameter()][switch]$RustTools" in windows
+assert "\"zed/$_\"" in windows
+assert "--features $applicationFeatures" in windows
+assert "--features $env:ZED_PRODUCT_REMOTE_FEATURES" in windows
+assert "--rust-tools" in (root / "script/flatpak/bundle-flatpak").read_text()
+assert "--rust-tools" in (root / "script/install-linux").read_text()
+'
+
+for features in "agentic-tools,rust-tools" "agentic-tools,jvm-tools"; do
+    product_tree=$(cargo tree --locked -p zed --no-default-features --features "$features" -e normal --prefix none)
+    if printf '%s\n' "$product_tree" | grep -E '^(graphics_ui|graphics_core|graphite-editor)[[:space:]]' >/dev/null; then
+        printf '%s\n' "non-Sim product dependency graph contains native graphics" >&2
+        exit 1
+    fi
+done
+
+sim_tree=$(cargo tree --locked -p zed --no-default-features --features sim -e normal --prefix none)
+for package in graphics_ui graphics_core; do
+    if ! printf '%s\n' "$sim_tree" | grep -E "^${package}[[:space:]]" >/dev/null; then
+        printf '%s\n' "Sim product dependency graph misses ${package}" >&2
+        exit 1
+    fi
+done
+
+echo "Rust-tools and graphics product feature boundaries passed"

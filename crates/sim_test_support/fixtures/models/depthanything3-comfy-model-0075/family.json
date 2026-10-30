@@ -1,0 +1,71 @@
+{
+  "fixture_id": "depthanything3-sim-model-0075",
+  "feature_id": "COMFY-MODEL-0075",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.backbone.embeddings.patch_embeddings.projection.weight": [384, 3, 14, 14],
+      "model.diffusion_model.head.projects.0.weight": [2, 2],
+      "model.diffusion_model.head.scratch.refinenet1.out_conv.weight": [2, 2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0750750750750750750750750750750750750750750750750750750750750750",
+  "source_weights": [
+    {
+      "key": "model.diffusion_model.head.projects.0.weight",
+      "shape": [2, 2],
+      "values": [1.0, 0.0, 0.0, 1.0]
+    },
+    {
+      "key": "model.diffusion_model.head.scratch.refinenet1.out_conv.weight",
+      "shape": [2, 2],
+      "values": [2.0, 0.0, 0.0, 0.5]
+    },
+    {
+      "key": "model.diffusion_model.head.scratch.output_conv2.2.weight",
+      "shape": [2, 2],
+      "values": [1.0, 1.0, 1.0, -1.0]
+    }
+  ],
+  "input": {
+    "key": "image_features",
+    "shape": [1, 2],
+    "values": [1.0, 2.0]
+  },
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 56,
+  "expected_memory_bytes": 56,
+  "checkpoints": [
+    {"name": "backbone_feature_projection", "values": [1.0, 2.0]},
+    {"name": "backbone_feature_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "depth_refinement", "values": [1.4621172, 0.8807971]},
+    {"name": "depth_refinement_normalized", "values": [0.9999941, -0.9999941]},
+    {"name": "depth_projection", "values": [0.0, 1.9999882]},
+    {"name": "depth_output", "values": [0.0, 0.96402675]}
+  ],
+  "patches": [
+    {
+      "identifier": "depthanything3-refinement-delta",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {
+          "key": "native.head.scratch.refinenet1.out_conv.weight",
+          "expected_shape": [2, 2],
+          "values": [1.0, 0.0, 0.0, 1.0],
+          "application": "add"
+        }
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "backbone_feature_projection", "values": [1.0, 2.0]},
+    {"name": "backbone_feature_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "depth_refinement", "values": [2.1931758, 2.6423912]},
+    {"name": "depth_refinement_normalized", "values": [-0.9999901, 0.9999901]},
+    {"name": "depth_projection", "values": [0.0, -1.9999802]},
+    {"name": "depth_output", "values": [0.0, -0.9640262]}
+  ]
+}

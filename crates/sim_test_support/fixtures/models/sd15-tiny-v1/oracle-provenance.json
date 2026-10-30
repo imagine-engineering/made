@@ -1,0 +1,19 @@
+{
+  "fixture_id": "sd15-tiny-v1",
+  "oracle_kind": "pinned-simui-source-equation-fixture",
+  "production_dependency": false,
+  "sources": {
+    "projects/sim/ComfyUI/sim/k_diffusion/sampling.py": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "projects/sim/ComfyUI/sim/latent_formats.py": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac",
+    "projects/sim/ComfyUI/sim/ldm/models/autoencoder.py": "24b5a9126539733ef15f36e0d723abde8a8fb3319184083970b385ab918404f0",
+    "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/openaimodel.py": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+    "projects/sim/ComfyUI/sim/samplers.py": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "projects/sim/ComfyUI/sim/sd.py": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
+    "projects/sim/ComfyUI/sim/sd1_clip.py": "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2",
+    "projects/sim/ComfyUI/sim/sd1_clip_config.json": "c4dabd85f1abdd818c7a9f5dee1f6cf2b9cebc5ed3237ab2f2c4b00bdb02ce6c",
+    "projects/sim/ComfyUI/sim/supported_models.py": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69",
+    "projects/sim/ComfyUI/sim/supported_models_base.py": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596",
+    "projects/sim/ComfyUI/nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+  },
+  "weight_algorithm": "SHA-256 key seed plus SplitMix64 signed top-24 stream"
+}

@@ -1,0 +1,135 @@
+{
+  "namespace": "zed.sim.provider.recraft",
+  "source_sha256": "35a4c957bd8f34691c26235ccd9ee3efacabee51f7132de9c536e344a98bf410",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0509",
+      "node_identifier": "RecraftColorRGB"
+    },
+    {
+      "feature_id": "COMFY-NODE-0510",
+      "node_identifier": "RecraftControls"
+    },
+    {
+      "feature_id": "COMFY-NODE-0511",
+      "node_identifier": "RecraftCreateStyleNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0512",
+      "node_identifier": "RecraftCreativeUpscaleNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0513",
+      "node_identifier": "RecraftCrispUpscaleNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0514",
+      "node_identifier": "RecraftImageInpaintingNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0515",
+      "node_identifier": "RecraftImageToImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0516",
+      "node_identifier": "RecraftRemoveBackgroundNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0517",
+      "node_identifier": "RecraftReplaceBackgroundNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0518",
+      "node_identifier": "RecraftStyleV3DigitalIllustration"
+    },
+    {
+      "feature_id": "COMFY-NODE-0519",
+      "node_identifier": "RecraftStyleV3InfiniteStyleLibrary"
+    },
+    {
+      "feature_id": "COMFY-NODE-0520",
+      "node_identifier": "RecraftStyleV3LogoRaster"
+    },
+    {
+      "feature_id": "COMFY-NODE-0521",
+      "node_identifier": "RecraftStyleV3RealisticImage"
+    },
+    {
+      "feature_id": "COMFY-NODE-0522",
+      "node_identifier": "RecraftTextToImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0523",
+      "node_identifier": "RecraftTextToVectorNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0524",
+      "node_identifier": "RecraftV4TextToImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0525",
+      "node_identifier": "RecraftV4TextToVectorNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0526",
+      "node_identifier": "RecraftVectorizeImageNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0136",
+      "method": "POST",
+      "path": "/proxy/recraft/image_generation",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0137",
+      "method": "POST",
+      "path": "/proxy/recraft/images/creativeUpscale",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0138",
+      "method": "POST",
+      "path": "/proxy/recraft/images/crispUpscale",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0139",
+      "method": "POST",
+      "path": "/proxy/recraft/images/imageToImage",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0140",
+      "method": "POST",
+      "path": "/proxy/recraft/images/inpaint",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0141",
+      "method": "POST",
+      "path": "/proxy/recraft/images/removeBackground",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0142",
+      "method": "POST",
+      "path": "/proxy/recraft/images/replaceBackground",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0143",
+      "method": "POST",
+      "path": "/proxy/recraft/images/vectorize",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0144",
+      "method": "POST",
+      "path": "/proxy/recraft/styles",
+      "disposition": "executable"
+    }
+  ]
+}

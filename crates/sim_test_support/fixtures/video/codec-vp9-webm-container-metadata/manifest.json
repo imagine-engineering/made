@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-vp9-webm-container-metadata-v1",
+  "truth_mode": "synthetic-source-compatible-vp9-webm-container-metadata",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d",
+    "observable": "SaveWEBM assigns serialized prompt metadata first, then extra_pnginfo in insertion order, before creating the WebM stream"
+  },
+  "ffmpeg_7_1": {
+    "archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "signing_key": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "avformat_header_sha256": "6171ac10e35a67fe04aa8ddfbf84263def2d7ae9159019dd71e5597be5dd3944",
+    "avformat_context_metadata_offset": 192,
+    "metadata_projection_size": 200,
+    "metadata_projection_alignment": 8,
+    "historical_data_plane_prefix_size": 56,
+    "reviewed_symbol_count": 54
+  },
+  "dependencies": {
+    "historical_data_plane_manifest_sha256": "c5d4780cac865e9dd327f42f80278e6cfd4d85a94cbdd48cafbc981872b440ec",
+    "historical_data_plane_verifier_sha256": "bb61bec6fa7e300f2730f1df7ad88abafabdb21f0942b5a61f9dfde3f7ffc9f6",
+    "container_metadata_overlay_manifest_sha256": "cb989b103743491f19d41a7f451bac06c055496a9ff2cf3d37b12d92b133192d",
+    "container_metadata_verifier_sha256": "77f5613573c64754138c793d669c928fb066fc988093177e3c98011ece8d6c58",
+    "codec_vp9_webm_crf_manifest_sha256": "25f4f8976cb47da76c1b095892ddb0d3fd124e77684e5e49c185443553b5ab8a"
+  },
+  "contract": {
+    "input": "bounded ordered pre-serialized UTF-8 key/value entries",
+    "duplicate_keys": "preserved through sequential av_dict_set calls with flags zero so later entries overwrite",
+    "attachment_phase": "after format and custom AVIO setup and before stream and header creation",
+    "native_ownership": "avformat_free_context owns partial and complete attached dictionaries exactly once",
+    "actor_transport": "one owned safe metadata value crosses the sole capacity-one retained codec actor",
+    "codec_thread_identity_version": "zed.sim.video-codec-thread.v5"
+  },
+  "vectors": [
+    { "key": "prompt", "value": "first", "ordinal": 0 },
+    { "key": "workflow", "value": "{}", "ordinal": 1 },
+    { "key": "prompt", "value": "last", "ordinal": 2 }
+  ],
+  "claims": {
+    "compiler_verified_supplementary_projection": true,
+    "historical_data_plane_contract_unchanged": true,
+    "bounded_ordered_metadata_reaches_real_session_and_actor": true,
+    "flags_zero_preheader_calls_observed_by_exact_signature_mock": true,
+    "typed_failure_cancellation_cleanup_and_retry": true,
+    "licensed_or_installed_ffmpeg_or_libvpx_package": false,
+    "production_codec_availability": false,
+    "playable_webm_metadata_roundtrip_or_numeric_codec_oracle": false,
+    "python_json_serialization_owned": false,
+    "alpha_av1_aac_or_audio_supported": false,
+    "node_effect_path_or_output_committer_reachable": false,
+    "media_payload_handle_cache_persistence_recovery_or_publication_owned": false
+  }
+}

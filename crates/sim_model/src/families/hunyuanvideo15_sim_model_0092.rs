@@ -1,0 +1,259 @@
+use crate::{
+    HUNYUAN_VIDEO_COMPONENT_STATE_SCHEMAS, HUNYUAN_VIDEO_COMPONENTS,
+    HUNYUAN_VIDEO_FORWARD_PROGRAM, HUNYUAN_VIDEO_PREFIXED_STATE_PLAN,
+    HUNYUAN_VIDEO_SAVED_MODEL_STATE_PLAN, HUNYUAN_VIDEO_STANDALONE_STATE_PLAN,
+    HUNYUAN_VIDEO_SUPPORTED_DEVICES, HUNYUAN_VIDEO15_CLIP_TARGET,
+    HUNYUAN_VIDEO15_LATENT_FORMAT, HUNYUAN_VIDEO15_SUPPORTED_DTYPES, HunyuanVideoVariant,
+    MemoryEstimatorDescriptor, ModelClipTargetSelector, ModelDetectionRule,
+    ModelFamilyDefinition, ModelFamilyError, ModelFamilyProfile, ModelFamilyRegistration,
+    ModelFamilyStatePlanCase, ModelFamilyStatePlanSelector, ModelLayoutSignature, ModelProbe,
+    ModelStateLayout, ModelTensorFactPredicate, ModelTensorFactRelation, ModelTensorFactSubject,
+    ModelWeightRule, hunyuan_video_configuration_for_probe,
+};
+
+pub const MODEL_FAMILY_IDENTIFIER: &str = "HunyuanVideo15";
+pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0092";
+pub const MODEL_FAMILY_FIXTURE: &str = "hunyuanvideo15-comfy-model-0092";
+pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 35;
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_SHA256: &str =
+    "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
+pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
+    "2957b5481f2c6f30e23468702eb93513e3929d1e8600c6a3cc09310cdbafa6da";
+pub const MODEL_FAMILY_MEMORY_USAGE_FACTOR: f64 = 4.0;
+pub const MODEL_FAMILY_SAMPLING_SHIFT: f64 = 7.0;
+
+const MARKER_FACTS: &[ModelTensorFactPredicate] = &[
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Rank,
+        relation: ModelTensorFactRelation::Equal,
+        value: 1,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(0),
+        relation: ModelTensorFactRelation::GreaterThan,
+        value: 0,
+    },
+];
+
+const PATCH_PROJECTION_FACTS: &[ModelTensorFactPredicate] = &[
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Rank,
+        relation: ModelTensorFactRelation::Equal,
+        value: 5,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(1),
+        relation: ModelTensorFactRelation::Equal,
+        value: 32,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(2),
+        relation: ModelTensorFactRelation::Equal,
+        value: 1,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(3),
+        relation: ModelTensorFactRelation::Equal,
+        value: 2,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(4),
+        relation: ModelTensorFactRelation::Equal,
+        value: 2,
+    },
+];
+
+const FINAL_PROJECTION_FACTS: &[ModelTensorFactPredicate] = &[
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Rank,
+        relation: ModelTensorFactRelation::Equal,
+        value: 2,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(0),
+        relation: ModelTensorFactRelation::Equal,
+        value: 128,
+    },
+];
+
+const CONTEXT_PROJECTION_FACTS: &[ModelTensorFactPredicate] = &[
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Rank,
+        relation: ModelTensorFactRelation::Equal,
+        value: 2,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(1),
+        relation: ModelTensorFactRelation::GreaterThan,
+        value: 0,
+    },
+];
+
+const VISION_PROJECTION_FACTS: &[ModelTensorFactPredicate] = &[
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Rank,
+        relation: ModelTensorFactRelation::Equal,
+        value: 1,
+    },
+    ModelTensorFactPredicate {
+        subject: ModelTensorFactSubject::Dimension(0),
+        relation: ModelTensorFactRelation::Equal,
+        value: 1_152,
+    },
+];
+
+const DETECTION_RULES: &[ModelDetectionRule] = &[
+    ModelDetectionRule::AnyTensorFact {
+        keys: &[
+            "model.diffusion_model.txt_in.individual_token_refiner.blocks.0.norm1.weight",
+            "model.txt_in.individual_token_refiner.blocks.0.norm1.weight",
+            "txt_in.individual_token_refiner.blocks.0.norm1.weight",
+        ],
+        predicates: MARKER_FACTS,
+        score: 100,
+    },
+    ModelDetectionRule::AnyTensorFact {
+        keys: &[
+            "model.diffusion_model.img_in.proj.weight",
+            "model.img_in.proj.weight",
+            "img_in.proj.weight",
+        ],
+        predicates: PATCH_PROJECTION_FACTS,
+        score: 350,
+    },
+    ModelDetectionRule::AnyTensorFact {
+        keys: &[
+            "model.diffusion_model.final_layer.linear.weight",
+            "model.final_layer.linear.weight",
+            "final_layer.linear.weight",
+        ],
+        predicates: FINAL_PROJECTION_FACTS,
+        score: 200,
+    },
+    ModelDetectionRule::AnyTensorFact {
+        keys: &[
+            "model.diffusion_model.txt_in.input_embedder.weight",
+            "model.txt_in.input_embedder.weight",
+            "txt_in.input_embedder.weight",
+        ],
+        predicates: CONTEXT_PROJECTION_FACTS,
+        score: 150,
+    },
+    ModelDetectionRule::AnyTensorFact {
+        keys: &[
+            "model.diffusion_model.vision_in.proj.0.weight",
+            "model.vision_in.proj.0.weight",
+            "vision_in.proj.0.weight",
+        ],
+        predicates: VISION_PROJECTION_FACTS,
+        score: 200,
+    },
+];
+
+const WEIGHT_RULES: &[ModelWeightRule] = &[ModelWeightRule {
+    source_prefix: "model.diffusion_model.",
+    target_prefix: "native.",
+    required: true,
+}];
+
+const REQUIRED_KEYS: &[&str] = &[
+    "native.img_in.proj.weight",
+    "native.final_layer.linear.weight",
+    "native.final_layer.linear.bias",
+    "native.txt_in.input_embedder.weight",
+    "native.txt_in.input_embedder.bias",
+    "native.txt_in.individual_token_refiner.blocks.0.norm1.weight",
+];
+
+const OPTIONAL_KEYS: &[&str] = &["native.txt_in.t_embedder.in_layer.weight"];
+
+pub const MODEL_FAMILY: ModelFamilyDefinition = ModelFamilyDefinition {
+    feature_id: MODEL_FAMILY_FEATURE_ID,
+    identifier: MODEL_FAMILY_IDENTIFIER,
+    architecture_version: "hunyuan-video-1.5-flow-transformer-v1",
+    latent_feature_id: "COMFY-MODEL-0038",
+    latent_identifier: "HunyuanVideo15",
+    clip_target: &HUNYUAN_VIDEO15_CLIP_TARGET,
+    components: HUNYUAN_VIDEO_COMPONENTS,
+    detection_rules: DETECTION_RULES,
+    weight_rules: WEIGHT_RULES,
+    required_keys: REQUIRED_KEYS,
+    optional_keys: OPTIONAL_KEYS,
+    supported_dtypes: HUNYUAN_VIDEO15_SUPPORTED_DTYPES,
+    supported_devices: HUNYUAN_VIDEO_SUPPORTED_DEVICES,
+    memory_estimator: MemoryEstimatorDescriptor {
+        fixed_bytes: 0,
+        bytes_per_parameter: 2,
+        activation_bytes_per_element: 2,
+    },
+    forward_program: HUNYUAN_VIDEO_FORWARD_PROGRAM,
+};
+
+const LAYOUT_SIGNATURES: &[ModelLayoutSignature] = &[
+    ModelLayoutSignature {
+        layout: ModelStateLayout::PrefixedNative,
+        required_keys: &[
+            "model.diffusion_model.txt_in.individual_token_refiner.blocks.0.norm1.weight",
+        ],
+        required_prefixes: &[],
+    },
+    ModelLayoutSignature {
+        layout: ModelStateLayout::Diffusers,
+        required_keys: &["model.txt_in.individual_token_refiner.blocks.0.norm1.weight"],
+        required_prefixes: &[],
+    },
+    ModelLayoutSignature {
+        layout: ModelStateLayout::StandaloneNative,
+        required_keys: &["txt_in.individual_token_refiner.blocks.0.norm1.weight"],
+        required_prefixes: &[],
+    },
+];
+
+const STATE_PLAN_CASES: &[ModelFamilyStatePlanCase] = &[
+    ModelFamilyStatePlanCase {
+        layout: ModelStateLayout::PrefixedNative,
+        plan: &HUNYUAN_VIDEO_PREFIXED_STATE_PLAN,
+    },
+    ModelFamilyStatePlanCase {
+        layout: ModelStateLayout::Diffusers,
+        plan: &HUNYUAN_VIDEO_SAVED_MODEL_STATE_PLAN,
+    },
+    ModelFamilyStatePlanCase {
+        layout: ModelStateLayout::StandaloneNative,
+        plan: &HUNYUAN_VIDEO_STANDALONE_STATE_PLAN,
+    },
+];
+
+pub const MODEL_FAMILY_REGISTRATION: ModelFamilyRegistration = ModelFamilyRegistration {
+    definition: &MODEL_FAMILY,
+    source_ordinal: 35,
+    source_architecture: "model_base.HunyuanVideo15",
+    source_configuration: &[],
+    required_state_keys: &[],
+    profile_selector: Some(select_profile),
+    clip_target_selector: ModelClipTargetSelector::Static(&HUNYUAN_VIDEO15_CLIP_TARGET),
+    state_plan_selector: ModelFamilyStatePlanSelector::Layout {
+        signatures: LAYOUT_SIGNATURES,
+        cases: STATE_PLAN_CASES,
+    },
+    component_state_schemas: HUNYUAN_VIDEO_COMPONENT_STATE_SCHEMAS,
+};
+
+fn select_profile(probe: &ModelProbe) -> Result<ModelFamilyProfile, ModelFamilyError> {
+    let configuration = hunyuan_video_configuration_for_probe(probe)?;
+    if configuration.variant != HunyuanVideoVariant::Video15 {
+        return Err(ModelFamilyError::InvalidSelectorOutput(format!(
+            "HunyuanVideo15 row cannot admit {:?}",
+            configuration.variant
+        )));
+    }
+    if configuration.latent_format.feature_id != HUNYUAN_VIDEO15_LATENT_FORMAT.feature_id
+        || configuration.latent_format.identifier != HUNYUAN_VIDEO15_LATENT_FORMAT.identifier
+    {
+        return Err(ModelFamilyError::InvalidSelectorOutput(
+            "HunyuanVideo15 latent selection drifted".to_owned(),
+        ));
+    }
+    Ok(ModelFamilyProfile::from_definition(&MODEL_FAMILY))
+}

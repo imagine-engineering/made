@@ -1,0 +1,15 @@
+[package]
+name = "zed-rust-tools-physical-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "fixture-bin"
+path = "src/bin/fixture.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"

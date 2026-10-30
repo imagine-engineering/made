@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zed.dev/schemas/sim/mlu/ffi-contracts-v1.schema.json",
+  "title": "Zed Cambricon MLU native FFI contracts v1",
+  "$comment": "The native runtime additionally requires exact reviewed identities, filenames, ABI, symbol rows, owner, manifest digest, policy digest, target, deterministic ordering, and signed package coverage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "backend",
+    "abi_floor",
+    "target",
+    "abi_manifest_sha256",
+    "package_policy_sha256",
+    "libraries"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "backend": { "const": "mlu" },
+    "abi_floor": { "const": "neuware-1.20-cnnl-1.20.4-cnrt-6.6.0" },
+    "target": {
+      "enum": [
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu"
+      ]
+    },
+    "abi_manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "package_policy_sha256": { "$ref": "#/$defs/sha256" },
+    "libraries": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/library" }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "filename",
+        "sha256",
+        "abi",
+        "required_symbols",
+        "unsafe_owner"
+      ],
+      "properties": {
+        "identity": { "enum": ["cnnl", "cnrt"] },
+        "filename": { "enum": ["libcnnl.so", "libcnrt.so"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "abi": { "const": "neuware-1.20-cnnl-1.20.4-cnrt-6.6.0" },
+        "required_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+          }
+        },
+        "unsafe_owner": { "const": "sim_backend_mlu::loader" }
+      }
+    }
+  }
+}

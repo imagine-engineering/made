@@ -1,0 +1,1 @@
+No compiler, subprocess, network, or external package is used.

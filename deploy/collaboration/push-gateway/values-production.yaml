@@ -1,0 +1,26 @@
+# This contract is intentionally undeployable until the release pipeline
+# supplies an immutable image and environment-owned authority references.
+deployment:
+  enabled: true
+  production: true
+image:
+  tag: ""
+  digest: ""
+runtimeSecret:
+  name: ""
+migration:
+  secretName: ""
+publicDeliveryUrl: ""
+appAttest:
+  appIdentifier: ""
+  rootCertificateSecretName: ""
+profiles:
+  production:
+    credentialSecretName: ""
+    configurationSecretName: ""
+httpRoute:
+  enabled: true
+  parentRefs: []
+  hostnames: []
+networkPolicy:
+  postgresEgressCidrs: []

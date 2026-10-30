@@ -1,0 +1,191 @@
+{
+  "feature_id": "COMFY-NODE-0680",
+  "class_type": "TorchCompileModel",
+  "source": {
+    "catalog_line": 8,
+    "path": "sim_extras/nodes_torch_compile.py",
+    "sha256": "51a36311466f5f040a784b6b075f48faee28f66889fc2169837230f98dd5a155",
+    "symbol": {
+      "end_line": 30,
+      "kind": "ClassDef",
+      "line": 8,
+      "sha256": "240c6eb84ce2b93fe4d7c04fcf69df571e662f17893a4fd8e721241ea082edc8",
+      "status": "parsed_definition",
+      "symbol": "TorchCompileModel"
+    }
+  },
+  "schema": {
+    "catalog_sha256": "6c5815c9b3e85c73e198925585dfbacf8eb8491c9980f91abbd63e157bb93cbb",
+    "definition_sha256": "fa8f425dfc9cbf2ffc161eba3fc0a6d62b3e219241c912738b1cb74ffecf5e9e",
+    "dynamic_inputs": [],
+    "hidden": [],
+    "inputs": [
+      {
+        "advanced": false,
+        "choices": [],
+        "default": null,
+        "display_name": null,
+        "extra": [],
+        "force_input": false,
+        "maximum": null,
+        "minimum": null,
+        "multiline": false,
+        "name": "model",
+        "raw_link": false,
+        "requirement": "required",
+        "socketless": false,
+        "source_type_names": [
+          "MODEL"
+        ],
+        "step": null,
+        "tooltip": null,
+        "upload": null,
+        "widget_type": null
+      },
+      {
+        "advanced": true,
+        "choices": [
+          {
+            "kind": "string",
+            "value": "inductor"
+          },
+          {
+            "kind": "string",
+            "value": "cudagraphs"
+          }
+        ],
+        "default": null,
+        "display_name": null,
+        "extra": [],
+        "force_input": false,
+        "maximum": null,
+        "minimum": null,
+        "multiline": false,
+        "name": "backend",
+        "raw_link": false,
+        "requirement": "required",
+        "socketless": false,
+        "source_type_names": [
+          "COMBO"
+        ],
+        "step": null,
+        "tooltip": null,
+        "upload": null,
+        "widget_type": null
+      }
+    ],
+    "node": {
+      "accept_all_inputs": false,
+      "api_node": false,
+      "definition_sha256": "fa8f425dfc9cbf2ffc161eba3fc0a6d62b3e219241c912738b1cb74ffecf5e9e",
+      "development_only": false,
+      "enable_expand": false,
+      "essentials_category": null,
+      "extra": [],
+      "feature_id": "COMFY-NODE-0680",
+      "has_intermediate_output": false,
+      "not_idempotent": false,
+      "price_badge": null,
+      "provenance": "source_v3",
+      "schema_version": 2
+    },
+    "outputs": [
+      {
+        "choices": [],
+        "display_name": null,
+        "extra": [],
+        "match_template": null,
+        "ordinal": 0,
+        "source_name": null,
+        "source_type_name": "MODEL",
+        "tooltip": null
+      }
+    ],
+    "presentation": {
+      "description": null,
+      "display_name": null,
+      "is_deprecated": false,
+      "is_experimental": true
+    },
+    "provenance": "source_v3",
+    "schema_version": 2,
+    "unresolved_inputs": [],
+    "unresolved_outputs": []
+  },
+  "native_descriptor": {
+    "schema_version": 1,
+    "class_type": "TorchCompileModel",
+    "display_name": "TorchCompileModel",
+    "category": "experimental",
+    "description": "",
+    "python_module": "sim_extras.nodes_torch_compile",
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false,
+    "implementation_version": "native-diffusion-v1",
+    "inputs": [
+      {
+        "name": "model",
+        "type_name": "MODEL",
+        "required": true
+      },
+      {
+        "name": "backend",
+        "type_name": "STRING",
+        "required": true,
+        "choices": [
+          "inductor",
+          "cudagraphs"
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "model",
+        "type_name": "MODEL",
+        "required": true
+      }
+    ],
+    "output_node": false,
+    "effect": "pure",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "io.Model.Input:model | io.Combo.Input:backend(options=['inductor', 'cudagraphs'];advanced=True)",
+      "outputs": "io.Model.Output:",
+      "input_is_list": "False",
+      "output_is_list": "[false]",
+      "lazy_inputs": "False"
+    }
+  },
+  "behavior": {
+    "owner": "sim_runtime::executor canonical compile-policy bridge",
+    "clone": "disable_dynamic=True; immutable retained model resources",
+    "guard_filter": "exclude entries whose name contains transformer_options",
+    "backends": [
+      "inductor",
+      "cudagraphs"
+    ],
+    "publication": "one compiled MODEL, no prepared effects",
+    "cache": "input MODEL identity and backend; policy digest seals compiled wrapper",
+    "recovery": "persist the source workflow and reconstruct attempt-scoped compiled state",
+    "validation": [
+      "task594_compile_node_runtime_presentation_preserves_source_flags",
+      "task594_compile_node_reconstructs_from_workflow_and_rejects_previous_store_handles",
+      "task408_torch_compile_model_production_cache_and_atomic_failures",
+      "task408_compile_policy_seals_source_backends_and_enforces_guard_projection",
+      "task408_compile_policy_bridge_has_one_canonical_owner"
+    ]
+  },
+  "prompt": {
+    "1": {
+      "class_type": "TorchCompileModel",
+      "inputs": {
+        "model": [
+          "2",
+          0
+        ],
+        "backend": "inductor"
+      }
+    }
+  }
+}

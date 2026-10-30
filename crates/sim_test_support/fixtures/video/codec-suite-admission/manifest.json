@@ -1,0 +1,64 @@
+{
+  "fixture_schema": "zed.sim.video-codec-suite-admission.v1",
+  "truth_mode": "synthetic-retained-native-video-codec-suite-admission",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9"
+  },
+  "prerequisites": {
+    "codec_dependency_contract_manifest_sha256": "7c55e2dfe7f631c70c025623756dbad3795f71a3d947da308f4fa245ec910f71",
+    "codec_dependency_closure_manifest_sha256": "16deaedd063e29d731420cbf51ae744bf1e4468fb9821e46dc8bbcb37ce6a404",
+    "codec_symbol_binding_manifest_sha256": "76ec18127e54deff5b581046786ebd62aafa3e92a34aec45aaad114fcb0a5bd6",
+    "codec_ltxv_h264_admission_manifest_sha256": "2e2ce96b886978cc05876e9b4fc02153685548e9b6d92f07f4f2d5e2855cad88",
+    "codec_ltxv_thread_service_manifest_sha256": "d555cfc0b1b7472cee1cef4a50cd1ab79ec99a40393781b3f90cfa0d06f83ed9"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_ffi::NativeVideoCodecSuite",
+    "retained_encoders": [
+      "libx264",
+      "aac",
+      "libsvtav1",
+      "libvpx-vp9"
+    ],
+    "retained_decoders": {
+      "h264": 27,
+      "aac": 86018,
+      "vp9": 167,
+      "av1": 225
+    },
+    "encoder_providers": {
+      "aac": "avcodec",
+      "libsvtav1": "svtav1",
+      "libvpx-vp9": "vpx",
+      "libx264": "x264"
+    },
+    "all_descriptors_provider_proved_against_retained_avcodec": true,
+    "one_binding_and_loaded_namespace_retained": true,
+    "codec_thread_service_retains_the_suite": true,
+    "raw_codec_pointers_private": true,
+    "thread_bound": true,
+    "cancellation_before_publication": true
+  },
+  "synthetic_fixture": {
+    "native_functions": "exact-signature avcodec registry lookup functions with stable internal descriptor objects",
+    "test_cases": [
+      "six new exact encoder and decoder lookups",
+      "each missing registry descriptor",
+      "retained avcodec provider proof",
+      "cancellation at every lookup and provider-proof boundary",
+      "reverse cleanup and clean retry",
+      "existing LTXV thread service remains serial and thread-affine"
+    ]
+  },
+  "claims": {
+    "licensed_or_installed_ffmpeg_package": false,
+    "production_codec_availability": false,
+    "codec_context_format_frame_packet_or_avio_allocated": false,
+    "mux_demux_encode_or_decode_executed": false,
+    "numeric_codec_or_media_oracle": false,
+    "media_payload_or_handle_published": false,
+    "effect_cache_persistence_or_recovery_owned": false
+  }
+}

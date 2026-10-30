@@ -1,0 +1,54 @@
+{
+  "fixture_id": "sam31-sim-model-0116",
+  "feature_id": "COMFY-MODEL-0116",
+  "detector": {
+    "tensor_shapes": {
+      "detector.backbone.vision_backbone.trunk.blocks.0.attn.qkv.weight": [6, 2],
+      "detector.backbone.vision_backbone.propagation_convs.0.conv_1x1.weight": [2, 2, 1, 1],
+      "detector.transformer.decoder.query_embed.weight": [2, 2],
+      "tracker.sam_decoder.transformer.layers.0.self_attn.q_proj.weight": [2, 2],
+      "tracker.sam_decoder.transformer.layers.0.self_attn.k_proj.weight": [2, 2],
+      "tracker.sam_decoder.transformer.layers.0.self_attn.v_proj.weight": [2, 2],
+      "tracker.sam_decoder.transformer.layers.0.mlp.0.weight": [2, 2],
+      "tracker.sam_decoder.transformer.layers.0.norm_final.weight": [2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "0116011601160116011601160116011601160116011601160116011601160116",
+  "source_weights": [
+    {"key": "detector.backbone.vision_backbone.trunk.blocks.0.attn.qkv.weight", "shape": [6, 2], "values": [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
+    {"key": "detector.backbone.vision_backbone.propagation_convs.0.conv_1x1.weight", "shape": [2, 2, 1, 1], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "detector.transformer.decoder.query_embed.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "tracker.sam_decoder.transformer.layers.0.self_attn.q_proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "tracker.sam_decoder.transformer.layers.0.self_attn.k_proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "tracker.sam_decoder.transformer.layers.0.self_attn.v_proj.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "tracker.sam_decoder.transformer.layers.0.mlp.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "tracker.sam_decoder.transformer.layers.0.norm_final.weight", "shape": [2], "values": [1.0, 1.0]}
+  ],
+  "input": {"key": "image_embedding", "shape": [1, 2], "values": [0.25, -0.5]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 80,
+  "expected_memory_bytes": 80,
+  "checkpoints": [
+    {"name": "detector_queries", "values": [0.25, -0.5]},
+    {"name": "tracker_query_projection", "values": [0.25, -0.5]},
+    {"name": "segmentation_embedding", "values": [0.24491866, -0.46211717]}
+  ],
+  "patches": [
+    {
+      "identifier": "sam31-tracker-query-projection",
+      "kind": "lora",
+      "scale": 1.0,
+      "targets": [
+        {"key": "native.tracker.sam_decoder.transformer.layers.0.self_attn.q_proj.weight", "expected_shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0], "application": "add"}
+      ]
+    }
+  ],
+  "patched_checkpoints": [
+    {"name": "detector_queries", "values": [0.25, -0.5]},
+    {"name": "tracker_query_projection", "values": [0.5, -1.0]},
+    {"name": "segmentation_embedding", "values": [0.46211717, -0.7615942]}
+  ]
+}

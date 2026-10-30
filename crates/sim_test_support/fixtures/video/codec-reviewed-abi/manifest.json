@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-reviewed-ffmpeg-abi-v1",
+  "truth_mode": "official-source-reviewed-declaration-only-abi",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "ffmpeg_release": "7.1",
+    "ffmpeg_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+    "detached_signature_verified": true
+  },
+  "dependencies": {
+    "codec_ffi_certification_manifest_sha256": "f69947e75aae0a17d5b14ca2e100b2bd86f817ddb4e9930b75f4319528947d75",
+    "codec_retained_loader_manifest_sha256": "2ef96c055442b97635cece8661b7610de669bb437482d880a22888a115875f11"
+  },
+  "evidence": {
+    "reviewed_abi_manifest_sha256": "b9d999e2d15a155fe6f6955d240042f34ee49a98a09e6c1ba4300dd58e8049a3",
+    "c_signature_verifier_sha256": "032ab1b0f74b4e26394da5008e3aa48abdde9441e76881bb6e37c8f9a6290294",
+    "target": "x86_64-unknown-linux-gnu",
+    "compiler": "gcc 15.2.0",
+    "function_count": 54,
+    "version_functions": [
+      "avcodec_version",
+      "avformat_version",
+      "avutil_version",
+      "swresample_version",
+      "swscale_version"
+    ],
+    "av_rational_layout": "size=8,align=4,num=0,den=4",
+    "av_channel_layout_layout": "size=24,align=8,order=0,nb_channels=4,u=8,opaque=16"
+  },
+  "ownership": {
+    "canonical_declaration_owner": "sim_runtime::native_video_codec_abi",
+    "canonical_certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "canonical_loader_owner": "sim_runtime::native_video_codec_ffi"
+  },
+  "claims": {
+    "reviewed_typed_c_declarations": true,
+    "official_source_signature_verified": true,
+    "licensed_ffmpeg_binary": false,
+    "production_codec_package": false,
+    "native_library_loaded_by_this_leaf": false,
+    "runtime_symbol_address_resolved": false,
+    "runtime_version_checked": false,
+    "encoder_availability_probed": false,
+    "codec_execution": false,
+    "media_allocation": false,
+    "effect_cache_persistence_or_publication": false
+  }
+}

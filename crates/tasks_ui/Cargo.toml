@@ -1,0 +1,99 @@
+[package]
+name = "tasks_ui"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/tasks_ui.rs"
+
+[features]
+default = []
+multiplayer-tools = []
+test-explorer = [
+    "dep:db",
+    "dep:fs",
+    "dep:feature_flags",
+    "dep:futures",
+    "dep:language_tools",
+    "dep:log",
+    "dep:serde_json",
+    "dep:settings",
+    "dep:ui_input",
+    "project/structured-execution",
+    "settings/test-explorer",
+]
+rust-test-actions = ["test-explorer", "project/rust-tests"]
+jvm-test-actions = ["test-explorer", "project/jvm-tools", "workspace/jvm-tools"]
+
+jvm-workflow-test-support = [
+    "jvm-test-actions",
+    "editor/test-support", "gpui/test-support", "language/test-support",
+    "project/test-support", "workspace/test-support",
+    "dep:jvm_ui", "jvm_ui/test-support", "dep:lsp", "dep:release_channel",
+    "dep:remote", "remote/test-support", "dep:rpc", "dep:semver", "dep:tempfile",
+    "dep:terminal_view", "terminal_view/test-support", "dep:tree-sitter-java",
+]
+
+[dependencies]
+anyhow.workspace = true
+collections.workspace = true
+db = { workspace = true, optional = true }
+editor.workspace = true
+file_icons.workspace = true
+feature_flags = { workspace = true, optional = true }
+fs = { workspace = true, optional = true }
+fuzzy.workspace = true
+futures = { workspace = true, optional = true }
+itertools.workspace = true
+gpui.workspace = true
+menu.workspace = true
+picker.workspace = true
+project.workspace = true
+task.workspace = true
+serde.workspace = true
+tree-sitter.workspace = true
+tree-sitter-json.workspace = true
+settings = { workspace = true, optional = true }
+ui.workspace = true
+util.workspace = true
+workspace.workspace = true
+language.workspace = true
+language_tools = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+zed_actions.workspace = true
+serde_json = { workspace = true, optional = true }
+ui_input = { workspace = true, optional = true }
+
+jvm_ui = { workspace = true, optional = true }
+lsp = { workspace = true, optional = true }
+release_channel = { workspace = true, optional = true }
+remote = { workspace = true, optional = true }
+rpc = { workspace = true, optional = true }
+semver = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+terminal_view = { workspace = true, optional = true }
+tree-sitter-java = { workspace = true, optional = true }
+
+[dev-dependencies]
+editor = { workspace = true, features = ["test-support"] }
+gpui = { workspace = true, features = ["test-support"] }
+jvm_ui = { workspace = true, features = ["test-support"] }
+language = { workspace = true, features = ["test-support"] }
+lsp.workspace = true
+project = { workspace = true, features = ["test-support"] }
+release_channel.workspace = true
+remote = { workspace = true, features = ["test-support"] }
+rpc.workspace = true
+semver.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+terminal_view = { workspace = true, features = ["test-support"] }
+tree-sitter-java.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-typescript.workspace = true
+workspace = { workspace = true, features = ["test-support"] }

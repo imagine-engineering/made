@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "provenance_mode": "code-inferred-reduced-exact-weights",
+  "comfyui": {
+    "version": "0.27.1",
+    "canonical_file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "sources": {
+    "comfy_extras/nodes_lotus.py": "a1db3c22c71719b11d470655ddd408daa06b8e13f24e25556f77ce0ba825ee08",
+    "comfy/ldm/modules/sdpose.py": "19a55d1ecf16796226ed204241852b9b237a563addf636ff738167d9273cf97a",
+    "comfy_extras/nodes_sdpose.py": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21"
+  },
+  "dependency_fixtures": {
+    "projection/manifest.json": "e2d3b036c064ce263f893e110a5e8f35a4a0892c154a473031443454c23312fa"
+  },
+  "lotus_conditioning": {
+    "shape": [1, 2, 1024],
+    "f16le_bytes": 4096,
+    "f16le_sha256": "168b6113df66f4f1006e36bcd143aa46215a28ff60d0e769cc8a412c16c0b951",
+    "f32le_bytes": 8192,
+    "f32le_sha256": "a7ba15b03c89931a7764a7d4b398201b322e00524d03efaac172b48dc637397d",
+    "first": -0.3134765625,
+    "last": 1.5009765625
+  },
+  "adm": {
+    "shape": [1, 4],
+    "values": [0.8414709568023682, 0.0, 0.5403022766113281, 1.0]
+  },
+  "head_order": [
+    "conv_transpose_2d",
+    "instance_norm_2d",
+    "silu",
+    "conv_2d",
+    "instance_norm_2d",
+    "silu",
+    "final_conv_2d"
+  ],
+  "certification": {
+    "licensed_checkpoint": false,
+    "upstream_python_runtime_oracle": false,
+    "accelerator_numeric_oracle": false,
+    "reduced_exact_weight_execution": true,
+    "plane_streaming_projection": true
+  }
+}

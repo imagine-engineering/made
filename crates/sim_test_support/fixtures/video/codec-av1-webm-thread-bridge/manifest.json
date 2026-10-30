@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-av1-webm-owned-tensor-thread-bridge-v1",
+  "truth_mode": "synthetic-retained-av1-webm-owned-tensor-thread-bridge",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "save_webm_symbol_sha256": "e3d052815071a6baa6df18ea51be79fed5d2f740537a8fa88e360392ec83505d"
+  },
+  "dependencies": {
+    "codec_ltxv_thread_service_manifest_sha256": "d555cfc0b1b7472cee1cef4a50cd1ab79ec99a40393781b3f90cfa0d06f83ed9",
+    "codec_vp9_webm_thread_bridge_manifest_sha256": "a2b0e44560f451445855d02cd2161848258fa48de9dae611cf3acad7fe9697a9",
+    "codec_vp9_webm_alpha_manifest_sha256": "0d8b7d5f72af18a7ce7172eeb37d5a7d1355d39384f7058dfa5b3718d855943b",
+    "codec_av1_webm_sequence_encode_manifest_sha256": "15eb6d17fff196a4e0d5ea20ac36e2b265cc73077f8d829c295ea051257c5077"
+  },
+  "contract": {
+    "canonical_owner": "sim_runtime::native_video_codec_service::NativeLtxvCodecRequestProxy::encode_av1_webm_batch_with_metadata",
+    "actor": "the existing single retained native video codec thread and capacity-one request channel",
+    "input": "shallow-cloned canonical IMAGE plus reduced frame rate, exact floating CRF bits, bounded ordered metadata, caller stream, scratch, and cancellation",
+    "native_lifetime": "the AV1 WebM session, AVIO output, suite borrow, and every FFmpeg pointer remain on and drop on the actor thread",
+    "portable_output": "one exact-length contiguous rank-one CPU U8 Tensor plus dimensions, reduced frame rate, frame count, SHA-256, ten-bit YUV420P10LE identity, and no alpha",
+    "post_encode_copy_count": 1,
+    "successful_response_retains_scratch_lease": false,
+    "successful_response_backend_accounts_actual_encoded_length": true,
+    "mixed_ltxv_vp9_and_av1_requests_share_one_actor": true,
+    "actor_identity_version": "zed.sim.video-codec-thread.v7"
+  },
+  "synthetic_fixture": {
+    "encoded_bytes": "HA1T",
+    "dimensions": [2, 2],
+    "frame_rate": [125, 2997],
+    "frame_count": 3,
+    "test_cases": [
+      "LTXV preprocessing, VP9 alpha, and AV1 owned-byte materialization execute serially on one non-caller actor thread",
+      "the AV1 request preserves IMAGE identity, exact CRF bits, ordered metadata, rate, stream, scratch, and cancellation",
+      "the returned AV1 Tensor is Send plus Sync, CPU U8 contiguous, exact length, content-digest bound, ten-bit, and non-alpha",
+      "scratch is zero before the successful response while backend resident bytes remain until Tensor drop",
+      "pre-materialization cancellation and backend allocation exhaustion remain owned by the shared portable-byte materializer"
+    ]
+  },
+  "claims": {
+    "synthetic_actor_and_owned_av1_tensor_choreography_executed": true,
+    "one_deliberate_post_encode_copy_observed": true,
+    "native_or_workspace_owner_crosses_thread_response": false,
+    "licensed_or_installed_ffmpeg_or_libsvtav1_package": false,
+    "production_codec_availability": false,
+    "synthetic_bytes_are_valid_playable_webm": false,
+    "numeric_av1_swscale_ten_bit_or_byte_identity_oracle": false,
+    "av1_decoder_round_trip_or_alpha_preservation": false,
+    "python_json_serialization_or_source_float_fps_projection": false,
+    "public_node_service_node_effect_path_or_output_committer_reachable": false,
+    "media_payload_or_handle_published": false,
+    "cache_persistence_recovery_or_restart_owned": false,
+    "all_native_heap_allocations_intercepted": false
+  }
+}

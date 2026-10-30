@@ -1,0 +1,14 @@
+schema=zed.sim.provider-signing-payload.v1
+namespace=zed.sim.provider.anthropic
+aliases=[]
+node=COMFY-NODE-0056:ClaudeNode
+route=COMFY-API-EXT-0001:POST:/proxy/anthropic/v1/messages
+source_sha256=36ca216053c7a84cc847d5a88d971b76a945240e58aef88148efcfb969d62edb
+inputs=prompt,model,seed,max_tokens,temperature,reasoning_effort,system_prompt?,images[0..20]
+secret_id=sim_org.auth_token
+secret_fallback=sim_org.api_key
+component_sha256=f4b54f14702753f93b9a09495afbd4d1ceb5e1ec216a066207e668908d9aad50
+component_bytes=161751
+native_contract_sha256=5bf889c4754da87caf8ace62b5495da1afe895a45aad0b8bdc0d497a8f632bbb
+bindings_sha256=cf0228cb4b3832a98ab8984f2fd050f5615b575cdecb5fda1446aa8d25fb193b
+transport_schema=zed:sim-provider-transport@1

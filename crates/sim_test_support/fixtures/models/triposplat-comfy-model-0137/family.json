@@ -1,0 +1,49 @@
+{
+  "fixture_id": "triposplat-sim-model-0137",
+  "feature_id": "COMFY-MODEL-0137",
+  "detector": {
+    "tensor_shapes": {
+      "first_stage_model.octree.out_proj.weight": [1],
+      "model.diffusion_model.blocks.0.mlp.mlp.2.weight": [2, 2],
+      "model.diffusion_model.cam_out_layer.weight": [5, 1024],
+      "model.diffusion_model.out_layer.weight": [2, 2],
+      "model.diffusion_model.repo_layers.0.final_map.weight": [48, 128],
+      "model.diffusion_model.t_embedder.mlp.0.weight": [2, 2]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "1371371371371371371371371371371371371371371371371371371371371371",
+  "source_weights": [
+    {"key": "model.diffusion_model.t_embedder.mlp.0.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.blocks.0.mlp.mlp.2.weight", "shape": [2, 2], "values": [2.0, 0.0, 0.0, 0.5]},
+    {"key": "model.diffusion_model.out_layer.weight", "shape": [2, 2], "values": [1.0, 1.0, 1.0, -1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [1.0, 2.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 14,
+  "expected_memory_bytes": 14,
+  "checkpoints": [
+    {"name": "triposplat_timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "triposplat_conditioning_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "triposplat_unified_transformer", "values": [1.4621172, 0.8807971]},
+    {"name": "triposplat_multimodal_normalization", "values": [0.9999941, -0.9999941]},
+    {"name": "triposplat_latent_projection", "values": [0.0, 1.9999882]},
+    {"name": "triposplat_latent_and_camera_output", "values": [0.0, 0.96402675]}
+  ],
+  "patches": [{
+    "identifier": "triposplat-unified-transformer-delta",
+    "kind": "lora",
+    "scale": 1.0,
+    "targets": [{"key": "native.blocks.0.mlp.mlp.2.weight", "expected_shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0], "application": "add"}]
+  }],
+  "patched_checkpoints": [
+    {"name": "triposplat_timestep_embedding", "values": [1.0, 2.0]},
+    {"name": "triposplat_conditioning_activation", "values": [0.7310586, 1.7615942]},
+    {"name": "triposplat_unified_transformer", "values": [2.1931758, 2.6423912]},
+    {"name": "triposplat_multimodal_normalization", "values": [-0.9999901, 0.9999901]},
+    {"name": "triposplat_latent_projection", "values": [0.0, -1.9999802]},
+    {"name": "triposplat_latent_and_camera_output", "values": [0.0, -0.9640262]}
+  ]
+}

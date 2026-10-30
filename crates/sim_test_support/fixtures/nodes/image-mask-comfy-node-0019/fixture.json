@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-mask-sim-node-0019",
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0019",
+      "class_type": "BatchMasksNode",
+      "source": "sim_extras/nodes_post_processing.py:537-551,590-609",
+      "source_file_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "source_symbol_sha256": "7e9bc4be8e54ec1c08be7760e6a0ed80622281f7ce354ac9f97cc5770e891f7d",
+      "definition_sha256": "0c3f451ed864f728bf6812246c4ba6f37ee93176841f129a13bf663d6f8c37c3",
+      "dynamic_inputs": { "name_template": "mask{index}", "start_index": 1, "minimum_count": 1, "maximum_count": 50 },
+      "operation": "resize every spatially mismatched mask to the first mask with common_upscale bilinear center, then concatenate on batch axis"
+    },
+    {
+      "feature_id": "COMFY-NODE-0126",
+      "class_type": "CropMask",
+      "source": "sim_extras/nodes_mask.py:225-249",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "e1d2095816073e79ec945e7a4770b00f92948b15222031280779609e97cf0b65",
+      "definition_sha256": "7910f72407a7c29789b125c21362ee3bcdf03ed1438bea5cb40ce677206def1c",
+      "operation": "reshape to BHW and apply the Python slice mask[:, y:y+height, x:x+width]"
+    },
+    {
+      "feature_id": "COMFY-NODE-0171",
+      "class_type": "FeatherMask",
+      "source": "sim_extras/nodes_mask.py:303-348",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "2560887049663864235095385150f66917d306c828bf42882407c358855151fc",
+      "definition_sha256": "00a84c18f99e37d2926c5025d741848d6686155d92f94e18b28d8a84b41fcd55",
+      "operation": "multiply left, right, top, and bottom edge ramps independently; overlapping ramps multiply"
+    },
+    {
+      "feature_id": "COMFY-NODE-0219",
+      "class_type": "GrowMask",
+      "source": "sim_extras/nodes_mask.py:351-386",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "745d6f2c11f5cd4a970e8742cc89b556ac40fcfbcda23683bdd4cd6021464124",
+      "definition_sha256": "c000ee3c37ccb74bc1bf21231272869f58560153d39d57d7ed88b702a4790cf1",
+      "operation": "repeat scipy grey dilation for positive expand or grey erosion for negative expand; tapered corners use a cross footprint and untapered corners use a full 3x3 footprint"
+    },
+    {
+      "feature_id": "COMFY-NODE-0244",
+      "class_type": "ImageColorToMask",
+      "source": "sim_extras/nodes_mask.py:155-177",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "30de9cbe7636f805d8528cd879162b3fbd4f30a1e28185ba397c141700508adf",
+      "definition_sha256": "8d485fc52affbc7a49abf62821a9cb3470dcd8efb2188d7d3905b4aff6dff247",
+      "operation": "clamp RGB to [0,1], multiply by 255, round with torch ties-to-even semantics, pack 0xRRGGBB, and emit one for an exact color match"
+    },
+    {
+      "feature_id": "COMFY-NODE-0268",
+      "class_type": "ImageToMask",
+      "source": "sim_extras/nodes_mask.py:131-152",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "4f7745452b2885485454103f56565f87b03847dd0373618a54836823365ca4d3",
+      "definition_sha256": "0b39eaedbb95b0f70f9c5df8787726759792246378b9627267b3b9bd72be8635",
+      "channel_options": ["red", "green", "blue", "alpha"],
+      "operation": "select the requested BHWC channel by its source option index"
+    },
+    {
+      "feature_id": "COMFY-NODE-0273",
+      "class_type": "InvertMask",
+      "source": "sim_extras/nodes_mask.py:203-222",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "2ca96a2b6457cba2f0c9912c06db03113290615656130558789758903bfce4d7",
+      "definition_sha256": "213e496f7827683c2d204e0fa5b486a51bab67e6223230ce000436470cb69ce9",
+      "operation": "1.0 - mask without an additional clamp"
+    },
+    {
+      "feature_id": "COMFY-NODE-0399",
+      "class_type": "MaskComposite",
+      "source": "sim_extras/nodes_mask.py:252-300",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "fa3dd37f45fb3089949c6b28e145735b9cdcd3dc3c2dc5f9d82b5c67a3002ce6",
+      "definition_sha256": "d92b2a6c8600211354586404220eec53c5c2603a5699db6a12ae712d78dad16b",
+      "operation_options": ["multiply", "add", "subtract", "and", "or", "xor"],
+      "operation": "combine the visible source slice at x,y, use torch round then bool for bitwise operations, and clamp the complete destination to [0,1]"
+    },
+    {
+      "feature_id": "COMFY-NODE-0400",
+      "class_type": "MaskPreview",
+      "source": "sim_extras/nodes_mask.py:411-432",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "c9d9dbc59a063b04a2cb72c36345574357123945cfb50bb3f259b4ed73b6702a",
+      "definition_sha256": "2283800adfb50a787314f8d68926c7dc5e7ff0acf766eeafde56d81249973864",
+      "hidden_inputs": ["prompt", "extra_pnginfo"],
+      "effect": "prepared temporary PNG preview with filename prefix ComfyUI",
+      "output_node": true
+    },
+    {
+      "feature_id": "COMFY-NODE-0401",
+      "class_type": "MaskToImage",
+      "source": "sim_extras/nodes_mask.py:109-128",
+      "source_file_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
+      "source_symbol_sha256": "fb396b8a1d05062714de62a904ed25d46b33beb9ae0db64ed91a0e30741f3209",
+      "definition_sha256": "554dadbbca47d25da85da52e6653c6d97957de3f6f90423d694070352b3c203a",
+      "operation": "reshape BHW to BHW1 and expand the value identically over three RGB channels"
+    }
+  ],
+  "behavior": {
+    "input_is_list": false,
+    "output_is_list": [false],
+    "lazy_inputs": false,
+    "pure_effect": "pure",
+    "preview_effect": "writes_artifact",
+    "pure_cache": "input_identity",
+    "preview_cache": "never",
+    "cancellation": "execution_interrupted_without_output_publication_or_partial_prepared_effects",
+    "persistence": "source class types, dynamic names, hidden metadata, and literal widget values round-trip unchanged",
+    "recovery": "stale or foreign mask and image handles fail closed and fresh handles execute deterministically"
+  }
+}

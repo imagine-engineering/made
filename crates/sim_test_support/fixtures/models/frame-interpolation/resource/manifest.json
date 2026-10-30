@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "provenance": "code-inferred synthetic reduced sealed-resource contract",
+  "admission_manifest_sha256": "69f8f1e407917a41b7db6f52a95ec149624cdd956b1b3d762c4260838e6bf6e1",
+  "resource": {
+    "role": "INTERP_MODEL",
+    "format": "zed-native-frame-interpolation-v1",
+    "film_identifier": "native-frame-interpolation-film",
+    "rife_identifier": "native-frame-interpolation-rife",
+    "artifact_identity": "checkpoint digest",
+    "execution_identity": "retained semantic-state digest"
+  },
+  "residency": {
+    "backing_kind": "NativeFrameInterpolationModel",
+    "tensor_storage_identity": "StorageId",
+    "aliases_are_charged_once": true
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "interpolation_execution_parity": false,
+    "handle_store_algorithm_reimplemented": false
+  }
+}

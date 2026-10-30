@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "identity": "uni_pc",
+  "feature_id": "COMFY-MODEL-0201",
+  "source_ordinal": 42,
+  "source": {
+    "uni_pc_path": "projects/comfy/ComfyUI/comfy/extra_samplers/uni_pc.py",
+    "uni_pc_sha256": "62a3bc207d60d10fc2700459c2090961ffa9f1199f1f1213ade0e4b97be6b04c",
+    "samplers_path": "projects/comfy/ComfyUI/comfy/samplers.py",
+    "samplers_sha256": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "catalog_path": ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4",
+    "bh_lines": [579, 697],
+    "traversal_lines": [700, 759],
+    "wrapper_lines": [821, 873],
+    "registry_line": 1337,
+    "selector_line": 1370,
+    "catalog_line": 202
+  },
+  "terminal_sigma_replacement": 0.001,
+  "maximum_order": 3,
+  "tolerance": 0.00002,
+  "shape": [2],
+  "sigmas": [2.0, 1.5, 1.0, 0.7, 0.4, 0.0],
+  "initial": [0.75, -1.0],
+  "model_scale": 0.2,
+  "model_sigma_scale": 0.05,
+  "model_offsets": [0.1, -0.15],
+  "model_calls": [
+    {"target_index": 0, "stage": "initial", "sigma": 2.0, "input": [0.74999994, -1.0], "output": [0.35, -0.25]},
+    {"target_index": 1, "stage": "corrector", "sigma": 1.5, "input": [0.65, -0.81250006], "output": [0.305, -0.23750001]},
+    {"target_index": 2, "stage": "corrector", "sigma": 1.0, "input": [0.5178266, -0.61606294], "output": [0.25356534, -0.2232126]},
+    {"target_index": 3, "stage": "corrector", "sigma": 0.7, "input": [0.43525428, -0.49729285], "output": [0.22205085, -0.21445857]},
+    {"target_index": 4, "stage": "corrector", "sigma": 0.4, "input": [0.33019543, -0.37227648], "output": [0.18603909, -0.2044553]}
+  ],
+  "transitions": [
+    {"target_index": 1, "order": 1, "corrector": true, "predictor": [0.3605551, -0.45069394], "corrected": [0.35696462, -0.44969657]},
+    {"target_index": 2, "order": 2, "corrector": true, "predictor": [0.36615872, -0.43562227], "corrected": [0.36850587, -0.43627426]},
+    {"target_index": 3, "order": 3, "corrector": true, "predictor": [0.3565742, -0.40739816], "corrected": [0.35678828, -0.40745765]},
+    {"target_index": 4, "order": 2, "corrector": true, "predictor": [0.30657876, -0.34565005], "corrected": [0.31105351, -0.34689304]},
+    {"target_index": 5, "order": 1, "corrector": false, "predictor": [0.18641144, -0.2048781], "corrected": [0.18641144, -0.2048781]}
+  ],
+  "callbacks": [
+    {"step": 0, "latent": [0.33541018, -0.4472136], "denoised": [0.35, -0.25]},
+    {"step": 1, "latent": [0.35696462, -0.44969657], "denoised": [0.305, -0.23750001]},
+    {"step": 2, "latent": [0.36850587, -0.43627426], "denoised": [0.25356534, -0.2232126]},
+    {"step": 3, "latent": [0.35678828, -0.40745765], "denoised": [0.22205085, -0.21445857]},
+    {"step": 4, "latent": [0.18641144, -0.2048781], "denoised": [0.18603909, -0.2044553]}
+  ],
+  "trace_latents": [
+    [0.33541018, -0.4472136],
+    [0.33541018, -0.4472136],
+    [0.35696462, -0.44969657],
+    [0.36850587, -0.43627426],
+    [0.35678828, -0.40745765],
+    [0.18641153, -0.20487821]
+  ],
+  "terminal": [0.18641153, -0.20487821],
+  "bh2_terminal": [0.18711297, -0.20507306]
+}

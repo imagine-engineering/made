@@ -1,0 +1,2 @@
+DROP TABLE public.collaboration_message_auxiliary_events;
+DROP TABLE public.collaboration_messages;

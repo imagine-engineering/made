@@ -1,0 +1,3782 @@
+{
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0571",
+      "class_type": "SamplerDPMAdaptative",
+      "source": {
+        "catalog_line": 554,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 582,
+          "kind": "ClassDef",
+          "line": 554,
+          "sha256": "07b2e5b9f21ec101eabccc6be245d043e64a996a14db10434b03eaae0a91b1d8",
+          "status": "parsed_definition",
+          "symbol": "SamplerDPMAdaptative"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "28234acfd18aaa48bd23c70db47618c94a366bb095d055524f2b5978ffa3d7db",
+        "definition_sha256": "046b537379bf4e51d3025958c1f00ee46f45d68cb51fa10ee8390836aaf89c24",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 3
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 3
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 2
+            },
+            "multiline": false,
+            "name": "order",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.05"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "rtol",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0078"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "atol",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.05"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "h_init",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "pcoeff",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "icoeff",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "dcoeff",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.81"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "accept_safety",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "046b537379bf4e51d3025958c1f00ee46f45d68cb51fa10ee8390836aaf89c24",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0571",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0572",
+      "class_type": "SamplerDPMPP_2M_SDE",
+      "source": {
+        "catalog_line": 421,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 445,
+          "kind": "ClassDef",
+          "line": 421,
+          "sha256": "42f5f098fa7573ca8a1a6085b72675ee6cb0ae8e7865c5793a815a6ef2495f82",
+          "status": "parsed_definition",
+          "symbol": "SamplerDPMPP_2M_SDE"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "6d7bf007829800adde5fd2c4c6bd095a2ad1e7a63aa8f3220a05a7285da7defa",
+        "definition_sha256": "498f89ae3c9ee62e2b033eb5e0fff0bbfe3ba2b74b2408bbdffadad73caeb1ad",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "midpoint"
+              },
+              {
+                "kind": "string",
+                "value": "heun"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "solver_type",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "gpu"
+              },
+              {
+                "kind": "string",
+                "value": "cpu"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "noise_device",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "498f89ae3c9ee62e2b033eb5e0fff0bbfe3ba2b74b2408bbdffadad73caeb1ad",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0572",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0573",
+      "class_type": "SamplerDPMPP_2S_Ancestral",
+      "source": {
+        "catalog_line": 474,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 492,
+          "kind": "ClassDef",
+          "line": 474,
+          "sha256": "8d20ec21e6c699965753413d9ef8b6191553c4b7b606d93c10470aa9d988a308",
+          "status": "parsed_definition",
+          "symbol": "SamplerDPMPP_2S_Ancestral"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "e137d8e4277c580d0ee5e5d96365e52dbe42ad20e61558d3fbf0bb6fb9c536f4",
+        "definition_sha256": "d66ec68834bade1e452f2570ba3edf3cb2cacc2e36d74c31aa35c9d0b27ff0bb",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "d66ec68834bade1e452f2570ba3edf3cb2cacc2e36d74c31aa35c9d0b27ff0bb",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0573",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0574",
+      "class_type": "SamplerDPMPP_3M_SDE",
+      "source": {
+        "catalog_line": 396,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 419,
+          "kind": "ClassDef",
+          "line": 396,
+          "sha256": "0f624398c67e50639fc41384b50b91bab93797bd785dda25f1f5fc649e46825b",
+          "status": "parsed_definition",
+          "symbol": "SamplerDPMPP_3M_SDE"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "493efad3a4af500c18086336d4a607b04f15b1fe4e135c65177863077a6b2243",
+        "definition_sha256": "0f76c6f7fc309ded85c49bd310c41cef04789a753e86cd5dbd43e62b32502e21",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "gpu"
+              },
+              {
+                "kind": "string",
+                "value": "cpu"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "noise_device",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "0f76c6f7fc309ded85c49bd310c41cef04789a753e86cd5dbd43e62b32502e21",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0574",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0575",
+      "class_type": "SamplerDPMPP_SDE",
+      "source": {
+        "catalog_line": 448,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 472,
+          "kind": "ClassDef",
+          "line": 448,
+          "sha256": "56949712f245abfcc48c09d7d14a1a7778e80ba58535e538484c382d7e0d02c6",
+          "status": "parsed_definition",
+          "symbol": "SamplerDPMPP_SDE"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "712b6c85300e00d10a773ff30c588dd5bf5d9a7cd62b33ed2801c1d174e8dc28",
+        "definition_sha256": "e2ad1270d2166be847e6ada8888f373c8e7d5d1ce06f5fa817c40296abcae7d2",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.5"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "r",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "gpu"
+              },
+              {
+                "kind": "string",
+                "value": "cpu"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "noise_device",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "e2ad1270d2166be847e6ada8888f373c8e7d5d1ce06f5fa817c40296abcae7d2",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0575",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0576",
+      "class_type": "SamplerER_SDE",
+      "source": {
+        "catalog_line": 585,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 619,
+          "kind": "ClassDef",
+          "line": 585,
+          "sha256": "0bdb269f644a145d13dd5515cd8d56512952213eb4cf8fc8ef8435090086f298",
+          "status": "parsed_definition",
+          "symbol": "SamplerER_SDE"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "08a68120d860cf83f1ade70e5f8902ad9a8fd36fc7b3000facec50d4acb9bb80",
+        "definition_sha256": "06ddd1d6bc7335d0b3d74bc91b819c7ba7b032dee46405780840c28b98971edf",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "ER-SDE"
+              },
+              {
+                "kind": "string",
+                "value": "Reverse-time SDE"
+              },
+              {
+                "kind": "string",
+                "value": "ODE"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "solver_type",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "unsigned_integer",
+              "value": 3
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 3
+            },
+            "minimum": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "multiline": false,
+            "name": "max_stage",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "Stochastic strength of reverse-time SDE.\nWhen eta=0, it reduces to deterministic ODE. This setting doesn't apply to ER-SDE solver type.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "06ddd1d6bc7335d0b3d74bc91b819c7ba7b032dee46405780840c28b98971edf",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0576",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0577",
+      "class_type": "SamplerEulerAncestral",
+      "source": {
+        "catalog_line": 494,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 512,
+          "kind": "ClassDef",
+          "line": 494,
+          "sha256": "0d3c1f0ffe01eb6cc17fd53e743713f659218ec19001c670440472ae7d0d3887",
+          "status": "parsed_definition",
+          "symbol": "SamplerEulerAncestral"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "83c42785a92e130655a6bdf4c582badf1b3501c82577069483145d14f99ae570",
+        "definition_sha256": "8f77677e3588af1ac60b18929cc468e68fb14325f4cb465877fdf3246f534326",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "100.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "8f77677e3588af1ac60b18929cc468e68fb14325f4cb465877fdf3246f534326",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0577",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0578",
+      "class_type": "SamplerEulerAncestralCFGPP",
+      "source": {
+        "catalog_line": 514,
+        "path": "sim_extras/nodes_custom_sampler.py",
+        "sha256": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4",
+        "symbol": {
+          "end_line": 535,
+          "kind": "ClassDef",
+          "line": 514,
+          "sha256": "de83cb4c3e9aeee60f1554ad1af8181adb4fa62e3d23cec02a6f4396b96500c1",
+          "status": "parsed_definition",
+          "symbol": "SamplerEulerAncestralCFGPP"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "d28580162145dc56171dde63c10cdc11f52a758801183b9de69532c093c616e9",
+        "definition_sha256": "1bb7dc169e18e4b14cdc85c9030cd2d137aba16a32497d560a3f4a9e5f6ecdd2",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "eta",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [
+              {
+                "name": "round",
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "1bb7dc169e18e4b14cdc85c9030cd2d137aba16a32497d560a3f4a9e5f6ecdd2",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0578",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": "SamplerEulerAncestralCFG++",
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0580",
+      "class_type": "SamplerLCM",
+      "source": {
+        "catalog_line": 89,
+        "path": "sim_extras/nodes_advanced_samplers.py",
+        "sha256": "7db38b52a07d3d7a65a5f6b5f78aae8f8b72c134a3710e6c4f35f644a9f17114",
+        "symbol": {
+          "end_line": 117,
+          "kind": "ClassDef",
+          "line": 89,
+          "sha256": "0d18f2f977ddadeedcd7807233b48ebcc4e94c6213f8540b9037a45a9c70c6cf",
+          "status": "parsed_definition",
+          "symbol": "SamplerLCM"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "f8a591f70e61e36e08e6706d6322a418c266318a925058572b1c91c5376f6c86",
+        "definition_sha256": "bae9ea9dab7d3e29dcd6295f661beb669c9b551a1f3d7a37075091c55ae49290",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "64.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "Per-step noise multiplier at the first step (1.0 = match training).",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "64.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "s_noise_end",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "Per-step noise multiplier at the last step. Set equal to s_noise for a constant schedule.",
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "10.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.0"
+            },
+            "multiline": false,
+            "name": "noise_clip_std",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": "Clamp per-step noise to +/- N*std. 0 disables.",
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "bae9ea9dab7d3e29dcd6295f661beb669c9b551a1f3d7a37075091c55ae49290",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0580",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": "LCM sampler with tunable per-step noise. s_noise is a multiplier on the model's training noise scale",
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0581",
+      "class_type": "SamplerLCMUpscale",
+      "source": {
+        "catalog_line": 41,
+        "path": "sim_extras/nodes_advanced_samplers.py",
+        "sha256": "7db38b52a07d3d7a65a5f6b5f78aae8f8b72c134a3710e6c4f35f644a9f17114",
+        "symbol": {
+          "end_line": 62,
+          "kind": "ClassDef",
+          "line": 41,
+          "sha256": "5d6f6472fbb4d2c66a8a8b9d6dc34dcc52ac8272589fd6c29e4084d6cab3141b",
+          "status": "parsed_definition",
+          "symbol": "SamplerLCMUpscale"
+        }
+      },
+      "schema": {
+        "catalog_sha256": "17cec4c8486f44566297416bc876e7bf642cecf2821d9bbe7a600a5abc110927",
+        "definition_sha256": "95acc7c83e657d98522784b639485254af1e540645891b003f77eb1d08fa20d5",
+        "dynamic_inputs": [],
+        "hidden": [],
+        "inputs": [
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "finite_decimal",
+              "value": "1.0"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "finite_decimal",
+              "value": "20.0"
+            },
+            "minimum": {
+              "kind": "finite_decimal",
+              "value": "0.1"
+            },
+            "multiline": false,
+            "name": "scale_ratio",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "FLOAT"
+            ],
+            "step": {
+              "kind": "finite_decimal",
+              "value": "0.01"
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": true,
+            "choices": [],
+            "default": {
+              "kind": "preserved_expression",
+              "sha256": "d2283cb2c62c25a20781308e1999ded8285f2fabe778827833838be73b8da317",
+              "source": "{\"kind\":\"unary\",\"operand\":{\"kind\":\"literal\",\"source\":\"1\",\"value\":1},\"operator\":\"USub\"}"
+            },
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": {
+              "kind": "unsigned_integer",
+              "value": 1000
+            },
+            "minimum": {
+              "kind": "preserved_expression",
+              "sha256": "d2283cb2c62c25a20781308e1999ded8285f2fabe778827833838be73b8da317",
+              "source": "{\"kind\":\"unary\",\"operand\":{\"kind\":\"literal\",\"source\":\"1\",\"value\":1},\"operator\":\"USub\"}"
+            },
+            "multiline": false,
+            "name": "scale_steps",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "INT"
+            ],
+            "step": {
+              "kind": "unsigned_integer",
+              "value": 1
+            },
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          },
+          {
+            "advanced": false,
+            "choices": [
+              {
+                "kind": "string",
+                "value": "bislerp"
+              },
+              {
+                "kind": "string",
+                "value": "nearest-exact"
+              },
+              {
+                "kind": "string",
+                "value": "bilinear"
+              },
+              {
+                "kind": "string",
+                "value": "area"
+              },
+              {
+                "kind": "string",
+                "value": "bicubic"
+              }
+            ],
+            "default": null,
+            "display_name": null,
+            "extra": [],
+            "force_input": false,
+            "maximum": null,
+            "minimum": null,
+            "multiline": false,
+            "name": "upscale_method",
+            "raw_link": false,
+            "requirement": "required",
+            "socketless": false,
+            "source_type_names": [
+              "COMBO"
+            ],
+            "step": null,
+            "tooltip": null,
+            "upload": null,
+            "widget_type": null
+          }
+        ],
+        "node": {
+          "accept_all_inputs": false,
+          "api_node": false,
+          "definition_sha256": "95acc7c83e657d98522784b639485254af1e540645891b003f77eb1d08fa20d5",
+          "development_only": false,
+          "enable_expand": false,
+          "essentials_category": null,
+          "extra": [],
+          "feature_id": "COMFY-NODE-0581",
+          "has_intermediate_output": false,
+          "not_idempotent": false,
+          "price_badge": null,
+          "provenance": "source_v3",
+          "schema_version": 2
+        },
+        "outputs": [
+          {
+            "choices": [],
+            "display_name": null,
+            "extra": [],
+            "match_template": null,
+            "ordinal": 0,
+            "source_name": null,
+            "source_type_name": "SAMPLER",
+            "tooltip": null
+          }
+        ],
+        "presentation": {
+          "description": null,
+          "display_name": null,
+          "is_deprecated": false,
+          "is_experimental": false
+        },
+        "provenance": "source_v3",
+        "schema_version": 2,
+        "unresolved_inputs": [],
+        "unresolved_outputs": []
+      }
+    }
+  ],
+  "source_reference": {
+    "provenance": "Pinned source node AST with sampler-construction capture; no numerical sampler-execution claim",
+    "source_sha256": {
+      "sim_extras/nodes_advanced_samplers.py": "7db38b52a07d3d7a65a5f6b5f78aae8f8b72c134a3710e6c4f35f644a9f17114",
+      "sim_extras/nodes_custom_sampler.py": "c3bd7c80dd55992b6bf40126756a6275688dfbbd7c2fa7592b69ebfdcbb804d4"
+    },
+    "cases": [
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "defaults",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "order-0",
+        "inputs": {
+          "order": 2,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 2,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "rtol-0",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.0,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.0,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "rtol-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 100.0,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 100.0,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "atol-0",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "atol-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 100.0,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 100.0,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "h_init-0",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.0,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.0,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "h_init-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 100.0,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 100.0,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "pcoeff-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 100.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 100.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "icoeff-0",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 0.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 0.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "icoeff-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 100.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 100.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "dcoeff-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 100.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 100.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "accept_safety-0",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.0,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.0,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "accept_safety-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 100.0,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 100.0,
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "eta-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 100.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 100.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "s_noise-0",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 0.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMAdaptative",
+        "case": "s_noise-1",
+        "inputs": {
+          "order": 3,
+          "rtol": 0.05,
+          "atol": 0.0078,
+          "h_init": 0.05,
+          "pcoeff": 0.0,
+          "icoeff": 1.0,
+          "dcoeff": 0.0,
+          "accept_safety": 0.81,
+          "eta": 0.0,
+          "s_noise": 100.0
+        },
+        "output": {
+          "algorithm": "dpm_adaptive",
+          "parameters": {
+            "order": 3,
+            "rtol": 0.05,
+            "atol": 0.0078,
+            "h_init": 0.05,
+            "pcoeff": 0.0,
+            "icoeff": 1.0,
+            "dcoeff": 0.0,
+            "accept_safety": 0.81,
+            "eta": 0.0,
+            "s_noise": 100.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "defaults",
+        "inputs": {
+          "solver_type": "midpoint",
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "solver_type": "midpoint"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "solver_type-1",
+        "inputs": {
+          "solver_type": "heun",
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "solver_type": "heun"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "eta-0",
+        "inputs": {
+          "solver_type": "midpoint",
+          "eta": 0.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde_gpu",
+          "parameters": {
+            "eta": 0.0,
+            "s_noise": 1.0,
+            "solver_type": "midpoint"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "eta-1",
+        "inputs": {
+          "solver_type": "midpoint",
+          "eta": 100.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde_gpu",
+          "parameters": {
+            "eta": 100.0,
+            "s_noise": 1.0,
+            "solver_type": "midpoint"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "s_noise-0",
+        "inputs": {
+          "solver_type": "midpoint",
+          "eta": 1.0,
+          "s_noise": 0.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 0.0,
+            "solver_type": "midpoint"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "s_noise-1",
+        "inputs": {
+          "solver_type": "midpoint",
+          "eta": 1.0,
+          "s_noise": 100.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 100.0,
+            "solver_type": "midpoint"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "noise_device-1",
+        "inputs": {
+          "solver_type": "midpoint",
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "noise_device": "cpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "solver_type": "midpoint"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2M_SDE",
+        "case": "choices-('heun', 'cpu')",
+        "inputs": {
+          "solver_type": "heun",
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "noise_device": "cpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_2m_sde",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "solver_type": "heun"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2S_Ancestral",
+        "case": "defaults",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpmpp_2s_ancestral",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2S_Ancestral",
+        "case": "eta-0",
+        "inputs": {
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpmpp_2s_ancestral",
+          "parameters": {
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2S_Ancestral",
+        "case": "eta-1",
+        "inputs": {
+          "eta": 100.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "dpmpp_2s_ancestral",
+          "parameters": {
+            "eta": 100.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2S_Ancestral",
+        "case": "s_noise-0",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 0.0
+        },
+        "output": {
+          "algorithm": "dpmpp_2s_ancestral",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_2S_Ancestral",
+        "case": "s_noise-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 100.0
+        },
+        "output": {
+          "algorithm": "dpmpp_2s_ancestral",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 100.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_3M_SDE",
+        "case": "defaults",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_3m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_3M_SDE",
+        "case": "eta-0",
+        "inputs": {
+          "eta": 0.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_3m_sde_gpu",
+          "parameters": {
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_3M_SDE",
+        "case": "eta-1",
+        "inputs": {
+          "eta": 100.0,
+          "s_noise": 1.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_3m_sde_gpu",
+          "parameters": {
+            "eta": 100.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_3M_SDE",
+        "case": "s_noise-0",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 0.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_3m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_3M_SDE",
+        "case": "s_noise-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 100.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_3m_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 100.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_3M_SDE",
+        "case": "noise_device-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "noise_device": "cpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_3m_sde",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "defaults",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "r": 0.5,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "r": 0.5
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "eta-0",
+        "inputs": {
+          "eta": 0.0,
+          "s_noise": 1.0,
+          "r": 0.5,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 0.0,
+            "s_noise": 1.0,
+            "r": 0.5
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "eta-1",
+        "inputs": {
+          "eta": 100.0,
+          "s_noise": 1.0,
+          "r": 0.5,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 100.0,
+            "s_noise": 1.0,
+            "r": 0.5
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "s_noise-0",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 0.0,
+          "r": 0.5,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 0.0,
+            "r": 0.5
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "s_noise-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 100.0,
+          "r": 0.5,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 100.0,
+            "r": 0.5
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "r-0",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "r": 0.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "r": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "r-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "r": 100.0,
+          "noise_device": "gpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde_gpu",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "r": 100.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerDPMPP_SDE",
+        "case": "noise_device-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0,
+          "r": 0.5,
+          "noise_device": "cpu"
+        },
+        "output": {
+          "algorithm": "dpmpp_sde",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0,
+            "r": 0.5
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "defaults",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 1.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "solver_type-1",
+        "inputs": {
+          "solver_type": "Reverse-time SDE",
+          "max_stage": 3,
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 1.0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.0625,
+              1.0,
+              4.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "solver_type-2",
+        "inputs": {
+          "solver_type": "ODE",
+          "max_stage": 3,
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.25,
+              1.0,
+              2.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "max_stage-0",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 1,
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 1.0,
+            "max_stage": 1,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "eta-0",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 1.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "eta-1",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 100.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 1.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "s_noise-0",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 1.0,
+          "s_noise": 0.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 0.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "s_noise-1",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 1.0,
+          "s_noise": 100.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 100.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "ER-SDE-0.0",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 0.0,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 3.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "ER-SDE-0.5",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 0.5,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 3.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "ER-SDE-2.0",
+        "inputs": {
+          "solver_type": "ER-SDE",
+          "max_stage": 3,
+          "eta": 2.0,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 3.0,
+            "max_stage": 3,
+            "noise_scaler": null
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "Reverse-time SDE-0.0",
+        "inputs": {
+          "solver_type": "Reverse-time SDE",
+          "max_stage": 3,
+          "eta": 0.0,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.25,
+              1.0,
+              2.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "Reverse-time SDE-0.5",
+        "inputs": {
+          "solver_type": "Reverse-time SDE",
+          "max_stage": 3,
+          "eta": 0.5,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 3.0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.125,
+              1.0,
+              2.8284271247461903
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "Reverse-time SDE-2.0",
+        "inputs": {
+          "solver_type": "Reverse-time SDE",
+          "max_stage": 3,
+          "eta": 2.0,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 3.0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.015625,
+              1.0,
+              8.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "ODE-0.0",
+        "inputs": {
+          "solver_type": "ODE",
+          "max_stage": 3,
+          "eta": 0.0,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.25,
+              1.0,
+              2.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "ODE-0.5",
+        "inputs": {
+          "solver_type": "ODE",
+          "max_stage": 3,
+          "eta": 0.5,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.25,
+              1.0,
+              2.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerER_SDE",
+        "case": "ODE-2.0",
+        "inputs": {
+          "solver_type": "ODE",
+          "max_stage": 3,
+          "eta": 2.0,
+          "s_noise": 3.0
+        },
+        "output": {
+          "algorithm": "er_sde",
+          "parameters": {
+            "s_noise": 0,
+            "max_stage": 3,
+            "noise_scaler": [
+              0.0,
+              0.25,
+              1.0,
+              2.0
+            ]
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestral",
+        "case": "defaults",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestral",
+        "case": "eta-0",
+        "inputs": {
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral",
+          "parameters": {
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestral",
+        "case": "eta-1",
+        "inputs": {
+          "eta": 100.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral",
+          "parameters": {
+            "eta": 100.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestral",
+        "case": "s_noise-0",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 0.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestral",
+        "case": "s_noise-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 100.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 100.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestralCFGPP",
+        "case": "defaults",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral_cfg_pp",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestralCFGPP",
+        "case": "eta-0",
+        "inputs": {
+          "eta": 0.0,
+          "s_noise": 1.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral_cfg_pp",
+          "parameters": {
+            "eta": 0.0,
+            "s_noise": 1.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestralCFGPP",
+        "case": "s_noise-0",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 0.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral_cfg_pp",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerEulerAncestralCFGPP",
+        "case": "s_noise-1",
+        "inputs": {
+          "eta": 1.0,
+          "s_noise": 10.0
+        },
+        "output": {
+          "algorithm": "euler_ancestral_cfg_pp",
+          "parameters": {
+            "eta": 1.0,
+            "s_noise": 10.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCM",
+        "case": "defaults",
+        "inputs": {
+          "s_noise": 1.0,
+          "s_noise_end": 1.0,
+          "noise_clip_std": 0.0
+        },
+        "output": {
+          "algorithm": "lcm",
+          "parameters": {
+            "s_noise": 1.0,
+            "s_noise_end": 1.0,
+            "noise_clip_std": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCM",
+        "case": "s_noise-0",
+        "inputs": {
+          "s_noise": 0.0,
+          "s_noise_end": 1.0,
+          "noise_clip_std": 0.0
+        },
+        "output": {
+          "algorithm": "lcm",
+          "parameters": {
+            "s_noise": 0.0,
+            "s_noise_end": 1.0,
+            "noise_clip_std": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCM",
+        "case": "s_noise-1",
+        "inputs": {
+          "s_noise": 64.0,
+          "s_noise_end": 1.0,
+          "noise_clip_std": 0.0
+        },
+        "output": {
+          "algorithm": "lcm",
+          "parameters": {
+            "s_noise": 64.0,
+            "s_noise_end": 1.0,
+            "noise_clip_std": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCM",
+        "case": "s_noise_end-0",
+        "inputs": {
+          "s_noise": 1.0,
+          "s_noise_end": 0.0,
+          "noise_clip_std": 0.0
+        },
+        "output": {
+          "algorithm": "lcm",
+          "parameters": {
+            "s_noise": 1.0,
+            "s_noise_end": 0.0,
+            "noise_clip_std": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCM",
+        "case": "s_noise_end-1",
+        "inputs": {
+          "s_noise": 1.0,
+          "s_noise_end": 64.0,
+          "noise_clip_std": 0.0
+        },
+        "output": {
+          "algorithm": "lcm",
+          "parameters": {
+            "s_noise": 1.0,
+            "s_noise_end": 64.0,
+            "noise_clip_std": 0.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCM",
+        "case": "noise_clip_std-1",
+        "inputs": {
+          "s_noise": 1.0,
+          "s_noise_end": 1.0,
+          "noise_clip_std": 10.0
+        },
+        "output": {
+          "algorithm": "lcm",
+          "parameters": {
+            "s_noise": 1.0,
+            "s_noise_end": 1.0,
+            "noise_clip_std": 10.0
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "defaults",
+        "inputs": {
+          "scale_ratio": 1.0,
+          "scale_steps": -1,
+          "upscale_method": "bislerp"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 1.0,
+            "upscale_steps": null,
+            "upscale_method": "bislerp"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "scale_ratio-0",
+        "inputs": {
+          "scale_ratio": 0.1,
+          "scale_steps": -1,
+          "upscale_method": "bislerp"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 0.1,
+            "upscale_steps": null,
+            "upscale_method": "bislerp"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "scale_ratio-1",
+        "inputs": {
+          "scale_ratio": 20.0,
+          "scale_steps": -1,
+          "upscale_method": "bislerp"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 20.0,
+            "upscale_steps": null,
+            "upscale_method": "bislerp"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "scale_steps-1",
+        "inputs": {
+          "scale_ratio": 1.0,
+          "scale_steps": 1000,
+          "upscale_method": "bislerp"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 1.0,
+            "upscale_steps": 1000,
+            "upscale_method": "bislerp"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "upscale_method-1",
+        "inputs": {
+          "scale_ratio": 1.0,
+          "scale_steps": -1,
+          "upscale_method": "nearest-exact"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 1.0,
+            "upscale_steps": null,
+            "upscale_method": "nearest-exact"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "upscale_method-2",
+        "inputs": {
+          "scale_ratio": 1.0,
+          "scale_steps": -1,
+          "upscale_method": "bilinear"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 1.0,
+            "upscale_steps": null,
+            "upscale_method": "bilinear"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "upscale_method-3",
+        "inputs": {
+          "scale_ratio": 1.0,
+          "scale_steps": -1,
+          "upscale_method": "area"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 1.0,
+            "upscale_steps": null,
+            "upscale_method": "area"
+          }
+        }
+      },
+      {
+        "class_type": "SamplerLCMUpscale",
+        "case": "upscale_method-4",
+        "inputs": {
+          "scale_ratio": 1.0,
+          "scale_steps": -1,
+          "upscale_method": "bicubic"
+        },
+        "output": {
+          "algorithm": "sample_lcm_upscale",
+          "parameters": {
+            "total_upscale": 1.0,
+            "upscale_steps": null,
+            "upscale_method": "bicubic"
+          }
+        }
+      }
+    ]
+  }
+}

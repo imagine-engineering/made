@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "fixture_id": "stableaudio3-sim-model-0133",
+  "feature_id": "COMFY-MODEL-0133",
+  "source_symbol": "StableAudio3",
+  "source_ordinal": 20,
+  "source_architecture": "model_base.StableAudio3",
+  "latent_feature_id": "COMFY-MODEL-0051",
+  "latent_identifier": "StableAudio3",
+  "catalog_projection_sha256": "a5d654d17f204bb571145cdd2156765d53611b8f2bede7a8e7a6686ad3c1c273",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/audio/dit.py", "sha256": "46a6eb57a69f9a488164346063bc0c76568b26fe0a97a8a4bb6900d3ae9f751c"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/audio/embedders.py", "sha256": "91c50b361f0e7dbefc6ffd63896e3005399301db6f8f5ad41e7d5e82734061bd"}
+  ],
+  "source_projection": "source_symbol=StableAudio3\nsource_ordinal=20\ninheritance=StableAudio3,StableAudio,supported_models_base.BASE\nunet_config.audio_model=dit1.0\nunet_config.global_cond_shared_embed=true\nlatent_format=sim.latent_formats.StableAudio3\nlatent_channels=256\nlatent_dimensions=1\ntemporal_downscale_ratio=4096\nmemory_usage_factor=7.0\nsampling_settings.multiplier=1.0\nsampling_settings.shift=2.0\narchitecture=model_base.StableAudio3\nmodel_type=FLOW\nclip_target=sim.text_encoders.sa3.SAT5GemmaTokenizer,sim.text_encoders.sa3.SAT5GemmaModel\ntext_encoder_key_prefix=text_encoders.\nvae_key_prefix=pretransform.model.\nunet_save_prefix=model.model.\nconditioning=seconds_total[0,384],optional_prompt_padding_embedding\ncondition_defaults=seconds_total:int(noise.shape[-1]/10.7666),max_text_tokens:256\nunet_zero_beta_suffixes=.cross_attend_norm.beta,.ff_norm.beta,.pre_norm.beta\nnative_detector=transformer.rotary_pos_emb.inv_freq plus shared-global marker and shape-derived transformer facts\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "90cd47662ed636abf5baa39270a9542d40d435be1f08a76eb915fd90ec1fd869",
+  "alternate_layout": "The pinned ComfyUI Diffusers detector table has no StableAudio configuration; native Rust resolution fails closed for Diffusers and StableAudio1 seconds-start probes.",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI StableAudio3 sources; no production Python dependency"
+}

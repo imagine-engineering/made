@@ -1,0 +1,385 @@
+[package]
+description = "The fast, collaborative code editor."
+edition.workspace = true
+name = "zed"
+version = "1.16.2"
+publish.workspace = true
+license = "GPL-3.0-or-later"
+authors = ["Zed Team <hi@zed.dev>"]
+default-run = "zed"
+
+[lints]
+workspace = true
+
+[features]
+default = ["agentic-tools"]
+agentic-tools = [
+    "dep:acp_thread",
+    "dep:acp_tools",
+    "dep:agent",
+    "dep:agent-client-protocol",
+    "dep:agent_settings",
+    "dep:agent_skills",
+    "dep:agent_ui",
+    "dep:language_models",
+    "dep:prompt_store",
+    "dep:sidebar",
+    "dep:web_search",
+    "dep:web_search_providers",
+    "auto_update_ui/agentic",
+    "diagnostics/agentic",
+    "editor/agentic",
+    "extensions_ui/agentic",
+    "git_ui/agentic",
+    "onboarding/agentic",
+    "settings_ui/agentic",
+    "terminal_view/agentic",
+    "title_bar/agentic",
+    "workspace/agentic",
+    "zed_actions/agentic",
+]
+multiplayer-tools = [
+    "agentic-tools",
+    "agent/multiplayer-tools",
+    "dep:nostr_compat",
+    "agent_ui/multiplayer-tools",
+    "channel/multiplayer-tools",
+    "collab_ui/multiplayer-tools",
+    "git_ui/multiplayer-tools",
+    "onboarding/multiplayer-tools",
+    "sidebar/multiplayer-tools",
+    "tasks_ui/multiplayer-tools",
+    "title_bar/multiplayer-tools",
+    "zed_credentials_provider/multiplayer-tools",
+    "workspace/multiplayer-tools",
+]
+multiplayer-test-support = ["multiplayer-tools", "agent_ui/test-support"]
+sim = [
+    "dep:graphics_ui",
+    "dep:clock",
+    "dep:sim_api",
+    "dep:sim_model",
+    "dep:sim_plugin_host",
+    "dep:sim_runtime",
+    "dep:sim_tensor",
+    "dep:sim_types",
+    "dep:sim_ui",
+]
+sim-test-support = ["sim", "test-support", "sim_ui/test-support"]
+rust-tools = ["dep:cargo_ui", "tasks_ui/rust-test-actions", "diagnostics/rust-tools"]
+jvm-tools = ["dep:jvm_ui", "extension_host/jvm-test-runnables", "project/jvm-tools", "tasks_ui/jvm-test-actions", "workspace/jvm-tools", "diagnostics/jvm-tools"]
+corex = ["sim", "sim_runtime/corex"]
+cuda = ["sim", "sim_runtime/cuda"]
+directml = ["sim", "sim_runtime/directml"]
+metal = ["sim", "sim_runtime/metal"]
+mlu = ["sim", "sim_runtime/mlu"]
+npu = ["sim", "sim_runtime/npu"]
+rocm = ["sim", "sim_runtime/rocm"]
+xpu = ["sim", "sim_runtime/xpu"]
+tracy = ["ztracing/tracy"]
+runtime-shaders = ["gpui_platform/runtime_shaders"]
+# LEAK_BACKTRACE=1 cargo run --features zed/track-project-leak --profile release-fast
+track-project-leak = ["gpui/leak-detection"]
+test-support = [
+    "agentic-tools",
+    "agent/test-support",
+    "dep:tempfile",
+    "gpui/test-support",
+    "gpui_platform/screen-capture",
+    "dep:image",
+    "workspace/test-support",
+    "project/test-support",
+    "editor/test-support",
+    "terminal_view/test-support",
+    "image_viewer/test-support",
+    "recent_projects/test-support",
+    "repl/test-support",
+    "title_bar/test-support",
+]
+visual-tests = [
+    "agentic-tools",
+    "gpui/test-support",
+    "gpui_platform/screen-capture",
+    "gpui_platform/test-support",
+    "dep:image",
+    "dep:tempfile",
+    "dep:action_log",
+    "dep:agent_servers",
+    "workspace/test-support",
+    "project/test-support",
+    "editor/test-support",
+    "terminal_view/test-support",
+    "image_viewer/test-support",
+    "clock/test-support",
+    "acp_thread/test-support",
+    "action_log/test-support",
+    "agent_ui/test-support",
+    "channel/test-support",
+    "db/test-support",
+    "agent/test-support",
+    "language_model/test-support",
+    "fs/test-support",
+    "recent_projects/test-support",
+    "title_bar/test-support",
+]
+
+[[bin]]
+name = "zed"
+path = "src/main.rs"
+
+[[bin]]
+name = "zed_visual_test_runner"
+path = "src/visual_test_runner.rs"
+required-features = ["visual-tests"]
+
+[dependencies]
+graphics_ui = { workspace = true, optional = true }
+async-channel.workspace = true
+cargo_ui = { workspace = true, optional = true }
+sim_api = { workspace = true, optional = true }
+sim_model = { workspace = true, optional = true }
+sim_plugin_host = { workspace = true, optional = true }
+sim_runtime = { workspace = true, optional = true }
+sim_tensor = { workspace = true, optional = true }
+sim_types = { workspace = true, optional = true }
+sim_ui = { workspace = true, optional = true }
+acp_tools = { workspace = true, optional = true }
+activity_indicator.workspace = true
+agent = { workspace = true, optional = true }
+agent-client-protocol = { workspace = true, optional = true }
+agent_settings = { workspace = true, optional = true }
+agent_skills = { workspace = true, optional = true }
+agent_ui = { workspace = true, features = ["audio"], optional = true }
+anyhow.workspace = true
+askpass.workspace = true
+assets.workspace = true
+audio.workspace = true
+auto_update.workspace = true
+auto_update_ui.workspace = true
+breadcrumbs.workspace = true
+call.workspace = true
+chrono.workspace = true
+channel.workspace = true
+clap.workspace = true
+cli.workspace = true
+client.workspace = true
+product_flavor.workspace = true
+codestral.workspace = true
+collab_ui.workspace = true
+collections.workspace = true
+command_palette.workspace = true
+component.workspace = true
+component_preview.workspace = true
+copilot.workspace = true
+copilot_chat.workspace = true
+copilot_ui.workspace = true
+crashes.workspace = true
+csv_preview.workspace = true
+dap_adapters.workspace = true
+db.workspace = true
+debug_adapter_extension.workspace = true
+debugger_tools.workspace = true
+debugger_ui.workspace = true
+dev_container.workspace = true
+diagnostics.workspace = true
+editor.workspace = true
+encoding_selector.workspace = true
+env_logger.workspace = true
+extension.workspace = true
+extension_host.workspace = true
+extensions_ui.workspace = true
+feature_flags.workspace = true
+feedback.workspace = true
+file_finder.workspace = true
+fs.workspace = true
+futures.workspace = true
+git.workspace = true
+git_hosting_providers.workspace = true
+git_ui = { workspace = true, features = ["call"] }
+git_ui_core.workspace = true
+go_to_line.workspace = true
+system_specs.workspace = true
+gpui = { workspace = true, features = [
+    "frame-duration-histogram",
+    "input-latency-histogram",
+    "profiler",
+] }
+gpui_platform = {workspace = true, features=["screen-capture", "font-kit", "wayland", "x11"]}
+hdrhistogram.workspace = true
+image = { workspace = true, optional = true }
+itertools.workspace = true
+nostr_compat = { workspace = true, optional = true }
+semver.workspace = true
+tempfile = { workspace = true, optional = true }
+clock = { workspace = true, optional = true }
+acp_thread = { workspace = true, optional = true }
+action_log = { workspace = true, optional = true }
+agent_servers = { workspace = true, optional = true }
+gpui_tokio.workspace = true
+rayon.workspace = true
+
+edit_prediction.workspace = true
+edit_prediction_ui.workspace = true
+http_client.workspace = true
+image_viewer.workspace = true
+input_latency_ui.workspace = true
+inspector_ui.workspace = true
+install_cli.workspace = true
+journal.workspace = true
+json_schema_store.workspace = true
+keymap_editor.workspace = true
+language.workspace = true
+language_extension.workspace = true
+language_model.workspace = true
+language_models = { workspace = true, optional = true }
+language_onboarding.workspace = true
+language_selector.workspace = true
+language_tools.workspace = true
+jvm_ui = { workspace = true, optional = true }
+languages = { workspace = true, features = ["load-grammars"] }
+line_ending_selector.workspace = true
+log.workspace = true
+lsp_locations.workspace = true
+markdown.workspace = true
+markdown_preview.workspace = true
+menu.workspace = true
+migrator.workspace = true
+miniprofiler_ui.workspace = true
+mimalloc = { version = "0.1", optional = true }
+node_runtime.workspace = true
+notifications.workspace = true
+onboarding.workspace = true
+outline.workspace = true
+outline_panel.workspace = true
+parking_lot.workspace = true
+paths.workspace = true
+picker.workspace = true
+profiling.workspace = true
+project.workspace = true
+project_panel.workspace = true
+project_symbols.workspace = true
+prompt_store = { workspace = true, optional = true }
+proto.workspace = true
+recent_projects.workspace = true
+release_channel.workspace = true
+remote.workspace = true
+repl.workspace = true
+reqwest.workspace = true
+reqwest_client.workspace = true
+rope.workspace = true
+sandbox.workspace = true
+search.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+session.workspace = true
+settings.workspace = true
+settings_profile_selector.workspace = true
+settings_ui.workspace = true
+shellexpand.workspace = true
+sidebar = { workspace = true, optional = true }
+smol.workspace = true
+snippet_provider.workspace = true
+snippets_ui.workspace = true
+svg_preview.workspace = true
+sysinfo.workspace = true
+tab_switcher.workspace = true
+task.workspace = true
+tasks_ui.workspace = true
+telemetry.workspace = true
+telemetry_events.workspace = true
+terminal_view.workspace = true
+theme.workspace = true
+theme_settings.workspace = true
+theme_extension.workspace = true
+theme_selector.workspace = true
+time.workspace = true
+time_format.workspace = true
+title_bar.workspace = true
+ztracing.workspace = true
+tracing.workspace = true
+toolchain_selector.workspace = true
+ui.workspace = true
+ui_prompt.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+util.workspace = true
+uuid.workspace = true
+vim.workspace = true
+vim_mode_setting.workspace = true
+watch.workspace = true
+web_search = { workspace = true, optional = true }
+web_search_providers = { workspace = true, optional = true }
+which_key.workspace = true
+workspace.workspace = true
+zed_actions.workspace = true
+zed_credentials_provider.workspace = true
+zed_env_vars.workspace = true
+zlog.workspace = true
+zlog_settings.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+etw_tracing.workspace = true
+windows.workspace = true
+gpui = { workspace = true, features = [
+    "input-latency-histogram",
+    "windows-manifest",
+] }
+
+[build-dependencies]
+windows_resources = { path = "../windows_resources" }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+gpui = { workspace = true, features = [
+    "input-latency-histogram",
+    "wayland",
+    "x11",
+] }
+ashpd.workspace = true
+image.workspace = true
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.build-dependencies]
+image.workspace = true
+
+
+[target.'cfg(target_os = "linux")'.build-dependencies]
+pkg-config = "0.3.22"
+
+[dev-dependencies]
+action_log.workspace = true
+acp_thread = { workspace = true, features = ["test-support"] }
+agent = { workspace = true, features = ["test-support"] }
+call = { workspace = true, features = ["test-support"] }
+editor = { workspace = true, features = ["test-support"] }
+fs = { workspace = true, features = ["test-support"] }
+gpui = { workspace = true, features = ["input-latency-histogram", "test-support"] }
+image_viewer = { workspace = true, features = ["test-support"] }
+itertools.workspace = true
+language = { workspace = true, features = ["test-support"] }
+language_model = { workspace = true, features = ["test-support"] }
+pretty_assertions.workspace = true
+project = { workspace = true, features = ["test-support"] }
+remote = { workspace = true, features = ["test-support"] }
+remote_server = { workspace = true, features = ["test-support"] }
+semver.workspace = true
+tempfile.workspace = true
+terminal_view = { workspace = true, features = ["test-support"] }
+title_bar = { workspace = true, features = ["test-support"] }
+workspace = { workspace = true, features = ["test-support"] }
+image.workspace = true
+search = { workspace = true, features = ["test-support"] }
+repl = { workspace = true, features = ["test-support"] }
+
+
+
+[package.metadata.bundle]
+icon = ["resources/app-icon@2x.png", "resources/app-icon.png"]
+identifier = "dev.zed.internal"
+name = "Zed Internal"
+osx_minimum_system_version = "10.15.7"
+osx_info_plist_exts = ["resources/info/*"]
+osx_url_schemes = ["zed-internal"]
+
+[package.metadata.cargo-machete]
+ignored = ["profiling", "zstd", "tracing"]

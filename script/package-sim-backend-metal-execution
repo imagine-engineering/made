@@ -1,0 +1,366 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+execution_abi="$workspace/crates/sim_backend_metal/abi/execution-v1.json"
+reviewed_bindings="$workspace/crates/sim_backend_metal/abi/reviewed-execution-bindings-v1.txt"
+abi_verifier="$workspace/crates/sim_backend_metal/abi/verify-execution-bindings.m"
+kernel_source="$workspace/crates/sim_backend_metal/kernels/tensor_ops.metal"
+licenses="$workspace/crates/sim_backend_metal/LICENSES.execution"
+policy="$workspace/nix/sim-backends/metal/execution-policy.json"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --self-test" >&2
+}
+
+validate_target() {
+    case "$1" in
+        aarch64-apple-darwin|x86_64-apple-darwin) ;;
+        *) echo "unsupported Metal execution target: $1" >&2; return 1 ;;
+    esac
+}
+
+validate_sdk_contract() (
+    contract=${1:-$execution_abi}
+    command -v xcrun >/dev/null 2>&1 || {
+        echo "xcrun is required for development-time Metal ABI verification" >&2
+        return 1
+    }
+    command -v xcodebuild >/dev/null 2>&1 || {
+        echo "xcodebuild is required for development-time Metal ABI verification" >&2
+        return 1
+    }
+    sdk_version=$(xcrun -sdk macosx --show-sdk-version) || return 1
+    sdk_root=$(xcrun -sdk macosx --show-sdk-path) || return 1
+    xcode_build=$(xcodebuild -version | sed -n 's/^Build version //p') || return 1
+    if [ "$sdk_version" != "26.2" ] || [ "$xcode_build" != "17C52" ]; then
+        echo "Metal execution ABI verification requires SDK 26.2 and Xcode build 17C52" >&2
+        return 1
+    fi
+    python3 - "$contract" "$sdk_root" <<'PY' || return 1
+import hashlib
+import json
+import pathlib
+import sys
+
+contract_path = pathlib.Path(sys.argv[1])
+sdk_root = pathlib.Path(sys.argv[2]).resolve()
+
+def reject_duplicates(rows):
+    result = {}
+    for key, value in rows:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+contract = json.loads(
+    contract_path.read_text(encoding="utf-8"),
+    object_pairs_hook=reject_duplicates,
+)
+if contract.get("reviewed_sdk_version") != "26.2" or contract.get("reviewed_xcode_build") != "17C52":
+    raise SystemExit("execution ABI toolchain identity differs from the pinned SDK")
+headers = contract.get("reviewed_headers")
+if not isinstance(headers, list) or not headers:
+    raise SystemExit("execution ABI has no reviewed_headers")
+seen = set()
+for index, row in enumerate(headers):
+    if not isinstance(row, dict) or list(row) != ["path", "sha256"]:
+        raise SystemExit(f"reviewed header row {index} is malformed")
+    relative = pathlib.PurePosixPath(row["path"])
+    if relative.is_absolute() or ".." in relative.parts or relative.as_posix() in seen:
+        raise SystemExit(f"reviewed header row {index} has an unsafe or duplicate path")
+    seen.add(relative.as_posix())
+    expected = row["sha256"]
+    if not isinstance(expected, str) or len(expected) != 64 or any(character not in "0123456789abcdef" for character in expected):
+        raise SystemExit(f"reviewed header row {index} has an invalid SHA-256")
+    header = sdk_root.joinpath(*relative.parts)
+    if not header.is_file():
+        raise SystemExit(f"reviewed SDK header is unavailable: {relative.as_posix()}")
+    actual = hashlib.sha256(header.read_bytes()).hexdigest()
+    if actual != expected:
+        raise SystemExit(f"reviewed SDK header digest differs: {relative.as_posix()}")
+print(f"verified {len(headers)} reviewed Metal SDK header digests")
+PY
+    verify_directory=$(mktemp -d "${TMPDIR:-/tmp}/sim-metal-execution-abi.XXXXXX")
+    trap 'rm -rf -- "$verify_directory"' 0 HUP INT TERM
+    xcrun -sdk macosx clang \
+        -arch arm64 -arch x86_64 \
+        -mmacosx-version-min=13.0 \
+        -fobjc-arc -Wall -Wextra -Werror \
+        -framework Foundation -framework Metal \
+        "$abi_verifier" -o "$verify_directory/verify-execution-bindings" || return 1
+    "$verify_directory/verify-execution-bindings" "$contract"
+)
+
+compile_metallib() {
+    metallib_output=$1
+    command -v xcrun >/dev/null 2>&1 || {
+        echo "xcrun is required for development-time Metal package compilation" >&2
+        return 1
+    }
+    sdk_version=$(xcrun -sdk macosx --show-sdk-version)
+    xcode_build=$(xcodebuild -version | sed -n 's/^Build version //p')
+    if [ "$sdk_version" != "26.2" ] || [ "$xcode_build" != "17C52" ]; then
+        echo "Metal execution packaging requires SDK 26.2 and Xcode build 17C52" >&2
+        return 1
+    fi
+    compile_directory=$(mktemp -d "${TMPDIR:-/tmp}/sim-metal-execution-compile.XXXXXX")
+    module_cache="$compile_directory/module-cache"
+    mkdir -p "$module_cache"
+    if ! xcrun -sdk macosx metal \
+        -std=metal3.0 -mmacosx-version-min=13.0 \
+        -fmodules-cache-path="$module_cache" -c "$kernel_source" \
+        -o "$compile_directory/tensor_ops.air"; then
+        rm -rf -- "$compile_directory"
+        return 1
+    fi
+    if ! xcrun -sdk macosx metallib "$compile_directory/tensor_ops.air" -o "$metallib_output"; then
+        rm -rf -- "$compile_directory"
+        return 1
+    fi
+    rm -rf -- "$compile_directory"
+}
+
+write_target() {
+    python3 - "$1" "$2" <<'PY'
+import json
+import pathlib
+import sys
+pathlib.Path(sys.argv[1]).write_text(
+    json.dumps({"schema_version": 1, "target": sys.argv[2]}, separators=(",", ":")) + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+write_coverage() {
+    python3 - "$1" <<'PY'
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+root = pathlib.Path(sys.argv[1])
+rows = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        if relative == "package-coverage.sha256":
+            continue
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SystemExit(f"coverage input is not a regular file: {relative}")
+        contents = path.read_bytes()
+        rows.append((relative, f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n"))
+(root / "package-coverage.sha256").write_text(
+    "".join(row for _relative, row in sorted(rows)),
+    encoding="utf-8",
+)
+PY
+}
+
+validate_tree() {
+    python3 - "$policy" "$1" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import sys
+
+policy_path = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+
+def reject_duplicates(rows):
+    result = {}
+    for key, value in rows:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("Metal execution package root must be a physical directory")
+policy = json.loads(policy_path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
+observed = set()
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for entry_name in directory_names + file_names:
+        entry = pathlib.Path(directory, entry_name)
+        relative = entry.relative_to(root).as_posix()
+        metadata = entry.lstat()
+        if stat.S_ISLNK(metadata.st_mode):
+            raise SystemExit(f"symbolic links are forbidden: {relative}")
+        if stat.S_ISDIR(metadata.st_mode):
+            if not any(path.startswith(relative + "/") for path in policy["allowed_payloads"]):
+                raise SystemExit(f"undeclared package directory: {relative}")
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SystemExit(f"non-regular package entry: {relative}")
+        if metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"package payload is empty or oversized: {relative}")
+        if any(relative.endswith(suffix) for suffix in policy["forbidden_payload_suffixes"]):
+            raise SystemExit(f"forbidden package payload: {relative}")
+        observed.add(relative)
+expected = set(policy["allowed_payloads"])
+if observed != expected:
+    raise SystemExit(f"package tree differs: missing={sorted(expected-observed)} extra={sorted(observed-expected)}")
+packaged_policy = json.loads((root / "execution-policy.json").read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
+if packaged_policy != policy:
+    raise SystemExit("packaged execution policy differs from reviewed policy")
+target = json.loads((root / "target.json").read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
+if list(target) != ["schema_version", "target"] or target["schema_version"] != 1 or target["target"] not in policy["allowed_targets"]:
+    raise SystemExit("target metadata is invalid")
+checks = {
+    "abi/execution-v1.json": policy["execution_abi_sha256"],
+    "abi/reviewed-execution-bindings-v1.txt": policy["reviewed_execution_bindings_sha256"],
+    "kernels/tensor_ops.metal": policy["tensor_ops_source_sha256"],
+    "kernels/tensor_ops.metallib": policy["tensor_ops_metallib_sha256_by_target"][target["target"]],
+    "LICENSES": policy["license_notice_sha256"],
+}
+for relative, expected_digest in checks.items():
+    actual = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+    if actual != expected_digest:
+        raise SystemExit(f"digest mismatch: {relative}")
+rows = []
+for relative in sorted(observed - {"package-coverage.sha256"}):
+    contents = (root / relative).read_bytes()
+    rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+if (root / "package-coverage.sha256").read_bytes() != "".join(rows).encode("utf-8"):
+    raise SystemExit("package coverage differs from the exact payload tree")
+if policy["runtime_authorization_from_structure"] is not False:
+    raise SystemExit("structural packaging must not grant runtime authorization")
+if policy.get("development_structure_only") is not True:
+    raise SystemExit("standalone execution packaging must remain development-only structure")
+if policy.get("authorization_owner") != "sim_runtime::MetalPackageVerificationKey":
+    raise SystemExit("standalone execution policy has the wrong authorization owner")
+if policy.get("authorization_package") != "signed-main-metal-package":
+    raise SystemExit("standalone execution resources must require the signed main package")
+PY
+}
+
+build_package() (
+    output=$1
+    target=$2
+    validate_target "$target" || exit 1
+    if [ -e "$output" ] || [ -L "$output" ]; then
+        echo "output already exists: $output" >&2
+        exit 1
+    fi
+    validate_sdk_contract "$execution_abi" || exit 1
+    parent=$(dirname -- "$output")
+    mkdir -p "$parent"
+    staging=$(mktemp -d "$parent/.sim-metal-execution.XXXXXX")
+    trap 'rm -rf -- "$staging"' 0 HUP INT TERM
+    mkdir -p "$staging/abi" "$staging/kernels"
+    cp "$execution_abi" "$staging/abi/execution-v1.json"
+    cp "$reviewed_bindings" "$staging/abi/reviewed-execution-bindings-v1.txt"
+    cp "$kernel_source" "$staging/kernels/tensor_ops.metal"
+    cp "$licenses" "$staging/LICENSES"
+    cp "$policy" "$staging/execution-policy.json"
+    write_target "$staging/target.json" "$target"
+    compile_metallib "$staging/kernels/tensor_ops.metallib" || exit 1
+    write_coverage "$staging"
+    validate_tree "$staging"
+    mv "$staging" "$output"
+    trap - 0 HUP INT TERM
+    echo "packaged development-only Metal execution resource structure for $target at $output"
+)
+
+run_self_test() {
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/sim-metal-execution-test.XXXXXX")
+    trap 'rm -rf -- "$temporary"' 0 HUP INT TERM
+    build_package "$temporary/a" aarch64-apple-darwin >/dev/null
+    build_package "$temporary/b" aarch64-apple-darwin >/dev/null
+    build_package "$temporary/x86" x86_64-apple-darwin >/dev/null
+    cmp -s "$temporary/a/kernels/tensor_ops.metallib" "$temporary/b/kernels/tensor_ops.metallib"
+    cmp -s "$temporary/a/package-coverage.sha256" "$temporary/b/package-coverage.sha256"
+    validate_tree "$temporary/a"
+    validate_tree "$temporary/x86"
+    if build_package "$temporary/bad-target" arm64-apple-ios >/dev/null 2>&1; then
+        echo "self-test accepted an unsupported target" >&2
+        exit 1
+    fi
+    python3 - "$execution_abi" "$temporary/tampered-abi.json" <<'PY'
+import json
+import pathlib
+import sys
+document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+document["resource_selectors"][0]["encoding"] = "v24@0:8"
+pathlib.Path(sys.argv[2]).write_text(json.dumps(document), encoding="utf-8")
+PY
+    if validate_sdk_contract "$temporary/tampered-abi.json" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered selector encoding" >&2
+        exit 1
+    fi
+    python3 - "$execution_abi" "$temporary/tampered-nullability.json" <<'PY'
+import json
+import pathlib
+import sys
+document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+document["resource_selectors"][5]["return_nullability"] = "nonnull"
+pathlib.Path(sys.argv[2]).write_text(json.dumps(document), encoding="utf-8")
+PY
+    if validate_sdk_contract "$temporary/tampered-nullability.json" >/dev/null 2>&1; then
+        echo "self-test accepted tampered selector return nullability" >&2
+        exit 1
+    fi
+    python3 - "$execution_abi" "$temporary/tampered-header.json" <<'PY'
+import json
+import pathlib
+import sys
+document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+document["reviewed_headers"][0]["sha256"] = "0" * 64
+pathlib.Path(sys.argv[2]).write_text(json.dumps(document), encoding="utf-8")
+PY
+    if validate_sdk_contract "$temporary/tampered-header.json" >/dev/null 2>&1; then
+        echo "self-test accepted a tampered SDK header digest" >&2
+        exit 1
+    fi
+    cp -R "$temporary/a" "$temporary/tampered-source"
+    printf 'x' >> "$temporary/tampered-source/kernels/tensor_ops.metal"
+    write_coverage "$temporary/tampered-source"
+    if validate_tree "$temporary/tampered-source" >/dev/null 2>&1; then
+        echo "self-test accepted tampered source" >&2
+        exit 1
+    fi
+    cp -R "$temporary/a" "$temporary/tampered-metallib"
+    printf 'x' >> "$temporary/tampered-metallib/kernels/tensor_ops.metallib"
+    write_coverage "$temporary/tampered-metallib"
+    if validate_tree "$temporary/tampered-metallib" >/dev/null 2>&1; then
+        echo "self-test accepted tampered metallib" >&2
+        exit 1
+    fi
+    cp -R "$temporary/a" "$temporary/uncovered"
+    printf 'x' > "$temporary/uncovered/unknown.bin"
+    if validate_tree "$temporary/uncovered" >/dev/null 2>&1; then
+        echo "self-test accepted an uncovered payload" >&2
+        exit 1
+    fi
+    cp -R "$temporary/a" "$temporary/symlink"
+    ln -s tensor_ops.metal "$temporary/symlink/kernels/alias.metal"
+    if validate_tree "$temporary/symlink" >/dev/null 2>&1; then
+        echo "self-test accepted a symbolic link" >&2
+        exit 1
+    fi
+    echo "Metal execution package self-test passed"
+}
+
+if [ "$#" -eq 1 ] && [ "$1" = "--self-test" ]; then
+    run_self_test
+elif [ "$#" -eq 2 ] && [ "$1" = "--inspect-structure" ]; then
+    validate_tree "$2"
+    echo "inspected untrusted development-only Metal execution structure; only the signed main package can authorize it"
+elif [ "$#" -eq 2 ]; then
+    build_package "$1" "$2"
+else
+    usage
+    exit 2
+fi

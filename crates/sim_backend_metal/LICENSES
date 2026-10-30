@@ -1,0 +1,5 @@
+Zed Apple Metal MPS adapter package
+
+Zed adapter source and package metadata are licensed GPL-3.0-or-later.
+Apple system frameworks are not redistributed. Apple SDK headers are not redistributed.
+The packaged metallib is generated from Zed's readiness.metal source by the locally installed Xcode toolchain and is covered by the package signature and final application signing.

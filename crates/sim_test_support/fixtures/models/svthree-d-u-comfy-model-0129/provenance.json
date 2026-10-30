@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fixture_id": "svthree-d-u-sim-model-0129",
+  "feature_id": "COMFY-MODEL-0129",
+  "source_symbol": "SV3D_u",
+  "source_ordinal": 17,
+  "source_architecture": "model_base.SV3D_u",
+  "latent_feature_id": "COMFY-MODEL-0045",
+  "latent_identifier": "SD15",
+  "catalog_projection_sha256": "7418426898eecfd48c2b5355d4d2093d97824189bf702167b9aa86f3d464a4e7",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/diffusers_convert.py", "sha256": "8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/latent_formats.py", "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/openaimodel.py", "sha256": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96"}
+  ],
+  "source_projection": "source_symbol=SV3D_u\nsource_ordinal=17\ninheritance=SV3D_u,SVD_img2vid,supported_models_base.BASE\nunet_config.model_channels=320\nunet_config.in_channels=8\nunet_config.context_dim=1024\nunet_config.adm_in_channels=256\nunet_config.transformer_depth=1,1,1,1,1,1,0,0\nunet_config.use_linear_in_transformer=true\nunet_config.use_temporal_attention=true\nunet_config.use_temporal_resblock=true\nlatent_format=sim.latent_formats.SD15\nmemory_usage_factor=2.0\nsampling_settings.sigma_max=700.0\nsampling_settings.sigma_min=0.002\narchitecture=model_base.SV3D_u\nclip_target=None\nclip_vision_prefix=conditioner.embedders.0.open_clip.model.visual.\nvae_key_prefix=conditioner.embedders.1.encoder.\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "51a953b1138598f31fecd6d601f6d3513d948aba48d08ef684f4f84480ff57ef",
+  "alternate_layout": "The pinned ComfyUI diffusers detector table has no SV3D_u configuration; fail closed instead of confusing it with SVD_img2vid or SV3D_p.",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI SV3D_u sources; no production Python dependency"
+}

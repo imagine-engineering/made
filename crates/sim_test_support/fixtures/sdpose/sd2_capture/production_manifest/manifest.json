@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "provenance_mode": "code-inferred-source-schema",
+  "comfyui_version": "0.27.1",
+  "comfyui_file_count": 949,
+  "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+  "source_sha256": {
+    "openaimodel.py": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+    "attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "model_base.py": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd",
+    "supported_models.py": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+  },
+  "normalized_prefix": "native.",
+  "tensor_count": 690,
+  "scalar_count": 867556804,
+  "supported_cpu_dtypes": ["f16", "bf16", "f32"],
+  "latent_shape": [1, 4, 128, 96],
+  "capture": {
+    "timing": "pre_skip_concat",
+    "selection": "last_channel_640",
+    "output_block": 9,
+    "shape": [1, 640, 128, 96]
+  },
+  "output_block_input_channels": [1280, 1280, 1280, 1280, 1280, 1280, 1280, 640, 640, 640, 320, 320],
+  "licensed_checkpoint_oracle": null,
+  "upstream_runtime_oracle": null,
+  "accelerator_numeric_oracle": null
+}

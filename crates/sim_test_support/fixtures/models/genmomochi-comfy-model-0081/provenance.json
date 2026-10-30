@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "fixture_id": "genmomochi-sim-model-0081",
+  "feature_id": "COMFY-MODEL-0081",
+  "source_symbol": "GenmoMochi",
+  "source_ordinal": 31,
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/latent_formats.py",
+      "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/genmo/joint_model/asymm_models_joint.py",
+      "sha256": "59137d17f39231ca7b3db318d863a49f8d47857ba73e7db6993e1f1f62609dbe"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/genmo/joint_model/layers.py",
+      "sha256": "bb0ae6cc4dee093547688f667e307bc37d83697d7342dc944f20499682321c95"
+    }
+  ],
+  "source_projection": "source_symbol=GenmoMochi\nsource_ordinal=31\nunet_config.image_model=mochi_preview\nsampling_settings.multiplier=1.0\nsampling_settings.shift=6.0\nlatent_format=Mochi\nmemory_usage_factor=2.0\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.GenmoMochi\nmodel_type=FLOW\ndetector=t5_yproj.weight\nconfiguration.depth=48\nconfiguration.patch_size=2\nconfiguration.num_heads=24\nconfiguration.hidden_size_x=3072\nconfiguration.hidden_size_y=1536\nconfiguration.mlp_ratio_x=4.0\nconfiguration.mlp_ratio_y=4.0\nconfiguration.learn_sigma=false\nconfiguration.in_channels=12\nconfiguration.qk_norm=true\nconfiguration.qkv_bias=false\nconfiguration.out_bias=true\nconfiguration.patch_embed_bias=true\nconfiguration.posenc_preserve_area=true\nconfiguration.timestep_mlp_bias=true\nconfiguration.attend_to_padding=false\nclip_tokenizer=sim.text_encoders.genmo.MochiT5Tokenizer\nclip_model=sim.text_encoders.genmo.mochi_te\n",
+  "source_projection_sha256": "e89d34b2cd18e9128e0d47ddb06f430f998cee5c7cd88922629498afc407fafc",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

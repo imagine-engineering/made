@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-qwen-multimodal-resource-foundation",
+  "provenance_mode": "code-inferred",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "source_sha256": {
+    "comfy/sd.py": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
+    "comfy/text_encoders/llama.py": "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a",
+    "comfy/text_encoders/qwen3vl.py": "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06",
+    "comfy/text_encoders/qwen35.py": "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929",
+    "comfy/text_encoders/qwen_vl.py": "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f"
+  },
+  "tokenizer_artifact_digest": {
+    "qwen25": "c24475458600e650d71943977840489c018993267821ce92f7c3c7843c125de4",
+    "qwen35": "1388589740cd1075d5d495ae728a4c69fa377d5fadfd8bc72cd18465707056ea"
+  },
+  "accepted_families": [
+    {"family": "Qwen3Vl4B", "tokenizer": "qwen25", "decoder": "Qwen3VL_4BConfig", "vision_output": 2560, "deepstack": [5, 11, 17]},
+    {"family": "Qwen3Vl8B", "tokenizer": "qwen25", "decoder": "Qwen3VL_8BConfig", "vision_output": 4096, "deepstack": [8, 16, 24]},
+    {"family": "Qwen35_08B", "tokenizer": "qwen35", "decoder": "qwen35_08b", "vision_output": 1024, "deepstack": []},
+    {"family": "Qwen35_2B", "tokenizer": "qwen35", "decoder": "qwen35_2b", "vision_output": 2048, "deepstack": []},
+    {"family": "Qwen35_4B", "tokenizer": "qwen35", "decoder": "qwen35_4b", "vision_output": 2560, "deepstack": []},
+    {"family": "Qwen35_9B", "tokenizer": "qwen35", "decoder": "qwen35_9b", "vision_output": 4096, "deepstack": []},
+    {"family": "Qwen35_27B", "tokenizer": "qwen35", "decoder": "qwen35_27b", "vision_output": 5120, "deepstack": []}
+  ],
+  "resource_contract": {
+    "role": "CLIP",
+    "format": "zed-native-qwen-multimodal-clip-v1",
+    "source_adapter": "standard-comfy-text-generation-adapter",
+    "production_profiles_are_source_exact": true,
+    "reduced_fixtures_are_not_publishable": true,
+    "transient_state_is_retained": false,
+    "tensor_residency_key": "StorageId"
+  }
+}

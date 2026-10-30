@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Rebuild first-party Sim component fixtures with their locked owning sources."""
+import argparse
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import tomllib
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--check', action='store_true', help='compare rebuilt output without replacing fixtures')
+arguments = parser.parse_args()
+root = Path(__file__).resolve().parent.parent
+os.chdir(root)
+target = root / 'target/sim-component-fixtures'
+logs = target / 'rebuild-evidence'
+logs.mkdir(parents=True, exist_ok=True)
+environment = os.environ.copy()
+environment.update(CARGO_BUILD_JOBS='2', CARGO_INCREMENTAL='0', CARGO_TARGET_DIR=str(target))
+commands = []
+artifacts = []
+
+def run(command, extra_environment=None):
+    actual_environment = environment | (extra_environment or {})
+    log = logs / (str(len(commands)) + '.log')
+    with log.open('wb') as output:
+        result = subprocess.run(command, env=actual_environment, stdout=output, stderr=subprocess.STDOUT)
+    commands.append({'command': command, 'exit_code': result.returncode, 'log': str(log.relative_to(root))})
+    if result.returncode:
+        (logs / 'commands.json').write_text(json.dumps(commands, indent=2) + '\n')
+        raise SystemExit(f'Failed: {command}; see {log}')
+
+host = root / 'crates/sim_plugin_host/tests/fixtures'
+providers = root / 'crates/sim_test_support/fixtures/providers'
+# The host generator uses the same native registry and SDK serialization as component admission.
+fixture_paths = sorted(providers.glob('*/provider_v2*_host.fixture'))
+recipe_path = providers / 'hitpaw/unsigned-fixture-recipe.json'
+recipe = json.loads(recipe_path.read_text())
+hitpaw_fixture = logs / 'hitpaw-binding-input.json'
+hitpaw_fixture.write_text(json.dumps({'namespace': 'zed.sim.provider.hitpaw', 'bindings_sha256': recipe['bindings_sha256'], 'bindings': [{
+    'feature_id': 'COMFY-NODE-0226', 'node_id': 'HitPawGeneralImageEnhance',
+    'contract_sha256': recipe['native_contract_sha256'],
+    'transport_schema': 'zed:sim-provider-transport@1', 'materializer_schema': 'zed:sim-provider-materializer@1'}]}))
+contract_output = logs / 'contracts.json'
+command = ['cargo', 'run', '--locked', '--offline', '-p', 'sim_runtime', '--example', 'sim_component_contracts', '--', *map(str, fixture_paths), str(hitpaw_fixture)]
+# Reuse the main workspace cache for the native registry, never for guest modules.
+with contract_output.open('wb') as output, (logs / 'contracts.log').open('wb') as error:
+    result = subprocess.run(command, env=os.environ | {'CARGO_BUILD_JOBS': '2'}, stdout=output, stderr=error)
+commands.append({'command': command, 'exit_code': result.returncode, 'log': str((logs / 'contracts.log').relative_to(root))})
+if result.returncode:
+    raise SystemExit('Native contract generator failed; see ' + str(logs / 'contracts.log'))
+contracts = json.loads(contract_output.read_text())
+replacements = contracts['contracts'] | contracts['binding_sets']
+for directory in root.glob('crates/sim_*'):
+    for path in directory.rglob('*'):
+        if not path.is_file() or 'target' in path.parts or (path.suffix not in ('.rs', '.fixture') and path != recipe_path):
+            continue
+        before = path.read_text()
+        after = before
+        for old, new in replacements.items():
+            after = after.replace(old, new)
+        if after != before:
+            if arguments.check:
+                raise SystemExit('Stale canonical contract: ' + str(path))
+            path.write_text(after)
+recipe = json.loads(recipe_path.read_text())
+encoder_source = providers / 'common/component_source'
+run(['cargo', 'build', '--locked', '--offline', '--manifest-path', str(encoder_source / 'Cargo.toml'), '--bin', 'rebuild_fixture'])
+encoder = target / 'debug/rebuild_fixture'
+
+jobs = [
+    (host / 'list_ports_component', [], host / 'list_ports', 'contract'),
+    (host / 'hang_component_source', [], host / 'hang_component', 'base64'),
+    (host / 'provider_component_source', [], host / 'provider_component', 'base64'),
+    (host / 'provider_streaming_component_source', [], host / 'provider_streaming_component', 'base64'),
+]
+for provider in ('common', 'openrouter', 'anthropic'):
+    for flags, suffix in [([], ''), (['malformed-result'], '_malformed_result'), (['oversized-result'], '_oversized_result')]:
+        jobs.append((providers / provider / 'component_source', flags, providers / provider / ('provider_v2' + suffix + '_component'), 'binary'))
+        if provider == 'common':
+            jobs.append((providers / provider / 'component_source', ['multi-contract', *flags], providers / provider / ('provider_v2_multi' + suffix + '_component'), 'binary'))
+jobs.append((providers / 'hitpaw/component_source', [], providers / 'hitpaw/provider_v2_image_input_probe_component', 'binary'))
+
+with tempfile.TemporaryDirectory(prefix='stage-', dir=logs) as staging:
+    staged = []
+    for index, (source, features, destination, encoding) in enumerate(jobs):
+        manifest = source / 'Cargo.toml'
+        package = tomllib.loads(manifest.read_text())['package']['name']
+        command = ['cargo', 'build', '--locked', '--offline', '--manifest-path', str(manifest), '--target', 'wasm32-unknown-unknown', '--release', '--lib']
+        if features:
+            command += ['--features', ','.join(features)]
+        extra_environment = {}
+        if source.parent.name == 'hitpaw':
+            extra_environment = {'SIM_HITPAW_NATIVE_CONTRACT_SHA256': recipe['native_contract_sha256'], 'SIM_HITPAW_BINDINGS_SHA256': recipe['bindings_sha256']}
+        run(command, extra_environment)
+        module = target / ('wasm32-unknown-unknown/release/' + package.replace('-', '_') + '.wasm')
+        output = Path(staging) / (str(index) + '.wasm')
+        run([str(encoder), str(module), str(output)])
+        component = output.read_bytes()
+        if component[:8] != b'\0asm\r\0\1\0' or any(name in component for name in (b'zed:comfy-', b'comfy:', b'zed.comfy.', b'wasi:')):
+            raise SystemExit('Unexpected component interface, type ID or WASI import: ' + str(destination))
+        if encoding == 'contract':
+            data = (source / 'port_contract.txt').read_bytes() + b'[component-base64]\n' + base64.b64encode(component) + b'\n'
+        elif encoding == 'base64':
+            data = base64.b64encode(component) + b'\n'
+        else:
+            data = component
+        if arguments.check and destination.read_bytes() != data:
+            raise SystemExit('Stale compiled fixture: ' + str(destination))
+        staged.append((destination, data))
+        artifacts.append({'source': str(source.relative_to(root)), 'features': features, 'destination': str(destination.relative_to(root)),
+            'encoding': encoding, 'component_bytes': len(component), 'component_sha256': hashlib.sha256(component).hexdigest(), 'file_sha256': hashlib.sha256(data).hexdigest(),
+            'source_sha256': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(source.iterdir()) if path.is_file()},
+            'sim_interfaces_verified': True})
+    payload = providers / 'openrouter/signing_payload.fixture'
+    payload_text = payload.read_text()
+    openrouter = next(item for item in artifacts if item['destination'].endswith('/openrouter/provider_v2_component'))
+    import re
+    payload_text = re.sub(r'^component_sha256=.*$', 'component_sha256=' + openrouter['component_sha256'], payload_text, flags=re.MULTILINE)
+    payload_text = re.sub(r'^component_bytes=.*$', 'component_bytes=' + str(openrouter['component_bytes']), payload_text, flags=re.MULTILINE)
+    if arguments.check and payload.read_text() != payload_text:
+        raise SystemExit('Stale OpenRouter unsigned signing payload')
+    if not arguments.check:
+        payload.write_text(payload_text)
+        for destination, data in staged:
+            destination.write_bytes(data)
+        hitpaw = artifacts[-1]
+        recipe['component_bytes'] = hitpaw['component_bytes']
+        recipe['component_sha256'] = hitpaw['component_sha256']
+        recipe['sim_rename_rebuild'] = 'Rebuilt from canonical Sim WIT and native binding contracts; historical validation references describe the prior artifact. Run host conformance against this artifact.'
+        recipe_path.write_text(json.dumps(recipe, indent=2) + '\n')
+receipt = {'rustc': subprocess.check_output(['rustc', '-Vv'], text=True), 'mode': 'check' if arguments.check else 'rebuild',
+    'commands': commands, 'artifacts': artifacts, 'wit_sha256': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted((root / 'crates/sim_plugin_sdk/wit').rglob('*.wit'))}}
+(logs / ('check.json' if arguments.check else 'rebuild.json')).write_text(json.dumps(receipt, indent=2) + '\n')
+print(f'Validated {len(artifacts)} rebuilt first-party components; receipt: {logs}')

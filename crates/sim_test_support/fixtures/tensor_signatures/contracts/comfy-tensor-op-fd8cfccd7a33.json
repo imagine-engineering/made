@@ -1,0 +1,466 @@
+{
+  "canonical_target": "torch.Tensor.std",
+  "consumer_output_expectations": [
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/k_diffusion/sampling.py:1038:45 (sample_lcm)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/model.py:31:90 (cross_norm)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/ace/model.py:32:99 (cross_norm)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy/ldm/audio/vae_sa3.py:441:28 (SoftNormBottleneck.decode)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_kandinsky5.py:57:18 (adaptive_mean_std_normalization)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_kandinsky5.py:60:33 (adaptive_mean_std_normalization)"
+    },
+    {
+      "expectation": {
+        "attribute": "clamp_min_",
+        "kind": "attribute-access"
+      },
+      "site": "comfy_extras/nodes_post_processing.py:728:26 (ColorTransfer._frame_stats)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_slg.py:77:30 (SkipLayerGuidanceDiT.execute.post_cfg_function)"
+    },
+    {
+      "expectation": {
+        "kind": "nested-expression"
+      },
+      "site": "comfy_extras/nodes_slg.py:77:48 (SkipLayerGuidanceDiT.execute.post_cfg_function)"
+    },
+    {
+      "expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "site": "comfy_extras/nodes_wandancer.py:578:17 (track_beats)"
+    }
+  ],
+  "definition_call_reconciliation": [
+    {
+      "site": "comfy/k_diffusion/sampling.py:1038:45 (sample_lcm)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/model.py:31:90 (cross_norm)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/ace/model.py:32:99 (cross_norm)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy/ldm/audio/vae_sa3.py:441:28 (SoftNormBottleneck.decode)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_kandinsky5.py:57:18 (adaptive_mean_std_normalization)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_kandinsky5.py:60:33 (adaptive_mean_std_normalization)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_post_processing.py:728:26 (ColorTransfer._frame_stats)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_slg.py:77:30 (SkipLayerGuidanceDiT.execute.post_cfg_function)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_slg.py:77:48 (SkipLayerGuidanceDiT.execute.post_cfg_function)",
+      "status": "definition-unavailable"
+    },
+    {
+      "site": "comfy_extras/nodes_wandancer.py:578:17 (track_beats)",
+      "status": "definition-unavailable"
+    }
+  ],
+  "fixture_id": "tensor-operation-contract-comfy-tensor-op-fd8cfccd7a33-v1",
+  "inventory_kind": "callable-operation",
+  "normative_rules": {
+    "cancellation": "Check cooperative cancellation before dispatch and at bounded kernel/tile boundaries; cancelled work must publish no partial tensor, cache entry, model mutation, or output.",
+    "device": "Provide the operation on CPU and each certified native backend used by the source call sites; match transfer, co-location, fallback prohibition, synchronization, and device-error behavior.",
+    "dtype": "Match accepted dtypes, scalar coercion, promotion, accumulation dtype, cast/quantization rules, overflow, and unsupported-dtype errors; never silently widen or narrow differently.",
+    "layout_and_alias": "Match strides, contiguity requirements, aliasing, in-place mutation, view/copy identity, memory format, and overlap rejection where externally observable.",
+    "numeric": "Define deterministic and fast numeric modes; match NaN/Inf/signed-zero handling, reduction order obligations, approximation tolerance, and backend-specific variance fixtures.",
+    "shape": "Match reduced axes, keep-dimension behavior, empty-domain behavior, output rank, and scalar-versus-tensor results.",
+    "vjp_jvp": "Implement and verify the VJP/JVP when the operation is reachable from a cataloged autograd path; otherwise prove and record forward-only reachability instead of assuming it."
+  },
+  "observed_parameters": [
+    {
+      "default": null,
+      "evidence": "static call-site position only",
+      "keyword_only": false,
+      "kind": "positional_or_keyword",
+      "name": "observed_positional_0",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "ddof",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "dim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "keepdim",
+      "type": "unresolved_external_semantics"
+    },
+    {
+      "default": null,
+      "evidence": "static call-site spelling only",
+      "keyword_only": true,
+      "kind": "observed_keyword",
+      "name": "unbiased",
+      "type": "unresolved_external_semantics"
+    }
+  ],
+  "operation_id": "COMFY-TENSOR-OP-FD8CFCCD7A33",
+  "provenance": {
+    "environment_fixture": "resolution-environment.json",
+    "environment_fixture_sha256": "d7eae0f3eb4607ba09e36c0aba3fa2fc21ded68b707f739770f628660a756312",
+    "inventory_row_sha256": "12ce398e5fef9df78e15130ffb0e22f90f402d4f4f84c2657ed7730d3b7b753b",
+    "source_declared_version": "0.27.1",
+    "source_files": [
+      {
+        "path": "comfy/k_diffusion/sampling.py",
+        "sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06"
+      },
+      {
+        "path": "comfy/ldm/ace/model.py",
+        "sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708"
+      },
+      {
+        "path": "comfy/ldm/audio/vae_sa3.py",
+        "sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75"
+      },
+      {
+        "path": "comfy_extras/nodes_kandinsky5.py",
+        "sha256": "21a5b3fbc8a639293d970867c14cbcfba718577ee9dfc6a223fd4653d82f1d05"
+      },
+      {
+        "path": "comfy_extras/nodes_post_processing.py",
+        "sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575"
+      },
+      {
+        "path": "comfy_extras/nodes_slg.py",
+        "sha256": "3042fb89646636eea114df5fa0090bdd8de26231bcd30bbfec304041e9ee1213"
+      },
+      {
+        "path": "comfy_extras/nodes_wandancer.py",
+        "sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed"
+      }
+    ],
+    "source_product": "ComfyUI",
+    "source_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "reference_semantic": {
+    "category": "not-applicable",
+    "value": "torch.Tensor.std"
+  },
+  "resolution": {
+    "blocker_reason": "Static syntax does not prove that the receiver is a tensor or identify an overload; a versioned source-oracle/type-flow fixture is required before a Rust callable may exist.",
+    "expected_resolution_module": "reduction_02",
+    "policy": "static evidence or explicit blocker; external semantics are never inferred",
+    "release_closure_required": true,
+    "resolution_owner_task_id": "comfy-parity-tensor-ops-reduction-comfy-tensor-op-9f681b3616f6",
+    "state": "blocked_receiver_unverified"
+  },
+  "schema_version": 1,
+  "static_call_sites": [
+    {
+      "catalog_field": "production_call_sites",
+      "column": 45,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 1038,
+      "positional_arguments": [],
+      "scope": "sample_lcm",
+      "site": "comfy/k_diffusion/sampling.py:1038:45 (sample_lcm)",
+      "source_path": "comfy/k_diffusion/sampling.py",
+      "source_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+      "status": "static-call-observed",
+      "target_syntax": "noise.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 90,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "(1, 2)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 31,
+      "positional_arguments": [],
+      "scope": "cross_norm",
+      "site": "comfy/ldm/ace/model.py:31:90 (cross_norm)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "hidden_states.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 99,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "(1, 2)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 32,
+      "positional_arguments": [],
+      "scope": "cross_norm",
+      "site": "comfy/ldm/ace/model.py:32:99 (cross_norm)",
+      "source_path": "comfy/ldm/ace/model.py",
+      "source_sha256": "4a4487c566fa5118d16ee8d91bd0ffff523f89513fe2ff2968c5dd18b55a3708",
+      "status": "static-call-observed",
+      "target_syntax": "controlnet_input.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 28,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 441,
+      "positional_arguments": [],
+      "scope": "SoftNormBottleneck.decode",
+      "site": "comfy/ldm/audio/vae_sa3.py:441:28 (SoftNormBottleneck.decode)",
+      "source_path": "comfy/ldm/audio/vae_sa3.py",
+      "source_sha256": "1dd0c011f42b889398c2ef35d2c96d8b0e927db6328cecfee8ea3dc8ec75eb75",
+      "status": "static-call-observed",
+      "target_syntax": "x.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 18,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "(1, 3, 4)",
+          "syntax_kind": "Tuple"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 57,
+      "positional_arguments": [],
+      "scope": "adaptive_mean_std_normalization",
+      "site": "comfy_extras/nodes_kandinsky5.py:57:18 (adaptive_mean_std_normalization)",
+      "source_path": "comfy_extras/nodes_kandinsky5.py",
+      "source_sha256": "21a5b3fbc8a639293d970867c14cbcfba718577ee9dfc6a223fd4653d82f1d05",
+      "status": "static-call-observed",
+      "target_syntax": "source.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 33,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 60,
+      "positional_arguments": [],
+      "scope": "adaptive_mean_std_normalization",
+      "site": "comfy_extras/nodes_kandinsky5.py:60:33 (adaptive_mean_std_normalization)",
+      "source_path": "comfy_extras/nodes_kandinsky5.py",
+      "source_sha256": "21a5b3fbc8a639293d970867c14cbcfba718577ee9dfc6a223fd4653d82f1d05",
+      "status": "static-call-observed",
+      "target_syntax": "reference.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 26,
+      "consumer_output_expectation": {
+        "attribute": "clamp_min_",
+        "kind": "attribute-access"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "dim",
+          "syntax": "-1",
+          "syntax_kind": "UnaryOp"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "keepdim",
+          "syntax": "True",
+          "syntax_kind": "Constant"
+        },
+        {
+          "expanded_mapping": false,
+          "name": "unbiased",
+          "syntax": "False",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 728,
+      "positional_arguments": [],
+      "scope": "ColorTransfer._frame_stats",
+      "site": "comfy_extras/nodes_post_processing.py:728:26 (ColorTransfer._frame_stats)",
+      "source_path": "comfy_extras/nodes_post_processing.py",
+      "source_sha256": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+      "status": "static-call-observed",
+      "target_syntax": "lab_flat.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 30,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 77,
+      "positional_arguments": [],
+      "scope": "SkipLayerGuidanceDiT.execute.post_cfg_function",
+      "site": "comfy_extras/nodes_slg.py:77:30 (SkipLayerGuidanceDiT.execute.post_cfg_function)",
+      "source_path": "comfy_extras/nodes_slg.py",
+      "source_sha256": "3042fb89646636eea114df5fa0090bdd8de26231bcd30bbfec304041e9ee1213",
+      "status": "static-call-observed",
+      "target_syntax": "cond_pred.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 48,
+      "consumer_output_expectation": {
+        "kind": "nested-expression"
+      },
+      "keyword_arguments": [],
+      "line": 77,
+      "positional_arguments": [],
+      "scope": "SkipLayerGuidanceDiT.execute.post_cfg_function",
+      "site": "comfy_extras/nodes_slg.py:77:48 (SkipLayerGuidanceDiT.execute.post_cfg_function)",
+      "source_path": "comfy_extras/nodes_slg.py",
+      "source_sha256": "3042fb89646636eea114df5fa0090bdd8de26231bcd30bbfec304041e9ee1213",
+      "status": "static-call-observed",
+      "target_syntax": "cfg_result.std"
+    },
+    {
+      "catalog_field": "production_call_sites",
+      "column": 17,
+      "consumer_output_expectation": {
+        "arity": 1,
+        "kind": "single-binding"
+      },
+      "keyword_arguments": [
+        {
+          "expanded_mapping": false,
+          "name": "ddof",
+          "syntax": "1",
+          "syntax_kind": "Constant"
+        }
+      ],
+      "line": 578,
+      "positional_arguments": [
+        {
+          "index": 0,
+          "starred": false,
+          "syntax": "onset_env",
+          "syntax_kind": "Name"
+        }
+      ],
+      "scope": "track_beats",
+      "site": "comfy_extras/nodes_wandancer.py:578:17 (track_beats)",
+      "source_path": "comfy_extras/nodes_wandancer.py",
+      "source_sha256": "5375a5c55e1ad1b85532d8b1a22a4844ed1322948623d603616acf22fa3be1ed",
+      "status": "static-call-observed",
+      "target_syntax": "np.std"
+    }
+  ],
+  "static_definition": null
+}

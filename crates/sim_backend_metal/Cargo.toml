@@ -1,0 +1,22 @@
+[package]
+name = "sim_backend_metal"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_backend_metal.rs"
+[features]
+test-support = []
+[dependencies]
+anyhow.workspace = true
+sim_types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal.workspace = true
+objc.workspace = true

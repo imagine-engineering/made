@@ -1,0 +1,3 @@
+DROP TABLE public.collaboration_project_channel_bindings;
+DROP TABLE public.collaboration_project_repository_bindings;
+DROP TABLE public.collaboration_project_groups;

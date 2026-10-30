@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fixture_id": "stable-cascade-c-sim-model-0135",
+  "feature_id": "COMFY-MODEL-0135",
+  "source_symbol": "Stable_Cascade_C",
+  "source_ordinal": 15,
+  "source_architecture": "model_base.StableCascade_C",
+  "latent_feature_id": "COMFY-MODEL-0044",
+  "latent_identifier": "SC_Prior",
+  "catalog_projection_sha256": "2b8619420b562703d2314c1abbc78afa0a29a1f22317aa2126b163d8e6c228a9",
+  "source_files": [
+    {"path":"projects/sim/ComfyUI/sim/supported_models.py","sha256":"3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path":"projects/sim/ComfyUI/sim/supported_models_base.py","sha256":"a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path":"projects/sim/ComfyUI/sim/model_detection.py","sha256":"f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path":"projects/sim/ComfyUI/sim/diffusers_convert.py","sha256":"8dc4e2b4de8dce831de48d766460e9b98c178b25b0737154f135253046a22c54"},
+    {"path":"projects/sim/ComfyUI/sim/model_base.py","sha256":"99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path":"projects/sim/ComfyUI/sim/latent_formats.py","sha256":"ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/cascade/stage_c.py","sha256":"be52f2650be0643c8358cf29c4d20ba8432c84147bc3d5d46526007f1de11e68"}
+  ],
+  "source_projection": "source_symbol=Stable_Cascade_C\nsource_ordinal=15\ninheritance=Stable_Cascade_C,supported_models_base.BASE\nunet_config.stable_cascade_stage=c\nlatent_format=sim.latent_formats.SC_Prior\nlatent_channels=16\nspatial_downscale_ratio=42\nlatent_scale_factor=1.0\nmemory_usage_factor=2.0\nsampling_settings.shift=2.0\nsupported_dtypes=bfloat16,float32\narchitecture=model_base.StableCascade_C\nmodel_type=STABLE_CASCADE\nclip_target=sdxl_clip.StableCascadeTokenizer,sdxl_clip.StableCascadeClipModel\ntext_encoder_key_prefix=text_encoder.\nvae_key_prefix=vae.\nclip_vision_prefix=clip_l_vision.\nunet_save_prefix=model.diffusion_model.\nconditioning=text_tokens_and_pooled,optional_vision,zero_sca,zero_crp\nattention_conversion=in_proj_weight_and_bias_split_to_q_k_v\nclip_conversion=strip_text_encoder_prefix_and_transpose_clip_g_text_projection\nnative_detector=clf.1 plus clip_txt_mapper width 2048 full or 1536 lite\ndiffusers_support=none; absent from pinned unet_config_from_diffusers_unet table\n",
+  "source_projection_sha256": "acd5fc64c37ee5abe165ac2b5d058cc3119edc0b84923f75e0153da644541b14",
+  "alternate_layout": "The pinned ComfyUI Diffusers detector table has no Stable Cascade entry; native Rust resolution fails closed.",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI Stable Cascade C; no production Python dependency"
+}

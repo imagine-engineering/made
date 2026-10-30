@@ -1,0 +1,61 @@
+{
+  "namespace": "zed.sim.provider.runway",
+  "source_sha256": "529998a3d2f51c60aff8e1095fff6a44ca8d481e761754ac24d7ad3e6e52b889",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0557",
+      "node_identifier": "RunwayAleph2KeyframeNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0558",
+      "node_identifier": "RunwayAleph2PromptImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0559",
+      "node_identifier": "RunwayAleph2VideoToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0560",
+      "node_identifier": "RunwayFirstLastFrameNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0561",
+      "node_identifier": "RunwayImageToVideoNodeGen3a"
+    },
+    {
+      "feature_id": "COMFY-NODE-0562",
+      "node_identifier": "RunwayImageToVideoNodeGen4"
+    },
+    {
+      "feature_id": "COMFY-NODE-0563",
+      "node_identifier": "RunwayTextToImageNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0151",
+      "method": "POST",
+      "path": "/proxy/runway/image_to_video",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0152",
+      "method": "GET",
+      "path": "/proxy/runway/tasks",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0153",
+      "method": "POST",
+      "path": "/proxy/runway/text_to_image",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0154",
+      "method": "POST",
+      "path": "/proxy/runway/video_to_video",
+      "disposition": "executable"
+    }
+  ]
+}

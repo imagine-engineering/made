@@ -1,0 +1,951 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import hashlib
+import io
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import tarfile
+import tempfile
+import tomllib
+from typing import NoReturn
+from unittest import mock
+
+
+REPOSITORY = pathlib.Path(__file__).resolve().parents[1]
+DEFAULT_WORKFLOW = REPOSITORY / ".github/workflows/collaboration-release.yml"
+COMPATIBILITY = REPOSITORY / "docs/collaboration/compatibility.md"
+CLIENT_FIXTURES = (
+    REPOSITORY / ".agents/specs/collaborative-workspace/fixtures/clients/manifest.json"
+)
+MIGRATION_MANIFEST = REPOSITORY / "deploy/collaboration/migrations/manifest.json"
+MAX_INPUT_FILE_BYTES = 512 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+SOURCE_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+ARTIFACT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+VERSION_PATTERN = re.compile(r"^[0-9A-Za-z]+(?:[.+-][0-9A-Za-z]+)*$")
+
+
+class ContractError(Exception):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class Payload:
+    archive_path: str
+    source_path: pathlib.Path | None = None
+    content: bytes | None = None
+    executable: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class Artifact:
+    artifact_id: str
+    kind: str
+    component_id: str
+    version: str
+    compatibility_id: str
+    compatibility_version: str
+    payloads: tuple[Payload, ...]
+
+
+def fail(message: str) -> NoReturn:
+    raise ContractError(message)
+
+
+def canonical_json(value: object) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def read_bounded(path: pathlib.Path) -> bytes:
+    try:
+        status = path.lstat()
+    except OSError as error:
+        fail(f"cannot inspect release input {path}: {error}")
+    if not path.is_file() or path.is_symlink():
+        fail(f"release input must be a regular non-symlink file: {path}")
+    if status.st_size <= 0 or status.st_size > MAX_INPUT_FILE_BYTES:
+        fail(f"release input has invalid size: {path}")
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        fail(f"cannot read release input {path}: {error}")
+
+
+def cargo_package(path: str) -> dict[str, object]:
+    manifest_path = REPOSITORY / path
+    try:
+        document = tomllib.loads(manifest_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        fail(f"cannot read Cargo version authority {path}: {error}")
+    package = document.get("package")
+    if not isinstance(package, dict):
+        fail(f"Cargo version authority has no package table: {path}")
+    return package
+
+
+def cargo_version(path: str, expected_name: str) -> str:
+    package = cargo_package(path)
+    if package.get("name") != expected_name:
+        fail(f"Cargo package identity drifted in {path}")
+    version = package.get("version")
+    if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
+        fail(f"Cargo package version is invalid in {path}")
+    if package.get("license") != "GPL-3.0-or-later":
+        fail(f"Cargo package license drifted in {path}")
+    return version
+
+
+def chart_versions(path: str, expected_name: str) -> tuple[str, str]:
+    chart_path = REPOSITORY / path
+    try:
+        text = chart_path.read_text()
+    except OSError as error:
+        fail(f"cannot read chart version authority {path}: {error}")
+    name = re.search(r"^name:\s*([^\s]+)\s*$", text, re.MULTILINE)
+    version = re.search(r"^version:\s*\"?([^\s\"]+)\"?\s*$", text, re.MULTILINE)
+    app_version = re.search(r"^appVersion:\s*\"?([^\s\"]+)\"?\s*$", text, re.MULTILINE)
+    if name is None or name.group(1) != expected_name or version is None or app_version is None:
+        fail(f"chart version authority drifted in {path}")
+    return version.group(1), app_version.group(1)
+
+
+def compatibility_matrix() -> dict[str, object]:
+    try:
+        text = COMPATIBILITY.read_text()
+    except OSError as error:
+        fail(f"cannot read compatibility policy: {error}")
+    matches = re.findall(r"```json compatibility-matrix\n(.*?)\n```", text, re.DOTALL)
+    if len(matches) != 1:
+        fail("compatibility policy must contain one machine-readable matrix")
+    try:
+        matrix = json.loads(matches[0])
+    except json.JSONDecodeError as error:
+        fail(f"compatibility matrix is invalid: {error}")
+    if not isinstance(matrix, dict) or matrix.get("matrix_schema") != 1:
+        fail("compatibility matrix schema drifted")
+    for collection in ("clients", "services", "protocols", "schemas"):
+        rows = matrix.get(collection)
+        if not isinstance(rows, list) or not rows:
+            fail(f"compatibility matrix collection is invalid: {collection}")
+        identifiers = [row.get("id") for row in rows if isinstance(row, dict)]
+        if len(identifiers) != len(rows) or len(set(identifiers)) != len(rows):
+            fail(f"compatibility matrix identifiers are invalid: {collection}")
+    return matrix
+
+
+def compatibility_row(
+    matrix: dict[str, object], collection: str, identifier: str
+) -> dict[str, object]:
+    rows = matrix.get(collection)
+    if not isinstance(rows, list):
+        fail(f"missing compatibility collection {collection}")
+    matches = [row for row in rows if isinstance(row, dict) and row.get("id") == identifier]
+    if len(matches) != 1:
+        fail(f"missing compatibility identity {identifier}")
+    return matches[0]
+
+
+def exact_version(row: dict[str, object], identifier: str) -> str:
+    minimum = row.get("minimum_version")
+    maximum = row.get("maximum_version")
+    if not isinstance(minimum, str) or minimum != maximum:
+        fail(f"release artifact requires one exact compatibility version: {identifier}")
+    return minimum
+
+
+def migration_ceiling() -> str:
+    try:
+        document = json.loads(MIGRATION_MANIFEST.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read migration manifest: {error}")
+    ceiling = document.get("schemaCeiling") if isinstance(document, dict) else None
+    if not isinstance(ceiling, str) or re.fullmatch(r"[0-9]{14}", ceiling) is None:
+        fail("migration schema ceiling is invalid")
+    return ceiling
+
+
+def source_payloads(source_root: str, archive_root: str) -> tuple[Payload, ...]:
+    root = REPOSITORY / source_root
+    if not root.is_dir():
+        fail(f"release source directory is missing: {source_root}")
+    payloads = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            if (
+                path.relative_to(REPOSITORY).as_posix()
+                == "services/push_gateway/LICENSE-GPL"
+                and os.readlink(path) == "../../LICENSE-GPL"
+            ):
+                # Materialize the canonical license without following source links.
+                payloads.append(
+                    Payload(
+                        f"{archive_root}/{relative}",
+                        content=read_bounded(REPOSITORY / "LICENSE-GPL"),
+                    )
+                )
+                continue
+            fail(f"release source contains a symlink: {path}")
+        if any(part in (".DS_Store", "__pycache__") for part in path.relative_to(root).parts):
+            continue
+        if path.is_file():
+            payloads.append(Payload(f"{archive_root}/{relative}", source_path=path))
+    if not payloads:
+        fail(f"release source directory is empty: {source_root}")
+    return tuple(payloads)
+
+
+def file_payload(source: str, archive_path: str, executable: bool = False) -> Payload:
+    return Payload(archive_path, source_path=REPOSITORY / source, executable=executable)
+
+
+def verify_version_authorities(matrix: dict[str, object]) -> dict[str, str]:
+    clients = {
+        identifier: exact_version(compatibility_row(matrix, "clients", identifier), identifier)
+        for identifier in ("zed-desktop", "buzz-cli", "buzz-mobile", "buzz-web", "buzz-admin-web")
+    }
+    services = {
+        identifier: exact_version(compatibility_row(matrix, "services", identifier), identifier)
+        for identifier in ("collab", "push-gateway", "pair-relay")
+    }
+    authorities = {
+        "zed-desktop": cargo_version("crates/zed/Cargo.toml", "zed"),
+        "collab": cargo_version("crates/collab/Cargo.toml", "collab"),
+        "push-gateway": cargo_version("services/push_gateway/Cargo.toml", "push_gateway"),
+        "pair-relay": cargo_version("services/pair_relay/Cargo.toml", "pair_relay"),
+        "buzz-cli": cargo_version("tools/buzz_compat/Cargo.toml", "buzz_compat"),
+    }
+    try:
+        frozen_clients = json.loads(CLIENT_FIXTURES.read_text()).get("clients", {})
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read frozen client authorities: {error}")
+    for identifier in ("buzz-cli", "buzz-mobile", "buzz-web", "buzz-admin-web"):
+        row = frozen_clients.get(identifier) if isinstance(frozen_clients, dict) else None
+        if not isinstance(row, dict) or row.get("version") != clients[identifier]:
+            fail(f"frozen client version drifted for {identifier}")
+    for identifier, version in {**clients, **services}.items():
+        if identifier in authorities and authorities[identifier] != version:
+            fail(f"version authority differs from compatibility policy for {identifier}")
+    return {**clients, **services}
+
+
+def artifact_catalog(
+    collab_binary: pathlib.Path,
+    pair_relay_binary: pathlib.Path,
+    buzz_binary: pathlib.Path,
+) -> tuple[Artifact, ...]:
+    matrix = compatibility_matrix()
+    versions = verify_version_authorities(matrix)
+    collaboration_chart_version, collaboration_app_version = chart_versions(
+        "deploy/collaboration/charts/collaboration/Chart.yaml", "collaboration"
+    )
+    push_chart_version, push_app_version = chart_versions(
+        "deploy/collaboration/push-gateway/Chart.yaml", "collaboration-push-gateway"
+    )
+    if collaboration_app_version != versions["collab"]:
+        fail("collaboration chart appVersion differs from compatibility policy")
+    if push_app_version != versions["push-gateway"]:
+        fail("push gateway chart appVersion differs from compatibility policy")
+    ceiling = migration_ceiling()
+    canonical_schema = compatibility_row(matrix, "schemas", "canonical-collaboration-postgres")
+    if (
+        canonical_schema.get("minimum_version") != ceiling
+        or canonical_schema.get("maximum_version") != ceiling
+    ):
+        fail("migration ceiling differs from compatibility policy")
+
+    profile = subprocess.run(
+        [str(REPOSITORY / "script/multiplayer-build-profile"), "multiplayer", "--dry-run"],
+        cwd=REPOSITORY,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if profile.returncode != 0 or "multiplayer_tools=true" not in profile.stdout:
+        fail("multiplayer build profile rejected the release contract")
+
+    return (
+        Artifact(
+            "zed-multiplayer-profile",
+            "build-profile",
+            "zed",
+            versions["zed-desktop"],
+            "zed-desktop",
+            versions["zed-desktop"],
+            (
+                Payload("payload/zed-multiplayer-profile.txt", content=profile.stdout.encode()),
+                file_payload(
+                    "script/multiplayer-build-profile",
+                    "payload/multiplayer-build-profile",
+                    True,
+                ),
+            ),
+        ),
+        Artifact(
+            "collab-linux-x86-64",
+            "service-binary",
+            "collab",
+            versions["collab"],
+            "collab",
+            versions["collab"],
+            (Payload("payload/collab", source_path=collab_binary, executable=True),),
+        ),
+        Artifact(
+            "pair-relay-linux-x86-64",
+            "service-binary",
+            "pair-relay",
+            versions["pair-relay"],
+            "pair-relay",
+            versions["pair-relay"],
+            (Payload("payload/pair-relay", source_path=pair_relay_binary, executable=True),),
+        ),
+        Artifact(
+            "push-gateway-source",
+            "service-source",
+            "push-gateway",
+            versions["push-gateway"],
+            "push-gateway",
+            versions["push-gateway"],
+            source_payloads("services/push_gateway", "payload/services/push_gateway"),
+        ),
+        Artifact(
+            "buzz-cli-shim-linux-x86-64",
+            "client-binary",
+            "buzz-compat",
+            versions["buzz-cli"],
+            "buzz-cli",
+            versions["buzz-cli"],
+            (Payload("payload/buzz", source_path=buzz_binary, executable=True),),
+        ),
+        Artifact(
+            "buzz-web-adapter-source",
+            "client-source",
+            "buzz-web-adapter",
+            versions["buzz-web"],
+            "buzz-web",
+            versions["buzz-web"],
+            source_payloads("clients/web/src", "payload/clients/web/src"),
+        ),
+        Artifact(
+            "buzz-mobile-adapter-source",
+            "client-source",
+            "buzz-mobile-adapter",
+            versions["buzz-mobile"],
+            "buzz-mobile",
+            versions["buzz-mobile"],
+            source_payloads("clients/mobile/lib", "payload/clients/mobile/lib"),
+        ),
+        Artifact(
+            "buzz-admin-web-adapter-source",
+            "client-source",
+            "buzz-admin-web-adapter",
+            versions["buzz-admin-web"],
+            "buzz-admin-web",
+            versions["buzz-admin-web"],
+            source_payloads("admin-web/src", "payload/admin-web/src"),
+        ),
+        Artifact(
+            "collaboration-migrations",
+            "migration-source",
+            "collaboration-migrations",
+            ceiling,
+            "canonical-collaboration-postgres",
+            ceiling,
+            (
+                *source_payloads(
+                    "deploy/collaboration/migrations",
+                    "payload/deploy/collaboration/migrations",
+                ),
+                *source_payloads("crates/collab/migrations", "payload/crates/collab/migrations"),
+            ),
+        ),
+        Artifact(
+            "collaboration-helm-chart",
+            "helm-chart",
+            "collaboration",
+            collaboration_chart_version,
+            "collab",
+            collaboration_app_version,
+            source_payloads(
+                "deploy/collaboration/charts/collaboration",
+                "payload/deploy/collaboration/charts/collaboration",
+            ),
+        ),
+        Artifact(
+            "push-gateway-helm-chart",
+            "helm-chart",
+            "collaboration-push-gateway",
+            push_chart_version,
+            "push-gateway",
+            push_app_version,
+            source_payloads(
+                "deploy/collaboration/push-gateway",
+                "payload/deploy/collaboration/push-gateway",
+            ),
+        ),
+    )
+
+
+def payload_bytes(payload: Payload) -> bytes:
+    if (payload.source_path is None) == (payload.content is None):
+        fail(f"payload must have exactly one source: {payload.archive_path}")
+    return payload.content if payload.content is not None else read_bounded(payload.source_path)
+
+
+def add_tar_bytes(
+    archive: tarfile.TarFile,
+    name: str,
+    content: bytes,
+    executable: bool = False,
+) -> None:
+    if name.startswith("/") or ".." in pathlib.PurePosixPath(name).parts:
+        fail(f"unsafe archive member: {name}")
+    information = tarfile.TarInfo(name)
+    information.size = len(content)
+    information.mode = 0o755 if executable else 0o644
+    information.uid = 0
+    information.gid = 0
+    information.uname = ""
+    information.gname = ""
+    information.mtime = 0
+    archive.addfile(information, io.BytesIO(content))
+
+
+def create_archive(
+    output: pathlib.Path,
+    artifact: Artifact,
+    source_sha: str,
+    notices: dict[str, bytes],
+) -> tuple[dict[str, object], dict[str, object]]:
+    if ARTIFACT_ID_PATTERN.fullmatch(artifact.artifact_id) is None:
+        fail(f"artifact ID is invalid: {artifact.artifact_id}")
+    metadata = {
+        "schema_version": 1,
+        "artifact_id": artifact.artifact_id,
+        "kind": artifact.kind,
+        "component_id": artifact.component_id,
+        "component_version": artifact.version,
+        "compatibility_id": artifact.compatibility_id,
+        "compatibility_version": artifact.compatibility_version,
+        "capability": "multiplayer-tools",
+        "source_sha": source_sha,
+        "publication": "release-candidate-only",
+        "notice_files": sorted(notices),
+    }
+    metadata_bytes = canonical_json(metadata)
+    archive_path = output / f"{artifact.artifact_id}-{artifact.version}.tar"
+    names = [payload.archive_path for payload in artifact.payloads]
+    if len(names) != len(set(names)):
+        fail(f"artifact payload names collide: {artifact.artifact_id}")
+    with tarfile.open(archive_path, "w", format=tarfile.PAX_FORMAT) as archive:
+        root = artifact.artifact_id
+        for payload in sorted(artifact.payloads, key=lambda value: value.archive_path):
+            add_tar_bytes(
+                archive,
+                f"{root}/{payload.archive_path}",
+                payload_bytes(payload),
+                payload.executable,
+            )
+        add_tar_bytes(archive, f"{root}/artifact-metadata.json", metadata_bytes)
+        for name, content in sorted(notices.items()):
+            add_tar_bytes(archive, f"{root}/notices/{name}", content)
+    archive_bytes = read_bounded(archive_path)
+    if len(archive_bytes) > MAX_ARCHIVE_BYTES:
+        fail(f"release archive exceeds bound: {archive_path.name}")
+    record = {
+        "artifact_id": artifact.artifact_id,
+        "archive": archive_path.name,
+        "archive_sha256": sha256_bytes(archive_bytes),
+        "archive_size": len(archive_bytes),
+        "component_id": artifact.component_id,
+        "component_version": artifact.version,
+        "compatibility_id": artifact.compatibility_id,
+        "compatibility_version": artifact.compatibility_version,
+        "kind": artifact.kind,
+        "metadata_sha256": sha256_bytes(metadata_bytes),
+    }
+    return record, metadata
+
+
+def load_notices(notices_path: pathlib.Path) -> dict[str, bytes]:
+    notices = {
+        "LICENSE-APACHE": read_bounded(REPOSITORY / "LICENSE-APACHE"),
+        "LICENSE-GPL": read_bounded(REPOSITORY / "LICENSE-GPL"),
+        "THIRD_PARTY_NOTICES.md": read_bounded(notices_path),
+    }
+    if b"CODE LICENSES" not in notices["THIRD_PARTY_NOTICES.md"]:
+        fail("third-party notices are not generated by the canonical Zed license workflow")
+    return notices
+
+
+def assemble(
+    output: pathlib.Path,
+    source_sha: str,
+    collab_binary: pathlib.Path,
+    pair_relay_binary: pathlib.Path,
+    buzz_binary: pathlib.Path,
+    notices_path: pathlib.Path,
+) -> pathlib.Path:
+    if SOURCE_SHA_PATTERN.fullmatch(source_sha) is None:
+        fail("source SHA must be exactly 40 lowercase hexadecimal characters")
+    if output.exists() and any(output.iterdir()):
+        fail("release output directory must be empty")
+    output.mkdir(parents=True, exist_ok=True)
+    notices = load_notices(notices_path)
+    matrix = compatibility_matrix()
+    artifacts = artifact_catalog(collab_binary, pair_relay_binary, buzz_binary)
+    records = []
+    for artifact in artifacts:
+        record, _ = create_archive(output, artifact, source_sha, notices)
+        records.append(record)
+    manifest = {
+        "schema_version": 1,
+        "source_sha": source_sha,
+        "capability": "multiplayer-tools",
+        "publication": "github-actions-release-candidate-only",
+        "signature_policy": {
+            "format": "github-oidc-build-provenance-v1",
+            "subjects": ["release-manifest.json", *[record["archive"] for record in records]],
+        },
+        "compatibility": matrix,
+        "compatibility_sha256": sha256_bytes(canonical_json(matrix)),
+        "artifacts": records,
+    }
+    manifest_path = output / "release-manifest.json"
+    manifest_path.write_bytes(canonical_json(manifest))
+    verify_manifest(manifest_path)
+    return manifest_path
+
+
+def archive_metadata(
+    archive_path: pathlib.Path, artifact_id: str
+) -> tuple[dict[str, object], set[str]]:
+    try:
+        with tarfile.open(archive_path, "r") as archive:
+            members = archive.getmembers()
+            names = {member.name for member in members}
+            if len(names) != len(members):
+                fail(f"archive has duplicate members: {archive_path.name}")
+            if any(not member.isfile() or member.issym() or member.islnk() for member in members):
+                fail(f"archive contains a non-regular member: {archive_path.name}")
+            expected_metadata = f"{artifact_id}/artifact-metadata.json"
+            extracted = archive.extractfile(expected_metadata)
+            if extracted is None:
+                fail(f"archive has no metadata: {archive_path.name}")
+            metadata = json.loads(extracted.read())
+    except (OSError, tarfile.TarError, KeyError, json.JSONDecodeError) as error:
+        fail(f"cannot inspect archive {archive_path.name}: {error}")
+    if not isinstance(metadata, dict):
+        fail(f"archive metadata is invalid: {archive_path.name}")
+    return metadata, names
+
+
+def verify_manifest(manifest_path: pathlib.Path) -> None:
+    try:
+        manifest = json.loads(read_bounded(manifest_path))
+    except json.JSONDecodeError as error:
+        fail(f"release manifest is invalid JSON: {error}")
+    if not isinstance(manifest, dict) or set(manifest) != {
+        "schema_version",
+        "source_sha",
+        "capability",
+        "publication",
+        "signature_policy",
+        "compatibility",
+        "compatibility_sha256",
+        "artifacts",
+    }:
+        fail("release manifest fields are not canonical")
+    if (
+        manifest["schema_version"] != 1
+        or SOURCE_SHA_PATTERN.fullmatch(manifest["source_sha"] or "") is None
+        or manifest["capability"] != "multiplayer-tools"
+        or manifest["publication"] != "github-actions-release-candidate-only"
+    ):
+        fail("release manifest identity is invalid")
+    matrix = compatibility_matrix()
+    verify_version_authorities(matrix)
+    if manifest["compatibility"] != matrix:
+        fail("release manifest compatibility metadata drifted")
+    if manifest["compatibility_sha256"] != sha256_bytes(canonical_json(matrix)):
+        fail("release manifest compatibility digest drifted")
+    records = manifest["artifacts"]
+    if not isinstance(records, list) or len(records) != 11:
+        fail("release manifest artifact inventory drifted")
+    expected_artifacts = artifact_catalog(
+        pathlib.Path("release-verification-collab"),
+        pathlib.Path("release-verification-pair-relay"),
+        pathlib.Path("release-verification-buzz"),
+    )
+    expected_contracts = [
+        (
+            artifact.artifact_id,
+            artifact.kind,
+            artifact.component_id,
+            artifact.version,
+            artifact.compatibility_id,
+            artifact.compatibility_version,
+            f"{artifact.artifact_id}-{artifact.version}.tar",
+        )
+        for artifact in expected_artifacts
+    ]
+    actual_contracts = [
+        (
+            record.get("artifact_id"),
+            record.get("kind"),
+            record.get("component_id"),
+            record.get("component_version"),
+            record.get("compatibility_id"),
+            record.get("compatibility_version"),
+            record.get("archive"),
+        )
+        for record in records
+        if isinstance(record, dict)
+    ]
+    if actual_contracts != expected_contracts:
+        fail("release manifest artifact contracts drifted")
+    artifact_ids = [record.get("artifact_id") for record in records if isinstance(record, dict)]
+    if len(artifact_ids) != len(records) or len(set(artifact_ids)) != len(records):
+        fail("release manifest artifact IDs are invalid")
+    expected_subjects = ["release-manifest.json", *[record.get("archive") for record in records]]
+    if manifest["signature_policy"] != {
+        "format": "github-oidc-build-provenance-v1",
+        "subjects": expected_subjects,
+    }:
+        fail("release manifest signature coverage drifted")
+    expected_notice_names = {"LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md"}
+    directory = manifest_path.parent
+    for record, expected_artifact in zip(records, expected_artifacts, strict=True):
+        if not isinstance(record, dict) or set(record) != {
+            "artifact_id",
+            "archive",
+            "archive_sha256",
+            "archive_size",
+            "component_id",
+            "component_version",
+            "compatibility_id",
+            "compatibility_version",
+            "kind",
+            "metadata_sha256",
+        }:
+            fail("release artifact record fields are not canonical")
+        archive_path = directory / record["archive"]
+        archive_bytes = read_bounded(archive_path)
+        if (
+            len(archive_bytes) != record["archive_size"]
+            or sha256_bytes(archive_bytes) != record["archive_sha256"]
+        ):
+            fail(f"release archive integrity failed: {archive_path.name}")
+        if SHA256_PATTERN.fullmatch(record["metadata_sha256"] or "") is None:
+            fail(f"release metadata digest is invalid: {archive_path.name}")
+        metadata, member_names = archive_metadata(archive_path, record["artifact_id"])
+        if sha256_bytes(canonical_json(metadata)) != record["metadata_sha256"]:
+            fail(f"release metadata integrity failed: {archive_path.name}")
+        for field in (
+            "artifact_id",
+            "kind",
+            "component_id",
+            "component_version",
+            "compatibility_id",
+            "compatibility_version",
+        ):
+            if metadata.get(field) != record[field]:
+                fail(f"release archive metadata differs for {field}: {archive_path.name}")
+        if (
+            metadata.get("source_sha") != manifest["source_sha"]
+            or metadata.get("publication") != "release-candidate-only"
+        ):
+            fail(f"release archive source/publication drifted: {archive_path.name}")
+        if set(metadata.get("notice_files", [])) != expected_notice_names:
+            fail(f"release notice inventory drifted: {archive_path.name}")
+        expected_notice_members = {
+            f"{record['artifact_id']}/notices/{name}" for name in expected_notice_names
+        }
+        expected_payload_members = {
+            f"{record['artifact_id']}/{payload.archive_path}"
+            for payload in expected_artifact.payloads
+        }
+        expected_members = {
+            f"{record['artifact_id']}/artifact-metadata.json",
+            *expected_notice_members,
+            *expected_payload_members,
+        }
+        if member_names != expected_members:
+            fail(f"release archive payload or notice inventory drifted: {archive_path.name}")
+
+
+def verify_workflow(workflow_path: pathlib.Path) -> None:
+    try:
+        text = workflow_path.read_text()
+    except OSError as error:
+        fail(f"cannot read release workflow: {error}")
+    required = (
+        "workflow_dispatch:",
+        "permissions:\n  contents: read",
+        "script/collaboration-release-contract assemble",
+        "script/collaboration-release-contract verify",
+        "script/generate-licenses",
+        "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373",
+        "id-token: write",
+        "attestations: write",
+        "subject-path: target/collaboration-release/*",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "persist-credentials: false",
+    )
+    for value in required:
+        if value not in text:
+            fail(f"release workflow contract is missing: {value}")
+    forbidden = (
+        "contents: write",
+        "packages: write",
+        "deployments: write",
+        "secrets.",
+        "docker push",
+        "gh release",
+        "npm publish",
+        "cargo publish",
+        "helm push",
+        "kubectl",
+        "environment: production",
+        "push:\n",
+        "pull_request:\n",
+    )
+    for value in forbidden:
+        if value in text:
+            fail(f"release-candidate workflow contains a production publication path: {value}")
+    action_references = re.findall(r"uses:\s*([^\s#]+)", text)
+    if not action_references or any(
+        "@" not in reference
+        or not re.search(r"@[0-9a-f]{40}$", reference)
+        for reference in action_references
+    ):
+        fail("release workflow actions must be pinned to full commit SHAs")
+
+
+def expect_failure(operation, expected: str) -> None:
+    try:
+        operation()
+    except ContractError as error:
+        if expected not in str(error):
+            fail(f"negative contract produced the wrong error: {error}")
+        return
+    fail(f"negative contract unexpectedly passed: {expected}")
+
+
+def dry_run(workflow_path: pathlib.Path) -> None:
+    verify_workflow(workflow_path)
+    with tempfile.TemporaryDirectory(prefix="collaboration-release-contract-") as temporary:
+        root = pathlib.Path(temporary)
+        source_fixture = root / "source-fixture"
+        service = source_fixture / "services/push_gateway"
+        service.mkdir(parents=True)
+        canonical_license = source_fixture / "LICENSE-GPL"
+        canonical_license.write_bytes(b"canonical GPL license fixture\n")
+        license_link = service / "LICENSE-GPL"
+        license_link.symlink_to("../../LICENSE-GPL")
+        (service / ".DS_Store").write_bytes(b"local machine metadata\n")
+        bytecode_cache = service / "__pycache__"
+        bytecode_cache.mkdir()
+        (bytecode_cache / "fixture.pyc").write_bytes(b"generated Python bytecode\n")
+        (service / "retained.fixture").write_bytes(b"required source fixture\n")
+        with mock.patch.dict(globals(), {"REPOSITORY": source_fixture}):
+            payloads = source_payloads("services/push_gateway", "payload/services/push_gateway")
+            packaged_source = {payload.archive_path: payload_bytes(payload) for payload in payloads}
+            if packaged_source != {
+                "payload/services/push_gateway/LICENSE-GPL": canonical_license.read_bytes(),
+                "payload/services/push_gateway/retained.fixture": b"required source fixture\n",
+            }:
+                fail("canonical source license was not materialized losslessly")
+            for target in (
+                "missing",
+                "../../LICENSE-APACHE",
+                "../.././LICENSE-GPL",
+                str(canonical_license),
+            ):
+                license_link.unlink()
+                license_link.symlink_to(target)
+                expect_failure(
+                    lambda: source_payloads("services/push_gateway", "payload"),
+                    "source contains a symlink",
+                )
+            license_link.unlink()
+            license_link.symlink_to("../../LICENSE-GPL")
+            for target in ("../../LICENSE-GPL", "../push_gateway", "/private/tmp"):
+                unrelated_link = service / "unrelated-link"
+                unrelated_link.symlink_to(target)
+                expect_failure(
+                    lambda: source_payloads("services/push_gateway", "payload"),
+                    "source contains a symlink",
+                )
+                unrelated_link.unlink()
+            cached_link = bytecode_cache / "linked.pyc"
+            cached_link.symlink_to("../../../LICENSE-GPL")
+            expect_failure(
+                lambda: source_payloads("services/push_gateway", "payload"),
+                "source contains a symlink",
+            )
+            cached_link.unlink()
+            canonical_license.unlink()
+            canonical_license.symlink_to("services/push_gateway/LICENSE-GPL")
+            expect_failure(
+                lambda: source_payloads("services/push_gateway", "payload"),
+                "regular non-symlink file",
+            )
+        collab = root / "collab"
+        pair_relay = root / "pair-relay"
+        buzz = root / "buzz"
+        notices = root / "licenses.md"
+        for binary, content in (
+            (collab, b"collab release contract\n"),
+            (pair_relay, b"pair relay release contract\n"),
+            (buzz, b"buzz compatibility release contract\n"),
+        ):
+            binary.write_bytes(content)
+            binary.chmod(0o755)
+        notices.write_text("# THEME LICENSES\n# ICON LICENSES\n# CODE LICENSES\ncontract fixture\n")
+        output = root / "release"
+        manifest_path = assemble(output, "a" * 40, collab, pair_relay, buzz, notices)
+        verify_manifest(manifest_path)
+        manifest = json.loads(manifest_path.read_text())
+        source_archive = next(
+            record["archive"]
+            for record in manifest["artifacts"]
+            if record["artifact_id"] == "push-gateway-source"
+        )
+        with tarfile.open(output / source_archive, "r") as archive:
+            license_member = archive.getmember(
+                "push-gateway-source/payload/services/push_gateway/LICENSE-GPL"
+            )
+            extracted_license = archive.extractfile(license_member)
+            extracted_notice = archive.extractfile("push-gateway-source/notices/LICENSE-GPL")
+            if (
+                not license_member.isfile()
+                or extracted_license is None
+                or extracted_notice is None
+            ):
+                fail("packaged source license differs from the canonical notice")
+            expected_license = read_bounded(REPOSITORY / "LICENSE-GPL")
+            if (
+                extracted_license.read() != expected_license
+                or extracted_notice.read() != expected_license
+            ):
+                fail("packaged source license differs from the canonical notice")
+
+        for artifact in manifest["artifacts"]:
+            with tarfile.open(output / artifact["archive"], "r") as archive:
+                if any(
+                    part in (".DS_Store", "__pycache__")
+                    for member in archive.getmembers()
+                    for part in pathlib.PurePosixPath(member.name).parts
+                ):
+                    fail("release archive contains generated machine state")
+
+        repeated_output = root / "release-repeated"
+        assemble(repeated_output, "a" * 40, collab, pair_relay, buzz, notices)
+        first_digests = {
+            path.name: sha256_bytes(path.read_bytes()) for path in sorted(output.iterdir())
+        }
+        repeated_digests = {
+            path.name: sha256_bytes(path.read_bytes())
+            for path in sorted(repeated_output.iterdir())
+        }
+        if first_digests != repeated_digests:
+            fail("release candidate assembly is not reproducible")
+
+        first_archive = sorted(output.glob("*.tar"))[0]
+        changed_archive = first_archive.read_bytes() + b"drift"
+        first_archive.write_bytes(changed_archive)
+        expect_failure(lambda: verify_manifest(manifest_path), "archive integrity")
+        first_archive.write_bytes(changed_archive[:-5])
+
+        document = json.loads(manifest_path.read_text())
+        original_version = document["artifacts"][0]["component_version"]
+        document["artifacts"][0]["component_version"] = "999.0.0"
+        manifest_path.write_bytes(canonical_json(document))
+        expect_failure(lambda: verify_manifest(manifest_path), "artifact contracts drifted")
+        document["artifacts"][0]["component_version"] = original_version
+        manifest_path.write_bytes(canonical_json(document))
+
+        unsafe_workflow = root / "unsafe.yml"
+        unsafe_workflow.write_text(workflow_path.read_text() + "\n# contents: write\n")
+        expect_failure(lambda: verify_workflow(unsafe_workflow), "production publication path")
+
+        invalid_notices = root / "invalid-notices.md"
+        invalid_notices.write_text("missing canonical sections\n")
+        expect_failure(
+            lambda: assemble(
+                root / "invalid-release",
+                "a" * 40,
+                collab,
+                pair_relay,
+                buzz,
+                invalid_notices,
+            ),
+            "not generated by the canonical Zed license workflow",
+        )
+
+    print("collaboration release contract passed: artifacts=11 signed_subjects=12 publication=none")
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--workflow", type=pathlib.Path, default=DEFAULT_WORKFLOW)
+    subparsers = parser.add_subparsers(dest="command")
+    assemble_parser = subparsers.add_parser("assemble")
+    assemble_parser.add_argument("--output", type=pathlib.Path, required=True)
+    assemble_parser.add_argument("--source-sha", required=True)
+    assemble_parser.add_argument("--collab-binary", type=pathlib.Path, required=True)
+    assemble_parser.add_argument("--pair-relay-binary", type=pathlib.Path, required=True)
+    assemble_parser.add_argument("--buzz-binary", type=pathlib.Path, required=True)
+    assemble_parser.add_argument("--notices", type=pathlib.Path, required=True)
+    verify_parser = subparsers.add_parser("verify")
+    verify_parser.add_argument("--manifest", type=pathlib.Path, required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        if arguments.dry_run:
+            if arguments.command is not None:
+                fail("--dry-run cannot be combined with a subcommand")
+            dry_run(arguments.workflow)
+        elif arguments.command == "assemble":
+            manifest = assemble(
+                arguments.output,
+                arguments.source_sha,
+                arguments.collab_binary,
+                arguments.pair_relay_binary,
+                arguments.buzz_binary,
+                arguments.notices,
+            )
+            print(f"collaboration_release_manifest={manifest}")
+        elif arguments.command == "verify":
+            verify_workflow(arguments.workflow)
+            verify_manifest(arguments.manifest)
+            print("collaboration release manifest verified")
+        else:
+            fail("use --dry-run, assemble, or verify")
+    except ContractError as error:
+        print(f"collaboration_release_error={error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

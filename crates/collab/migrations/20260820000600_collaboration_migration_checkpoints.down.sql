@@ -1,0 +1,3 @@
+DROP TABLE public.collaboration_migration_checkpoints;
+DROP FUNCTION public.guard_collaboration_migration_checkpoint_update();
+DROP TABLE public.collaboration_migration_runs;

@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "zed:sim-plugin-manifest@1",
+  "title": "Zed Sim plugin manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "identifier",
+    "plugin_version",
+    "api",
+    "digest_sha256",
+    "signature",
+    "provenance",
+    "nodes",
+    "capabilities",
+    "ui",
+    "routes",
+    "legacy_mappings"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "identifier": { "$ref": "#/$defs/identifier" },
+    "plugin_version": { "$ref": "#/$defs/version" },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minimum_minor", "maximum_minor", "required_features"],
+      "properties": {
+        "major": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "minimum_minor": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "maximum_minor": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "required_features": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    },
+    "digest_sha256": { "$ref": "#/$defs/sha256" },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value"],
+      "properties": {
+        "algorithm": { "const": "ed25519-v1" },
+        "key_id": { "$ref": "#/$defs/identifier" },
+        "value": { "type": "string", "pattern": "^[0-9a-f]{128}$" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "publisher", "registry"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "publisher": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "registry": { "type": ["string", "null"], "minLength": 1, "maxLength": 2048 }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "provider_binding": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/provider_binding_set" }
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "ui": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": { "$ref": "#/$defs/ui" }
+    },
+    "routes": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": { "$ref": "#/$defs/route" }
+    },
+    "legacy_mappings": {
+      "type": "array",
+      "maxItems": 16384,
+      "items": { "$ref": "#/$defs/legacy_mapping" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}(\\.[A-Za-z0-9][A-Za-z0-9_-]{0,63})*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor", "patch"],
+      "properties": {
+        "major": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "minor": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "patch": { "type": "integer", "minimum": 0, "maximum": 65535 }
+      }
+    },
+    "scalar": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "null" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "boolean" },
+            "value": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "integer" },
+            "value": { "type": "integer", "minimum": -9223372036854775808, "maximum": 9223372036854775807 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "float" },
+            "value": { "type": "number" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "string" },
+            "value": { "type": "string", "maxLength": 8388608 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "bytes" },
+            "value": {
+              "type": "array",
+              "maxItems": 8388608,
+              "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "list" },
+            "value": {
+              "type": "array",
+              "maxItems": 65536,
+              "items": { "$ref": "#/$defs/scalar" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "record" },
+            "value": {
+              "type": "array",
+              "maxItems": 65536,
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  { "type": "string", "minLength": 1 },
+                  { "$ref": "#/$defs/scalar" }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "direction",
+        "type_id",
+        "cardinality",
+        "presence",
+        "hidden",
+        "lazy",
+        "default",
+        "serialization",
+        "accepted_legacy_names"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "direction": { "enum": ["input", "output"] },
+        "type_id": {
+          "type": "string",
+          "maxLength": 135,
+          "pattern": "^[a-z][a-z0-9-]{0,63}:[a-z][a-z0-9-]{0,63}@(6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3})$"
+        },
+        "cardinality": { "enum": ["singular", "list"] },
+        "presence": { "enum": ["required", "optional", "hidden"] },
+        "hidden": { "type": "boolean" },
+        "lazy": { "type": "boolean" },
+        "default": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/scalar" }
+          ]
+        },
+        "serialization": {
+          "enum": ["inline", "handle", "artifact-reference", "opaque-preserved"]
+        },
+        "accepted_legacy_names": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "display_name",
+        "category",
+        "ports",
+        "determinism",
+        "cache",
+        "effects"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "version": { "$ref": "#/$defs/version" },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "ports": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "$ref": "#/$defs/port" }
+        },
+        "determinism": { "enum": ["deterministic", "seeded", "external"] },
+        "cache": { "enum": ["input-identity", "never", "plugin-key"] },
+        "effects": { "enum": ["pure", "transactional", "provider"] }
+      }
+    },
+    "provider_binding_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feature_id",
+        "node_id",
+        "contract_sha256",
+        "transport_schema",
+        "materializer_schema"
+      ],
+      "properties": {
+        "feature_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Z0-9-]+$"
+        },
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "contract_sha256": { "$ref": "#/$defs/sha256" },
+        "transport_schema": {
+          "type": "string",
+          "maxLength": 135,
+          "pattern": "^[a-z][a-z0-9-]{0,63}:[a-z][a-z0-9-]{0,63}@[1-9][0-9]{0,4}$"
+        },
+        "materializer_schema": {
+          "type": "string",
+          "maxLength": 135,
+          "pattern": "^[a-z][a-z0-9-]{0,63}:[a-z][a-z0-9-]{0,63}@[1-9][0-9]{0,4}$"
+        }
+      }
+    },
+    "provider_binding_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "implementation_namespace",
+        "bindings_sha256",
+        "bindings"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "implementation_namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        },
+        "bindings_sha256": { "$ref": "#/$defs/sha256" },
+        "bindings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/provider_binding_claim" }
+        }
+      }
+    },
+    "quota": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_operations",
+        "maximum_request_bytes",
+        "maximum_response_bytes",
+        "maximum_total_bytes",
+        "maximum_handles",
+        "timeout_milliseconds"
+      ],
+      "properties": {
+        "maximum_operations": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 },
+        "maximum_request_bytes": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 },
+        "maximum_response_bytes": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 },
+        "maximum_total_bytes": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 },
+        "maximum_handles": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+        "timeout_milliseconds": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "scope", "quota"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "filesystem",
+            "network-provider",
+            "secret",
+            "clock",
+            "randomness",
+            "model",
+            "transactional-output",
+            "sanitized-log",
+            "declarative-ui",
+            "route"
+          ]
+        },
+        "scope": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "quota": { "$ref": "#/$defs/quota" }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "surface", "state_schema"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "surface": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "state_schema": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "method", "path", "maximum_request_bytes", "maximum_response_bytes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+        "path": {
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000\\\\]*$"
+        },
+        "maximum_request_bytes": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 },
+        "maximum_response_bytes": { "type": "integer", "minimum": 1, "maximum": 18446744073709551615 }
+      }
+    },
+    "legacy_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy_identifier", "node_id", "node_version"],
+      "properties": {
+        "legacy_identifier": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" },
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "node_version": { "$ref": "#/$defs/version" },
+        "legacy_widget_names": {
+          "type": "array",
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" }
+        },
+        "input_translations": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "$ref": "#/$defs/legacy_input_translation" }
+        },
+        "output_translations": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "$ref": "#/$defs/legacy_output_translation" }
+        }
+      }
+    },
+    "legacy_input_translation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "target_port_id", "legacy_input_id"],
+          "properties": {
+            "kind": { "const": "rename" },
+            "target_port_id": { "$ref": "#/$defs/identifier" },
+            "legacy_input_id": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "target_port_id", "value"],
+          "properties": {
+            "kind": { "const": "constant" },
+            "target_port_id": { "$ref": "#/$defs/identifier" },
+            "value": { "$ref": "#/$defs/scalar" }
+          }
+        }
+      ]
+    },
+    "legacy_output_translation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_port_index", "legacy_output_index"],
+      "properties": {
+        "target_port_index": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "legacy_output_index": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+      }
+    }
+  }
+}

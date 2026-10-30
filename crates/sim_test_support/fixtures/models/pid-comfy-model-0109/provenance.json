@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "fixture_id": "pid-sim-model-0109",
+  "feature_id": "COMFY-MODEL-0109",
+  "source_symbol": "PiD",
+  "source_ordinal": 47,
+  "source_files": [
+    { "path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69" },
+    { "path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd" },
+    { "path": "projects/sim/ComfyUI/sim/ldm/pixeldit/model.py", "sha256": "fff32b630e0eeb437c9defd68122513566070bd90d6225e062922accf6ed28bb" },
+    { "path": "projects/sim/ComfyUI/sim/ldm/pixeldit/pid.py", "sha256": "e85c99e74d566b3850d0208f6078d8fbc36e389e1308a9fe417c60223c5a2a04" },
+    { "path": "projects/sim/ComfyUI/sim/text_encoders/pixeldit.py", "sha256": "316ea00a65f2a4df3bcb57dac1ffe51cb83024a04d9e43ca6aba4a8d8119e409" },
+    { "path": "crates/sim_model/src/pixeldit_pid_family.rs", "sha256": "0568ed4ffc21cbbfea8cf1dc5cdb008d9ca8bef483631825a0f5e15687b6823c" }
+  ],
+  "source_projection": "source_symbol=PiD\nsource_ordinal=47\ninherits=PixelDiTT2I\nunet_config.image_model=pid\nsampling_settings.shift=1.5\nlatent_format=PixelDiTPixel\nmemory_usage_factor=0.04\nsupported_inference_dtypes=bf16,f32\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\narchitecture=model_base.PiD\nclip_tokenizer=sim.text_encoders.pixeldit.PixelDiTGemma2Tokenizer\nclip_model=sim.text_encoders.pixeldit.PixelDiTGemma2TE\nlayouts=core-native,net-native\ndiffusers=unsupported\nconfiguration.patch_depth=14\nconfiguration.pixel_depth=2\nconfiguration.patch_size=16\nconfiguration.sr_scale=4\nconditioning=attention_mask,lq_latent,degrade_sigma\nstate_mapping=canonical-pixeldit-pid-branch-split\n",
+  "source_projection_sha256": "0b768e17c73c88781e73a843407abb6c424737734c601a43bd262309a62fa86d",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

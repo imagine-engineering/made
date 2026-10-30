@@ -1,0 +1,58 @@
+{
+  "observed_utc": "2026-10-15T09:29:22.005369+00:00",
+  "source_commit": "d4828cc93da67e6568a2c45908167d94132b57de",
+  "scope": "Inexpensive WIP preservation integrity; no product certification",
+  "checks": [
+    {
+      "label": "format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/transfer-20261015-format-result.log"
+    },
+    {
+      "label": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/transfer-20261015-diff-check-result.log"
+    },
+    {
+      "label": "staged-diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--cached",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "/private/tmp/transfer-20261015-staged-diff-check-result.log"
+    }
+  ],
+  "manual_transfer_payload_verification": {
+    "verified_file_count": 29485,
+    "failures": [],
+    "repository": "/Users/ahmad.vegah/repos/imagineerings/zed"
+  },
+  "own_validation_cleanup": {
+    "observed_utc": "2026-10-15T09:44:05.674448+00:00",
+    "normal_quit_isolated_Copper_app": true,
+    "verified_absent_process_ids": [
+      55720,
+      82621,
+      82614
+    ],
+    "active_Rust_validation_processes": 0,
+    "agents_completed": true,
+    "other_apps_services_and_warm_caches_preserved": true
+  },
+  "handoff_verifier_python_AST_exit": 0
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture_id": "hunyuanthree-dv2-sim-model-0084",
+  "feature_id": "COMFY-MODEL-0084",
+  "source_symbol": "Hunyuan3Dv2",
+  "source_ordinal": 66,
+  "source_files": [
+    {"path":"projects/sim/ComfyUI/sim/supported_models.py","sha256":"3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path":"projects/sim/ComfyUI/sim/supported_models_base.py","sha256":"a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path":"projects/sim/ComfyUI/sim/model_detection.py","sha256":"f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path":"projects/sim/ComfyUI/sim/model_base.py","sha256":"99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path":"projects/sim/ComfyUI/sim/latent_formats.py","sha256":"ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/hunyuan3d/model.py","sha256":"a3772417ab78adf948b748f12c3fc056aab708ce8987c5ace0acb2e38c3822f2"},
+    {"path":"projects/sim/ComfyUI/sim/ldm/hunyuan3dv2_1/hunyuandit.py","sha256":"183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45"},
+    {"path":"crates/sim_model/src/hunyuan3d_family.rs","sha256":"4df9577ede2512897754478e1b3db458f71b4236d89212f63ed27b3580deeb1f"},
+    {"path":"crates/sim_model/src/latent_formats/hunyuanthree_dv2_sim_model_0032.rs","sha256":"d92e17eb821891384ec21464c9a9ea1e24ffcb2b84e58954190d743af0581553"},
+    {"path":"crates/sim_model/src/latent_formats/hunyuanthree_dv2_1_sim_model_0033.rs","sha256":"2044b04050f3cf20b11a89cec4f6064cd626900afcaadffa658e517742e05413"},
+    {"path":"crates/sim_model/src/latent_formats/hunyuanthree_dv2mini_sim_model_0034.rs","sha256":"43556052fad15d94f01f0b689e6d868e19fb006a5479645e081f79207b7460ab"}
+  ],
+  "source_projection": "source_symbol=Hunyuan3Dv2\nsource_ordinal=66\ninherits=supported_models_base.BASE\nunet_config.image_model=hunyuan3d2\nsampling_settings.multiplier=1.0\nsampling_settings.shift=1.0\nlatent_format=Hunyuan3Dv2\nmemory_usage_factor=3.5\nsupported_inference_dtypes=f16,bf16,f32\nclip_vision_prefix=conditioner.main_image_encoder.model.\nvae_key_prefix=vae.\narchitecture=model_base.Hunyuan3Dv2\nmodel_type=FLOW\ndetector=latent_in.weight+cond_in.weight+double_blocks.8+single_blocks.0\nlayouts=prefixed-native,saved-model,standalone-native\ndiffusers=unsupported\nconfiguration.in_channels=64\nconfiguration.context_dimension=1536\nconfiguration.hidden_size=1024\nconfiguration.mlp_ratio=4.0\nconfiguration.number_of_heads=16\nconfiguration.depth=16\nconfiguration.single_block_depth=32\nconfiguration.qkv_bias=true\nconfiguration.guidance_embedding=false\nstate_scale_suffix=.scale->.weight\nsaving_prefix=model.\n",
+  "source_projection_sha256": "12f28c9d82aea3a819befbcd17328e77e9d8dcd3953c711e5c1863f497864437",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-shader-sim-node-0211",
+  "feature_id": "COMFY-NODE-0211",
+  "source": {
+    "path": "sim_extras/nodes_glsl.py",
+    "sha256": "fd4725172fe84e5ea3b9274ceddb44fefedaa27815fb6c9bc2689862760bda9c",
+    "byte_length": 31405,
+    "class_type": "GLSLShader",
+    "class_line": 656,
+    "execute_line": 751,
+    "definition_sha256": "99876568ea92b7171511499f9af7338c1833b0710f080971c0a6d13f75dae666"
+  },
+  "contract": {
+    "display_name": "GLSL Shader",
+    "category": "image/shader",
+    "description": "Apply GLSL ES fragment shaders to images. u_resolution (vec2) is always available.",
+    "experimental": true,
+    "has_intermediate_output": true,
+    "inputs": {
+      "fragment_shader": {
+        "type": "STRING",
+        "multiline": true,
+        "default": "#version 300 es\nprecision highp float;\n\nuniform sampler2D u_image0;\nuniform vec2 u_resolution;\n\nin vec2 v_texCoord;\nlayout(location = 0) out vec4 fragColor0;\n\nvoid main() {\n    fragColor0 = texture(u_image0, v_texCoord);\n}\n"
+      },
+      "size_mode": {
+        "type": "COMFY_DYNAMICCOMBO_V3",
+        "options": {
+          "from_input": [],
+          "custom": [
+            {"name": "width", "type": "INT", "default": 512, "minimum": 1, "maximum": 16384},
+            {"name": "height", "type": "INT", "default": 512, "minimum": 1, "maximum": 16384}
+          ]
+        }
+      },
+      "dynamic": [
+        {"identity": "image{index}", "start_index": 1, "minimum_count": 1, "maximum_count": 5, "type": "IMAGE"},
+        {"identity": "u_float{index}", "start_index": 1, "minimum_count": 0, "maximum_count": 20, "type": "FLOAT", "default": 0.0},
+        {"identity": "u_int{index}", "start_index": 1, "minimum_count": 0, "maximum_count": 20, "type": "INT", "default": 0},
+        {"identity": "u_bool{index}", "start_index": 1, "minimum_count": 0, "maximum_count": 10, "type": "BOOLEAN", "default": false},
+        {"identity": "u_curve{index}", "start_index": 1, "minimum_count": 0, "maximum_count": 4, "type": "CURVE", "lut_samples": 256}
+      ]
+    },
+    "outputs": ["IMAGE0", "IMAGE1", "IMAGE2", "IMAGE3"],
+    "input_is_list": false,
+    "output_is_list": [false, false, false, false],
+    "lazy_inputs": false,
+    "output_node": false,
+    "effect": "exclusive_device_with_transactional_temp_previews",
+    "cache": "input_identity_with_runtime_shader_configuration"
+  },
+  "behavior": {
+    "size_from_input": "first input IMAGE width and height",
+    "size_custom": "checked width and height are projected unchanged",
+    "uniform_order": "autogrow inputs are ordered by numeric suffix and compacted to u_image0, u_float0, u_int0, u_bool0, and u_curve0 service slots",
+    "curves": "raw CURVE points use source linear or monotone-cubic interpolation and 256 evenly spaced samples from 0 through 1",
+    "execution": "one injected NativeShaderExecutor request owns GLSL ES compilation, uniforms, MRT, multipass execution, diagnostics, cancellation, and float readback",
+    "outputs": "four canonical RGBA IMAGE handles; unused MRT slots are source-compatible black images",
+    "ui": "transactionally prepared GLSLShader_input and GLSLShader_output temporary PNG references",
+    "failure": {
+      "missing_image": "invalid_node_inputs with At least one input image is required",
+      "invalid_schema_or_uniform": "invalid_node_inputs before service invocation",
+      "stale_or_foreign_handle": "invalid_shader_image_handle before service invocation",
+      "compilation_or_bounds": "native_shader_execution_failed without output publication",
+      "service_unavailable": "retryable native_shader_service_unavailable",
+      "cancellation": "execution_interrupted with no output handles or prepared previews",
+      "partial_handle_publication": "all already-published IMAGE handles and prepared previews are rolled back"
+    },
+    "recovery": "a fresh attempt with current-generation IMAGE handles and an injected compatible shader service succeeds after invalid, cancelled, unavailable, or stale-handle failure"
+  },
+  "persistence": {
+    "class_type": "GLSLShader",
+    "inputs": {
+      "fragment_shader": "#version 300 es\nprecision highp float;\nuniform sampler2D u_image0;\nin vec2 v_texCoord;\nlayout(location = 0) out vec4 fragColor0;\nvoid main() { fragColor0 = texture(u_image0, v_texCoord); }",
+      "size_mode": "custom",
+      "size_mode.width": 640,
+      "size_mode.height": 360,
+      "image1": ["source", 0],
+      "u_float1": 0.5,
+      "u_int1": 2,
+      "u_bool1": true,
+      "u_curve1": {"__type__": "CURVE", "__value__": {"points": [[0.0, 0.0], [1.0, 1.0]], "interpolation": "linear"}}
+    },
+    "unknown_data": {
+      "future_shader_metadata": {"version": 2},
+      "preserve": true
+    }
+  },
+  "evidence_claims": {
+    "native_node_descriptor_and_execution": true,
+    "canonical_shader_service_delegation": true,
+    "transactional_intermediate_previews": true,
+    "exact_source_schema_and_autogrow_bounds": true,
+    "gpu_numeric_or_cross_platform_certification": false,
+    "source_python_runtime_oracle": false
+  }
+}

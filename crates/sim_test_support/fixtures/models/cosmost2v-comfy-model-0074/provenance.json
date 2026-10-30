@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "fixture_id": "cosmost2v-sim-model-0074",
+  "feature_id": "COMFY-MODEL-0074",
+  "source_symbol": "CosmosT2V",
+  "source_ordinal": 41,
+  "source_architecture": "model_base.CosmosVideo",
+  "latent_feature_id": "COMFY-MODEL-0028",
+  "latent_identifier": "Cosmos1CV8x8x8",
+  "catalog_projection_sha256": "ff11fcbe31283ba44ee6a40487a2b4a32d350e2124d4bde893849c365888ca55",
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models_base.py",
+      "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/cosmos/model.py",
+      "sha256": "70e1cf6ddc1e47a370cd86dcdd6e9e4f5ad078cbe352cad4457ba5407bdc66c2"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/cosmos/blocks.py",
+      "sha256": "085f29f34564c6f6d7063e131ac71adf9a826dbad5f27ca71d4430d9de8db46b"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/cosmos.py",
+      "sha256": "98c09ef00e0b0953bfae891ca2df97c3d70fdbfbacb1165168fe74eaff230524"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/sd3_clip.py",
+      "sha256": "61bde2b4a428779469a01f342a9195d115f2a207c7a3d2c0d6c0a5715fdc03ed"
+    }
+  ],
+  "source_projection": "source_symbol=CosmosT2V\nsource_ordinal=41\ninheritance=CosmosT2V,supported_models_base.BASE\nunet_config.image_model=cosmos\nunet_config.in_channels=16\nsampling_settings.sigma_data=0.5\nsampling_settings.sigma_max=80.0\nsampling_settings.sigma_min=0.002\nlatent_format=sim.latent_formats.Cosmos1CV8x8x8\nmemory_usage_factor=1.6\nsupported_inference_dtypes=bf16,f16,f32\narchitecture=model_base.CosmosVideo\nclip_tokenizer=sim.text_encoders.cosmos.CosmosT5Tokenizer\nclip_model=sim.text_encoders.cosmos.te\nclip_configuration=sim.text_encoders.sd3_clip.t5_xxl_detect(text_encoders.t5xxl.transformer.)\nvae_key_prefix=vae.\ntext_encoder_key_prefix=text_encoders.\nunet_key_prefix=net.\nstate_dict_transform=identity\n",
+  "source_projection_sha256": "7cee5fc24199d80e44b8fa2e6a4b73018a7d89128fcf4878d6fce99db7f97990",
+  "alternate_layout": "none; the pinned source has no Cosmos diffusers converter and its detector selects the native net. prefix",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI CosmosT2V sources; no production Python dependency"
+}

@@ -1,0 +1,2722 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.hunyuan3d",
+  "scope": "Actual pinned execute/API/validation/downscale AST; upload encoding, native File3D ownership, RGB archive extraction and allocation remain injected canonical boundaries.",
+  "source_sha256": {
+    "sim_api_nodes/nodes_hunyuan3d.py": "b40684e319579f7f1fb43fc513c0a94298602468d777c11a765de728256fbab0",
+    "sim_api_nodes/apis/hunyuan3d.py": "443d3d516c3e5014b450d189cac25976b1bb78ffb0511faa47e91772b15d816c",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+  },
+  "cases": [
+    {
+      "input": {
+        "node": "Tencent3DPartNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-part",
+        "method": "POST",
+        "body": {
+          "File": {
+            "Type": "FBX",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          }
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "fbx",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-part/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/fbx",
+          "kind": "file",
+          "format": "fbx"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/fbx",
+          "format": "fbx"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "Tencent3DTextureEditNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-texture-edit",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "FBX",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "Prompt": "  cloud ☁  ",
+          "EnablePBR": true
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "fbx",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-texture-edit/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb"
+        },
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        },
+        {
+          "url": "https://download.fixture.invalid/texture_image",
+          "kind": "image",
+          "mode": "RGBA"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb"
+        },
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        },
+        {
+          "download": "https://download.fixture.invalid/texture_image",
+          "mode": "RGBA"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentImageToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {
+          "image": {
+            "width": 256,
+            "height": 128
+          }
+        }
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "ImageUrl": "https://storage.fixture.invalid/image",
+          "EnablePBR": false,
+          "FaceCount": 500000,
+          "GenerateType": "Normal"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "image",
+          "width": 256,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "obj_archive",
+          "mode": "RGB"
+        },
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        {
+          "file_format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        },
+        "source RGB texture",
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentModelTo3DUVNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-uv",
+        "method": "POST",
+        "body": {
+          "File": {
+            "Type": "FBX",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          }
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "fbx",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-uv/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/uv_image",
+          "kind": "image",
+          "mode": "RGBA"
+        },
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        },
+        {
+          "url": "https://download.fixture.invalid/fbx",
+          "kind": "file",
+          "format": "fbx"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        },
+        {
+          "download": "https://download.fixture.invalid/fbx",
+          "format": "fbx"
+        },
+        {
+          "download": "https://download.fixture.invalid/uv_image",
+          "mode": "RGBA"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "OBJ",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "OBJ",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "triangle",
+          "FaceLevel": "medium"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "Prompt": "  cloud ☁  ",
+          "EnablePBR": false,
+          "FaceCount": 500000,
+          "GenerateType": "Normal"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "obj_archive",
+          "mode": "RGB"
+        },
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        {
+          "file_format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        },
+        "source RGB texture"
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.1",
+        "prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+        "face_count": 3000,
+        "generate_type": {
+          "generate_type": "Geometry"
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.1",
+          "Prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+          "FaceCount": 3000,
+          "GenerateType": "Geometry"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "obj_archive",
+          "mode": "RGB"
+        },
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        {
+          "file_format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        },
+        "source RGB texture"
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.0",
+        "prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+        "face_count": 3000,
+        "generate_type": {
+          "generate_type": "LowPoly",
+          "polygon_type": "quadrilateral",
+          "pbr": true
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "Prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+          "EnablePBR": true,
+          "FaceCount": 3000,
+          "GenerateType": "LowPoly",
+          "PolygonType": "quadrilateral"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "obj_archive",
+          "mode": "RGB"
+        },
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        {
+          "file_format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        },
+        "source RGB texture"
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentImageToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": true
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {
+          "image": {
+            "width": 256,
+            "height": 128
+          },
+          "image_left": {
+            "width": 256,
+            "height": 128
+          },
+          "image_right": {
+            "width": 9800,
+            "height": 257
+          },
+          "image_back": {
+            "width": 256,
+            "height": 128
+          }
+        }
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "ImageUrl": "https://storage.fixture.invalid/image",
+          "MultiViewImages": [
+            {
+              "ViewType": "left",
+              "ViewImageUrl": "https://storage.fixture.invalid/image_left"
+            },
+            {
+              "ViewType": "right",
+              "ViewImageUrl": "https://storage.fixture.invalid/image_right"
+            },
+            {
+              "ViewType": "back",
+              "ViewImageUrl": "https://storage.fixture.invalid/image_back"
+            }
+          ],
+          "EnablePBR": true,
+          "FaceCount": 500000,
+          "GenerateType": "Normal"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "image_left",
+          "width": 256,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        },
+        {
+          "role": "image_right",
+          "width": 4900,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        },
+        {
+          "role": "image_back",
+          "width": 256,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        },
+        {
+          "role": "image",
+          "width": 256,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        }
+      ],
+      "resizes": [
+        {
+          "role": "image_right",
+          "width": 4900,
+          "height": 128,
+          "method": "lanczos",
+          "crop": "disabled"
+        }
+      ],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "obj_archive",
+          "mode": "RGB"
+        },
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        {
+          "file_format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        },
+        "source RGB texture",
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentImageToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {
+          "image": {
+            "width": 128,
+            "height": 128
+          }
+        }
+      },
+      "files": [
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "ImageUrl": "https://storage.fixture.invalid/image",
+          "EnablePBR": false,
+          "FaceCount": 500000,
+          "GenerateType": "Normal"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "image",
+          "width": 128,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "Prompt": "  cloud ☁  ",
+          "EnablePBR": false,
+          "FaceCount": 500000,
+          "GenerateType": "Normal"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        null,
+        null
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentImageToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {
+          "image": {
+            "width": 128,
+            "height": 128
+          }
+        }
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "raw",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-pro",
+        "method": "POST",
+        "body": {
+          "Model": "3.0",
+          "ImageUrl": "https://storage.fixture.invalid/image",
+          "EnablePBR": false,
+          "FaceCount": 500000,
+          "GenerateType": "Normal"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "image",
+          "width": 128,
+          "height": 128,
+          "mime_type": "image/webp",
+          "total_pixels": 24010000
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-pro/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "obj_archive",
+          "mode": "RGB"
+        },
+        {
+          "url": "https://download.fixture.invalid/glb",
+          "kind": "file",
+          "format": "glb",
+          "task_id": "source-task-42"
+        }
+      ],
+      "outputs": [
+        "source-task-42.glb",
+        {
+          "download": "https://download.fixture.invalid/glb",
+          "format": "glb",
+          "task_id": "source-task-42"
+        },
+        {
+          "file_format": "obj",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        },
+        null,
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentModelTo3DUVNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-uv",
+        "method": "POST",
+        "body": {
+          "File": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          }
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-uv/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        },
+        {
+          "url": "https://download.fixture.invalid/fbx",
+          "kind": "file",
+          "format": "fbx"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        },
+        {
+          "download": "https://download.fixture.invalid/fbx",
+          "format": "fbx"
+        },
+        {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "triangle",
+          "FaceLevel": "medium"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "triangle",
+        "face_level": "high",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "triangle",
+          "FaceLevel": "high"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "triangle",
+        "face_level": "low",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "triangle",
+          "FaceLevel": "low"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "quadrilateral",
+        "face_level": "medium",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "quadrilateral",
+          "FaceLevel": "medium"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "quadrilateral",
+        "face_level": "high",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "quadrilateral",
+          "FaceLevel": "high"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "quadrilateral",
+        "face_level": "low",
+        "images": {}
+      },
+      "files": [
+        {
+          "Type": "OBJ",
+          "Url": "https://download.fixture.invalid/obj"
+        },
+        {
+          "Type": "GLB",
+          "Url": "https://download.fixture.invalid/glb"
+        },
+        {
+          "Type": "FBX",
+          "Url": "https://download.fixture.invalid/fbx"
+        },
+        {
+          "Type": "UV_IMAGE",
+          "Url": "https://download.fixture.invalid/uv_image"
+        },
+        {
+          "Type": "TEXTURE_IMAGE",
+          "Url": "https://download.fixture.invalid/texture_image"
+        }
+      ],
+      "obj_mode": "zip",
+      "request": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology",
+        "method": "POST",
+        "body": {
+          "File3D": {
+            "Type": "GLB",
+            "Url": "https://storage.fixture.invalid/model_3d"
+          },
+          "PolygonType": "quadrilateral",
+          "FaceLevel": "low"
+        },
+        "tencent_rate_limit": true
+      },
+      "uploads": [
+        {
+          "role": "model_3d",
+          "format": "glb",
+          "bytes_hex": "61637475616c20736f75726365206d6f64656c206279746573"
+        }
+      ],
+      "resizes": [],
+      "poll": {
+        "path": "/proxy/tencent/hunyuan/3d-smart-topology/query",
+        "method": "POST",
+        "body": {
+          "JobId": "source-task-42"
+        }
+      },
+      "downloads": [
+        {
+          "url": "https://download.fixture.invalid/obj",
+          "kind": "file",
+          "format": "obj"
+        }
+      ],
+      "outputs": [
+        {
+          "download": "https://download.fixture.invalid/obj",
+          "format": "obj"
+        }
+      ]
+    }
+  ],
+  "preflight_errors": [
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.0",
+        "prompt": " \u001c ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": "Field 'prompt' cannot be shorter than 1 characters; was 0 characters long.",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.0",
+        "prompt": "☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁☁",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": " Field 'prompt cannot be longer than 1024 characters; was 1025 characters long.",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "TencentTextToModelNode",
+        "model": "3.1",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "LowPoly"
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": "The LowPoly option is currently unavailable for the 3.1 model.",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "TencentImageToModelNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {
+          "image": {
+            "width": 127,
+            "height": 128
+          }
+        }
+      },
+      "error": "Image width must be at least 128px, got 127px",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "Tencent3DTextureEditNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "OBJ",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": "Unsupported file format: 'obj'. Only FBX format is supported.",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "Tencent3DPartNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "GLB",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": "Unsupported file format: 'glb'. Only FBX format is supported.",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "TencentModelTo3DUVNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "STL",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": "Unsupported file format: 'stl'. Supported formats: fbx, glb, obj.",
+      "requests": 0,
+      "uploads": 0
+    },
+    {
+      "input": {
+        "node": "TencentSmartTopologyNode",
+        "model": "3.0",
+        "prompt": "  cloud ☁  ",
+        "face_count": 500000,
+        "generate_type": {
+          "generate_type": "Normal",
+          "pbr": false
+        },
+        "seed": 42,
+        "model_format": "FBX",
+        "polygon_type": "triangle",
+        "face_level": "medium",
+        "images": {}
+      },
+      "error": "Unsupported file format: 'fbx'. Supported: glb, obj.",
+      "requests": 0,
+      "uploads": 0
+    }
+  ],
+  "rate_limit_cases": [
+    {
+      "status": 400,
+      "body": {
+        "Response": {
+          "Error": {
+            "Code": "xxRequestLimitExceeded.zz"
+          }
+        }
+      },
+      "rate_limited": true
+    },
+    {
+      "status": 400,
+      "body": {
+        "Error": {
+          "Code": "RequestLimitExceeded"
+        }
+      },
+      "rate_limited": false
+    },
+    {
+      "status": 429,
+      "body": {
+        "Response": {
+          "Error": {
+            "Code": "RequestLimitExceeded"
+          }
+        }
+      },
+      "rate_limited": false
+    },
+    {
+      "status": 400,
+      "body": {},
+      "rate_limited": false
+    }
+  ],
+  "archive_cases": [
+    {
+      "file": "archives/ordered.zip",
+      "sha256": "f726db6ade1a145ad30f6c4b436b0c545f8c803d179d2385d8a20b86a303d422",
+      "entries": [
+        {
+          "name": "first.OBJ",
+          "bytes_hex": "6669727374206d657368"
+        },
+        {
+          "name": "ignored.mtl",
+          "bytes_hex": "69676e6f726564206d6174657269616c"
+        },
+        {
+          "name": "old.png",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        },
+        {
+          "name": "folder/a_METALLIC.PNG",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        },
+        {
+          "name": "folder/a_NORMAL.PNG",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        },
+        {
+          "name": "folder/a_ROUGHNESS.PNG",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        },
+        {
+          "name": "new.PNG",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        },
+        {
+          "name": "last.obj",
+          "bytes_hex": "6c617374206d657368"
+        }
+      ],
+      "result": {
+        "obj": {
+          "file_format": "obj",
+          "bytes_hex": "6c617374206d657368"
+        },
+        "texture": {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.501960813999176,
+            0.250980406999588,
+            0.125490203499794
+          ]
+        },
+        "metallic": {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.501960813999176,
+            0.250980406999588,
+            0.125490203499794
+          ]
+        },
+        "normal": {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.501960813999176,
+            0.250980406999588,
+            0.125490203499794
+          ]
+        },
+        "roughness": {
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "pixels": [
+            0.501960813999176,
+            0.250980406999588,
+            0.125490203499794
+          ]
+        }
+      }
+    },
+    {
+      "file": "archives/no-obj.zip",
+      "sha256": "15196164483c6cf047a84ad2f07e8d0a2ab90874954c432717b3743c89c761a0",
+      "entries": [
+        {
+          "name": "texture.png",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        }
+      ],
+      "result": {
+        "error_type": "ValueError",
+        "error": "ZIP archive does not contain an OBJ file."
+      }
+    },
+    {
+      "file": "archives/invalid-overwritten.zip",
+      "sha256": "0e548ed145048ef51a82930bf61b7aeaf66746dc7ad96ffdb8cb50de14cf8964",
+      "entries": [
+        {
+          "name": "mesh.obj",
+          "bytes_hex": "6d657368"
+        },
+        {
+          "name": "old.png",
+          "bytes_hex": "696e76616c696420696d616765"
+        },
+        {
+          "name": "new.png",
+          "bytes_hex": "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63687050100400031600f2c0b497e40000000049454e44ae426082"
+        }
+      ],
+      "result": {
+        "error_type": "UnidentifiedImageError",
+        "error": "cannot identify image file "
+      }
+    },
+    {
+      "file": "archives/raw.obj",
+      "sha256": "8cb246ce90885caf218e541119b70c6a026dac68ff61e048078a0b67f7033819",
+      "entries": [],
+      "result": {
+        "obj": {
+          "file_format": "obj",
+          "bytes_hex": "7261772061637475616c204f424a206279746573"
+        },
+        "texture": null,
+        "metallic": null,
+        "normal": null,
+        "roughness": null
+      }
+    }
+  ],
+  "schema_facts": {
+    "TencentTextToModelNode": [
+      {
+        "call": "IO.Schema",
+        "literals": {
+          "node_id": "TencentTextToModelNode",
+          "display_name": "Hunyuan3D: Text to Model",
+          "category": "partner/3d/Tencent",
+          "essentials_category": "3D",
+          "is_api_node": true,
+          "is_output_node": true
+        }
+      },
+      {
+        "call": "IO.PriceBadge",
+        "literals": {
+          "expr": "\n                (\n                  $base := widgets.generate_type = \"normal\" ? 25 : widgets.generate_type = \"lowpoly\" ? 30 : 15;\n                  $pbr := $lookup(widgets, \"generate_type.pbr\") ? 10 : 0;\n                  $face := widgets.face_count != 500000 ? 10 : 0;\n                  {\"type\":\"usd\",\"usd\": ($base + $pbr + $face) * 0.02}\n                )\n                "
+        }
+      },
+      {
+        "call": "IO.Combo.Input",
+        "literals": {
+          "options": [
+            "3.0",
+            "3.1"
+          ],
+          "tooltip": "The LowPoly option is unavailable for the `3.1` model."
+        }
+      },
+      {
+        "call": "IO.String.Input",
+        "literals": {
+          "multiline": true,
+          "default": "",
+          "tooltip": "Supports up to 1024 characters."
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 500000,
+          "min": 3000,
+          "max": 1500000
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 0,
+          "min": 0,
+          "max": 2147483647,
+          "control_after_generate": true,
+          "tooltip": "Seed controls whether the node should re-run; results are non-deterministic regardless of seed."
+        }
+      },
+      {
+        "call": "IO.String.Output",
+        "literals": {
+          "display_name": "model_file"
+        }
+      },
+      {
+        "call": "IO.File3DGLB.Output",
+        "literals": {
+          "display_name": "GLB"
+        }
+      },
+      {
+        "call": "IO.File3DOBJ.Output",
+        "literals": {
+          "display_name": "OBJ"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "texture_image"
+        }
+      },
+      {
+        "call": "IO.PriceBadgeDepends",
+        "literals": {
+          "widgets": [
+            "generate_type",
+            "generate_type.pbr",
+            "face_count"
+          ]
+        }
+      },
+      {
+        "call": "IO.Boolean.Input",
+        "literals": {
+          "default": false
+        }
+      },
+      {
+        "call": "IO.Combo.Input",
+        "literals": {
+          "options": [
+            "triangle",
+            "quadrilateral"
+          ]
+        }
+      },
+      {
+        "call": "IO.Boolean.Input",
+        "literals": {
+          "default": false
+        }
+      }
+    ],
+    "TencentImageToModelNode": [
+      {
+        "call": "IO.Schema",
+        "literals": {
+          "node_id": "TencentImageToModelNode",
+          "display_name": "Hunyuan3D: Image(s) to Model",
+          "category": "partner/3d/Tencent",
+          "essentials_category": "3D",
+          "is_api_node": true,
+          "is_output_node": true
+        }
+      },
+      {
+        "call": "IO.PriceBadge",
+        "literals": {
+          "expr": "\n                (\n                  $base := widgets.generate_type = \"normal\" ? 25 : widgets.generate_type = \"lowpoly\" ? 30 : 15;\n                  $multiview := (\n                    inputs.image_left.connected or inputs.image_right.connected or inputs.image_back.connected\n                  ) ? 10 : 0;\n                  $pbr := $lookup(widgets, \"generate_type.pbr\") ? 10 : 0;\n                  $face := widgets.face_count != 500000 ? 10 : 0;\n                  {\"type\":\"usd\",\"usd\": ($base + $multiview + $pbr + $face) * 0.02}\n                )\n                "
+        }
+      },
+      {
+        "call": "IO.Combo.Input",
+        "literals": {
+          "options": [
+            "3.0",
+            "3.1"
+          ],
+          "tooltip": "The LowPoly option is unavailable for the `3.1` model."
+        }
+      },
+      {
+        "call": "IO.Image.Input",
+        "literals": {
+          "optional": true
+        }
+      },
+      {
+        "call": "IO.Image.Input",
+        "literals": {
+          "optional": true
+        }
+      },
+      {
+        "call": "IO.Image.Input",
+        "literals": {
+          "optional": true
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 500000,
+          "min": 3000,
+          "max": 1500000
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 0,
+          "min": 0,
+          "max": 2147483647,
+          "control_after_generate": true,
+          "tooltip": "Seed controls whether the node should re-run; results are non-deterministic regardless of seed."
+        }
+      },
+      {
+        "call": "IO.String.Output",
+        "literals": {
+          "display_name": "model_file"
+        }
+      },
+      {
+        "call": "IO.File3DGLB.Output",
+        "literals": {
+          "display_name": "GLB"
+        }
+      },
+      {
+        "call": "IO.File3DOBJ.Output",
+        "literals": {
+          "display_name": "OBJ"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "texture_image"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "optional_metallic"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "optional_normal"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "optional_roughness"
+        }
+      },
+      {
+        "call": "IO.PriceBadgeDepends",
+        "literals": {
+          "widgets": [
+            "generate_type",
+            "generate_type.pbr",
+            "face_count"
+          ],
+          "inputs": [
+            "image_left",
+            "image_right",
+            "image_back"
+          ]
+        }
+      },
+      {
+        "call": "IO.Boolean.Input",
+        "literals": {
+          "default": false
+        }
+      },
+      {
+        "call": "IO.Combo.Input",
+        "literals": {
+          "options": [
+            "triangle",
+            "quadrilateral"
+          ]
+        }
+      },
+      {
+        "call": "IO.Boolean.Input",
+        "literals": {
+          "default": false
+        }
+      }
+    ],
+    "TencentModelTo3DUVNode": [
+      {
+        "call": "IO.Schema",
+        "literals": {
+          "node_id": "TencentModelTo3DUVNode",
+          "display_name": "Hunyuan3D: Model to UV",
+          "category": "partner/3d/Tencent",
+          "description": "Perform UV unfolding on a 3D model to generate UV texture. Input model must have less than 30000 faces.",
+          "is_api_node": true
+        }
+      },
+      {
+        "call": "IO.PriceBadge",
+        "literals": {
+          "expr": "{\"type\":\"usd\",\"usd\":0.2}"
+        }
+      },
+      {
+        "call": "IO.MultiType.Input",
+        "literals": {
+          "tooltip": "Input 3D model (GLB, OBJ, or FBX)"
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 1,
+          "min": 0,
+          "max": 2147483647,
+          "control_after_generate": true,
+          "tooltip": "Seed controls whether the node should re-run; results are non-deterministic regardless of seed."
+        }
+      },
+      {
+        "call": "IO.File3DOBJ.Output",
+        "literals": {
+          "display_name": "OBJ"
+        }
+      },
+      {
+        "call": "IO.File3DFBX.Output",
+        "literals": {
+          "display_name": "FBX"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "uv_image"
+        }
+      }
+    ],
+    "Tencent3DTextureEditNode": [
+      {
+        "call": "IO.Schema",
+        "literals": {
+          "node_id": "Tencent3DTextureEditNode",
+          "display_name": "Hunyuan3D: 3D Texture Edit",
+          "category": "partner/3d/Tencent",
+          "description": "After inputting the 3D model, perform 3D model texture redrawing.",
+          "is_api_node": true
+        }
+      },
+      {
+        "call": "IO.PriceBadge",
+        "literals": {
+          "expr": "{\"type\":\"usd\",\"usd\": 0.6}"
+        }
+      },
+      {
+        "call": "IO.MultiType.Input",
+        "literals": {
+          "tooltip": "3D model in FBX format. Model should have less than 100000 faces."
+        }
+      },
+      {
+        "call": "IO.String.Input",
+        "literals": {
+          "multiline": true,
+          "default": "",
+          "tooltip": "Describes texture editing. Supports up to 1024 UTF-8 characters."
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 0,
+          "min": 0,
+          "max": 2147483647,
+          "control_after_generate": true,
+          "tooltip": "Seed controls whether the node should re-run; results are non-deterministic regardless of seed."
+        }
+      },
+      {
+        "call": "IO.File3DGLB.Output",
+        "literals": {
+          "display_name": "GLB"
+        }
+      },
+      {
+        "call": "IO.File3DOBJ.Output",
+        "literals": {
+          "display_name": "OBJ"
+        }
+      },
+      {
+        "call": "IO.Image.Output",
+        "literals": {
+          "display_name": "texture_image"
+        }
+      }
+    ],
+    "Tencent3DPartNode": [
+      {
+        "call": "IO.Schema",
+        "literals": {
+          "node_id": "Tencent3DPartNode",
+          "display_name": "Hunyuan3D: 3D Part",
+          "category": "partner/3d/Tencent",
+          "description": "Automatically perform component identification and generation based on the model structure.",
+          "is_api_node": true
+        }
+      },
+      {
+        "call": "IO.PriceBadge",
+        "literals": {
+          "expr": "{\"type\":\"usd\",\"usd\":0.6}"
+        }
+      },
+      {
+        "call": "IO.MultiType.Input",
+        "literals": {
+          "tooltip": "3D model in FBX format. Model should have less than 30000 faces."
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 0,
+          "min": 0,
+          "max": 2147483647,
+          "control_after_generate": true,
+          "tooltip": "Seed controls whether the node should re-run; results are non-deterministic regardless of seed."
+        }
+      },
+      {
+        "call": "IO.File3DFBX.Output",
+        "literals": {
+          "display_name": "FBX"
+        }
+      }
+    ],
+    "TencentSmartTopologyNode": [
+      {
+        "call": "IO.Schema",
+        "literals": {
+          "node_id": "TencentSmartTopologyNode",
+          "display_name": "Hunyuan3D: Smart Topology",
+          "category": "partner/3d/Tencent",
+          "description": "Perform smart retopology on a 3D model. Supports GLB/OBJ formats; max 200MB; recommended for high-poly models.",
+          "is_api_node": true
+        }
+      },
+      {
+        "call": "IO.PriceBadge",
+        "literals": {
+          "expr": "{\"type\":\"usd\",\"usd\":1.0}"
+        }
+      },
+      {
+        "call": "IO.MultiType.Input",
+        "literals": {
+          "tooltip": "Input 3D model (GLB or OBJ)"
+        }
+      },
+      {
+        "call": "IO.Combo.Input",
+        "literals": {
+          "options": [
+            "triangle",
+            "quadrilateral"
+          ],
+          "tooltip": "Surface composition type."
+        }
+      },
+      {
+        "call": "IO.Combo.Input",
+        "literals": {
+          "options": [
+            "medium",
+            "high",
+            "low"
+          ],
+          "tooltip": "Polygon reduction level."
+        }
+      },
+      {
+        "call": "IO.Int.Input",
+        "literals": {
+          "default": 0,
+          "min": 0,
+          "max": 2147483647,
+          "control_after_generate": true,
+          "tooltip": "Seed controls whether the node should re-run; results are non-deterministic regardless of seed."
+        }
+      },
+      {
+        "call": "IO.File3DOBJ.Output",
+        "literals": {
+          "display_name": "OBJ"
+        }
+      }
+    ]
+  },
+  "client_defaults": {
+    "sync_op_raw": {
+      "price_extractor": null,
+      "data": null,
+      "files": null,
+      "content_type": "application/json",
+      "timeout": 3600.0,
+      "multipart_parser": null,
+      "max_retries": 3,
+      "retry_delay": 1.0,
+      "retry_backoff": 2.0,
+      "wait_label": "Waiting for server",
+      "estimated_duration": null,
+      "as_binary": false,
+      "final_label_on_success": "Completed",
+      "progress_origin_ts": null,
+      "monitor_progress": true,
+      "max_retries_on_rate_limit": 16,
+      "is_rate_limited": null,
+      "response_header_validator": null
+    },
+    "poll_op_raw": {
+      "progress_extractor": null,
+      "price_extractor": null,
+      "completed_statuses": null,
+      "failed_statuses": null,
+      "queued_statuses": null,
+      "data": null,
+      "poll_interval": 5.0,
+      "max_poll_attempts": 480,
+      "timeout_per_poll": 120.0,
+      "max_retries_per_poll": 10,
+      "retry_delay_per_poll": 1.0,
+      "retry_backoff_per_poll": 1.4,
+      "estimated_duration": null,
+      "cancel_endpoint": null,
+      "cancel_timeout": 10.0,
+      "extra_text": null
+    },
+    "download_url_to_bytesio": {
+      "timeout": null,
+      "max_retries": 5,
+      "retry_delay": 1.0,
+      "retry_backoff": 2.0,
+      "cls": null
+    }
+  }
+}

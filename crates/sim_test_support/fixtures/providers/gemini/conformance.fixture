@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.gemini",
+  "source_sha256": "e760f41dad8e26c44b9e4d5c283c7ffafffb2d1839200c3b471da81992d463db",
+  "aliases": [
+    "vertexai"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0195",
+      "node_identifier": "GeminiImage2Node",
+      "source_class": "GeminiImage2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0196",
+      "node_identifier": "GeminiImageNode",
+      "source_class": "GeminiImage"
+    },
+    {
+      "feature_id": "COMFY-NODE-0197",
+      "node_identifier": "GeminiInputFiles",
+      "source_class": "GeminiInputFiles"
+    },
+    {
+      "feature_id": "COMFY-NODE-0198",
+      "node_identifier": "GeminiNanoBanana2",
+      "source_class": "GeminiNanoBanana2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0199",
+      "node_identifier": "GeminiNanoBanana2V2",
+      "source_class": "GeminiNanoBanana2V2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0200",
+      "node_identifier": "GeminiNode",
+      "source_class": "GeminiNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0201",
+      "node_identifier": "GeminiNodeV2",
+      "source_class": "GeminiNodeV2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0202",
+      "node_identifier": "GeminiVideoOmni",
+      "source_class": "GeminiVideoOmni"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0190",
+      "method": "POST",
+      "path": "/proxy/vertexai/gemini",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0191",
+      "method": "POST",
+      "path": "/proxy/vertexai/gemini/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0192",
+      "method": "POST",
+      "path": "/proxy/vertexai/gemini/{model_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0193",
+      "method": "POST",
+      "path": "/proxy/vertexai/gemini/{model}",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media, file ownership and guest integration pending"
+}

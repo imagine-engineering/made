@@ -1,0 +1,49 @@
+{
+  "fixture_id": "stable-cascade-b-sim-model-0134",
+  "feature_id": "COMFY-MODEL-0134",
+  "detector": {
+    "tensor_shapes": {
+      "model.diffusion_model.clf.1.weight": [2, 2],
+      "model.diffusion_model.clip_mapper.weight": [2, 2],
+      "model.diffusion_model.embedding.1.weight": [2, 2],
+      "model.diffusion_model.down_blocks.1.0.channelwise.0.weight": [2, 640],
+      "model.diffusion_model.down_blocks.0.0.attention.attn.in_proj_weight": [6, 2],
+      "model.diffusion_model.down_blocks.0.0.attention.attn.in_proj_bias": [6],
+      "text_encoder.clip_g.text_projection": [2, 3],
+      "text_encoder.clip_g.transformer.encoder.weight": [1],
+      "vae.decoder.weight": [1]
+    },
+    "metadata": {}
+  },
+  "base_artifact_digest": "1341341341341341341341341341341341341341341341341341341341341341",
+  "source_weights": [
+    {"key": "model.diffusion_model.clip_mapper.weight", "shape": [2, 2], "values": [1.0, 0.0, 0.0, 1.0]},
+    {"key": "model.diffusion_model.embedding.1.weight", "shape": [2, 2], "values": [2.0, 0.0, 0.0, 0.5]},
+    {"key": "model.diffusion_model.clf.1.weight", "shape": [2, 2], "values": [1.0, 1.0, 1.0, -1.0]}
+  ],
+  "input": {"key": "input", "shape": [1, 2], "values": [1.0, 2.0]},
+  "dtype": "f32",
+  "device": "cpu",
+  "activation_elements": 2,
+  "memory_budget_bytes": 56,
+  "expected_memory_bytes": 56,
+  "checkpoints": [
+    {"name": "stage_b_pooled_text_projection", "values": [1.0, 2.0]},
+    {"name": "stage_b_prior_fusion", "values": [0.7310586, 1.7615942]},
+    {"name": "stage_b_decoder_projection", "values": [1.4621172, 0.8807971]},
+    {"name": "stage_b_attention", "values": [1.4621172, 0.8807971]},
+    {"name": "stage_b_image_projection", "values": [2.3429143, 0.5813201]},
+    {"name": "stable_cascade_b_latent_output", "values": [0.9817185, 0.52362424]}
+  ],
+  "patches": [{"identifier":"stage-b-clip-delta","kind":"lora","scale":1.0,"targets":[
+    {"key":"native.clip_mapper.weight","expected_shape":[2,2],"values":[1.0,0.0,0.0,1.0],"application":"add"}
+  ]}],
+  "patched_checkpoints": [
+    {"name": "stage_b_pooled_text_projection", "values": [2.0, 4.0]},
+    {"name": "stage_b_prior_fusion", "values": [1.7615942, 3.928055]},
+    {"name": "stage_b_decoder_projection", "values": [3.5231884, 1.9640275]},
+    {"name": "stage_b_attention", "values": [3.5231884, 1.9640275]},
+    {"name": "stage_b_image_projection", "values": [5.487216, 1.5591609]},
+    {"name": "stable_cascade_b_latent_output", "values": [0.9999658, 0.91528434]}
+  ]
+}

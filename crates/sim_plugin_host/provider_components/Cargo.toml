@@ -1,0 +1,28 @@
+[package]
+name = "sim-provider-components"
+version = "0.1.0"
+edition = "2024"
+publish = false
+rust-version = "1.95"
+build = "build.rs"
+
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+sim_plugin_sdk = { path = "../../sim_plugin_sdk" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+speedate = "=0.17.0"
+num-rational = { version = "=0.4.2", default-features = false, features = ["std"] }
+num-traits = { version = "=0.2.19", default-features = false, features = ["std"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"
+
+[patch.crates-io]
+zune-jpeg = { path = "../../sim_media/vendor/zune-jpeg" }

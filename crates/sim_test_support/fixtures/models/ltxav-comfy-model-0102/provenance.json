@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "fixture_id": "ltxav-sim-model-0102",
+  "feature_id": "COMFY-MODEL-0102",
+  "source_symbol": "LTXAV",
+  "source_ordinal": 33,
+  "source_architecture": "model_base.LTXAV",
+  "latent_feature_id": "COMFY-MODEL-0039",
+  "latent_identifier": "LTXAV",
+  "catalog_projection_sha256": "8ad8b009ca551da18b106ab345d432d9bc2190b6d85ff24ea0b05c394d633592",
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/lightricks/av_model.py", "sha256": "b85d5cfdd273fe48d839542ced474bbcf456690702ef0bdfbcd6cf8798607fc7"},
+    {"path": "projects/sim/ComfyUI/sim/text_encoders/lt.py", "sha256": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2"},
+    {"path": "crates/sim_model/src/ltx_family.rs", "sha256": "e655e96897672ba2875d42cb2b9f3f09333ccb42678d94819392c0617ae062b4"},
+    {"path": "crates/sim_model/src/latent_formats/ltxav_sim_model_0039.rs", "sha256": "049838d37ea119c432abaffaf5474a96835b07281b89681ed0d93af4601da504"}
+  ],
+  "source_projection": "LTXAV|33|image_model=ltxav|shift=2.37|memory=0.077|latent=LTXAV|audio_discriminator=audio_adaln_single.linear.weight|dtypes=bf16,f32|layouts=prefixed,saved-model,standalone|diffusers=unsupported",
+  "source_projection_sha256": "e50c24b13fb6012a8d9cff5e9ff9d2e27b30022ea3d78cb2459aaf11d41b11cd",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

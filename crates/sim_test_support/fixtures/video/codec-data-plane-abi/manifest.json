@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-data-plane-abi-v1",
+  "truth_mode": "official-source-reviewed-prefix-only-data-plane-abi",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "nodes_lt_sha256": "d3c0a82b42808216b08fe9ca97e055f2a3793083755168a292cf8c076539d12d",
+    "ffmpeg_release": "7.1",
+    "ffmpeg_archive_sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "ffmpeg_signature_sha256": "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617",
+    "ffmpeg_signing_key_fingerprint": "FCF986EA15E6E293A5644F10B4322F04D67658D8"
+  },
+  "dependencies": {
+    "reviewed_abi_manifest_sha256": "cefc4429df3abe09508a4f6c91ba2c749580109fab52f3f79e9db7a998b4bb76",
+    "reviewed_abi_fixture_sha256": "542a37ba2c6795d2f2b6f509d4aed211036c3d865a0083d9c3639e9219ddd7eb",
+    "symbol_binding_fixture_sha256": "76ec18127e54deff5b581046786ebd62aafa3e92a34aec45aaad114fcb0a5bd6"
+  },
+  "evidence": {
+    "data_plane_abi_manifest_sha256": "c5d4780cac865e9dd327f42f80278e6cfd4d85a94cbdd48cafbc981872b440ec",
+    "c_data_plane_verifier_sha256": "bb61bec6fa7e300f2730f1df7ad88abafabdb21f0942b5a61f9dfde3f7ffc9f6",
+    "target": "x86_64-unknown-linux-gnu",
+    "compiler": "gcc 15.2.0",
+    "compiler_command": "cc -std=c11 -Wall -Wextra -Werror -I<configured-ffmpeg-7.1-source> -c verify-data-plane-bindings.c",
+    "reviewed_prefixes": [
+      "AVFrame:size=144,align=8,through=pts",
+      "AVPacket:size=72,align=8,through=duration",
+      "AVStream:size=40,align=8,through=time_base",
+      "AVFormatContext:size=56,align=8,through=streams",
+      "AVIOContext:size=16,align=8,through=buffer"
+    ],
+    "opaque_allocation_through_ffmpeg_only": true,
+    "reviewed_symbol_count_unchanged": 54
+  },
+  "ownership": {
+    "canonical_layout_owner": "sim_runtime::native_video_codec_abi",
+    "canonical_runtime_binding_owner": "sim_runtime::native_video_codec_ffi",
+    "full_struct_allocation_from_prefix_forbidden": true,
+    "raw_public_pointer_projection_forbidden": true
+  },
+  "claims": {
+    "reviewed_prefix_layouts_and_constants": true,
+    "licensed_or_installed_ffmpeg_package": false,
+    "native_library_loaded_by_this_leaf": false,
+    "runtime_symbol_address_resolved": false,
+    "native_function_invoked": false,
+    "encoder_or_decoder_probed": false,
+    "codec_or_media_executed": false,
+    "numeric_codec_oracle": false,
+    "effect_cache_persistence_recovery_or_publication": false
+  }
+}

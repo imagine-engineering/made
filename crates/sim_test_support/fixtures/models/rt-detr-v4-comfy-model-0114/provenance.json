@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixture_id": "rt-detr-v4-sim-model-0114",
+  "feature_id": "COMFY-MODEL-0114",
+  "source_symbol": "RT_DETR_v4",
+  "source_ordinal": 85,
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "projects/sim/ComfyUI/sim/ldm/rt_detr/rtdetr_v4.py", "sha256": "2bcb7202cb77a417f822842cfbeb7acf59d618e218177e365531b067899f7a58"},
+    {"path": "projects/sim/ComfyUI/sim_extras/nodes_rtdetr.py", "sha256": "d7aa0fcf5aa244b00fc85dfa66d281db3d3aa15bc3fe1babe8d46a064cb32918"}
+  ],
+  "source_projection": "source_symbol=RT_DETR_v4\nsource_ordinal=85\ninherits=supported_models_base.BASE\nunet_config.image_model=RT_DETR_v4\narchitecture=model_base.RT_DETR_v4\ndetector=encoder.pan_blocks.1.cv4.conv.weight\ndetector.enc_h=shape[0]\nsupported_inference_dtypes=f16,f32\nmemory_usage_factor=2.0\nlatent_format=LatentFormat\nvae_key_prefix=first_stage_model.\ntext_encoder_key_prefix=cond_stage_model.\nclip_target=None\nlayouts=prefixed-native,standalone-native\ndiffusers=unsupported\nconfiguration.query_count=300\nconfiguration.feature_strides=8,16,32\n",
+  "source_projection_sha256": "35fdb721ddf496b31aea09e4a9662ea03846e9b2ebb54b404ff2618da495ad86",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

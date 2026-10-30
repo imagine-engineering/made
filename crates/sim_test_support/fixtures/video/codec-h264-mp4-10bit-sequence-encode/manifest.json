@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "fixture_id": "native-video-codec-h264-mp4-10bit-sequence-encode-v1",
+  "truth_mode": "synthetic-source-compatible-component-h264-mp4-10bit-sequence-execution",
+  "source": {
+    "comfyui_version": "0.27.1",
+    "canonical_file_count": 949,
+    "canonical_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "requirements_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "nodes_video_sha256": "db1d0d40e065a50a4b10c2780511e4a9a75482916a76c175000e58ab875da7c9",
+    "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2",
+    "observable": "VideoFromComponents ten-bit output multiplies the first three float channels by 65535, clamps and truncates to native little-endian uint16 RGB48LE, converts to YUV420P10LE, and writes source-order H.264 MP4 frames"
+  },
+  "dependencies": {
+    "eight_bit_sequence_manifest_sha256": "518dd998c558cd34b114cf2b979db589992b4792de3634864eceb90d6e1a4794",
+    "encoded_video_backing_manifest_sha256": "b3b012d64c953ccab4002b8cde8a64f573cb5574728dbdf00b98f6361d484270",
+    "reviewed_pixel_format_manifest_sha256": "b81706ef04a75af4fb3547de17f6f950b1df826b2aac4f9b2cb78df0ab0a4d6a"
+  },
+  "contract": {
+    "profile": "MP4 with the retained provider-proved libx264 descriptor, RGB48LE source, YUV420P10LE destination, checked rational frame rate and global-header policy",
+    "quantization": "multiply the first three source channels by 65535, clamp to [0,65535], truncate to U16, store each channel little-endian in packed RGB order, and discard a fourth alpha channel",
+    "batch_lifecycle": "the existing bounded retained sequence session owns increasing frame PTS, per-frame packet draining, one terminal flush, one trailer, and final-only attempt-local bytes",
+    "abi": "the supplementary FFmpeg 7.1 compiler projection reviews RGB48LE=35 and reuses the reviewed YUV420P10LE=62 with zero new symbols"
+  },
+  "claims": {
+    "reviewed_54_symbol_abi_is_unchanged": true,
+    "compiler_rust_and_json_pixel_format_constants_agree": true,
+    "source_rgb48le_quantization_alpha_discard_and_yuv420p10le_profile_are_exact_signature_tested": true,
+    "shared_sequence_rate_pts_flush_failure_cancellation_cleanup_and_retry_evidence_is_reused": true,
+    "licensed_or_installed_ffmpeg_or_libx264_package": false,
+    "production_codec_availability": false,
+    "playable_mp4_or_decoded_numeric_ten_bit_color_oracle": false,
+    "python_pyav_default_encoder_or_byte_identity": false,
+    "aac_audio_or_dual_stream_mux": false,
+    "actor_node_service_encoded_backing_trim_video_slice_save_effect_or_publication_reachable": false,
+    "complete_native_heap_interception_or_measurement": false
+  }
+}

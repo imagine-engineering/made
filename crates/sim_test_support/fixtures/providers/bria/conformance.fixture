@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.bria",
+  "source_sha256": "267c7bf3cde3d9e57242de1782ee4fcb3394b9c845d79d0f1170379545d67c4b",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0024",
+      "node_identifier": "BriaImageEditNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0025",
+      "node_identifier": "BriaRemoveImageBackground"
+    },
+    {
+      "feature_id": "COMFY-NODE-0026",
+      "node_identifier": "BriaRemoveVideoBackground"
+    },
+    {
+      "feature_id": "COMFY-NODE-0027",
+      "node_identifier": "BriaTransparentVideoBackground"
+    },
+    {
+      "feature_id": "COMFY-NODE-0028",
+      "node_identifier": "BriaVideoGreenScreen"
+    },
+    {
+      "feature_id": "COMFY-NODE-0029",
+      "node_identifier": "BriaVideoReplaceBackground"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0218",
+      "method": "POST",
+      "path": "/proxy/bria/v2/image/edit",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0014",
+      "method": "POST",
+      "path": "/proxy/bria/v2/image/edit/remove_background",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0015",
+      "method": "GET",
+      "path": "/proxy/bria/v2/status/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0016",
+      "method": "GET",
+      "path": "/proxy/bria/v2/status/{response.request_id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0017",
+      "method": "POST",
+      "path": "/proxy/bria/v2/video/edit/green_screen",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0018",
+      "method": "POST",
+      "path": "/proxy/bria/v2/video/edit/remove_background",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0019",
+      "method": "POST",
+      "path": "/proxy/bria/v2/video/edit/replace_background",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical media integration pending"
+}

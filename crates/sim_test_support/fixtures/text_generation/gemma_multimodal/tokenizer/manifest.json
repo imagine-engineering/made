@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-gemma-tokenizer-foundation",
+  "provenance_mode": "code-inferred-reduced-artifact",
+  "source_snapshot": {
+    "product": "ComfyUI",
+    "version": "0.27.1",
+    "file_count": 949,
+    "tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "files": {
+      "comfy/text_encoders/gemma4.py": "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6",
+      "comfy/text_encoders/lt.py": "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2",
+      "comfy/text_encoders/spiece_tokenizer.py": "300de9904c109171b2270524a35c372e6b8c145b88b3f9d242613d45c2bb559f"
+    }
+  },
+  "gemma3": {
+    "artifact": "test-generated bounded SentencePiece ModelProto",
+    "profile": "Gemma3SentencePiece",
+    "configuration": {
+      "bos": 2,
+      "pad": 0,
+      "eos": null,
+      "left_padding": true,
+      "image_token": 262144,
+      "end_of_turn_token": 106
+    },
+    "vectors": {
+      "hello_image_world_turn": [0, 0, 0, 2, 4, 262144, 5, 106],
+      "generated_cleanup": "hello world"
+    }
+  },
+  "gemma4": {
+    "artifact": "gemma4-tokenizer.json",
+    "profile": "Gemma4TokenizerJson",
+    "configuration": {
+      "model": "Unigram",
+      "bos": 2,
+      "pad": 0,
+      "eos": null,
+      "left_padding": true,
+      "image_token": 258880,
+      "audio_token": 258881,
+      "video_token": 258884
+    },
+    "vectors": {
+      "hello_world": [2, 4, 5, 4, 6],
+      "image": [2, 258880],
+      "raw_decode": "hello world",
+      "generated_cleanup": "<think>\nhello</think>"
+    }
+  },
+  "limits": {
+    "prompt_bytes": 1048576,
+    "artifact_bytes": 134217728,
+    "vocabulary_entries": 1000000,
+    "cancellation": "checked before parsing and throughout bounded vocabulary, token, and encode/decode loops",
+    "allocation": "fallible reserves stage all externally returned vectors"
+  },
+  "claims": {
+    "licensed_checkpoint_included": false,
+    "upstream_tokenizers_runtime_observed": false,
+    "upstream_sentencepiece_runtime_observed": false,
+    "accelerator_numeric_parity": false,
+    "external_server_required": false
+  }
+}

@@ -1,0 +1,383 @@
+#!/bin/sh
+set -eu
+
+workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+abi_manifest="$workspace/crates/sim_backend_mlu/abi/symbols-v1.json"
+licenses="$workspace/crates/sim_backend_mlu/LICENSES"
+policy="$workspace/nix/sim-backends/mlu/package-policy.json"
+contract_schema="$workspace/nix/sim-backends/mlu/ffi-contracts-v1.schema.json"
+
+usage() {
+    echo "usage: $0 OUTPUT_DIRECTORY TARGET SIGNER_ID ED25519_RECEIPT REVIEWED_FFI_CONTRACTS" >&2
+    echo "       $0 --inspect-structure PACKAGE_DIRECTORY" >&2
+    echo "       $0 --verify-sdk NEUWARE_ROOT" >&2
+    echo "       $0 --self-test" >&2
+}
+
+verify_sdk() {
+    python3 - "$1" "$abi_manifest" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+manifest = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("Neuware root must be a directory and not a symbolic link")
+for library in manifest["libraries"]:
+    header = root / library["header"]
+    metadata = header.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+        raise SystemExit(f"reviewed header must be a bounded regular file: {library['header']}")
+    contents = header.read_bytes()
+    if hashlib.sha256(contents).hexdigest() != library["header_sha256"]:
+        raise SystemExit(f"reviewed header digest mismatch: {library['header']}")
+    text = contents.decode("utf-8")
+    for symbol in library["symbols"]:
+        if re.search(r"\b" + re.escape(symbol["name"]) + r"\s*\(", text) is None:
+            raise SystemExit(f"reviewed header omits symbol declaration: {symbol['name']}")
+cnrt = (root / "include/cnrt.h").read_text(encoding="utf-8")
+ordered = [
+    "cnrtMemcpyHostToDev = 0",
+    "cnrtMemcpyDevToDev",
+    "cnrtMemcpyDevToHost",
+    "cnrtMemcpyHostToHost",
+    "cnrtMemcpyPeerToPeer",
+    "cnrtMemcpyNoDirection",
+]
+positions = [cnrt.find(row) for row in ordered]
+if any(position < 0 for position in positions) or positions != sorted(positions):
+    raise SystemExit("cnrtMemTransDir_t declaration differs from the reviewed order")
+if "cnrtRet_t cnrtMemcpy(void *dst, void *src, size_t bytes, cnrtMemTransDir_t dir);" not in cnrt:
+    raise SystemExit("cnrtMemcpy declaration differs, including source pointer constness")
+if not re.search(r"#define CNRT_MAJOR_VERSION\s+6\s+.*#define CNRT_MINOR_VERSION\s+6\s+.*#define CNRT_PATCH_VERSION\s+0", cnrt, re.S):
+    raise SystemExit("CNRT header version differs")
+cnnl = (root / "include/cnnl.h").read_text(encoding="utf-8")
+if not re.search(r"#define CNNL_MAJOR\s+1\s+.*#define CNNL_MINOR\s+20\s+.*#define CNNL_PATCHLEVEL\s+4", cnnl, re.S):
+    raise SystemExit("CNNL header version differs")
+print("MLU reviewed SDK headers verified")
+PY
+}
+
+inspect() {
+    python3 - "$1" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected = [
+    "LICENSES",
+    "abi/symbols-v1.json",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json",
+]
+
+def strict_json(path):
+    def pairs(values):
+        result = {}
+        for key, value in values:
+            if key in result:
+                raise ValueError(f"duplicate key: {key}")
+            result[key] = value
+        return result
+    raw = path.read_bytes()
+    return json.loads(raw, object_pairs_hook=pairs), raw
+
+if not root.is_dir() or root.is_symlink():
+    raise SystemExit("MLU package root must be a directory and not a symbolic link")
+actual = []
+for directory, directory_names, file_names in os.walk(root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    for directory_name in directory_names:
+        path = pathlib.Path(directory, directory_name)
+        if path.is_symlink():
+            raise SystemExit(f"MLU package directory is symbolic link: {path.relative_to(root)}")
+    for file_name in file_names:
+        path = pathlib.Path(directory, file_name)
+        relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 4 * 1024 * 1024:
+            raise SystemExit(f"MLU payload must be a bounded nonempty regular file: {relative}")
+        actual.append(relative)
+if sorted(actual) != expected:
+    raise SystemExit(f"MLU package payload differs: {sorted(actual)}")
+
+policy, _ = strict_json(root / "package-policy.json")
+if policy["allowed_payloads"] != expected or policy["required_payloads"] != expected:
+    raise SystemExit("MLU package policy payload set differs")
+if policy["redistributes_vendor_runtime"] or not policy["license_approval_required_for_vendor_runtime"]:
+    raise SystemExit("MLU vendor redistribution policy differs")
+if policy["certificate_owner"] != "sim_runtime::NativeFfiRegistry":
+    raise SystemExit("MLU certificate owner differs")
+
+manifest, manifest_raw = strict_json(root / "adapter-manifest.json")
+required_manifest = {
+    "schema_version": 1,
+    "backend": "mlu",
+    "abi_floor": "neuware-1.20-cnnl-1.20.4-cnrt-6.6.0",
+    "redistributes_vendor_runtime": False,
+    "runtime_compilation_forbidden": True,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-mlu-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+}
+for key, value in required_manifest.items():
+    if manifest.get(key) != value:
+        raise SystemExit(f"MLU adapter manifest field differs: {key}")
+if manifest.get("target") not in ("aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("MLU adapter manifest target differs")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", manifest.get("signer", "")) is None:
+    raise SystemExit("MLU adapter manifest signer differs")
+abi_raw = (root / "abi/symbols-v1.json").read_bytes()
+if manifest.get("abi_manifest_sha256") != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("MLU ABI manifest digest mismatch")
+contracts, contracts_raw = strict_json(root / "ffi-contracts-v1.json")
+if manifest.get("ffi_contracts_sha256") != hashlib.sha256(contracts_raw).hexdigest():
+    raise SystemExit("MLU FFI contract catalog digest mismatch")
+policy_raw = (root / "package-policy.json").read_bytes()
+if manifest.get("package_policy_sha256") != hashlib.sha256(policy_raw).hexdigest():
+    raise SystemExit("MLU package policy digest mismatch")
+if list(contracts) != [
+    "abi_floor",
+    "abi_manifest_sha256",
+    "backend",
+    "libraries",
+    "package_policy_sha256",
+    "schema_version",
+    "target",
+]:
+    raise SystemExit("MLU FFI contract catalog fields are not canonical")
+if contracts.get("schema_version") != 1 or contracts.get("backend") != "mlu":
+    raise SystemExit("MLU FFI contract catalog identity differs")
+if contracts.get("abi_floor") != required_manifest["abi_floor"]:
+    raise SystemExit("MLU FFI contract ABI floor differs")
+if contracts.get("target") != manifest.get("target"):
+    raise SystemExit("MLU FFI contract target differs")
+if contracts.get("abi_manifest_sha256") != hashlib.sha256(abi_raw).hexdigest():
+    raise SystemExit("MLU FFI contract ABI digest differs")
+if contracts.get("package_policy_sha256") != hashlib.sha256(policy_raw).hexdigest():
+    raise SystemExit("MLU FFI contract policy digest differs")
+libraries = contracts.get("libraries")
+if not isinstance(libraries, list) or len(libraries) != 2:
+    raise SystemExit("MLU FFI contract catalog must contain exactly two libraries")
+abi_by_id = {library["id"]: library for library in json.loads(abi_raw)["libraries"]}
+previous = None
+for row in libraries:
+    if list(row) != ["abi", "filename", "identity", "required_symbols", "sha256", "unsafe_owner"]:
+        raise SystemExit("MLU FFI contract row fields are not canonical")
+    identity = row.get("identity")
+    reviewed = abi_by_id.get(identity)
+    if reviewed is None or (previous is not None and previous >= identity):
+        raise SystemExit("MLU FFI contract identities must be reviewed, sorted, and unique")
+    previous = identity
+    expected_symbols = [symbol["name"] for symbol in reviewed["symbols"]]
+    if (
+        row.get("filename") != reviewed["filename"]
+        or re.fullmatch(r"[0-9a-f]{64}", row.get("sha256", "")) is None
+        or row.get("abi") != required_manifest["abi_floor"]
+        or row.get("required_symbols") != expected_symbols
+        or not expected_symbols
+        or row.get("unsafe_owner") != "sim_backend_mlu::loader"
+    ):
+        raise SystemExit(f"MLU FFI contract differs for {identity}")
+
+receipt, receipt_raw = strict_json(root / "adapter-manifest.sig")
+if list(receipt) != ["schema_version", "algorithm", "signature"]:
+    raise SystemExit("MLU signature receipt fields are not canonical")
+if receipt.get("schema_version") != 1 or receipt.get("algorithm") != "ed25519":
+    raise SystemExit("MLU signature receipt identity differs")
+if re.fullmatch(r"[0-9a-f]{128}", receipt.get("signature", "")) is None:
+    raise SystemExit("MLU signature must be 64-byte lowercase hexadecimal")
+canonical_receipt = json.dumps(receipt, separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+if receipt_raw != canonical_receipt:
+    raise SystemExit("MLU signature receipt is not canonical-json-v1")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+coverage_rows = []
+for relative in expected:
+    if relative in excluded:
+        continue
+    contents = (root / relative).read_bytes()
+    coverage_rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+expected_coverage = "".join(sorted(coverage_rows)).encode("ascii")
+if (root / "package-coverage.sha256").read_bytes() != expected_coverage:
+    raise SystemExit("MLU package signature coverage differs or payload was tampered")
+PY
+}
+
+build_package() {
+    output=$1
+    target=$2
+    signer=$3
+    receipt=$4
+    contracts=$5
+    python3 - "$output" "$target" "$signer" "$receipt" "$contracts" "$abi_manifest" "$licenses" "$policy" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import stat
+import sys
+
+output = pathlib.Path(sys.argv[1])
+target = sys.argv[2]
+signer = sys.argv[3]
+receipt = pathlib.Path(sys.argv[4])
+contracts_source = pathlib.Path(sys.argv[5])
+abi_source = pathlib.Path(sys.argv[6])
+licenses_source = pathlib.Path(sys.argv[7])
+policy_source = pathlib.Path(sys.argv[8])
+if target not in ("aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"):
+    raise SystemExit("MLU package target is unsupported")
+if re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", signer) is None or len(signer) > 128:
+    raise SystemExit("MLU signer ID must use the canonical authority grammar")
+if output.exists():
+    raise SystemExit("MLU package output already exists")
+metadata = receipt.lstat()
+if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0 or metadata.st_size > 1024:
+    raise SystemExit("MLU signature receipt must be a bounded regular file")
+contracts_metadata = contracts_source.lstat()
+if not stat.S_ISREG(contracts_metadata.st_mode) or contracts_metadata.st_size == 0 or contracts_metadata.st_size > 1024 * 1024:
+    raise SystemExit("MLU FFI contract catalog must be a separately reviewed bounded regular file")
+
+output.mkdir(parents=True)
+(output / "abi").mkdir()
+shutil.copyfile(abi_source, output / "abi/symbols-v1.json")
+shutil.copyfile(licenses_source, output / "LICENSES")
+shutil.copyfile(policy_source, output / "package-policy.json")
+shutil.copyfile(contracts_source, output / "ffi-contracts-v1.json")
+abi_digest = hashlib.sha256((output / "abi/symbols-v1.json").read_bytes()).hexdigest()
+contracts_digest = hashlib.sha256((output / "ffi-contracts-v1.json").read_bytes()).hexdigest()
+policy_digest = hashlib.sha256((output / "package-policy.json").read_bytes()).hexdigest()
+manifest = {
+    "schema_version": 1,
+    "backend": "mlu",
+    "abi_floor": "neuware-1.20-cnnl-1.20.4-cnrt-6.6.0",
+    "target": target,
+    "libraries": ["libcnrt.so", "libcnnl.so"],
+    "discovery_order": ["SIM_MLU_ROOT", "NEUWARE_HOME", "signed_package_roots"],
+    "abi_manifest_sha256": abi_digest,
+    "ffi_contracts_sha256": contracts_digest,
+    "package_policy_sha256": policy_digest,
+    "redistributes_vendor_runtime": False,
+    "license_approval_required_for_vendor_runtime": True,
+    "runtime_compilation_forbidden": True,
+    "signer": signer,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-mlu-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "unsafe_owner": "sim_backend_mlu::loader",
+}
+(output / "adapter-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+shutil.copyfile(receipt, output / "adapter-manifest.sig")
+
+excluded = {"adapter-manifest.sig", "package-coverage.sha256"}
+rows = []
+for path in sorted(path for path in output.rglob("*") if path.is_file()):
+    relative = path.relative_to(output).as_posix()
+    if relative in excluded:
+        continue
+    contents = path.read_bytes()
+    rows.append(f"{hashlib.sha256(contents).hexdigest()} {len(contents)}  {relative}\n")
+(output / "package-coverage.sha256").write_text("".join(sorted(rows)), encoding="ascii")
+PY
+    inspect "$output"
+}
+
+self_test() {
+    temporary=$(mktemp -d "${TMPDIR:-/tmp}/sim-mlu-package.XXXXXX")
+    trap 'rm -rf -- "$temporary"' EXIT HUP INT TERM
+    receipt="$temporary/receipt.json"
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' > "$receipt"
+    contracts="$temporary/ffi-contracts-v1.json"
+    python3 - "$abi_manifest" "$policy" "$contracts" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+abi_path = pathlib.Path(sys.argv[1])
+policy_path = pathlib.Path(sys.argv[2])
+output = pathlib.Path(sys.argv[3])
+abi_raw = abi_path.read_bytes()
+policy_raw = policy_path.read_bytes()
+abi = json.loads(abi_raw)
+digest = "0123456789abcdef" * 4
+catalog = {
+    "schema_version": 1,
+    "backend": "mlu",
+    "abi_floor": abi["abi_floor"],
+    "target": "x86_64-unknown-linux-gnu",
+    "abi_manifest_sha256": hashlib.sha256(abi_raw).hexdigest(),
+    "package_policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
+    "libraries": [
+        {
+            "identity": library["id"],
+            "filename": library["filename"],
+            "sha256": digest,
+            "abi": abi["abi_floor"],
+            "required_symbols": [symbol["name"] for symbol in library["symbols"]],
+            "unsafe_owner": "sim_backend_mlu::loader",
+        }
+        for library in abi["libraries"]
+    ],
+}
+output.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+    build_package "$temporary/package" x86_64-unknown-linux-gnu zed.test "$receipt" "$contracts"
+    cp "$temporary/package/abi/symbols-v1.json" "$temporary/original.json"
+    printf '\n' >> "$temporary/package/abi/symbols-v1.json"
+    if inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "tampered MLU package was accepted" >&2
+        exit 1
+    fi
+    cp "$temporary/original.json" "$temporary/package/abi/symbols-v1.json"
+    if cp "$temporary/package/LICENSES" "$temporary/package/libcnrt.so" && inspect "$temporary/package" >/dev/null 2>&1; then
+        echo "vendor runtime payload was accepted" >&2
+        exit 1
+    fi
+    printf '%s\n' '{"schema_version":1,"algorithm":"ed25519","signature":"AAAA"}' > "$temporary/bad-receipt.json"
+    if build_package "$temporary/bad-package" x86_64-unknown-linux-gnu zed.test "$temporary/bad-receipt.json" "$contracts" >/dev/null 2>&1; then
+        echo "malformed MLU signature receipt was accepted" >&2
+        exit 1
+    fi
+    if build_package "$temporary/wrong-target" x86_64-apple-darwin zed.test "$receipt" "$contracts" >/dev/null 2>&1; then
+        echo "unsupported MLU package target was accepted" >&2
+        exit 1
+    fi
+    echo "MLU package self-test passed"
+}
+
+case ${1:-} in
+    --inspect-structure)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        inspect "$2"
+        ;;
+    --verify-sdk)
+        [ "$#" -eq 2 ] || { usage; exit 2; }
+        verify_sdk "$2"
+        ;;
+    --self-test)
+        [ "$#" -eq 1 ] || { usage; exit 2; }
+        self_test
+        ;;
+    *)
+        [ "$#" -eq 5 ] || { usage; exit 2; }
+        build_package "$1" "$2" "$3" "$4" "$5"
+        ;;
+esac

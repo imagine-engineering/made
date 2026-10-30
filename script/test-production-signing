@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""Local signing contract tests; fixtures do not prove production signing."""
+import base64
+import hashlib
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tarfile
+import tempfile
+import unittest
+from unittest.mock import patch
+import zipfile
+
+
+def module(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    result = importlib.util.module_from_spec(spec)
+    loader.exec_module(result)
+    return result
+
+
+policy = module("signing_policy", "script/check-signing-environment")
+runtime = module("runtime_package", "script/bundle-managed-runtime")
+linux_signature = module("linux_signature", "script/sign-linux-archive")
+
+
+class SigningPolicy(unittest.TestCase):
+    def environment(self, platform):
+        values = {name: "fixture-only" for name in policy.CREDENTIALS[platform]}
+        if platform == "linux":
+            values["LINUX_SIGNING_KEY_FINGERPRINT"] = "A" * 40
+        if platform == "macos":
+            values["MACOS_SIGNING_IDENTITY"] = "Developer ID Application: Test (0123456789)"
+        if platform == "windows":
+            values.update(FILE_DIGEST="SHA256", TIMESTAMP_DIGEST="SHA256",
+                          ENDPOINT="https://eus.codesigning.azure.net/", TIMESTAMP_SERVER="http://timestamp.acs.microsoft.com")
+        return values
+
+    def test_complete_partial_empty_and_development_policy(self):
+        for platform in policy.CREDENTIALS:
+            complete = self.environment(platform)
+            self.assertTrue(policy.validate(platform, "required", complete))
+            for name in complete:
+                for empty in ("", " \t"):
+                    partial = dict(complete, **{name: empty})
+                    with self.assertRaisesRegex(ValueError, name):
+                        policy.validate(platform, "required", partial)
+                    self.assertFalse(policy.validate(platform, "auto", partial))
+            self.assertFalse(policy.validate(platform, "off", complete))
+            self.assertFalse(policy.validate(platform, "auto", {}))
+            with self.assertRaisesRegex(ValueError, "conflicts"):
+                policy.validate(platform, "required", dict(complete, ZED_DISABLE_SIGNING="1"))
+
+    def test_production_parameters_are_not_silently_downgraded(self):
+        for platform, name, value in (("macos", "MACOS_SIGNING_IDENTITY", "-"),
+                                      ("windows", "FILE_DIGEST", "SHA1"),
+                                      ("windows", "TIMESTAMP_SERVER", "http://invalid.example"),
+                                      ("windows", "ENDPOINT", "https://invalid.example"),
+                                      ("windows", "ENDPOINT", "https://invalid.example/.codesigning.azure.net"),
+                                      ("windows", "ENDPOINT", "https://eus.codesigning.azure.net@invalid.example/.codesigning.azure.net"),
+                                      ("windows", "ENDPOINT", "https://eus.codesigning.azure.net:443/")):
+            with self.assertRaises(ValueError):
+                policy.validate(platform, "required", dict(self.environment(platform), **{name: value}))
+
+    def test_cli_does_not_echo_secret_values(self):
+        result = subprocess.run(("python3", "script/check-signing-environment", "--platform", "macos", "--policy", "required"),
+                                env={"PATH": os.environ["PATH"], "MACOS_CERTIFICATE": "PRIVATE_FIXTURE_DO_NOT_ECHO"}, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(b"PRIVATE_FIXTURE_DO_NOT_ECHO", result.stdout + result.stderr)
+
+    def test_linux_signature_status_rejects_wrong_key_digest_and_revocation(self):
+        fingerprint = "A" * 40
+        valid = f"[GNUPG:] VALIDSIG {fingerprint} 2026-10-30 1793318400 0 4 0 22 8 00 {fingerprint}"
+        linux_signature.verify_fingerprint(valid, fingerprint)
+        for invalid in (valid.replace("22 8", "22 2"), valid + "\n[GNUPG:] REVKEYSIG " + fingerprint,
+                        valid + "\n[GNUPG:] KEYEXPIRED 1", "[GNUPG:] BADSIG " + fingerprint,
+                        valid.replace(fingerprint, "B" * 40)):
+            with self.assertRaises(ValueError):
+                linux_signature.verify_fingerprint(invalid, fingerprint)
+
+    def test_mac_cleanup_after_import_failure_without_default_keychain_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            security = root / "security"
+            security.write_text('''#!/bin/bash
+case "$1" in
+create-keychain) touch "${@: -1}" ;;
+import) exit 37 ;;
+delete-keychain) rm "$2"; echo deleted > "$SIGNING_TEST_ROOT/deleted" ;;
+default-keychain|list-keychains) exit 99 ;;
+esac
+''')
+            security.chmod(0o755)
+            environment = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"], TMPDIR=str(root),
+                               SIGNING_TEST_ROOT=str(root), MACOS_CERTIFICATE="Zml4dHVyZQ==", MACOS_CERTIFICATE_PASSWORD="fixture",
+                               APPLE_NOTARIZATION_KEY="fixture")
+            result = subprocess.run(("bash", "-c", "set -euo pipefail; source script/lib/macos-signing.sh; IDENTITY=fixture; setup_production_signing"),
+                                    env=environment, capture_output=True)
+            self.assertEqual(result.returncode, 37, result.stderr)
+            self.assertTrue((root / "deleted").is_file())
+            self.assertFalse(list(root.glob("copper-signing.*")))
+
+
+@unittest.skipUnless(shutil.which("gpg") and shutil.which("gpgconf"), "GnuPG is unavailable on this host; real Linux CI is required")
+class LinuxSignature(unittest.TestCase):
+    def test_real_fixture_key_signs_archive_and_rejects_tampering(self):
+        with tempfile.TemporaryDirectory(prefix="copper-gpg-fixture-") as directory:
+            home = Path(directory) / "key-home"
+            home.mkdir(mode=0o700)
+            environment = dict(os.environ, GNUPGHOME=str(home))
+            def gpg(*arguments, data=None):
+                return subprocess.run(("gpg", "--batch", "--no-tty", *arguments), env=environment,
+                                      input=data, capture_output=True, check=True).stdout
+            try:
+                gpg("--pinentry-mode", "loopback", "--passphrase-fd", "0", "--quick-generate-key",
+                    "Copper fixture <fixture@example.invalid>", "ed25519", "sign", "1d", data=b"fixture-only\n")
+                fields = gpg("--with-colons", "--list-secret-keys").decode().splitlines()
+                fingerprint = next(line.split(":")[9] for line in fields if line.startswith("fpr:"))
+                private = gpg("--pinentry-mode", "loopback", "--passphrase-fd", "0", "--armor", "--export-secret-keys",
+                              fingerprint, data=b"fixture-only\n")
+                archive = Path(directory) / "fixture.tar.gz"
+                archive.write_bytes(b"archive fixture")
+                signing_environment = dict(environment, LINUX_SIGNING_KEY=base64.b64encode(private).decode(),
+                                           LINUX_SIGNING_KEY_PASSWORD="fixture-only", LINUX_SIGNING_KEY_FINGERPRINT=fingerprint)
+                result = subprocess.run(("python3", "script/sign-linux-archive", str(archive)),
+                                        env=signing_environment, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                signature = str(archive) + ".asc"
+                self.assertIn(b"BEGIN PGP PUBLIC KEY BLOCK", Path(str(archive) + ".pub").read_bytes())
+                self.assertNotIn(b"PRIVATE KEY BLOCK", Path(str(archive) + ".pub").read_bytes())
+                gpg("--verify", signature, str(archive))
+                verify_environment = {"PATH": os.environ["PATH"], "LINUX_SIGNING_KEY_FINGERPRINT": fingerprint}
+                verified = subprocess.run(("python3", "script/sign-linux-archive", "--verify-only", str(archive)),
+                                          env=verify_environment, capture_output=True)
+                self.assertEqual(verified.returncode, 0, verified.stderr)
+                archive.write_bytes(b"tampered")
+                with self.assertRaises(subprocess.CalledProcessError):
+                    gpg("--verify", signature, str(archive))
+                rejected = subprocess.run(("python3", "script/sign-linux-archive", "--verify-only", str(archive)),
+                                          env=verify_environment, capture_output=True)
+                self.assertNotEqual(rejected.returncode, 0)
+            finally:
+                subprocess.run(("gpgconf", "--homedir", str(home), "--kill", "gpg-agent"), check=True, capture_output=True)
+
+
+class RuntimePackage(unittest.TestCase):
+    def test_pinned_archive_and_receipt_without_network_or_weights(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / "cache"
+            cache.mkdir()
+            archive = cache / "llama-fixture.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("runtime/llama-server.exe", b"runtime fixture")
+            asset = {"platform": "windows-x86_64", "name": archive.name,
+                     "url": "https://github.com/ggml-org/llama.cpp/releases/download/fixture/" + archive.name,
+                     "bytes": archive.stat().st_size, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
+            catalog = {"runtime_version": "fixture", "runtime_revision": "abc", "runtime_assets": [asset]}
+            destination = root / "package/llama-cpp"
+            with patch("urllib.request.urlopen", side_effect=AssertionError("Unexpected network")):
+                runtime.stage(catalog, "windows-x86_64", destination, cache)
+            receipt = json.loads((destination / ".copper-bundled-runtime.json").read_text())
+            self.assertEqual(receipt["assets"]["windows-x86_64"], asset["sha256"])
+            self.assertEqual((destination / "windows-x86_64/runtime/llama-server.exe").read_bytes(), b"runtime fixture")
+            self.assertFalse(list(destination.rglob("*.gguf")))
+            (destination / ".copper-bundled-runtime.json").unlink()
+            with self.assertRaisesRegex(ValueError, "not owned"):
+                runtime.stage(catalog, "windows-x86_64", destination, cache)
+
+    def test_archive_path_escape_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "invalid.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("../escape", b"no")
+            asset = {"platform": "windows-x86_64", "name": archive.name,
+                     "url": "https://github.com/ggml-org/llama.cpp/releases/download/fixture/invalid.zip",
+                     "bytes": archive.stat().st_size, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
+            with self.assertRaisesRegex(ValueError, "Unsafe"):
+                runtime.stage({"runtime_version": "fixture", "runtime_assets": [asset]}, "windows-x86_64", root / "package", root)
+            self.assertFalse((root / "escape").exists())
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

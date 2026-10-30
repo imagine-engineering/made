@@ -1,0 +1,5 @@
+[workspace]
+resolver = "2"
+
+[profile]
+broken = "not a profile table"

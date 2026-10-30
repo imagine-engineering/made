@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-text-sim-node-0002",
+  "feature_ids": [
+    "COMFY-NODE-0002",
+    "COMFY-NODE-0003",
+    "COMFY-NODE-0030",
+    "COMFY-NODE-0046",
+    "COMFY-NODE-0110",
+    "COMFY-NODE-0111",
+    "COMFY-NODE-0276",
+    "COMFY-NODE-0407",
+    "COMFY-NODE-0529",
+    "COMFY-NODE-0530"
+  ],
+  "sources": [
+    {
+      "catalog_path": "sim_extras/nodes_dataset.py",
+      "oracle_path": "ComfyUI/sim_extras/nodes_dataset.py",
+      "sha256": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+      "byte_length": 59648,
+      "base_class_line": 525,
+      "class_lines": {
+        "AddTextPrefix": 984,
+        "AddTextSuffix": 999,
+        "MergeTextLists": 1216
+      }
+    },
+    {
+      "catalog_path": "sim_extras/nodes_json_prompt.py",
+      "oracle_path": "ComfyUI/sim_extras/nodes_json_prompt.py",
+      "sha256": "4808ede6ef04967dcc287fdaacfdb269a86561c15ef633842b73a37263e3503f",
+      "byte_length": 3909,
+      "class_lines": {
+        "BuildJsonPromptIdeogram": 7
+      }
+    },
+    {
+      "catalog_path": "sim_extras/nodes_string.py",
+      "oracle_path": "ComfyUI/sim_extras/nodes_string.py",
+      "sha256": "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1",
+      "byte_length": 17166,
+      "class_lines": {
+        "CaseConverter": 106,
+        "RegexMatch": 257,
+        "RegexExtract": 298,
+        "JsonExtractString": 410,
+        "ConvertDictionaryToString": 448,
+        "ConvertArrayToString": 471
+      }
+    }
+  ],
+  "behavior": {
+    "effect": "pure",
+    "cache": "input_identity",
+    "list_nodes": {
+      "MergeTextLists": {
+        "input_is_list": true,
+        "output_is_list": true,
+        "operation": "identity_concatenated_text_list"
+      }
+    },
+    "regex": {
+      "engine_owner": "sim_nodes::text_regex::NativeTextRegex",
+      "invalid_pattern": {
+        "RegexMatch": false,
+        "RegexExtract": ""
+      },
+      "join_delimiter": "\n",
+      "all_matches_tuple_projection": 0,
+      "bounded_backtracking": "failure",
+      "cancellation": "execution_interrupted"
+    },
+    "json": {
+      "ensure_ascii": false,
+      "compact_indent_input": 0,
+      "maximum_indent_input": 8,
+      "missing_or_null_key": ""
+    },
+    "invalid_inputs": [
+      "missing_input",
+      "extra_input",
+      "wrong_type",
+      "wrong_cardinality",
+      "indent_out_of_range",
+      "group_index_out_of_range",
+      "oversized_regex_pattern",
+      "oversized_regex_input"
+    ],
+    "persistence": "class_type_and_multiline_unicode_primitive_strings_round_trip",
+    "recovery": "a_failed_or_cancelled_execution_does_not_poison_a_fresh_execution"
+  }
+}

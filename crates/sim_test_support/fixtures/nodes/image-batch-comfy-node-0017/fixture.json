@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "stable_task_id": "sim-parity-native-nodes-image-batch-sim-node-0017",
+  "sources": {
+    "sim_extras/nodes_post_processing.py": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
+    "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
+    "sim_extras/nodes_dataset.py": "3b27465fec391509083bd1837895c09abc489c04d81afae5ffe631abd6a4e772",
+    "sim_extras/nodes_images.py": "a57638bf58f93698b8b5ed44e53d31ac3d4ac608cc5c49d38c3768fdf722e448",
+    "sim_extras/nodes_rebatch.py": "2ebbc41c60057a5efd38ac4b62b7d3a280bfe6f61846ccc53d1f36066ee8d70e"
+  },
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0017",
+      "class_type": "BatchImagesNode",
+      "source": "sim_extras/nodes_post_processing.py:514-535,568-588",
+      "input_cardinality": "dynamic image{index}, 1 through 50",
+      "output_cardinality": "scalar",
+      "case": {
+        "input_shapes": [[1, 1, 1, 3], [1, 1, 1, 4]],
+        "input_values": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6, 0.7]],
+        "output_shape": [2, 1, 1, 4],
+        "output_values": [0.1, 0.2, 0.3, 1.0, 0.4, 0.5, 0.6, 0.7]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0241",
+      "class_type": "ImageBatch",
+      "source": "nodes.py:1935-1957",
+      "input_cardinality": "two scalars",
+      "output_cardinality": "scalar",
+      "compatibility": "deprecated",
+      "equation": "pad one missing alpha channel with 1.0, resize image2 to image1 with center-cropped bilinear, concatenate batch axis"
+    },
+    {
+      "feature_id": "COMFY-NODE-0249",
+      "class_type": "ImageDeduplication",
+      "source": "sim_extras/nodes_dataset.py:1045-1115",
+      "input_cardinality": "list",
+      "output_cardinality": "list",
+      "equation": "flatten batches, source-quantize, Pillow Lanczos resize to 8x8, convert to L, average hash, keep the first hash below the similarity threshold"
+    },
+    {
+      "feature_id": "COMFY-NODE-0251",
+      "class_type": "ImageFromBatch",
+      "source": "sim_extras/nodes_images.py:136-162",
+      "input_cardinality": "scalar",
+      "output_cardinality": "scalar",
+      "case": {
+        "input_shape": [2, 1, 1, 3],
+        "batch_index": -1,
+        "length": 4,
+        "output_shape": [1, 1, 1, 3]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0252",
+      "class_type": "ImageGrid",
+      "source": "sim_extras/nodes_dataset.py:1118-1193",
+      "input_cardinality": "list",
+      "output_cardinality": "scalar",
+      "case": {
+        "image_count": 2,
+        "columns": 2,
+        "cell": [32, 32],
+        "padding": 0,
+        "output_shape": [1, 32, 64, 3]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0255",
+      "class_type": "ImageMergeTileList",
+      "source": "sim_extras/nodes_images.py:766-840",
+      "input_cardinality": "list",
+      "output_cardinality": "scalar",
+      "equation": "source row-major grid coordinates and sine-feathered weighted average with zero weights replaced by 1.0"
+    },
+    {
+      "feature_id": "COMFY-NODE-0405",
+      "class_type": "MergeImageLists",
+      "source": "sim_extras/nodes_dataset.py:1196-1213",
+      "input_cardinality": "list",
+      "output_cardinality": "list",
+      "equation": "flatten every input batch in connection order"
+    },
+    {
+      "feature_id": "COMFY-NODE-0506",
+      "class_type": "RebatchImages",
+      "source": "sim_extras/nodes_rebatch.py:101-132",
+      "input_cardinality": "list",
+      "output_cardinality": "list",
+      "case": {
+        "input_batch_sizes": [1, 1],
+        "batch_size": 2,
+        "output_batch_sizes": [2]
+      }
+    },
+    {
+      "feature_id": "COMFY-NODE-0535",
+      "class_type": "RepeatImageBatch",
+      "source": "sim_extras/nodes_images.py:113-133",
+      "input_cardinality": "scalar",
+      "output_cardinality": "scalar",
+      "equation": "repeat the complete source batch amount times"
+    },
+    {
+      "feature_id": "COMFY-NODE-0620",
+      "class_type": "ShuffleDataset",
+      "source": "sim_extras/nodes_dataset.py:872-889",
+      "input_cardinality": "list",
+      "output_cardinality": "list",
+      "rng_phase": "training-and-data-order",
+      "seed_modulus": 4294967295,
+      "case": {
+        "seed": 7,
+        "length": 10,
+        "permutation": [8, 5, 0, 2, 1, 9, 7, 3, 6, 4]
+      }
+    }
+  ],
+  "failure_contract": {
+    "invalid_input": "invalid_node_inputs",
+    "missing_handle": "invalid_image_handle",
+    "cancellation": "execution_interrupted with no partially published handles",
+    "cache": "input identity plus implementation version and the shuffle RNG phase",
+    "persistence": "pure outputs persist only through the native handle store and workflow class_type compatibility",
+    "recovery": "a fresh execution deterministically recomputes after validation failure or cancellation"
+  },
+  "platform_scope": {
+    "certified": ["CPU F32 BHWC"],
+    "uncertified": ["Apple Metal", "CUDA", "ROCm", "DirectML", "XPU", "NPU", "MLU"]
+  }
+}

@@ -1,0 +1,1 @@
+DROP TABLE public.collaboration_identity_bindings;

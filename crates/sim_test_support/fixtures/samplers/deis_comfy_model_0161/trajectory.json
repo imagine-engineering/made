@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "identity": "deis",
+  "feature_id": "COMFY-MODEL-0161",
+  "source_ordinal": 29,
+  "source": {
+    "coefficient_path": "projects/comfy/ComfyUI/comfy/k_diffusion/deis.py",
+    "coefficient_sha256": "8d4e5057a062b77ef2e33af8208a2d6a3c3fbb431315a4c37689a307d66bc807",
+    "sampler_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
+    "sampler_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",
+    "catalog_sha256": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4"
+  },
+  "mode": "tab",
+  "max_order": 3,
+  "tabulation_points": 10000,
+  "tolerance": 0.0002,
+  "sigmas": [4.0, 2.0, 1.0, 0.5, 0.0],
+  "noise": [],
+  "initial": [1.25, -0.75],
+  "denoiser_outputs": [
+    [0.4, -0.2],
+    [0.1, 0.3],
+    [-0.5, 0.7],
+    [0.2, -0.1]
+  ],
+  "derivatives": [
+    [0.2125, -0.1375],
+    [0.3625, -0.3875],
+    [0.8920966, -0.6701622],
+    [-0.82792205, 1.0458856]
+  ],
+  "coefficients": [
+    [],
+    [-1.4693483, 0.4693428],
+    [-0.84776413, 0.5088684, -0.16110551],
+    []
+  ],
+  "latents": [
+    [1.25, -0.75],
+    [0.825, -0.475],
+    [0.3920966, 0.029837815],
+    [-0.21396102, 0.4229428],
+    [0.2, -0.1]
+  ],
+  "callbacks": [
+    {"step": 0, "sigma": 4.0, "next_sigma": 2.0, "current": [1.25, -0.75], "denoised": [0.4, -0.2]},
+    {"step": 1, "sigma": 2.0, "next_sigma": 1.0, "current": [1.25, -0.75], "denoised": [0.1, 0.3]},
+    {"step": 2, "sigma": 1.0, "next_sigma": 0.5, "current": [1.25, -0.75], "denoised": [-0.5, 0.7]},
+    {"step": 3, "sigma": 0.5, "next_sigma": 0.0, "current": [1.25, -0.75], "denoised": [0.2, -0.1]}
+  ]
+}

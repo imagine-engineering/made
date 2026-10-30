@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "backend": "xpu",
+  "allowed_payloads": [
+    "LICENSES",
+    "abi/reviewed-execution-bindings-v1.txt",
+    "abi/symbols-v1.json",
+    "abi/verify-execution-bindings.c",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json"
+  ],
+  "required_payloads": [
+    "LICENSES",
+    "abi/reviewed-execution-bindings-v1.txt",
+    "abi/symbols-v1.json",
+    "abi/verify-execution-bindings.c",
+    "adapter-manifest.json",
+    "adapter-manifest.sig",
+    "ffi-contracts-v1.json",
+    "package-coverage.sha256",
+    "package-policy.json"
+  ],
+  "forbidden_payloads": ["*.so", "*.so.*", "*.dll", "*.lib", "*.a", "*.h", "*.hpp", "*.spv", "*.bin"],
+  "maximum_file_bytes": 4194304,
+  "signature_algorithm": "ed25519",
+  "signature_domain": "zed-sim-xpu-package-v1",
+  "signature_coverage_excludes": ["adapter-manifest.sig", "package-coverage.sha256"],
+  "redistributes_vendor_runtime": false,
+  "license_approval_required_for_vendor_runtime": true,
+  "runtime_compilation_forbidden": true,
+  "reviewed_execution_bindings_sha256": "ff27906b695ef070edce6b3e59c3144cfd15236c1cc221b046efb21d23eafea4",
+  "execution_verifier_sha256": "20b74364275542126bca7451b28eb6f114c559b7083c9b0df19cc8c9c23b7e4f",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "structural_receipt_is_authorization": false
+}

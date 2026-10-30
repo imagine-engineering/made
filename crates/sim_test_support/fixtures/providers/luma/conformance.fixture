@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.luma",
+  "source_sha256": "6faf168ba42691705caef3e03f4894cc8e4b95dfac63ac9fedbe5f08fe083a36",
+  "aliases": [
+    "luma_2"
+  ],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0376",
+      "node_identifier": "LumaConceptsNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0377",
+      "node_identifier": "LumaImageEditNode2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0378",
+      "node_identifier": "LumaImageModifyNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0379",
+      "node_identifier": "LumaImageNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0380",
+      "node_identifier": "LumaImageNode2"
+    },
+    {
+      "feature_id": "COMFY-NODE-0381",
+      "node_identifier": "LumaImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0382",
+      "node_identifier": "LumaRay32ExtendVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0383",
+      "node_identifier": "LumaRay32ImageToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0384",
+      "node_identifier": "LumaRay32KeyframeNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0385",
+      "node_identifier": "LumaRay32KeyframesToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0386",
+      "node_identifier": "LumaRay32TextToVideoNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0387",
+      "node_identifier": "LumaRay32VideoEditNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0388",
+      "node_identifier": "LumaRay32VideoReframeNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0389",
+      "node_identifier": "LumaReferenceNode"
+    },
+    {
+      "feature_id": "COMFY-NODE-0390",
+      "node_identifier": "LumaVideoNode"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0092",
+      "method": "POST",
+      "path": "/proxy/luma/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0093",
+      "method": "GET",
+      "path": "/proxy/luma/generations/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0094",
+      "method": "POST",
+      "path": "/proxy/luma/generations/image",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0095",
+      "method": "GET",
+      "path": "/proxy/luma/generations/{response_api.id}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0096",
+      "method": "POST",
+      "path": "/proxy/luma_2/generations",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0097",
+      "method": "GET",
+      "path": "/proxy/luma_2/generations/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0098",
+      "method": "GET",
+      "path": "/proxy/luma_2/generations/{initial.id}",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical native media and guest integration pending",
+  "source_generation_id_admission": "python_strip_before_direction_lookup_preserving_prompt_and_interior_bytes"
+}

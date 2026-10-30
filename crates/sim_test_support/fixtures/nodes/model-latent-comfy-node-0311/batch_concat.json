@@ -1,0 +1,164 @@
+{
+  "source_sha256": "cda1a84ae9e0f33db7395b05e813dc3ec592fbe61ab1af44dda72af1486ff961",
+  "utils_sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+  "cases": [
+    {
+      "class_type": "LatentBatch",
+      "first_shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "second_shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "first_batch_index": null,
+      "second_batch_index": [
+        9
+      ],
+      "dim": null,
+      "expected_shape": [
+        3,
+        4,
+        8,
+        8
+      ],
+      "expected_batch_index": [
+        0,
+        1,
+        9
+      ],
+      "retained_extra": "first"
+    },
+    {
+      "class_type": "LatentBatch",
+      "first_shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "second_shape": [
+        3,
+        4,
+        6,
+        6
+      ],
+      "first_batch_index": [
+        5,
+        6
+      ],
+      "second_batch_index": null,
+      "dim": null,
+      "expected_shape": [
+        5,
+        4,
+        8,
+        8
+      ],
+      "expected_batch_index": [
+        5,
+        6,
+        0,
+        1,
+        2
+      ],
+      "retained_extra": "first"
+    },
+    {
+      "class_type": "LatentBatch",
+      "first_shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "second_shape": [
+        1,
+        4,
+        8,
+        8
+      ],
+      "first_batch_index": [
+        7,
+        8
+      ],
+      "second_batch_index": null,
+      "dim": null,
+      "expected_shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "expected_batch_index": [
+        7,
+        8,
+        0
+      ],
+      "retained_extra": "first"
+    },
+    {
+      "class_type": "LatentConcat",
+      "first_shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "second_shape": [
+        1,
+        4,
+        8,
+        2
+      ],
+      "first_batch_index": [
+        5,
+        6
+      ],
+      "second_batch_index": null,
+      "dim": "x",
+      "expected_shape": [
+        2,
+        4,
+        8,
+        10
+      ],
+      "expected_batch_index": [
+        5,
+        6
+      ],
+      "retained_extra": "first"
+    },
+    {
+      "class_type": "LatentConcat",
+      "first_shape": [
+        2,
+        4,
+        8,
+        8
+      ],
+      "second_shape": [
+        1,
+        4,
+        3,
+        8
+      ],
+      "first_batch_index": null,
+      "second_batch_index": null,
+      "dim": "-y",
+      "expected_shape": [
+        2,
+        4,
+        11,
+        8
+      ],
+      "expected_batch_index": null,
+      "retained_extra": "first"
+    }
+  ]
+}

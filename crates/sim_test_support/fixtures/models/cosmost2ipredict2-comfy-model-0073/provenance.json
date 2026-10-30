@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixture_id": "cosmost2ipredict2-sim-model-0073",
+  "feature_id": "COMFY-MODEL-0073",
+  "source_symbol": "CosmosT2IPredict2",
+  "source_ordinal": 43,
+  "source_architecture": "model_base.CosmosPredict2",
+  "latent_feature_id": "COMFY-MODEL-0053",
+  "latent_identifier": "Wan21",
+  "catalog_projection_sha256": "b6be3927f0ac495a02caf635df8b77d4cfa3d2f1df990dc21149c7034deca1a1",
+  "source_files": [
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/supported_models_base.py",
+      "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/ldm/cosmos/predict2.py",
+      "sha256": "9926cfb198113ef33a3c3d256e7687d80a7e7993f8638ec1471aae801dc3f45b"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/cosmos.py",
+      "sha256": "98c09ef00e0b0953bfae891ca2df97c3d70fdbfbacb1165168fe74eaff230524"
+    },
+    {
+      "path": "projects/sim/ComfyUI/sim/text_encoders/sd3_clip.py",
+      "sha256": "61bde2b4a428779469a01f342a9195d115f2a207c7a3d2c0d6c0a5715fdc03ed"
+    }
+  ],
+  "source_projection": "source_symbol=CosmosT2IPredict2\nsource_ordinal=43\ninheritance=CosmosT2IPredict2,supported_models_base.BASE\nunet_config.image_model=cosmos_predict2\nunet_config.in_channels=16\nsampling_settings.sigma_data=1.0\nsampling_settings.sigma_max=80.0\nsampling_settings.sigma_min=0.002\nlatent_format=sim.latent_formats.Wan21\ndeclared_memory_usage_factor=1.0\nresolved_memory_usage_factor=(model_channels/2048)*0.95\nsupported_inference_dtypes=bf16,f16,f32\narchitecture=model_base.CosmosPredict2\nclip_tokenizer=sim.text_encoders.cosmos.CosmosT5Tokenizer\nclip_model=sim.text_encoders.cosmos.te\nclip_configuration=sim.text_encoders.sd3_clip.t5_xxl_detect(cond_stage_model.t5xxl.transformer.)\nvae_key_prefix=first_stage_model.\ntext_encoder_key_prefix=cond_stage_model.\nunet_key_prefix=net.\nstate_dict_transform=identity\n",
+  "source_projection_sha256": "65f6d887d450ede7c347be0d9ab2837ef8e2e8d6d5959af956fefc8657878c36",
+  "alternate_layout": "none; the pinned source has no Cosmos Predict2 diffusers converter and its detector selects the native net. prefix",
+  "oracle": "shape-reduced deterministic native Rust projection of the pinned ComfyUI CosmosT2IPredict2 sources; no production Python dependency"
+}

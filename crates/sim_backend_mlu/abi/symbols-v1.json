@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "backend": "mlu",
+  "abi_floor": "neuware-1.20-cnnl-1.20.4-cnrt-6.6.0",
+  "targets": ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"],
+  "discovery_order": ["SIM_MLU_ROOT", "NEUWARE_HOME", "signed_package_roots"],
+  "libraries": [
+    {
+      "id": "cnnl",
+      "filename": "libcnnl.so",
+      "header": "include/cnnl.h",
+      "header_sha256": "69eaa4fa560fa02e1e636a0d19917244a2badd94a960721e57fa36059f6fa031",
+      "package": "cnnl_1.20.4-1.ubuntu20.04_amd64.deb",
+      "package_sha256": "8874376ecdb81fb555d523197c922baace34d5a6abe567b68e1e74254f2b11e8",
+      "symbols": [
+        {"name":"cnnlCreate","signature":"cnnlStatus_t(cnnlHandle_t*)"},
+        {"name":"cnnlCreateOpTensorDescriptor","signature":"cnnlStatus_t(cnnlOpTensorDescriptor_t*)"},
+        {"name":"cnnlCreateTensorDescriptor","signature":"cnnlStatus_t(cnnlTensorDescriptor_t*)"},
+        {"name":"cnnlDestroy","signature":"cnnlStatus_t(cnnlHandle_t)"},
+        {"name":"cnnlDestroyOpTensorDescriptor","signature":"cnnlStatus_t(cnnlOpTensorDescriptor_t)"},
+        {"name":"cnnlDestroyTensorDescriptor","signature":"cnnlStatus_t(cnnlTensorDescriptor_t)"},
+        {"name":"cnnlGetLibVersion","signature":"void(int*,int*,int*)"},
+        {"name":"cnnlOpTensor","signature":"cnnlStatus_t(cnnlHandle_t,const cnnlOpTensorDescriptor_t,const void*,const cnnlTensorDescriptor_t,const void*,const void*,const cnnlTensorDescriptor_t,const void*,void*,size_t,const void*,const cnnlTensorDescriptor_t,void*)"},
+        {"name":"cnnlSetOpTensorDescriptor","signature":"cnnlStatus_t(cnnlOpTensorDescriptor_t,cnnlOpTensorDesc_t,cnnlDataType_t,cnnlNanPropagation_t)"},
+        {"name":"cnnlSetQueue","signature":"cnnlStatus_t(cnnlHandle_t,cnrtQueue_t)"},
+        {"name":"cnnlSetTensorDescriptor","signature":"cnnlStatus_t(cnnlTensorDescriptor_t,cnnlTensorLayout_t,cnnlDataType_t,int,const int[])"}
+      ]
+    },
+    {
+      "id": "cnrt",
+      "filename": "libcnrt.so",
+      "header": "include/cnrt.h",
+      "header_sha256": "0c8ca727c2db85c60f69cf8cd96157ee1d547b175ddeaf45c0e94108f794a8f2",
+      "package": "cnrt_6.6.0-1.ubuntu20.04_amd64.deb",
+      "package_sha256": "70e23ae6197f68f9c0440db985f7a20dc174837b4190ba6c70d70117e3d8fb51",
+      "symbols": [
+        {"name":"cnrtFree","signature":"cnrtRet_t(void*)"},
+        {"name":"cnrtGetDeviceCount","signature":"cnrtRet_t(unsigned int*)"},
+        {"name":"cnrtGetLibVersion","signature":"cnrtRet_t(int*,int*,int*)"},
+        {"name":"cnrtMalloc","signature":"cnrtRet_t(void**,size_t)"},
+        {"name":"cnrtMemcpy","signature":"cnrtRet_t(void*,void*,size_t,cnrtMemTransDir_t)"},
+        {"name":"cnrtQueueCreate","signature":"cnrtRet_t(cnrtQueue_t*)"},
+        {"name":"cnrtQueueDestroy","signature":"cnrtRet_t(cnrtQueue_t)"},
+        {"name":"cnrtQueueSync","signature":"cnrtRet_t(cnrtQueue_t)"},
+        {"name":"cnrtSetDevice","signature":"cnrtRet_t(int)"}
+      ]
+    }
+  ],
+  "reviewed_enums": [
+    {
+      "name": "cnrtMemTransDir_t",
+      "header": "include/cnrt.h",
+      "normalized_declaration": "typedef enum { cnrtMemcpyHostToDev = 0, cnrtMemcpyDevToDev, cnrtMemcpyDevToHost, cnrtMemcpyHostToHost, cnrtMemcpyPeerToPeer, cnrtMemcpyNoDirection } cnrtMemTransDir_t;",
+      "variants": [
+        {"name":"cnrtMemcpyHostToDev","value":0},
+        {"name":"cnrtMemcpyDevToDev","value":1},
+        {"name":"cnrtMemcpyDevToHost","value":2},
+        {"name":"cnrtMemcpyHostToHost","value":3},
+        {"name":"cnrtMemcpyPeerToPeer","value":4},
+        {"name":"cnrtMemcpyNoDirection","value":5}
+      ]
+    }
+  ],
+  "reviewed_enum_values": [
+    {"type_name":"cnrtRet_t","name":"cnrtSuccess","value":0},
+    {"type_name":"cnrtRet_t","name":"cnrtErrorNoDevice","value":100004},
+    {"type_name":"cnrtRet_t","name":"cnrtErrorNoMem","value":100100},
+    {"type_name":"cnnlStatus_t","name":"CNNL_STATUS_SUCCESS","value":0},
+    {"type_name":"cnnlStatus_t","name":"CNNL_STATUS_ALLOC_FAILED","value":2},
+    {"type_name":"cnnlTensorLayout_t","name":"CNNL_LAYOUT_ARRAY","value":4},
+    {"type_name":"cnnlDataType_t","name":"CNNL_DTYPE_HALF","value":1},
+    {"type_name":"cnnlDataType_t","name":"CNNL_DTYPE_FLOAT","value":2},
+    {"type_name":"cnnlOpTensorDesc_t","name":"CNNL_OP_TENSOR_ADD","value":0},
+    {"type_name":"cnnlNanPropagation_t","name":"CNNL_PROPAGATE_NAN","value":1}
+  ],
+  "layouts": [
+    {"name":"cnnlHandle_t","size":8,"align":8},
+    {"name":"cnnlOpTensorDescriptor_t","size":8,"align":8},
+    {"name":"cnnlStatus_t","size":4,"align":4},
+    {"name":"cnnlTensorDescriptor_t","size":8,"align":8},
+    {"name":"cnrtMemTransDir_t","size":4,"align":4},
+    {"name":"cnrtNotifier_t","size":8,"align":8},
+    {"name":"cnrtQueue_t","size":8,"align":8},
+    {"name":"cnrtRet_t","size":4,"align":4}
+  ],
+  "unsafe_owner": "sim_backend_mlu::loader",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "package_policy": {
+    "redistribute_vendor_runtime": false,
+    "license_approval_required": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-mlu-package-v1",
+    "runtime_compilation_forbidden": true
+  }
+}

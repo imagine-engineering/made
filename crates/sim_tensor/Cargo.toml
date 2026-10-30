@@ -1,0 +1,54 @@
+[package]
+name = "sim_tensor"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "GPL-3.0-or-later"
+build = "build.rs"
+[lints]
+workspace = true
+[lib]
+path = "src/sim_tensor.rs"
+[features]
+default = ["cpu"]
+cpu = []
+cuda = ["cpu", "dep:sim_backend_cuda"]
+rocm = ["cpu", "dep:sim_backend_rocm"]
+metal = ["cpu", "dep:sim_backend_metal"]
+directml = ["cpu", "dep:sim_backend_directml"]
+xpu = ["cpu", "dep:sim_backend_xpu"]
+npu = ["cpu", "dep:sim_backend_npu"]
+mlu = ["cpu", "dep:sim_backend_mlu"]
+corex = ["cpu", "dep:sim_backend_corex"]
+[dependencies]
+bytemuck.workspace = true
+sim_backend_corex = { workspace = true, optional = true }
+sim_backend_cuda = { workspace = true, optional = true }
+sim_backend_directml = { workspace = true, optional = true }
+sim_backend_metal = { workspace = true, optional = true }
+sim_backend_mlu = { workspace = true, optional = true }
+sim_backend_npu = { workspace = true, optional = true }
+sim_backend_rocm = { workspace = true, optional = true }
+sim_backend_xpu = { workspace = true, optional = true }
+sim_types.workspace = true
+half.workspace = true
+libm.workspace = true
+naga.workspace = true
+pollster.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+wgpu = { workspace = true, features = ["glsl"] }
+[dev-dependencies]
+sim_backend_cuda = { workspace = true, features = ["test-support"] }
+sim_backend_directml = { workspace = true, features = ["test-support"] }
+sim_backend_metal = { workspace = true, features = ["test-support"] }
+sim_backend_npu = { workspace = true, features = ["test-support"] }
+sim_backend_xpu = { workspace = true, features = ["test-support"] }
+[build-dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+syn.workspace = true

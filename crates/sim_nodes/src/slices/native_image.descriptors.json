@@ -1,0 +1,189 @@
+[
+  {
+    "schema_version": 1,
+    "class_type": "LoadImage",
+    "display_name": "Load Image",
+    "category": "image",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["load image", "open image", "import image", "image input", "upload image", "read image", "image loader"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-image-v1",
+    "inputs": [
+      {
+        "name": "image",
+        "type_name": "STRING",
+        "required": true,
+        "options": { "image_upload": true },
+        "choices_from_input_assets": true
+      }
+    ],
+    "outputs": [
+      { "name": "image", "type_name": "IMAGE", "required": true },
+      { "name": "mask", "type_name": "MASK", "required": true }
+    ],
+    "output_node": false,
+    "effect": "reads_artifact",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): input_dir = folder_paths.get_input_directory() files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))] files = folder_paths.filter_files_content_types(files, ['image']) return {'required': {'image': (sorted(files), {'image_upload': True})}}",
+      "outputs": "('IMAGE', 'MASK')",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "ImageScale",
+    "display_name": "Upscale Image",
+    "category": "image/upscaling",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["resize", "resize image", "scale image", "image resize", "zoom", "zoom in", "change size"],
+    "essentials_category": "Image Tools",
+    "has_intermediate_output": false,
+    "implementation_version": "native-image-v1",
+    "inputs": [
+      { "name": "image", "type_name": "IMAGE", "required": true },
+      {
+        "name": "upscale_method",
+        "type_name": "STRING",
+        "required": true,
+        "choices": ["nearest-exact", "bilinear", "area", "bicubic", "lanczos"]
+      },
+      {
+        "name": "width",
+        "type_name": "INT",
+        "required": true,
+        "options": { "default": 512, "min": 0, "max": 16384, "step": 1 }
+      },
+      {
+        "name": "height",
+        "type_name": "INT",
+        "required": true,
+        "options": { "default": 512, "min": 0, "max": 16384, "step": 1 }
+      },
+      {
+        "name": "crop",
+        "type_name": "STRING",
+        "required": true,
+        "choices": ["disabled", "center"]
+      }
+    ],
+    "outputs": [
+      { "name": "image", "type_name": "IMAGE", "required": true }
+    ],
+    "output_node": false,
+    "effect": "pure",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'image': ('IMAGE',), 'upscale_method': (s.upscale_methods,), 'width': ('INT', {'default': 512, 'min': 0, 'max': MAX_RESOLUTION, 'step': 1}), 'height': ('INT', {'default': 512, 'min': 0, 'max': MAX_RESOLUTION, 'step': 1}), 'crop': (s.crop_methods,)}}",
+      "outputs": "('IMAGE',)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "ImageInvert",
+    "display_name": "Invert Image Colors",
+    "category": "image/color",
+    "description": "",
+    "python_module": "nodes",
+    "search_aliases": ["reverse colors"],
+    "essentials_category": "Image Tools",
+    "has_intermediate_output": false,
+    "implementation_version": "native-image-v1",
+    "inputs": [
+      { "name": "image", "type_name": "IMAGE", "required": true }
+    ],
+    "outputs": [
+      { "name": "image", "type_name": "IMAGE", "required": true }
+    ],
+    "output_node": false,
+    "effect": "pure",
+    "cache_by_input_identity": true,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'image': ('IMAGE',)}}",
+      "outputs": "('IMAGE',)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "PreviewImage",
+    "display_name": "Preview Image",
+    "category": "image",
+    "description": "Saves the input images to your ComfyUI output directory.",
+    "python_module": "nodes",
+    "search_aliases": ["preview", "preview image", "show image", "view image", "display image", "image viewer"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-image-v1",
+    "inputs": [
+      { "name": "images", "type_name": "IMAGE", "required": true },
+      { "name": "prompt", "type_name": "PROMPT", "required": false, "hidden": true },
+      { "name": "extra_pnginfo", "type_name": "EXTRA_PNGINFO", "required": false, "hidden": true }
+    ],
+    "outputs": [],
+    "output_node": true,
+    "effect": "writes_artifact",
+    "cache_by_input_identity": false,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'images': ('IMAGE',)}, 'hidden': {'prompt': 'PROMPT', 'extra_pnginfo': 'EXTRA_PNGINFO'}}",
+      "outputs": "('IMAGE',) names=('images',)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  },
+  {
+    "schema_version": 1,
+    "class_type": "SaveImage",
+    "display_name": "Save Image",
+    "category": "image",
+    "description": "Saves the input images to your ComfyUI output directory.",
+    "python_module": "nodes",
+    "search_aliases": ["save", "save image", "export image", "output image", "write image", "download"],
+    "essentials_category": "Basics",
+    "has_intermediate_output": false,
+    "implementation_version": "native-image-v1",
+    "inputs": [
+      {
+        "name": "images",
+        "type_name": "IMAGE",
+        "required": true,
+        "options": { "tooltip": "The images to save." }
+      },
+      {
+        "name": "filename_prefix",
+        "type_name": "STRING",
+        "required": true,
+        "options": {
+          "default": "ComfyUI",
+          "tooltip": "The prefix for the file to save. This may include formatting information such as %date:yyyy-MM-dd% or %Empty Latent Image.width% to include values from nodes."
+        }
+      },
+      { "name": "prompt", "type_name": "PROMPT", "required": false, "hidden": true },
+      { "name": "extra_pnginfo", "type_name": "EXTRA_PNGINFO", "required": false, "hidden": true }
+    ],
+    "outputs": [
+      { "name": "images", "type_name": "IMAGE", "required": true }
+    ],
+    "output_node": true,
+    "effect": "writes_artifact",
+    "cache_by_input_identity": false,
+    "catalog_contract": {
+      "inputs": "@classmethod def INPUT_TYPES(s): return {'required': {'images': ('IMAGE', {'tooltip': 'The images to save.'}), 'filename_prefix': ('STRING', {'default': 'ComfyUI', 'tooltip': 'The prefix for the file to save. This may include formatting information such as %date:yyyy-MM-dd% or %Empty Latent Image.width% to include values from nodes.'})}, 'hidden': {'prompt': 'PROMPT', 'extra_pnginfo': 'EXTRA_PNGINFO'}}",
+      "outputs": "('IMAGE',) names=('images',)",
+      "input_is_list": "False",
+      "output_is_list": "False",
+      "lazy_inputs": "False"
+    }
+  }
+]

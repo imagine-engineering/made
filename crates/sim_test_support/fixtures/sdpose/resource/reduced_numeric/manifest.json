@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "task_id": "comfy-parity-native-sdpose-model-resource-foundation",
+  "provenance_mode": "code-inferred-reduced-test-support-only",
+  "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "denoiser_configuration": {
+    "model_channels": 4,
+    "context_dimension": 3,
+    "attention_head_channels": 1,
+    "normalization_groups": 1,
+    "latent_height": 8,
+    "latent_width": 8
+  },
+  "head_configuration": {
+    "input_channels": 8,
+    "hidden_channels": 8,
+    "output_channels": 3
+  },
+  "weight_fill": 0.0,
+  "expected_tensor_count": 695,
+  "semantic_identity_is_storage_independent": true,
+  "distinct_storage_is_charged_separately": true,
+  "production_admission_must_reject": true,
+  "licensed_checkpoint_oracle": null
+}

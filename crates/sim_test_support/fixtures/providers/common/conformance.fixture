@@ -1,0 +1,13 @@
+schema=zed.sim.provider-conformance.v1
+method=POST
+path=/v2/jobs
+headers=authorization,x-request-id
+multipart=prompt,reference
+chunks=bounded
+retry=worker-lost-once
+poll=timeout,head,chunk,chunk,terminal
+cost=USD:10
+progress=1/1
+cancellation=host-check
+materialization=output_0:sim:string@1:primitive
+network=forbidden

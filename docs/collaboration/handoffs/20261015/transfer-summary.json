@@ -1,0 +1,58 @@
+{
+  "scope": "Metadata-only transfer inventory; preserves excluded originals, no credential/profile/cache payloads",
+  "manifests": [
+    {
+      "path": "reference-source-transfer.json.gz",
+      "bytes": 2478459,
+      "sha256": "67f463b91451ec845554a63b70e699ac3b1562af377478a1087d87a03e436ef7",
+      "uncompressed_sha256": "b8936db21cf80b8dd0f326649ae6175c1bf87198878e68b4e00b1427c11f4b21",
+      "file_rows": 42988,
+      "payload_bytes": 1401249125
+    },
+    {
+      "path": "non-git-transfer-files.json.gz",
+      "bytes": 1798437,
+      "sha256": "ad2f62e997d8ffb4e2573b6ad8f9723df3514e1002841047ff74eea94326f4bd",
+      "uncompressed_sha256": "cbbed025473f23730056d91cb0a646b057b6a06ce01cafddd784c6f2ec682972",
+      "file_rows": 29773,
+      "payload_bytes": 2567329774
+    },
+    {
+      "path": "local-only-files.json.gz",
+      "bytes": 36613,
+      "sha256": "18a9876224038eb1cc3acba30900ad03dd1cadfc25accd15863ad5a91c1e3f4f",
+      "uncompressed_sha256": "6161e2f9f1edf9d6e37a94057c196e50f40b5f363503d33b656240eef8d3a38b",
+      "file_rows": 500,
+      "payload_bytes": 393936793
+    }
+  ],
+  "root_snapshot": "/Users/ahmad.vegah/repos/imagineerings/zed",
+  "private_required_files": 242,
+  "SDK_files": 29243,
+  "SDK_bytes": 1004937673,
+  "reference_source_rows": 42988,
+  "reference_bytes": 1401247748,
+  "raw_reconciliation": {
+    "raw_paths": 13752,
+    "already_retained_paths": 11159,
+    "newly_archived_safe_text_paths": 2093,
+    "local_only_paths": 500,
+    "local_only_reason_counts": {
+      "Machine-specific profile, database, lock or OS state; preserve locally; do not transfer credentials": 6,
+      "Compressed generated-cache/recovery or unreviewed archive; not needed for source transfer; preserve locally": 179,
+      "Raw historical source/fixture payload; current source is committed or canonical packet retained; preserve local for optional provenance review": 93,
+      "Unique screenshot pixels not individually privacy-reviewed in this immediate checkpoint; preserve local and review before optional transfer": 213,
+      "Conservative credential/OAuth-like literal scan flagged content; no raw content transferred; preserve local for redacted review": 9
+    }
+  },
+  "support_capsule": {
+    "archive": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current153-transfer-support-and-unmatched-evidence-wip-20261015/private-originals.tar.gz",
+    "manifest": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current153-transfer-support-and-unmatched-evidence-wip-20261015/manifest.json",
+    "SHA256": "753a0926c706513a27b86a95a69c664bc8acc0c507d07e293c0ffd58db9459a9",
+    "unique_payloads": 2002,
+    "regular_members": 2003,
+    "unmatched_safe_text_paths": 2093,
+    "helper_paths": 64,
+    "local_only_files": 500
+  }
+}

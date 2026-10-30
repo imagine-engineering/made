@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "fixture_id": "sam31-sim-model-0116",
+  "feature_id": "COMFY-MODEL-0116",
+  "source_symbol": "SAM31",
+  "source_ordinal": 88,
+  "source_files": [
+    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"}
+  ],
+  "source_projection": "source_symbol=SAM31\nsource_ordinal=88\ninherits=SAM3,supported_models_base.BASE\nunet_config.image_model=SAM31\narchitecture=model_base.SAM3\ndetector=SAM3+detector.backbone.vision_backbone.propagation_convs.0.conv_1x1.weight\nsupported_inference_dtypes=f16,bf16,f32\nmemory_usage_factor=2.0\nlatent_format=LatentFormat\nunet_extra_prefix=empty\ntext_encoder_key_prefix=detector.backbone.language_backbone.\nclip_tokenizer=sim.text_encoders.sam3_clip.SAM3TokenizerWrapper\nclip_model=sim.text_encoders.sam3_clip.SAM3ClipModelWrapper\nprocess_clip=inherited-SAM3\nprocess_unet=inherited-SAM3\nlayouts=source-native,source-checkpoint\nvariant=propagation-convolutions-present\n",
+  "source_projection_sha256": "9895bb001105397b5697fa456bac1136eb224398e0faf89a6116c06d45abc031",
+  "oracle": "shape-reduced deterministic native Rust projection of pinned ComfyUI sources; no production Python dependency"
+}

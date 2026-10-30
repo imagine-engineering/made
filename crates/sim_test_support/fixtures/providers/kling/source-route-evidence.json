@@ -1,0 +1,81 @@
+{
+  "source_sha256": {
+    "sim_api_nodes/nodes_kling.py": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+    "sim_api_nodes/apis/kling.py": "a1a94b595f72ca924ecba9737b4b75c03e5d1f2c6b7a7a2287a07f14a94b55ea",
+    "sim_api_nodes/apis/__init__.py": "a285c125490761d44772d4dcfd55a35d001cbdea4b6ec13c4ef717ca6e91836e",
+    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+  },
+  "version_constant": "KLING_API_VERSION",
+  "version": "v1",
+  "missing_routes": [
+    {
+      "method": "GET",
+      "source_template": "f'{PATH_VIDEO_EFFECTS}/{task_id}'",
+      "path": "/proxy/kling/v1/videos/effects/{task_id}",
+      "symbol": "execute_video_effect",
+      "source_line": 570,
+      "source_path": "sim_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "constant": "PATH_VIDEO_EFFECTS",
+      "constant_value": "/proxy/kling/v1/videos/effects"
+    },
+    {
+      "method": "GET",
+      "source_template": "f'{PATH_LIP_SYNC}/{task_id}'",
+      "path": "/proxy/kling/v1/videos/lip-sync/{task_id}",
+      "symbol": "execute_lipsync",
+      "source_line": 632,
+      "source_path": "sim_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "constant": "PATH_LIP_SYNC",
+      "constant_value": "/proxy/kling/v1/videos/lip-sync"
+    },
+    {
+      "method": "GET",
+      "source_template": "f'{PATH_VIDEO_EXTEND}/{task_id}'",
+      "path": "/proxy/kling/v1/videos/video-extend/{task_id}",
+      "symbol": "KlingVideoExtendNode.execute",
+      "source_line": 2118,
+      "source_path": "sim_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "constant": "PATH_VIDEO_EXTEND",
+      "constant_value": "/proxy/kling/v1/videos/video-extend"
+    },
+    {
+      "method": "GET",
+      "source_template": "f'{PATH_VIRTUAL_TRY_ON}/{task_id}'",
+      "path": "/proxy/kling/v1/images/kolors-virtual-try-on/{task_id}",
+      "symbol": "KlingVirtualTryOnNode.execute",
+      "source_line": 2468,
+      "source_path": "sim_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "constant": "PATH_VIRTUAL_TRY_ON",
+      "constant_value": "/proxy/kling/v1/images/kolors-virtual-try-on"
+    },
+    {
+      "method": "GET",
+      "source_template": "f'{PATH_IMAGE_GENERATIONS}/{task_id}'",
+      "path": "/proxy/kling/v1/images/generations/{task_id}",
+      "symbol": "KlingImageGenerationNode.execute",
+      "source_line": 2606,
+      "source_path": "sim_api_nodes/nodes_kling.py",
+      "source_sha256": "ad22ffbc4865b60c48b81a36be9d02b9b40f2cd9a4860b85dbaed328a9139e84",
+      "constant": "PATH_IMAGE_GENERATIONS",
+      "constant_value": "/proxy/kling/v1/images/generations"
+    }
+  ],
+  "equivalent_existing_routes": [
+    "COMFY-API-EXT-0067 image2video dynamicGET covers legacy PATH_IMAGE_TO_VIDEO/{task_id}",
+    "COMFY-API-EXT-0076 text2video dynamicGET covers legacy PATH_TEXT_TO_VIDEO/{task_id}"
+  ],
+  "claims_before_correction": {
+    "nodes": 25,
+    "catalog_rows": 29,
+    "new_feature_ids": null
+  }
+}

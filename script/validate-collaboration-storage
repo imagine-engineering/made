@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""Run repository outbox and recovery tests against disposable local services."""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import secrets
+import socket
+import struct
+from pathlib import Path
+import subprocess
+import sys
+import time
+import uuid
+
+root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--label", required=True)
+parser.add_argument("--jobs", type=int, default=1)
+parser.add_argument("--physical-standby", action="store_true")
+parser.add_argument("--evidence-dir", type=Path, required=True)
+arguments = parser.parse_args()
+if arguments.jobs < 1:
+    parser.error("jobs must be positive")
+if not arguments.label or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in arguments.label):
+    parser.error("label must contain only lowercase letters, digits, and hyphens")
+evidence = arguments.evidence_dir.resolve()
+evidence.mkdir(parents=True, exist_ok=True)
+log_path = evidence / f"storage-integration-{arguments.label}.log"
+result_path = evidence / f"storage-integration-{arguments.label}-result.json"
+if any(path.exists() for path in (log_path, log_path.with_suffix(".log.gz"), result_path)):
+    parser.error("refusing to overwrite existing validation evidence")
+identifier = "made-storage-validation-" + uuid.uuid4().hex[:12]
+postgres = identifier + "-postgres"
+redis = identifier + "-redis"
+replica = identifier + "-replica"
+network = identifier + "-network"
+password = secrets.token_urlsafe(24)
+owned_volumes = set()
+containers = [postgres, redis] + ([replica] if arguments.physical_standby else [])
+result = {
+    "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+    "containers": containers,
+    "physical_standby_requested": arguments.physical_standby,
+    "classification": "Seven MockDatabase outbox fixtures and one real PostgreSQL recovery test. Physical standby completion requires its runtime fence; no authenticated live-service evidence.",
+    "baseline_containers": {},
+}
+result["source_sha256"] = {
+    str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+    for path in [
+        Path(__file__).resolve(),
+        root / "Cargo.lock",
+        root / "crates/collab/src/db/collaboration/outbox.rs",
+        root / "crates/collab/tests/collaboration_outbox.rs",
+        root / "crates/collab/tests/collaboration_storage_recovery.rs",
+    ]
+}
+
+
+def docker(*arguments):
+    return subprocess.check_output(
+        ["docker", *arguments], text=True, stderr=subprocess.STDOUT, timeout=60
+    ).strip()
+
+
+def wait_ready(name, arguments):
+    for attempt in range(60):
+        probe = subprocess.run(["docker", "exec", name, *arguments], capture_output=True, text=True, timeout=10)
+        if probe.returncode == 0:
+            return
+        time.sleep(1)
+    raise RuntimeError(f"{name} did not become ready")
+
+
+def collect_volumes(name):
+    inspection = subprocess.run(["docker", "inspect", "--format", "{{json .Mounts}}", name], capture_output=True, text=True, timeout=30)
+    if inspection.returncode:
+        if "No such" in inspection.stderr:
+            return
+        raise RuntimeError(inspection.stderr)
+    owned_volumes.update(mount["Name"] for mount in json.loads(inspection.stdout) if mount["Type"] == "volume")
+
+
+def remaining_probe_time(deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Loopback protocol probe deadline expired")
+    return remaining
+
+
+def receive_exact(connection, length, deadline):
+    if length < 0 or length > 1024:
+        raise RuntimeError("Loopback protocol frame exceeds length bound")
+    response = bytearray()
+    while len(response) < length:
+        connection.settimeout(remaining_probe_time(deadline))
+        part = connection.recv(length - len(response))
+        if not part:
+            raise RuntimeError("Loopback protocol frame ended before declared length")
+        response.extend(part)
+    return bytes(response)
+
+
+def verify_host_protocol(connection, postgres_protocol, deadline):
+    connection.settimeout(remaining_probe_time(deadline))
+    if postgres_protocol:
+        payload = struct.pack("!I", 196608) + b"user\x00postgres\x00database\x00postgres\x00\x00"
+        connection.sendall(struct.pack("!I", len(payload) + 4) + payload)
+        header = receive_exact(connection, 5, deadline)
+        length = struct.unpack("!I", header[1:])[0]
+        if header[:1] != b"R" or length < 8 or length > 1024:
+            raise RuntimeError("PostgreSQL host endpoint did not offer bounded Authentication frame")
+        authentication = receive_exact(connection, length - 4, deadline)
+        method = struct.unpack("!I", authentication[:4])[0]
+        mechanisms = authentication[4:]
+        if method != 10 or not mechanisms.endswith(b"\x00\x00"):
+            raise RuntimeError("PostgreSQL password startup did not offer complete AuthenticationSASL")
+        names = mechanisms[:-2].split(b"\x00")
+        if not names or any(not name or len(name) > 64 for name in names) or len(set(names)) != len(names):
+            raise RuntimeError("PostgreSQL AuthenticationSASL mechanism list malformed")
+        try:
+            names = [name.decode("ascii") for name in names]
+        except UnicodeDecodeError as error:
+            raise RuntimeError("PostgreSQL AuthenticationSASL mechanism is not ASCII") from error
+        if "SCRAM-SHA-256" not in names:
+            raise RuntimeError("PostgreSQL password startup lacks SCRAM-SHA-256")
+    else:
+        connection.sendall(b"*1\r\n$4\r\nPING\r\n")
+        if receive_exact(connection, 7, deadline) != b"+PONG\r\n":
+            raise RuntimeError("Redis host endpoint did not answer complete RESP PONG")
+
+
+def wait_host_ready(address, postgres_protocol):
+    host, port = address.rsplit(":", 1)
+    if host != "127.0.0.1":
+        raise RuntimeError("Disposable services must bind only to loopback")
+    last_error = None
+    for attempt in range(30):
+        try:
+            deadline = time.monotonic() + 2
+            with socket.create_connection((host, int(port)), timeout=remaining_probe_time(deadline)) as connection:
+                verify_host_protocol(connection, postgres_protocol, deadline)
+                return {"address": address, "protocol_response_verified": True}
+        except (OSError, RuntimeError) as error:
+            last_error = error
+            time.sleep(1)
+    raise RuntimeError(f"Loopback readiness failed at {address}: {last_error}")
+
+
+exit_code = 1
+cleanup_errors = []
+try:
+    result["baseline_containers"] = dict(line.split("\t", 1) for line in docker("ps", "--all", "--format", "{{.ID}}\t{{.Names}}").splitlines())
+    network_arguments = []
+    if arguments.physical_standby:
+        docker("network", "create", network)
+        network_arguments = ["--network", network]
+    docker("run", "--detach", "--name", postgres, *network_arguments,
+           "--publish", "127.0.0.1::5432", "--env", f"POSTGRES_PASSWORD={password}",
+           "postgres:17-alpine", "postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=5")
+    docker("run", "--detach", "--name", redis,
+           "--publish", "127.0.0.1::6379", "redis:7-alpine")
+    wait_ready(postgres, ["pg_isready", "--username", "postgres"])
+    wait_ready(redis, ["redis-cli", "ping"])
+    if arguments.physical_standby:
+        docker("exec", postgres, "sh", "-c",
+               "printf '\nhost replication postgres samenet scram-sha-256\n' >> \"$PGDATA/pg_hba.conf\"")
+        docker("exec", postgres, "psql", "-U", "postgres", "-c", "SELECT pg_reload_conf()")
+        docker("run", "--detach", "--name", replica, "--network", network,
+               "--publish", "127.0.0.1::5432", "--user", "postgres",
+               "--env", "PGDATA=/tmp/physical-standby", "--env", f"PGPASSWORD={password}",
+               "--env", f"PRIMARY_HOST={postgres}", "--entrypoint", "sh", "postgres:17-alpine",
+               "-c", 'pg_basebackup -h "$PRIMARY_HOST" -U postgres -D "$PGDATA" -R -X stream && exec postgres -c hot_standby=on')
+        wait_ready(replica, ["pg_isready", "--username", "postgres"])
+        result["classification"] = "Seven MockDatabase outbox fixtures and one real PostgreSQL physical standby/recovery test; runtime fences required. No promotion/failover or authenticated service acceptance."
+    result["images"] = {name: docker("inspect", "--format", "{{.Image}}", name) for name in containers}
+    for name in containers:
+        collect_volumes(name)
+    result["owned_volumes"] = sorted(owned_volumes)
+    postgres_address = docker("port", postgres, "5432/tcp")
+    redis_address = docker("port", redis, "6379/tcp")
+    if not postgres_address.startswith("127.0.0.1:") or not redis_address.startswith("127.0.0.1:"):
+        raise RuntimeError("Disposable services must bind only to loopback")
+    result["host_readiness"] = {
+        "postgres": wait_host_ready(postgres_address, True),
+        "redis": wait_host_ready(redis_address, False),
+    }
+    environment = os.environ.copy()
+    environment.pop("CI", None)
+    environment.pop("COLLAB_TEST_REPLICA_DATABASE_URL", None)
+    environment.update({
+        "COLLAB_TEST_DATABASE_URL": f"postgres://postgres:{password}@{postgres_address}/postgres",
+        "COLLAB_TEST_REDIS_URL": f"redis://{redis_address}",
+        "CARGO_BUILD_JOBS": str(arguments.jobs),
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_PROFILE_DEV_INCREMENTAL": "false",
+        "CARGO_PROFILE_TEST_INCREMENTAL": "false",
+    })
+    if arguments.physical_standby:
+        replica_address = docker("port", replica, "5432/tcp")
+        if not replica_address.startswith("127.0.0.1:"):
+            raise RuntimeError("Standby must bind only to loopback")
+        environment["COLLAB_TEST_REPLICA_DATABASE_URL"] = f"postgres://postgres:{password}@{replica_address}/postgres"
+        result["replica_address"] = replica_address
+        result["host_readiness"]["replica"] = wait_host_ready(replica_address, True)
+    command = ["cargo", "test", "--locked", "-p", "collab", "-p", "collab_ui", "-p", "rpc",
+               "-p", "gpui_platform", "--test", "collaboration_outbox", "--test", "collaboration_storage_recovery", "--features",
+               "collab/test-support,collab_ui/multiplayer-tools,gpui_platform/runtime_shaders",
+               "--", "--nocapture"]
+    result.update(command=command, postgres_address=postgres_address, redis_address=redis_address,
+                  ci_guard="CI unset so macOS tests execute rather than return early",
+                  profiles="debug symbols/incremental cache omitted; assertions unchanged",
+                  build_jobs=arguments.jobs)
+    with log_path.open("x") as log:
+        exit_code = subprocess.run(command, cwd=root, env=environment, stdout=log, stderr=subprocess.STDOUT).returncode
+    result["test_exit_code"] = exit_code
+    if exit_code == 0:
+        if "projection checkpoints: resume, version rejection and tenant-scoped reset verified" not in log_path.read_text():
+            raise RuntimeError("Cargo succeeded without projection checkpoint fence evidence")
+    if arguments.physical_standby and exit_code == 0:
+        if "physical standby: paused lag, atomic catch-up and duplicate retry verified" not in log_path.read_text():
+            raise RuntimeError("Cargo succeeded without physical standby completion evidence")
+    result["exit_code"] = exit_code
+except Exception as error:
+    exit_code = 1
+    result["harness_error"] = str(error)
+    if isinstance(error, subprocess.CalledProcessError):
+        result["failed_command_output"] = error.output
+        print(str(error.output).replace(password, "<redacted disposable credential>"), file=sys.stderr)
+    print(str(error).replace(password, "<redacted disposable credential>"), file=sys.stderr)
+finally:
+    result["diagnostics"] = {}
+    for name in containers:
+        try:
+            collect_volumes(name)
+            state = subprocess.run(["docker", "inspect", "--format", "{{json .State}}", name], capture_output=True, text=True, timeout=30)
+            logs = subprocess.run(["docker", "logs", "--tail", "200", name], capture_output=True, text=True, timeout=30)
+            result["diagnostics"][name] = {"state_exit_code": state.returncode, "state": json.loads(state.stdout) if state.returncode == 0 else state.stderr, "logs_exit_code": logs.returncode, "logs": (logs.stdout + logs.stderr).replace(password, "<redacted disposable credential>")}
+        except (RuntimeError, subprocess.TimeoutExpired) as error:
+            cleanup_errors.append({"container": name, "diagnostic_error": str(error).replace(password, "<redacted disposable credential>")})
+    result["owned_volumes"] = sorted(owned_volumes)
+    for name in reversed(containers):
+        try:
+            cleanup = subprocess.run(
+                ["docker", "rm", "--force", "--volumes", name],
+                capture_output=True, text=True, timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            cleanup_errors.append({"container": name, "error": "cleanup timed out after 30 seconds; ownership retained for follow-up"})
+            continue
+        if cleanup.returncode and "No such container" not in cleanup.stderr:
+            cleanup_errors.append({"container": name, "error": cleanup.stderr})
+    result["containers_remaining"] = []
+    for name in containers:
+        try:
+            if docker("ps", "--all", "--filter", f"name=^{name}$", "--format", "{{.Names}}"):
+                result["containers_remaining"].append(name)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            cleanup_errors.append({"container": name, "verification_error": str(error)})
+    for volume in sorted(owned_volumes):
+        try:
+            current_volumes = set(docker("volume", "ls", "--format", "{{.Name}}").splitlines())
+            if volume not in current_volumes:
+                continue
+            consumers = docker("ps", "--all", "--filter", f"volume={volume}", "--format", "{{.ID}}")
+            if consumers:
+                cleanup_errors.append({"volume": volume, "error": "Still referenced; preserved for follow-up", "consumers": consumers.splitlines()})
+                continue
+            docker("volume", "rm", volume)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            cleanup_errors.append({"volume": volume, "cleanup_error": str(error)})
+    result["volumes_remaining"] = []
+    try:
+        mounted_volumes = set(docker("volume", "ls", "--format", "{{.Name}}").splitlines())
+        result["volumes_remaining"] = sorted(
+            set(result.get("owned_volumes", [])) & mounted_volumes
+        )
+        if result["volumes_remaining"]:
+            cleanup_errors.append({"volumes": result["volumes_remaining"], "error": "owned anonymous volumes remain"})
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        cleanup_errors.append({"volumes": result.get("owned_volumes", []), "verification_error": str(error)})
+    if arguments.physical_standby:
+        try:
+            cleanup = subprocess.run(["docker", "network", "rm", network], capture_output=True, text=True, timeout=30)
+            if cleanup.returncode and "not found" not in cleanup.stderr:
+                cleanup_errors.append({"network": network, "error": cleanup.stderr})
+            result["network_remaining"] = docker("network", "ls", "--filter", f"name=^{network}$", "--format", "{{.Name}}")
+            if result["network_remaining"]:
+                cleanup_errors.append({"network": network, "error": "network remains"})
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            cleanup_errors.append({"network": network, "verification_error": str(error)})
+    try:
+        current = dict(line.split("\t", 1) for line in docker("ps", "--all", "--format", "{{.ID}}\t{{.Names}}").splitlines())
+        result["baseline_containers_unchanged"] = {identifier: current.get(identifier) == name for identifier, name in result["baseline_containers"].items()}
+        if not all(result["baseline_containers_unchanged"].values()):
+            cleanup_errors.append({"error": "Baseline containers changed; do not claim isolated cleanup"})
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        cleanup_errors.append({"baseline_verification_error": str(error)})
+    result["cleanup_errors"] = cleanup_errors
+    if cleanup_errors or result["containers_remaining"] or result["volumes_remaining"]:
+        exit_code = 1
+    result["exit_code"] = exit_code
+    result["finished_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    result["source_unchanged"] = {
+        name: hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+        for name, digest in result["source_sha256"].items()
+    }
+    if not all(result["source_unchanged"].values()):
+        result["exit_code"] = exit_code = 1
+    serialized_result = json.dumps(result, indent=2).replace(password, "<redacted disposable credential>") + "\n"
+    try:
+        result_path.write_text(serialized_result)
+    except OSError as error:
+        print(f"Could not persist validation result: {error}", file=sys.stderr)
+        print(serialized_result, file=sys.stderr)
+        exit_code = 1
+sys.exit(exit_code)

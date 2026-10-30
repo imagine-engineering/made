@@ -1,0 +1,103 @@
+{
+  "classification": "Exact parent private-first archive import/readback receipts; no acceptance promotion",
+  "receipts": [
+    {
+      "observed_utc": "2026-10-15T09:26:56.023896+00:00",
+      "exit_code": 0,
+      "private_first": true,
+      "exact_members_verified": 237,
+      "copied": [
+        {
+          "path": "/private/tmp/current153-wip-transfer-retention-preparation-20261015/v2/sealed/private/private-originals.tar.gz",
+          "bytes": 13763615,
+          "sha256": "e6dba0352147f16faa32fe04a364e7883d9590d81006f3dbd7dea66f6aac4dd1",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current150152-closed-validation-live149-and-uninstalled153-wip-20261015/private-originals.tar.gz",
+          "expected_preimage": null,
+          "classification": "ignored private credential-free exact raw archive; manual transfer required"
+        },
+        {
+          "path": "/private/tmp/current153-wip-transfer-retention-preparation-20261015/v2/sealed/private/manifest.json",
+          "bytes": 172792,
+          "sha256": "173293f6d2ab251bee6ade002fbec34824de26fcbaf326605b0d0ee84f2eaafc",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current150152-closed-validation-live149-and-uninstalled153-wip-20261015/manifest.json",
+          "expected_preimage": null,
+          "classification": "ignored private credential-free exact raw archive; manual transfer required"
+        },
+        {
+          "path": "/private/tmp/current153-wip-transfer-retention-preparation-20261015/v2/sealed/public/results.json",
+          "bytes": 1881,
+          "sha256": "6f09c3fb2cde2258f1f0990edc01936588edc23e0ebe61cefccd87351bf07290",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/.agents/evidence-archives/collaborative-workspace/current150152-closed-validation-live149-and-uninstalled153-wip-20261015/results.json",
+          "expected_preimage": null,
+          "classification": "public typed WIP evidence only"
+        },
+        {
+          "path": "/private/tmp/current153-wip-transfer-retention-preparation-20261015/v2/sealed/public/manifest.json",
+          "bytes": 1847,
+          "sha256": "d494b036559dafc2d45e1fccf94c753a553f8382e467e061327bd9702e08db94",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/.agents/evidence-archives/collaborative-workspace/current150152-closed-validation-live149-and-uninstalled153-wip-20261015/manifest.json",
+          "expected_preimage": null,
+          "classification": "public typed WIP evidence only"
+        },
+        {
+          "path": "/private/tmp/current153-wip-transfer-retention-preparation-20261015/v2/sealed/public/README.md",
+          "bytes": 1380,
+          "sha256": "d0b19e3d8731d9bc6f547400ab8b9fc3662118dcfe689c9f97345d280e64f96f",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/.agents/evidence-archives/collaborative-workspace/current150152-closed-validation-live149-and-uninstalled153-wip-20261015/README.md",
+          "expected_preimage": null,
+          "classification": "public typed WIP evidence only"
+        }
+      ],
+      "originals_preserved": true
+    },
+    {
+      "exit_code": 0,
+      "observed_utc": "2026-10-15T09:39:04.172474+00:00",
+      "private_first": true,
+      "exact_regular_members": 2003,
+      "originals_preserved": true,
+      "files": [
+        {
+          "path": "/private/tmp/current153-transfer-support-retention-preparation-20261015/sealed/private/private-originals.tar.gz",
+          "bytes": 35797701,
+          "sha256": "753a0926c706513a27b86a95a69c664bc8acc0c507d07e293c0ffd58db9459a9",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current153-transfer-support-and-unmatched-evidence-wip-20261015/private-originals.tar.gz",
+          "expected_preimage": null,
+          "private": true
+        },
+        {
+          "path": "/private/tmp/current153-transfer-support-retention-preparation-20261015/sealed/private/manifest.json",
+          "bytes": 1765468,
+          "sha256": "a71988f9a456eb4072f9a3db23ec3fdcfe871d61601db6a8455e46ef370d4c35",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/test-results/collaborative-workspace/private-checkpoints/current153-transfer-support-and-unmatched-evidence-wip-20261015/manifest.json",
+          "expected_preimage": null,
+          "private": true
+        },
+        {
+          "path": "/private/tmp/current153-transfer-support-retention-preparation-20261015/sealed/public/results.json",
+          "bytes": 2004,
+          "sha256": "aacb45d23da528acba2b18ae8b057d4f23975b0996fbbd276ab1bfdba7502e18",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/.agents/evidence-archives/collaborative-workspace/current153-transfer-support-and-unmatched-evidence-wip-20261015/results.json",
+          "expected_preimage": null,
+          "private": false
+        },
+        {
+          "path": "/private/tmp/current153-transfer-support-retention-preparation-20261015/sealed/public/manifest.json",
+          "bytes": 562,
+          "sha256": "640c58e31e910606e10bcfb1d6bedc1e706247255b33639e8a4b45bb14323dd3",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/.agents/evidence-archives/collaborative-workspace/current153-transfer-support-and-unmatched-evidence-wip-20261015/manifest.json",
+          "expected_preimage": null,
+          "private": false
+        },
+        {
+          "path": "/private/tmp/current153-transfer-support-retention-preparation-20261015/sealed/public/README.md",
+          "bytes": 1506,
+          "sha256": "4fa471c891189ba2dcf28989d1db9b94d46d5eb7ba62345511b2ac0c1d8dd5b8",
+          "destination": "/Users/ahmad.vegah/repos/imagineerings/zed/.agents/evidence-archives/collaborative-workspace/current153-transfer-support-and-unmatched-evidence-wip-20261015/README.md",
+          "expected_preimage": null,
+          "private": false
+        }
+      ]
+    }
+  ]
+}

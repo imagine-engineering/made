@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "production_execution": "rust-wasm-declarative-only",
+  "cases": [
+    {"name":"legacy_v1_identifier","feature_id":"COMFY-FRONTEXT-EXT-037","expected_classification":"legacy_identifier_mapping","payload":"{\"extension\":\"legacy.v1.example\",\"version\":1}"},
+    {"name":"legacy_v3_identifier","feature_id":"COMFY-FRONTEXT-EXT-048","expected_classification":"legacy_identifier_mapping","payload":"{\"extension\":\"legacy.v3.example\",\"version\":3,\"node\":\"ExampleNode\"}"},
+    {"name":"dom_widget","feature_id":"COMFY-FRONTEXT-EXT-049","expected_classification":"declarative_rust_wasm","payload":"{\"widget\":\"DOMWidget\",\"value\":\"preserve me\"}"},
+    {"name":"web_directory","feature_id":"COMFY-FRONTEXT-EXT-046","expected_classification":"lossless_placeholder","payload":"{\"webDirectory\":\"./web\",\"entry\":\"index.js\"}"},
+    {"name":"commands","feature_id":"COMFY-FRONTEXT-EXT-038","expected_classification":"declarative_rust_wasm","payload":"{\"id\":\"example.command\",\"label\":\"Example\"}"},
+    {"name":"menus","feature_id":"COMFY-FRONTEXT-EXT-040","expected_classification":"declarative_rust_wasm","payload":"{\"path\":[\"Graph\",\"Example\"],\"command\":\"example.command\"}"},
+    {"name":"settings","feature_id":"COMFY-FRONTEXT-EXT-041","expected_classification":"declarative_rust_wasm","payload":"{\"id\":\"example.setting\",\"default\":false}"},
+    {"name":"routes","feature_id":null,"expected_classification":"versioned_wit_route","payload":"{\"route\":\"route.example\",\"method\":\"POST\"}"},
+    {"name":"serialization_callbacks","feature_id":"COMFY-FRONTEXT-EXT-058","expected_classification":"lossless_placeholder","payload":"{\"beforeConfigureGraph\":\"function payload retained, never executed\"}"},
+    {"name":"explicit_port_mappings","feature_id":"COMFY-FRONTEXT-EXT-053","expected_classification":"legacy_identifier_mapping","payload":"{\"legacyInput\":\"image\",\"targetPort\":\"image-in\"}"},
+    {"name":"signature_denial","feature_id":null,"expected_classification":"host_denial","payload":"{\"signature\":\"invalid\"}"},
+    {"name":"permission_denial","feature_id":null,"expected_classification":"host_denial","payload":"{\"capability\":\"network-provider:ungranted\"}"},
+    {"name":"trap","feature_id":null,"expected_classification":"host_isolation","payload":"{\"failure\":\"trap\"}"},
+    {"name":"hang","feature_id":null,"expected_classification":"host_isolation","payload":"{\"failure\":\"fuel-hang\"}"},
+    {"name":"cancellation","feature_id":null,"expected_classification":"host_isolation","payload":"{\"failure\":\"cancelled\"}"},
+    {"name":"resource_exhaustion","feature_id":null,"expected_classification":"host_isolation","payload":"{\"failure\":\"component-too-large\"}"},
+    {"name":"unresolved_placeholder","feature_id":"COMFY-FRONTEXT-EXT-061","expected_classification":"lossless_placeholder","payload":"{\"hook\":\"onAuthTokenRefreshed\",\"opaque\":{\"unknown\":[1,2,3]}}"}
+  ]
+}

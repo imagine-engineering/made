@@ -1,0 +1,50 @@
+[package]
+name = "cargo_ui"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/cargo_ui.rs"
+doctest = false
+
+[dependencies]
+anyhow.workspace = true
+collections.workspace = true
+command_palette_hooks.workspace = true
+feature_flags.workspace = true
+db.workspace = true
+editor.workspace = true
+fs.workspace = true
+futures.workspace = true
+gpui.workspace = true
+language_tools.workspace = true
+log.workspace = true
+menu.workspace = true
+project = { workspace = true, features = ["cargo-workspace", "rust-coverage"] }
+theme.workspace = true
+theme_settings.workspace = true
+settings = { workspace = true, features = ["rust-tools"] }
+serde.workspace = true
+serde_json.workspace = true
+task.workspace = true
+tasks_ui.workspace = true
+ui.workspace = true
+util.workspace = true
+workspace.workspace = true
+
+[dev-dependencies]
+paths.workspace = true
+async-trait.workspace = true
+editor = { workspace = true, features = ["test-support"] }
+gpui = { workspace = true, features = ["test-support"] }
+project = { workspace = true, features = ["cargo-workspace", "rust-coverage", "rust-tests", "test-support"] }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+ctor.workspace = true
+terminal_view = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true

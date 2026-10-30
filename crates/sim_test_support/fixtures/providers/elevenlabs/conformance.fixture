@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "namespace": "zed.sim.provider.elevenlabs",
+  "source_sha256": "e68033612e73bffa5c9a4353f3a2a280a8803a257debd86e32b0c35dbe9590ef",
+  "aliases": [],
+  "nodes": [
+    {
+      "feature_id": "COMFY-NODE-0141",
+      "node_identifier": "ElevenLabsAudioIsolation"
+    },
+    {
+      "feature_id": "COMFY-NODE-0142",
+      "node_identifier": "ElevenLabsInstantVoiceClone"
+    },
+    {
+      "feature_id": "COMFY-NODE-0143",
+      "node_identifier": "ElevenLabsSpeechToSpeech"
+    },
+    {
+      "feature_id": "COMFY-NODE-0144",
+      "node_identifier": "ElevenLabsSpeechToText"
+    },
+    {
+      "feature_id": "COMFY-NODE-0145",
+      "node_identifier": "ElevenLabsTextToDialogue"
+    },
+    {
+      "feature_id": "COMFY-NODE-0146",
+      "node_identifier": "ElevenLabsTextToSoundEffects"
+    },
+    {
+      "feature_id": "COMFY-NODE-0147",
+      "node_identifier": "ElevenLabsTextToSpeech"
+    },
+    {
+      "feature_id": "COMFY-NODE-0148",
+      "node_identifier": "ElevenLabsVoiceSelector"
+    }
+  ],
+  "routes": [
+    {
+      "feature_id": "COMFY-API-EXT-0025",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/audio-isolation",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0026",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/sound-generation",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0027",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/speech-to-speech/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0028",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/speech-to-speech/{voice}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0029",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/speech-to-text",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0030",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/text-to-dialogue",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0031",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/text-to-speech/",
+      "disposition": "synthetic_prefix_tombstone"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0032",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/text-to-speech/{voice}",
+      "disposition": "executable"
+    },
+    {
+      "feature_id": "COMFY-API-EXT-0033",
+      "method": "POST",
+      "path": "/proxy/elevenlabs/v1/voices/add",
+      "disposition": "executable"
+    }
+  ],
+  "scope": "source request and bounded transport; canonical audio, multipart and custom voice integration pending",
+  "source_validation": {
+    "python_strip_control_separators": [
+      28,
+      29,
+      30,
+      31
+    ],
+    "zero_width_space_is_whitespace": false,
+    "byte_order_mark_is_whitespace": false,
+    "nonempty_text_and_language_preserve_original": true,
+    "validation_utils_sha256": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "text_validation_nodes": [
+      "ElevenLabsTextToSpeech",
+      "ElevenLabsTextToSoundEffects",
+      "ElevenLabsTextToDialogue"
+    ],
+    "language_omission_nodes": [
+      "ElevenLabsSpeechToText",
+      "ElevenLabsTextToSpeech",
+      "ElevenLabsTextToDialogue"
+    ]
+  },
+  "multipart_header_binding": {
+    "declared_before_request_and_cost": true,
+    "encoded_header_must_match": true,
+    "mutable_transport_header": false,
+    "client_sha256": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc"
+  }
+}
