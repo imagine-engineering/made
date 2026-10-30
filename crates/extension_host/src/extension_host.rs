@@ -471,6 +471,11 @@ pub fn is_version_compatible(
     true
 }
 
+struct ReloadRequest {
+    modified_extension: Option<Arc<str>>,
+    completion: Option<oneshot::Sender<std::result::Result<(), Arc<str>>>>,
+}
+
 pub struct ExtensionStore {
     pub agent_plugins: std::collections::BTreeMap<String, agent_plugins::InstalledPackage>,
     pub agent_plugins_directory: PathBuf,
@@ -489,7 +494,7 @@ pub struct ExtensionStore {
     pub fs: Arc<dyn Fs>,
     pub http_client: Arc<HttpClientWithUrl>,
     pub telemetry: Option<Arc<Telemetry>>,
-    pub reload_tx: UnboundedSender<Option<Arc<str>>>,
+    reload_tx: UnboundedSender<ReloadRequest>,
     reload_complete_senders: Vec<oneshot::Sender<std::result::Result<(), Arc<str>>>>,
     pub installed_dir: PathBuf,
     pub staging_dir: PathBuf,
@@ -877,10 +882,13 @@ impl ExtensionStore {
                         _ = connection_registered_rx.next() => {
                             debounce_timer = cx.background_executor().timer(RELOAD_DEBOUNCE_DURATION).fuse()
                         }
-                        extension_id = reload_rx.next() => {
-                            let Some(extension_id) = extension_id else { break; };
+                        request = reload_rx.next() => {
+                            let Some(request) = request else { break; };
                             this.update(cx, |this, _cx| {
-                                this.modified_extensions.extend(extension_id);
+                                this.modified_extensions.extend(request.modified_extension);
+                                if let Some(completion) = request.completion {
+                                    this.reload_complete_senders.push(completion);
+                                }
                             })?;
                             index_changed = true;
                             debounce_timer = cx.background_executor().timer(RELOAD_DEBOUNCE_DURATION).fuse()
@@ -913,7 +921,15 @@ impl ExtensionStore {
                             event_path.components().next()
                             && let Some(extension_id) = extension_dir_name.to_str()
                         {
-                            reload_tx.unbounded_send(Some(extension_id.into())).ok();
+                            if let Err(error) = reload_tx.unbounded_send(ReloadRequest {
+                                modified_extension: Some(extension_id.into()),
+                                completion: None,
+                            }) {
+                                log::error!(
+                                    "Could not queue an extension filesystem reload: {error}"
+                                );
+                                return;
+                            }
                         }
                     }
                 }
@@ -929,14 +945,25 @@ impl ExtensionStore {
         cx: &mut Context<Self>,
     ) -> impl Future<Output = Result<()>> + use<> {
         let (tx, rx) = oneshot::channel();
-        self.reload_complete_senders.push(tx);
-        if self.reload_tx.unbounded_send(modified_extension).is_err() {
-            self.complete_reloads(Err("extension reload task exited".to_owned()));
-        } else {
-            cx.emit(Event::StartedReloading);
-        }
+        // A running batch must not complete a request still waiting in the queue.
+        let queued = match self.reload_tx.unbounded_send(ReloadRequest {
+            modified_extension,
+            completion: Some(tx),
+        }) {
+            Ok(()) => {
+                cx.emit(Event::StartedReloading);
+                true
+            }
+            Err(error) => {
+                log::error!("Could not queue an extension reload: {error}");
+                false
+            }
+        };
 
         async move {
+            if !queued {
+                return Err(anyhow!("extension reload task exited"));
+            }
             match rx.await {
                 Ok(Ok(())) => Ok(()),
                 Ok(Err(error)) => Err(anyhow!(error.to_string())),

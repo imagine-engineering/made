@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject local agent guidance as a compile input and check migrated static includes."""
+"""Validate tracked static Rust string/byte includes and reject local agent guidance."""
 import argparse
 from pathlib import Path
 import re
@@ -10,8 +10,10 @@ INCLUDE = re.compile(
     r'include_(?:str|bytes)!\(\s*(?P<manifest>concat!\(\s*env!\("CARGO_MANIFEST_DIR"\),\s*)?"(?P<path>[^"]+)"',
     re.MULTILINE,
 )
-OWNERS = ("sim_test_support/parity/", "language_tools/test_fixtures/profiling/",
-          "collaboration_domain/test_fixtures/", "docs/collaboration/")
+# The eval harness loads this upstream Rust excerpt as text; it is not a Cargo module.
+SOURCE_FIXTURES = {
+    "crates/agent/src/tools/evals/fixtures/use_wasi_sdk_in_compile_parser_to_wasm/before.rs",
+}
 
 
 def check(root):
@@ -22,15 +24,13 @@ def check(root):
     errors = ["Root .agents files must not be tracked"] if any(path.startswith(".agents/") for path in tracked) else []
     checked = 0
     for name in sorted(tracked):
-        if not name.endswith(".rs"):
+        if not name.endswith(".rs") or name in SOURCE_FIXTURES:
             continue
         source = root / name
         for match in INCLUDE.finditer(source.read_text()):
             literal = match["path"]
             if ".agents/" in literal:
                 errors.append(f"{name}: local agent guidance is a compile input")
-                continue
-            if not any(owner in literal for owner in OWNERS):
                 continue
             checked += 1
             if match["manifest"]:
@@ -50,7 +50,7 @@ def check(root):
                 errors.append(f"{name}: missing or untracked compile input {relative}")
     if errors:
         raise RuntimeError("\n".join(errors))
-    print(f"Tracked compile-input check passed: {checked} migrated includes; .agents absent from index")
+    print(f"Tracked compile-input check passed: {checked} static string/byte includes; .agents absent from index")
 
 
 def main():

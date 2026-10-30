@@ -61,7 +61,7 @@ jobs:
     - name: release::release_signing_check
       run: CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
     - name: release::release_signing_check
-      run: python3 script/check-repository-inputs && python3 script/test-production-signing && cargo test -p xtask --locked
+      run: python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && cargo test -p xtask --locked
     - name: release::generate_release_bundle_plans
       run: |
         mkdir -p release-bundle-plans

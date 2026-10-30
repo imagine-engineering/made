@@ -4005,6 +4005,16 @@ async fn doctor_owner_repair_extension_retry_preserves_preferences(cx: &mut Test
     });
     cx.executor().advance_clock(RELOAD_DEBOUNCE_DURATION);
     cx.run_until_parked();
+    let queued_reload = store.update(cx, |store, cx| {
+        let mut reload = Box::pin(store.reload(None, cx));
+        store.complete_reloads(Ok(()));
+        assert!(
+            reload.as_mut().now_or_never().is_none(),
+            "a previous batch must not resolve a request still waiting in the queue"
+        );
+        reload
+    });
+    queued_reload.await.expect("dequeued reload completes");
     let mut preferences = crate::ExtensionSettings::default();
     preferences
         .auto_install_extensions
