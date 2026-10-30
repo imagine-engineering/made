@@ -72,7 +72,7 @@ fn val_model_family_001_exact_native_breadth_closure() -> Result<(), Box<dyn std
     validate_closure(&expected)?;
     let serialized = stable_json(&expected)?;
     let path = repository_root()
-        .join(".agents/specs/comfy-parity/catalogs/native-model-family-closure.json");
+        .join("crates/sim_test_support/parity/catalogs/native-model-family-closure.json");
     if std::env::var_os(UPDATE_ENV).is_some_and(|value| value == "1") {
         std::fs::write(&path, &serialized)?;
     }
@@ -135,7 +135,7 @@ fn val_latent_001_exact_native_breadth_closure() -> Result<(), Box<dyn std::erro
 
 fn build_expected_closure() -> Result<NativeModelFamilyClosure, Box<dyn std::error::Error>> {
     let root = repository_root();
-    let backend_path = root.join(".agents/specs/comfy-parity/catalogs/backend-models.csv");
+    let backend_path = root.join("crates/sim_test_support/parity/catalogs/backend-models.csv");
     let source_catalog_path = root.join("crates/sim_model/catalog/model-families-v1.json");
     let source_catalog_bytes = std::fs::read(&source_catalog_path)?;
     let source_catalog: SourceCatalog = serde_json::from_slice(&source_catalog_bytes)?;

@@ -355,7 +355,8 @@ fn backend_dependency_ledger_matches(
     adapters: &[(&str, &str)],
 ) -> Result<bool, Box<dyn Error>> {
     let ledger: Value = serde_json::from_slice(&fs::read(
-        workspace_root.join(".agents/specs/comfy-parity/catalogs/native-backend-dependencies.json"),
+        workspace_root
+            .join("crates/sim_test_support/parity/catalogs/native-backend-dependencies.json"),
     )?)?;
     let lockfile_bytes = fs::read(workspace_root.join("Cargo.lock"))?;
     let lockfile_digest = format!("{:x}", Sha256::digest(lockfile_bytes));
@@ -421,7 +422,7 @@ fn backend_dependency_ledger_matches(
 }
 
 fn downstream_manifest_writes_are_scoped(workspace_root: &Path) -> Result<bool, Box<dyn Error>> {
-    let tasks = fs::read_to_string(workspace_root.join(".agents/specs/comfy-parity/tasks.md"))?;
+    let tasks = fs::read_to_string(workspace_root.join("crates/sim_test_support/parity/tasks.md"))?;
     let mut task_id = None;
     let mut manifest_writes = BTreeMap::<String, BTreeSet<String>>::new();
     let mut dependencies = BTreeMap::<String, BTreeSet<String>>::new();

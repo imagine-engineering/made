@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "backend": "xpu",
+  "source_model_id": "COMFY-MODEL-0021",
+  "foundation_task": "comfy-parity-device-foundation-intel-xpu-comfy-model-0021",
+  "binding_strategy": "checked Level Zero and oneDNN C declarations with runtime symbol resolution only from registry-certified retained images owned by one opaque serialized XpuExecutionSession",
+  "abi_floor": "level-zero-loader-1.11.0-api-1.6.3+onednn-3.5.0",
+  "targets": ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"],
+  "libraries": {
+    "linux": ["libze_loader.so.1", "libdnnl.so.3"],
+    "windows": ["ze_loader.dll", "dnnl.dll"]
+  },
+  "discovery_order": ["SIM_XPU_ROOT", "ONEAPI_ROOT", "signed_package_roots", "system_level_zero_loader"],
+  "symbol_manifest": "crates/sim_backend_xpu/abi/symbols-v1.json",
+  "canonical_abi_manifest_sha256": "50f9d4a59d8715d2762fa95ff9050300463e9ba2ea452611ff54dcd33df19c83",
+  "reviewed_execution_bindings": "crates/sim_backend_xpu/abi/reviewed-execution-bindings-v1.txt",
+  "reviewed_execution_bindings_sha256": "ff27906b695ef070edce6b3e59c3144cfd15236c1cc221b046efb21d23eafea4",
+  "execution_verifier": "crates/sim_backend_xpu/abi/verify-execution-bindings.c",
+  "execution_verifier_sha256": "20b74364275542126bca7451b28eb6f114c559b7083c9b0df19cc8c9c23b7e4f",
+  "unsafe_owner": "sim_backend_xpu::loader",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+  "semantic_capability_owner": "sim_tensor::BackendCapabilityMatrix",
+  "discovery_is_authorization": false,
+  "package_receipt_is_authorization": false,
+  "package": {
+    "script": "script/package-sim-backend-xpu",
+    "nix": "nix/sim-backends/xpu/default.nix",
+    "redistributes_vendor_runtime": false,
+    "license_approval_required_for_vendor_runtime": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-xpu-package-v1",
+    "runtime_compilation_forbidden": true
+  },
+  "provenance": {
+    "level_zero_repository": "https://github.com/oneapi-src/level-zero",
+    "level_zero_tag": "v1.11.0",
+    "level_zero_commit": "f35123bead54a471a7e5f3bf8d439a4a44527d8e",
+    "level_zero_header_sha256": "72108c7826744ed58e1c86e6abfd407d89fdf8e1b09e96ac0439f40c3b6d0175",
+    "level_zero_header_version": "v1.6-r1.6.3",
+    "onednn_repository": "https://github.com/oneapi-src/oneDNN",
+    "onednn_tag": "v3.5",
+    "onednn_commit": "6860e98e71c748f956150f72cdbe14efe6fc2ac2",
+    "onednn_version": "3.5.0",
+    "onednn_header_sha256": {
+      "dnnl.h": "23dc8d9f3f5bcfc5c5500a1c86528fcc67439e8d8fb512e66cb905e4d30eb373",
+      "dnnl_common.h": "c8af25f31fecbd810a6b8851a2d764eb29c69efeb4e729c8ad030e973f2b731f",
+      "dnnl_common_types.h": "6cc4ae6d144f0f8000e3e9b01875ff06d064ede6f64cd46ead2395844bc33349",
+      "dnnl_types.h": "09f99a6b1736e93e0b73c4c75675ccab1bcb4562763f04d3dd879c3a0819a078"
+    },
+    "reviewed_source": "official commit-pinned Level Zero and oneDNN source headers; vendor headers and binaries are not redistributed"
+  },
+  "resource_lifetimes": {
+    "retained_images": "RegistryCertifiedXpuImages retains an Arc-backed certification owner and exact non-null Level Zero and oneDNN images",
+    "vendor_resources": "crate-private OwnedXpuCore is the sole owner of resolved symbols, context, queue, engine, stream, memory, descriptors, and primitives",
+    "safe_session": "XpuExecutionSession is Send + Sync only through one Mutex-serialized RuntimeState and exposes opaque allocations and event-equivalent completion",
+    "teardown": "OwnedXpuCore synchronizes and deterministically releases memory, descriptors, stream, engine, queue, and context in dependency order"
+  },
+  "canonical_adapters": {
+    "trust": "sim_runtime::NativeFfiRegistry",
+    "binding_state": "sim_types::NativeBackendBindingStatus",
+    "cancellation": "sim_types::CancellationToken",
+    "capability_and_device_identity": "sim_tensor::BackendCapabilityMatrix and comfy_tensor device validation",
+    "storage_workspace_accounting_and_events": "comfy_tensor canonical resource owners"
+  },
+  "unavailable": {
+    "feature_compilation_is_availability": false,
+    "discovery_is_availability": false,
+    "manifest_is_availability": false,
+    "ordinary_paths_are_loadable": false,
+    "structural_package_receipt_is_availability": false,
+    "missing_target_library_symbol_version_certificate_or_license_is_typed": true,
+    "hardware_certification_task": "comfy-parity-certify-device-intel-xpu-comfy-model-0021"
+  },
+  "state": "reviewed execution resource boundary implemented; remains unbound until runtime registry certification and native tensor integration"
+}

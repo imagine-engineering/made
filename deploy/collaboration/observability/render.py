@@ -9,7 +9,7 @@ import sys
 
 DIRECTORY = pathlib.Path(__file__).resolve().parent
 REPOSITORY = DIRECTORY.parents[2]
-LIMITS = REPOSITORY / ".agents/specs/collaborative-workspace/security/operational-limits.md"
+LIMITS = REPOSITORY / "docs/collaboration/operational-limits.md"
 DASHBOARD_DIRECTORY = DIRECTORY / "dashboards"
 RULES = DIRECTORY / "prometheus-rules.yaml"
 DASHBOARD_BY_PREFIX = {

@@ -1,0 +1,60 @@
+feature_id,entry_kind,name,behavior,availability,source_file,evidence_level
+COMFY-FRONTEXT-EXT-037,interface member,name,Unique extension name; duplicate or empty registration throws,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-038,interface member,commands,Register extension commands with source attribution,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-039,interface member,keybindings,Register extension default keybindings,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-040,interface member,menuCommands,Add command groups to menu paths,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-041,interface member,settings,Register extension settings after server values load,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-042,interface member,bottomPanelTabs,Register extension bottom panel tabs and commands,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-043,interface member,aboutPageBadges,Contribute About page badges,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-044,interface member,topbarBadges,Contribute topbar badges,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-045,interface member,actionBarButtons,Contribute actionbar buttons,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-046,interface member,init,Initialize after canvas creation and before node registration,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-047,interface member,setup,Run after standard nodes and drop handlers are installed,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-048,interface member,addCustomNodeDefs,Mutate/add backend node definitions before registration,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-049,interface member,getCustomWidgets,Provide sync or async custom widget constructors,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-050,interface member,getSelectionToolboxCommands,Contribute selection toolbox commands,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-051,interface member,getCanvasMenuItems,Contribute canvas context menu items and separators,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-052,interface member,getNodeMenuItems,Contribute node context menu items and separators,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-053,interface member,beforeRegisterNodeDef,Modify generated node class before LiteGraph registration,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-054,interface member,beforeRegisterVueAppNodeDefs,Mutate node definitions before Vue store indexing,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-055,interface member,registerCustomNodes,Register frontend-only LiteGraph nodes after backend nodes,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-056,interface member,loadedGraphNode,Patch each node after workflow configuration,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-057,interface member,nodeCreated,Run after a node instance is created,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-058,interface member,beforeConfigureGraph,Mutate workflow JSON and append missing-node data before configure,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-059,interface member,afterConfigureGraph,Run after graph configure with missing-node data,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-060,interface member,onAuthUserResolved,Receive latest anonymized auth user and future changes,experimental,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-061,interface member,onAuthTokenRefreshed,Receive auth token refresh notification,experimental,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-062,interface member,onAuthUserLogout,Receive logout notification,experimental,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-063,interface member,onNodeOutputsUpdated,Receive node output map replacement,active,src/types/comfy.ts; src/services/extensionService.ts,test-backed
+COMFY-FRONTEXT-EXT-005,core extension module,clipspace,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/clipspace.ts,code-inferred
+COMFY-FRONTEXT-EXT-006,core extension module,contextMenuFilter,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/contextMenuFilter.ts,code-inferred
+COMFY-FRONTEXT-EXT-007,core extension module,createBoundingBoxes,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/createBoundingBoxes.ts,code-inferred
+COMFY-FRONTEXT-EXT-008,core extension module,customWidgets,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/customWidgets.ts,code-inferred
+COMFY-FRONTEXT-EXT-009,core extension module,dynamicPrompts,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/dynamicPrompts.ts,code-inferred
+COMFY-FRONTEXT-EXT-010,core extension module,editAttention,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/editAttention.ts,code-inferred
+COMFY-FRONTEXT-EXT-011,core extension module,electronAdapter,Imported by src/extensions/core/index.ts under gate platform-specific,platform-specific,src/extensions/core/electronAdapter.ts,code-inferred
+COMFY-FRONTEXT-EXT-012,core extension module,groupNode,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/groupNode.ts,code-inferred
+COMFY-FRONTEXT-EXT-013,core extension module,groupOptions,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/groupOptions.ts,code-inferred
+COMFY-FRONTEXT-EXT-014,core extension module,imageCompare,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/imageCompare.ts,code-inferred
+COMFY-FRONTEXT-EXT-015,core extension module,imageCrop,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/imageCrop.ts,code-inferred
+COMFY-FRONTEXT-EXT-016,core extension module,load3dLazy,Imported by src/extensions/core/index.ts under gate conditional,conditional,src/extensions/core/load3dLazy.ts,code-inferred
+COMFY-FRONTEXT-EXT-017,core extension module,maskeditor,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/maskeditor.ts,code-inferred
+COMFY-FRONTEXT-EXT-018,core extension module,nodeTemplates,Imported by src/extensions/core/index.ts under gate conditional,conditional,src/extensions/core/nodeTemplates.ts,code-inferred
+COMFY-FRONTEXT-EXT-019,core extension module,noteNode,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/noteNode.ts,code-inferred
+COMFY-FRONTEXT-EXT-020,core extension module,painter,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/painter.ts,code-inferred
+COMFY-FRONTEXT-EXT-021,core extension module,previewAny,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/previewAny.ts,code-inferred
+COMFY-FRONTEXT-EXT-022,core extension module,saveText,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/saveText.ts,code-inferred
+COMFY-FRONTEXT-EXT-023,core extension module,rerouteNode,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/rerouteNode.ts,code-inferred
+COMFY-FRONTEXT-EXT-024,core extension module,saveImageExtraOutput,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/saveImageExtraOutput.ts,code-inferred
+COMFY-FRONTEXT-EXT-025,core extension module,selectionBorder,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/selectionBorder.ts,code-inferred
+COMFY-FRONTEXT-EXT-026,core extension module,simpleTouchSupport,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/simpleTouchSupport.ts,code-inferred
+COMFY-FRONTEXT-EXT-027,core extension module,slotDefaults,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/slotDefaults.ts,code-inferred
+COMFY-FRONTEXT-EXT-028,core extension module,uploadAudio,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/uploadAudio.ts,code-inferred
+COMFY-FRONTEXT-EXT-029,core extension module,uploadImage,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/uploadImage.ts,code-inferred
+COMFY-FRONTEXT-EXT-030,core extension module,webcamCapture,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/webcamCapture.ts,code-inferred
+COMFY-FRONTEXT-EXT-031,core extension module,widgetInputs,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/widgetInputs.ts,code-inferred
+COMFY-FRONTEXT-EXT-032,core extension module,cloudRemoteConfig,Imported by src/extensions/core/index.ts under gate cloud/paid,cloud/paid,src/extensions/core/cloudRemoteConfig.ts,code-inferred
+COMFY-FRONTEXT-EXT-033,core extension module,cloudBadges,Imported by src/extensions/core/index.ts under gate cloud/paid,cloud/paid,src/extensions/core/cloudBadges.ts,code-inferred
+COMFY-FRONTEXT-EXT-034,core extension module,cloudSessionCookie,Imported by src/extensions/core/index.ts under gate cloud/paid,cloud/paid,src/extensions/core/cloudSessionCookie.ts,code-inferred
+COMFY-FRONTEXT-EXT-035,core extension module,cloudFeedbackTopbarButton,Imported by src/extensions/core/index.ts under gate cloud/paid,cloud/paid,src/extensions/core/cloudFeedbackTopbarButton.ts,code-inferred
+COMFY-FRONTEXT-EXT-036,core extension module,nightlyBadges,Imported by src/extensions/core/index.ts under gate active,active,src/extensions/core/nightlyBadges.ts,code-inferred

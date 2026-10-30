@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "backend": "npu",
+  "catalog_row": "COMFY-MODEL-0019",
+  "task": "comfy-parity-device-foundation-huawei-ascend-npu-comfy-model-0019",
+  "execution_task": "comfy-parity-npu-execution-resource-ownership-consolidation",
+  "abi_floor": "CANN-8.0.RC3-AscendCL",
+  "binding_strategy": "reviewed-c-declarations-runtime-symbol-loading",
+  "targets": ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"],
+  "required_libraries": ["libascendcl.so", "libruntime.so"],
+  "discovery_order": ["SIM_ASCEND_ROOT", "ASCEND_HOME_PATH", "signed_package_roots"],
+  "abi_manifest": "crates/sim_backend_npu/abi/symbols-v1.json",
+  "canonical_abi_manifest_sha256": "2df75a090079b923cdeea2f5464b29a9c78ef35223b6a16884ed07a778466b2d",
+  "reviewed_bindings": "crates/sim_backend_npu/abi/reviewed-bindings-v1.txt",
+  "reviewed_bindings_sha256": "0b4481f131bfa8b311ee6e1f7a926eb3fdcfffc0e0165fb64ed4fd8e4036cb81",
+  "reviewed_source_sha256": "91d8bd8a346bda371c8175066ac5155fb27ccfe4ba63091730ec29dcd96dd091",
+  "unsafe_owner": "sim_backend_npu::loader",
+  "execution_owner": "sim_backend_npu::NpuExecutionSession",
+  "certified_image_projection": "sim_backend_npu::RegistryCertifiedNpuImages",
+  "certification_owner": "sim_runtime::NativeFfiRegistry",
+  "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+  "semantic_owner": "sim_tensor::TensorBackend",
+  "capability_owner": "sim_tensor::BackendCapabilityMatrix",
+  "discovery_is_authorization": false,
+  "package_receipt_is_authorization": false,
+  "execution_contract": {
+    "device_properties": ["device_id", "device_count", "soc_name", "api_version", "physical_capacity_bytes", "allocation_capacity_bytes"],
+    "element_types": ["f16", "f32"],
+    "operations": ["allocation", "host_to_device", "device_to_host", "device_to_device", "contiguous_add", "stream_synchronize", "event_record", "event_synchronize"],
+    "raw_vendor_pointers_exported": false
+  },
+  "packaging": {
+    "nix": "nix/sim-backends/npu/default.nix",
+    "script": "script/package-sim-backend-npu",
+    "redistributes_cann": false,
+    "license_approval_required_for_cann_redistribution": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-npu-package-v1",
+    "final_application_signing_required": true
+  },
+  "foundation_state": "owned-execution-session-unbound-until-registry-certified-retained-images",
+  "hardware_certification": "not-observed"
+}

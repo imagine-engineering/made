@@ -152,7 +152,7 @@ fn shared_clippy() -> NamedJob {
                 fi
             "#}))
             .add_step(named::bash(
-                "python3 .agents/specs/collaborative-workspace/scripts/test-inventory.py",
+                "python3 script/test-collaborative-workspace-inventory.py",
             ))
             .add_step(steps::cleanup_cargo_config(Platform::Linux)),
     )
@@ -341,6 +341,7 @@ fn release_automation_validation() -> NamedJob {
                 cargo xtask workflows
                 git diff --exit-code
                 cargo xtask check-workflows
+                python3 script/check-repository-inputs
                 cargo xtask products --check
                 cargo xtask bundle --product rust \
                   --platform linux \
@@ -1151,9 +1152,8 @@ mod tests {
         assert!(shared_clippy_commands.contains(&"cargo fmt --all -- --check"));
         assert!(shared_clippy_commands.contains(&"./script/clippy"));
         assert!(
-            shared_clippy_commands.contains(
-                &"python3 .agents/specs/collaborative-workspace/scripts/test-inventory.py"
-            )
+            shared_clippy_commands
+                .contains(&"python3 script/test-collaborative-workspace-inventory.py")
         );
         let shared_clippy_steps = job(&parsed, "shared_clippy")
             .get("steps")

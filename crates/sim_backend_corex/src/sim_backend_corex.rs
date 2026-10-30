@@ -85,7 +85,7 @@ mod tests {
     #[test]
     fn catalog_maps_the_manifest_to_canonical_runtime_owners() {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/corex.json"
+            "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/corex.json"
         );
         assert!(catalog.contains(
             "\"canonical_abi_manifest_sha256\": \"315597fb5ed4e1d0ae322ecda5437cb2583cb861e325a34c5259e534c58e166d\""

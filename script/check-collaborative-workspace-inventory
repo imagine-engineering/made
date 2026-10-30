@@ -3,4 +3,4 @@
 set -eu
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-exec python3 "$repository_root/.agents/specs/collaborative-workspace/scripts/check-inventory.py" "$@"
+exec python3 "$repository_root/script/collaborative-workspace-inventory.py" "$@"

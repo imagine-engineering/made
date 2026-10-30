@@ -8,7 +8,7 @@ use std::{
 use thiserror::Error;
 
 pub const PROVIDER_COMPONENT_CONTRACT_CATALOG: &[u8] = include_bytes!(
-    "../../../.agents/specs/comfy-parity/catalogs/provider-component-contracts.json"
+    "../../../crates/sim_test_support/parity/catalogs/provider-component-contracts.json"
 );
 pub const PROVIDER_COMPONENT_CONTRACT_CATALOG_SHA256: &str =
     "cce8bc726f93d275731b54e706f89ae71831f55c882247bb9a255486ccc3c69e";

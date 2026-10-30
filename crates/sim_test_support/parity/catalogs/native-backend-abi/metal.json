@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "owner_task": "comfy-parity-device-foundation-apple-metal-mps-comfy-model-0015",
+  "feature_id": "COMFY-MODEL-0015",
+  "backend": "metal",
+  "adapter_crate": "sim_backend_metal",
+  "binding": "workspace metal 0.33 plus checked Objective-C framework, symbol, class, selector, encoding, and layout declarations",
+  "abi_floor": "macos-13-metal-3",
+  "targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin"
+  ],
+  "frameworks": [
+    "/System/Library/Frameworks/Metal.framework/Metal",
+    "/System/Library/Frameworks/MetalPerformanceShaders.framework/MetalPerformanceShaders",
+    "/System/Library/Frameworks/MetalPerformanceShadersGraph.framework/MetalPerformanceShadersGraph"
+  ],
+  "framework_redistribution": false,
+  "framework_provenance": "future NativeFfiRegistry system-framework certificate over fixed install names, RTLD_FIRST, dladdr, class_getImageName, and exact selector encodings",
+  "discovery_order": [
+    "fixed /System/Library framework install names",
+    "MTLCreateSystemDefaultDevice",
+    "Metal 3 family support",
+    "MPSSupportsMTLDevice",
+    "signature-covered target-specific readiness metallib"
+  ],
+  "ambient_linker_search": false,
+  "symbol_manifest": "crates/sim_backend_metal/abi/symbols-v1.json",
+  "symbol_manifest_sha256": "87d2183104154143d3f79583368d7a924627d40861fbc888e9cf8be9c2354476",
+  "reviewed_binding_evidence": "crates/sim_backend_metal/abi/reviewed-bindings-v1.txt",
+  "reviewed_sdk": {
+    "xcode_version": "26.2",
+    "xcode_build": "17C52",
+    "sdk": "macosx26.2",
+    "header_count": 12
+  },
+  "unsafe_owner": "sim_backend_metal::loader",
+  "domain_owners": {
+    "device_identity": "sim_tensor::DeviceId",
+    "capability_matrix": "sim_tensor::BackendCapabilityMatrix",
+    "unavailable_and_binding_status": "sim_types",
+    "vendor_abi_loader": "sim_backend_metal",
+    "system_framework_certification": "sim_runtime::NativeFfiRegistry (future dependent provisioning task)",
+    "renderer": "gpui_macos (not reused as compute authorization)",
+    "media_texture_bridge": "media (not reused as compute authorization)",
+    "package_signature_verification": "pending Task 110 sim_runtime::MetalPackageVerificationKey; Task 108 structural inspection grants no trust"
+  },
+  "package": {
+    "target_specific": true,
+    "redistributes_apple_frameworks": false,
+    "runtime_compilation_forbidden": true,
+    "development_compile_command": "xcrun -sdk macosx metal -std=metal3.0 -mmacosx-version-min=13.0 -c readiness.metal; xcrun -sdk macosx metallib readiness.air",
+    "readiness_function": "zed_sim_metal_readiness_v1",
+    "source": "crates/sim_backend_metal/kernels/readiness.metal",
+    "source_sha256": "902b8683ad1464d9bde9055ba9f808fa2d1df7ecb98aa7333662ee0d48b921a8",
+    "metallib_sha256_by_target": {
+      "aarch64-apple-darwin": "5f4d62997a8aff54306a04038222ac6075e30e40f7cc3ec295160b467a88d370",
+      "x86_64-apple-darwin": "5f4d62997a8aff54306a04038222ac6075e30e40f7cc3ec295160b467a88d370"
+    },
+    "minimum_macos_version": "13.0",
+    "metal_language_version": "metal3.0",
+    "minimum_metal_family": 5001,
+    "required_entitlements": [],
+    "final_application_signing_required": true,
+    "signature_verification_state": "pending comfy-parity-provision-native-ffi-contracts-apple-metal-mps-comfy-model-0015",
+    "structural_receipt_is_untrusted": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-metal-package-v1",
+    "signature_coverage": "package-coverage-v1",
+    "license_notice": "crates/sim_backend_metal/LICENSES",
+    "nix_expression": "nix/sim-backends/metal/default.nix",
+    "packager": "script/package-sim-backend-metal"
+  },
+  "availability": {
+    "requires_supported_target": true,
+    "requires_exact_framework_provenance": true,
+    "requires_all_manifest_symbols_classes_selectors_and_encodings": true,
+    "requires_macos_floor": true,
+    "requires_metal_3": true,
+    "requires_mps_device_support": true,
+    "requires_exact_package_tree_digest_coverage_before_future_signature_verification": true,
+    "requires_exact_source_and_metallib_digests": true,
+    "foundation_state": "unbound until NativeFfiRegistry certification and dependent production integration",
+    "missing_contract_result": "sim_types::BackendUnavailable"
+  },
+  "hardware_certification": "pending comfy-parity-certify-device-apple-metal-mps-comfy-model-0015"
+}

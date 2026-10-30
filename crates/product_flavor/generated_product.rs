@@ -3,6 +3,8 @@
 mod selected {
     /// The stable selected product ID.
     pub const ID: &str = "rust";
+    /// Initial release version, independent of upstream crate versions.
+    pub const INITIAL_VERSION: Option<&str> = Some("0.1.0");
     /// The selected product's default light theme.
     pub const DEFAULT_LIGHT_THEME: &str = "Fractal Neutral Light";
     /// The selected product's default dark theme.
@@ -98,6 +100,8 @@ mod selected {
 mod selected {
     /// The stable selected product ID.
     pub const ID: &str = "jvm";
+    /// Initial release version, independent of upstream crate versions.
+    pub const INITIAL_VERSION: Option<&str> = None;
     /// The selected product's default light theme.
     pub const DEFAULT_LIGHT_THEME: &str = "Fractal Neutral Light";
     /// The selected product's default dark theme.

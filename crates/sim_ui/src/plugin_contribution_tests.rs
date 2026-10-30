@@ -16,15 +16,15 @@ use std::{
 
 const SOURCE_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/catalogs/frontend-extensions.csv"
+    "/../../crates/sim_test_support/parity/catalogs/frontend-extensions.csv"
 ));
 const DISPOSITION_CATALOG: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/catalogs/frontend-extension-dispositions.csv"
+    "/../../crates/sim_test_support/parity/catalogs/frontend-extension-dispositions.csv"
 ));
 const POLICY: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/frontend-extension-policy.json"
+    "/../../crates/sim_test_support/parity/frontend-extension-policy.json"
 ));
 const FIXTURE: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

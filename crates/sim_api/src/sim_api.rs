@@ -3327,7 +3327,7 @@ pub(crate) mod tests {
                 "arch": std::env::consts::ARCH,
             },
             "fixture_digests": {
-                "backend_http_routes_fnv1a64": format!("{:016x}", fnv1a64(include_bytes!("../../../.agents/specs/comfy-parity/catalogs/backend-http-routes.csv"))),
+                "backend_http_routes_fnv1a64": format!("{:016x}", fnv1a64(include_bytes!("../../../crates/sim_test_support/parity/catalogs/backend-http-routes.csv"))),
             },
             "summary": {"passed": passed, "failed": failed, "skipped": 0},
             "canonical_host_cases": canonical_host_cases,

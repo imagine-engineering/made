@@ -16474,8 +16474,8 @@ esac
                     .await
                     .expect("genuine selected workload");
                 assert!(build.status().await.expect("Build status").success());
-                std::fs::write(installed.join("profile-template.json"),include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json")).expect("fixture profile");
-                std::fs::write(installed.join("profile-template.syms.json"),include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json")).expect("fixture symbols");
+                std::fs::write(installed.join("profile-template.json"),include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json")).expect("fixture profile");
+                std::fs::write(installed.join("profile-template.syms.json"),include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json")).expect("fixture symbols");
                 std::fs::write(
                     installed.join("capture-expected-cwd"),
                     fixture.root.to_str().expect("Cargo invocation cwd"),
@@ -16827,7 +16827,7 @@ esac
                     assert_eq!(
                         std::fs::read(&output).expect("profile"),
                         include_bytes!(
-                            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+                            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
                         )
                     );
                     let pair_store = fixture.project.read_with(cx, |project, _| {

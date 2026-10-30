@@ -10,8 +10,9 @@ use sim_model::{
 use sim_types::CancellationToken;
 use std::collections::BTreeSet;
 
-const CONTRACT: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/spandrel-image-model-contract.json");
+const CONTRACT: &str = include_str!(
+    "../../../crates/sim_test_support/parity/catalogs/spandrel-image-model-contract.json"
+);
 
 fn mutate_contract(
     change: impl FnOnce(&mut Value) -> Result<(), String>,

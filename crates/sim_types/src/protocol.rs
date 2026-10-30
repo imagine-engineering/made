@@ -268,8 +268,9 @@ mod tests {
 
     #[test]
     fn generated_protocol_catalogs_are_covered_by_generic_contracts() {
-        let routes =
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-http-routes.csv");
+        let routes = include_str!(
+            "../../../crates/sim_test_support/parity/catalogs/backend-http-routes.csv"
+        );
         let mut route_count = 0;
         for line in routes.lines().skip(1) {
             let method = line.split(',').next().expect("method column");
@@ -282,7 +283,7 @@ mod tests {
         assert_eq!(route_count, 141);
 
         let events = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/backend-websocket-events.csv"
+            "../../../crates/sim_test_support/parity/catalogs/backend-websocket-events.csv"
         );
         let mut event_count = 0;
         for line in events.lines().skip(1) {
@@ -302,7 +303,7 @@ mod tests {
         assert_eq!(event_count, 26);
 
         let formats =
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/cross-formats.csv");
+            include_str!("../../../crates/sim_test_support/parity/catalogs/cross-formats.csv");
         assert_eq!(formats.lines().skip(1).count(), 34);
     }
 }

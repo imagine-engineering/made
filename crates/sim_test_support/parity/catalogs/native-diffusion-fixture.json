@@ -1,0 +1,207 @@
+{
+  "algorithm_features": {
+    "latent": "COMFY-MODEL-0045",
+    "sampler": "COMFY-MODEL-0179",
+    "scheduler": "COMFY-MODEL-0209"
+  },
+  "clip": {
+    "activation": "quick_gelu",
+    "architecture": "SD1 CLIP-L equations with reduced width/depth",
+    "heads": 4,
+    "hidden_size": 32,
+    "intermediate_size": 128,
+    "layer_norm_eps": 1e-05,
+    "layers": 2,
+    "source_config_sha256": "c4dabd85f1abdd818c7a9f5dee1f6cf2b9cebc5ed3237ab2f2c4b00bdb02ce6c"
+  },
+  "family_detection": {
+    "detector_checkpoint": "sd15-detector-projection.json",
+    "rule": "A separate source-shape header/key fixture must make the production detector select COMFY-MODEL-0117. The reduced execution artifact is admitted only through a comfy_test_support-owned fixture provider carrying that detector transcript and may not define a production checkpoint format or bypass detector tests for user artifacts.",
+    "source_match_config": {
+      "adm_in_channels": null,
+      "context_dim": 768,
+      "model_channels": 320,
+      "use_linear_in_transformer": false,
+      "use_temporal_attention": false
+    }
+  },
+  "fixture_id": "sd15-tiny-v1",
+  "latent": {
+    "rgb_factors": [
+      [
+        0.3512,
+        0.2297,
+        0.3227
+      ],
+      [
+        0.325,
+        0.4974,
+        0.235
+      ],
+      [
+        -0.2829,
+        0.1762,
+        0.2721
+      ],
+      [
+        -0.212,
+        -0.2616,
+        -0.7177
+      ]
+    ],
+    "scale_factor": 0.18215,
+    "shape": [
+      1,
+      4,
+      4,
+      4
+    ]
+  },
+  "node_features": {
+    "CLIPTextEncode": "COMFY-NODE-0064",
+    "CheckpointLoaderSimple": "COMFY-NODE-0053",
+    "EmptyLatentImage": "COMFY-NODE-0163",
+    "KSampler": "COMFY-NODE-0306",
+    "SaveImage": "COMFY-NODE-0593",
+    "VAEDecode": "COMFY-NODE-0710"
+  },
+  "required_checkpoints": [
+    "sd15-detector-projection.json",
+    "state-dict-manifest.json",
+    "oracle-provenance.json",
+    "vocab.json",
+    "merges.txt",
+    "model.safetensors",
+    "tokens.json",
+    "clip-conditioning.safetensors",
+    "normal-sigmas.f64le",
+    "rng-state-before-noise.bin",
+    "initial-noise.safetensors",
+    "denoiser-eval-000.safetensors",
+    "denoiser-eval-001.safetensors",
+    "denoiser-eval-002.safetensors",
+    "denoiser-eval-003.safetensors",
+    "latent-step-000.safetensors",
+    "latent-step-001.safetensors",
+    "latent-step-002.safetensors",
+    "latent-step-003.safetensors",
+    "latent-step-004.safetensors",
+    "vae-decoded.f32le",
+    "output.png",
+    "expected-events.json"
+  ],
+  "source_family": {
+    "feature_id": "COMFY-MODEL-0117",
+    "name": "SD15",
+    "source": "projects/comfy/ComfyUI/comfy/supported_models.py:44",
+    "source_fingerprint": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
+  },
+  "state_dict": {
+    "complete_key_manifest": "state-dict-manifest.json",
+    "container": "safetensors, little-endian f32, lexicographically sorted keys",
+    "prefix_map": {
+      "cond_stage_model.": "clip_l.",
+      "first_stage_model.": "",
+      "model.diffusion_model.": ""
+    },
+    "required_sentinel_keys": [
+      "model.diffusion_model.input_blocks.0.0.weight",
+      "model.diffusion_model.time_embed.0.weight",
+      "model.diffusion_model.out.2.weight",
+      "cond_stage_model.transformer.text_model.embeddings.token_embedding.weight",
+      "cond_stage_model.transformer.text_model.embeddings.position_embedding.weight",
+      "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.q_proj.weight",
+      "cond_stage_model.transformer.text_model.final_layer_norm.weight",
+      "first_stage_model.encoder.conv_in.weight",
+      "first_stage_model.quant_conv.weight",
+      "first_stage_model.post_quant_conv.weight",
+      "first_stage_model.decoder.conv_out.weight"
+    ],
+    "weight_generation": "For each complete topology-derived key, seed SplitMix64 with the first little-endian u64 of SHA-256(fixture_id + NUL + key), map the top signed 24 bits to [-1,1), multiply by 0.02, and round once to f32; biases and normalization parameters use the same stream with no special zero/one shortcut."
+  },
+  "tokenizer": {
+    "end_and_pad": 49407,
+    "merges_sha256": "9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a",
+    "negative_tokens_rle": [
+      [
+        49406,
+        1
+      ],
+      [
+        49407,
+        76
+      ]
+    ],
+    "positive_tokens_rle": [
+      [
+        49406,
+        1
+      ],
+      [
+        320,
+        1
+      ],
+      [
+        1628,
+        1
+      ],
+      [
+        49407,
+        74
+      ]
+    ],
+    "sequence_length": 77,
+    "start": 49406,
+    "type": "SD1Tokenizer CLIP BPE",
+    "vocab_sha256": "e089ad92ba36837a0d31433e555c8f45fe601ab5c221d4f607ded32d9f7a4349",
+    "vocab_size": 49408
+  },
+  "unet": {
+    "attention_head_count": 4,
+    "channel_multipliers": [
+      1,
+      2,
+      4,
+      4
+    ],
+    "context_dim": 32,
+    "in_channels": 4,
+    "model_channels": 32,
+    "out_channels": 4,
+    "prediction": "epsilon",
+    "res_blocks_per_level": 1,
+    "transformer_depth": 1,
+    "use_linear_in_transformer": false,
+    "use_temporal_attention": false
+  },
+  "vae": {
+    "base_channels": 32,
+    "channel_multipliers": [
+      1,
+      2,
+      4,
+      4
+    ],
+    "embed_dim": 4,
+    "equations": "AutoencoderKL",
+    "image_channels": 3,
+    "latent_channels": 4,
+    "res_blocks_per_level": 1,
+    "spatial_downscale": 8
+  },
+  "workflow": {
+    "batch": 1,
+    "cfg": 7.0,
+    "denoise": 1.0,
+    "device": "cpu",
+    "dtype": "f32",
+    "height": 32,
+    "negative_prompt": "",
+    "positive_prompt": "a test",
+    "sampler": "euler",
+    "scheduler": "normal",
+    "seed_u64_hex": "0123456789abcdef",
+    "steps": 4,
+    "width": 32
+  }
+}

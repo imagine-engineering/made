@@ -381,7 +381,7 @@ mod tests {
 
     fn client_fixture() -> serde_json::Value {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.agents/specs/collaborative-workspace/fixtures/clients/manifest.json");
+            .join("../../crates/collaboration_domain/test_fixtures/frozen-clients.json");
         let source = fs::read_to_string(&path).unwrap_or_else(|error| {
             panic!(
                 "could not read frozen client fixture {}: {error}",

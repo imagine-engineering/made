@@ -10,19 +10,19 @@ use std::collections::BTreeSet;
 
 const EVENTS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/fixtures/protocol/events.json"
+    "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/events.json"
 ));
 const MANIFEST: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/fixtures/protocol/manifest.json"
+    "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/manifest.json"
 ));
 const WIRE_TRACES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/fixtures/protocol/wire-traces.json"
+    "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/wire-traces.json"
 ));
 const PROTOCOL_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/catalogs/protocol.csv"
+    "/../../docs/collaboration/collaborative-workspace/catalogs/protocol.csv"
 ));
 
 struct NipFixture {
@@ -440,19 +440,19 @@ fn relay_trace(filename: &str) -> &'static str {
     match filename {
         "relay-good.jsonl" => include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../.agents/specs/collaborative-workspace/fixtures/protocol/relay-good.jsonl"
+            "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/relay-good.jsonl"
         )),
         "relay-bad-host-channel.jsonl" => include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../.agents/specs/collaborative-workspace/fixtures/protocol/relay-bad-host-channel.jsonl"
+            "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/relay-bad-host-channel.jsonl"
         )),
         "relay-bad-foreign-row.jsonl" => include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../.agents/specs/collaborative-workspace/fixtures/protocol/relay-bad-foreign-row.jsonl"
+            "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/relay-bad-foreign-row.jsonl"
         )),
         "relay-bad-coverage.jsonl" => include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../.agents/specs/collaborative-workspace/fixtures/protocol/relay-bad-coverage.jsonl"
+            "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/relay-bad-coverage.jsonl"
         )),
         _ => panic!("unregistered relay fixture {filename}"),
     }

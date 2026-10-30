@@ -1539,7 +1539,8 @@ fn python_symbol_sha256(source: &[u8], symbol: &str) -> Result<String, Box<dyn E
 fn write_artifact(executed_case_ids: &BTreeSet<&str>) -> Result<(), Box<dyn Error>> {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let catalog = fs::read_to_string(
-        repository.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        repository
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let mut contracts = Vec::new();
     let mut counts = BTreeMap::new();

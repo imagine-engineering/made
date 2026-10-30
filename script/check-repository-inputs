@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Reject local agent guidance as a compile input and check migrated static includes."""
+import argparse
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+INCLUDE = re.compile(
+    r'include_(?:str|bytes)!\(\s*(?P<manifest>concat!\(\s*env!\("CARGO_MANIFEST_DIR"\),\s*)?"(?P<path>[^"]+)"',
+    re.MULTILINE,
+)
+OWNERS = ("sim_test_support/parity/", "language_tools/test_fixtures/profiling/",
+          "collaboration_domain/test_fixtures/", "docs/collaboration/")
+
+
+def check(root):
+    listing = subprocess.run(["git", "ls-files", "-z"], cwd=root, text=True, capture_output=True)
+    if listing.returncode:
+        raise RuntimeError("Run this check in a Git checkout")
+    tracked = set(listing.stdout.rstrip("\0").split("\0"))
+    errors = ["Root .agents files must not be tracked"] if any(path.startswith(".agents/") for path in tracked) else []
+    checked = 0
+    for name in sorted(tracked):
+        if not name.endswith(".rs"):
+            continue
+        source = root / name
+        for match in INCLUDE.finditer(source.read_text()):
+            literal = match["path"]
+            if ".agents/" in literal:
+                errors.append(f"{name}: local agent guidance is a compile input")
+                continue
+            if not any(owner in literal for owner in OWNERS):
+                continue
+            checked += 1
+            if match["manifest"]:
+                manifest = next((parent for parent in source.parents if (parent / "Cargo.toml").is_file()), None)
+                if manifest is None:
+                    errors.append(f"{name}: cannot find the owning Cargo manifest")
+                    continue
+                target = Path(str(manifest) + literal).resolve()
+            else:
+                target = (source.parent / literal).resolve()
+            try:
+                relative = target.relative_to(root).as_posix()
+            except ValueError:
+                errors.append(f"{name}: compile input escapes the repository")
+                continue
+            if not target.is_file() or relative not in tracked:
+                errors.append(f"{name}: missing or untracked compile input {relative}")
+    if errors:
+        raise RuntimeError("\n".join(errors))
+    print(f"Tracked compile-input check passed: {checked} migrated includes; .agents absent from index")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    arguments = parser.parse_args()
+    try:
+        check(arguments.root.resolve())
+    except (OSError, RuntimeError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

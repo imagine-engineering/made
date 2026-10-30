@@ -22,8 +22,9 @@ use futures::channel::oneshot;
 use gpui::{AppContext as _, TestAppContext};
 use markdown::Markdown;
 
-const PROTOCOL_MANIFEST: &str =
-    include_str!("../../../.agents/specs/collaborative-workspace/fixtures/protocol/manifest.json");
+const PROTOCOL_MANIFEST: &str = include_str!(
+    "../../../crates/collaboration_domain/test_fixtures/compatibility/protocol/manifest.json"
+);
 
 fn timestamp() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-08-14T12:00:00Z")

@@ -1,0 +1,379 @@
+{
+  "schema_version": 2,
+  "payload": {
+    "certification_id": "apple-metal-mps-comfy-model-0015",
+    "task_id": "comfy-parity-certify-device-apple-metal-mps-comfy-model-0015",
+    "feature_id": "COMFY-MODEL-0015",
+    "backend": "metal",
+    "target": "aarch64-apple-darwin",
+    "observed_at_utc": "2026-07-26T08:31:35Z",
+    "environment": {
+      "lab_id": "zed-metal-lab-mt-mbp-l2kh69c7rg",
+      "hostname": "MT-MBP-L2KH69C7RG",
+      "os_name": "macOS",
+      "os_version": "26.5.2",
+      "os_build": "25F84",
+      "architecture": "arm64",
+      "rust_target": "aarch64-apple-darwin",
+      "toolchain": [
+        {
+          "name": "sdk",
+          "value": "macosx26.2"
+        },
+        {
+          "name": "xcode-build",
+          "value": "17C52"
+        },
+        {
+          "name": "xcode-version",
+          "value": "26.2"
+        }
+      ]
+    },
+    "device": {
+      "name": "Apple M5",
+      "identifier": "0x0000000100000495",
+      "memory_model": "unified",
+      "observed_features": [
+        "metal-3",
+        "metal-performance-shaders"
+      ],
+      "memory": [
+        {
+          "name": "certification-effective-ceiling",
+          "bytes": 67108864
+        },
+        {
+          "name": "host-physical-memory",
+          "bytes": 34359738368
+        },
+        {
+          "name": "recommended-working-set",
+          "bytes": 26800603136
+        }
+      ]
+    },
+    "contract": {
+      "abi_contract_sha256": "571dee3564bda08368c13add8adb4a206174e7e6a3db8ce5769bf877989aa30e",
+      "abi_manifest_sha256": "87d2183104154143d3f79583368d7a924627d40861fbc888e9cf8be9c2354476",
+      "execution_abi_sha256": "5b183c3a01ab5d6cfad93c185a9aafa0fe66ad2db5c70c7ec5458f9c3701017e",
+      "abi_floor": "macos-13-metal-3",
+      "framework_count": 3,
+      "symbol_count": 2,
+      "class_count": 3,
+      "selector_count": 12,
+      "symbols": [
+        "MPSSupportsMTLDevice",
+        "MTLCreateSystemDefaultDevice",
+        "zed_comfy_metal_add_f16_v1",
+        "zed_comfy_metal_add_f32_v1",
+        "zed_comfy_metal_readiness_v1"
+      ],
+      "package": {
+        "kind": "signed",
+        "format": "zed-comfy-metal-package-v1",
+        "signer": "metal.lab.mt-mbp-l2kh69c7rg",
+        "signer_public_key": "ea96df9b4a930cb4a9a55425119a0cdba327e084a7859b5fda6025e2f36b3846",
+        "signature": "70d1a14b47c571708785da5627c2128ef48c41b234be1d5f2a3ec6eeadaec371121d326587323c9d2453cae65fffc9b9d92a81fed7cddf425f31a2050b439a07",
+        "coverage_sha256": "a27be9853b2bc25195accc276b468824df543127d3f88a58065dd80b43ff57ca",
+        "manifest_sha256": "e9228c629850ea95953e4dc42ea22a20ffa4bb1fcfd427a0129e41eae38392bf",
+        "contract_catalog_sha256": "7dd57199deca4c88c061f600bd944ac7e634904838f0e33af1a689c331b8687d",
+        "payloads": [
+          {
+            "path": "kernels/readiness.metallib",
+            "sha256": "5f4d62997a8aff54306a04038222ac6075e30e40f7cc3ec295160b467a88d370"
+          },
+          {
+            "path": "kernels/tensor_ops.metallib",
+            "sha256": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b"
+          }
+        ]
+      }
+    },
+    "matrix": [
+      {
+        "id": "001-abi",
+        "category": "contract",
+        "operation": "abi-probe",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "three fixed frameworks, two C symbols, three classes, twelve selectors"
+      },
+      {
+        "id": "002-package",
+        "category": "contract",
+        "operation": "signed-package",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "canonical runtime verifier accepted deterministic pinned package coverage"
+      },
+      {
+        "id": "003-device",
+        "category": "device",
+        "operation": "device-probe",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "actual default Apple GPU passed Metal 3 and MPS probes"
+      },
+      {
+        "id": "004-f16-allocation",
+        "category": "capability",
+        "operation": "allocation",
+        "dtype": "f16",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "005-f16-copy-input",
+        "category": "capability",
+        "operation": "copy-input",
+        "dtype": "f16",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "006-f16-copy-output",
+        "category": "capability",
+        "operation": "copy-output",
+        "dtype": "f16",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "007-f16-add-input",
+        "category": "capability",
+        "operation": "add-input",
+        "dtype": "f16",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "008-f16-add-output",
+        "category": "capability",
+        "operation": "add-output",
+        "dtype": "f16",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "009-f32-allocation",
+        "category": "capability",
+        "operation": "allocation",
+        "dtype": "f32",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "010-f32-copy-input",
+        "category": "capability",
+        "operation": "copy-input",
+        "dtype": "f32",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "011-f32-copy-output",
+        "category": "capability",
+        "operation": "copy-output",
+        "dtype": "f32",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "012-f32-add-input",
+        "category": "capability",
+        "operation": "add-input",
+        "dtype": "f32",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "013-f32-add-output",
+        "category": "capability",
+        "operation": "add-output",
+        "dtype": "f32",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "advertised row executed through the retained native Metal runtime"
+      },
+      {
+        "id": "014-upload",
+        "category": "transfer",
+        "operation": "host-to-device",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "actual shared-buffer upload completed and was event-fenced"
+      },
+      {
+        "id": "015-download",
+        "category": "transfer",
+        "operation": "device-to-host",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "actual shared-buffer download returned exact bytes"
+      },
+      {
+        "id": "016-record-event",
+        "category": "synchronization",
+        "operation": "record-event",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "native command-buffer event was recorded"
+      },
+      {
+        "id": "017-wait-event",
+        "category": "synchronization",
+        "operation": "wait-event",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "native event completed and retired"
+      },
+      {
+        "id": "018-determinism-f16",
+        "category": "determinism",
+        "operation": "add",
+        "dtype": "f16",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "two native executions returned identical exact bytes"
+      },
+      {
+        "id": "019-determinism-f32",
+        "category": "determinism",
+        "operation": "add",
+        "dtype": "f32",
+        "layout": "contiguous",
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "two native executions returned identical exact bytes"
+      },
+      {
+        "id": "020-memory",
+        "category": "memory",
+        "operation": "accounting-convergence",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "logical workspace and physical allocation counters returned to zero"
+      },
+      {
+        "id": "021-cancellation",
+        "category": "cancellation",
+        "operation": "pre-dispatch-cancel",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "canonical cancellation rejected allocation before native dispatch"
+      },
+      {
+        "id": "022-layout",
+        "category": "boundary",
+        "operation": "strided-layout",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "unsupported layout was rejected before native dispatch"
+      },
+      {
+        "id": "023-no-fallback",
+        "category": "boundary",
+        "operation": "multiply",
+        "dtype": null,
+        "layout": null,
+        "status": "pass",
+        "tolerance": "exact-bytes",
+        "evidence": "unsupported operation returned typed unsupported without CPU fallback"
+      },
+      {
+        "id": "024-device-loss",
+        "category": "device-loss",
+        "operation": "physical-device-loss-injection",
+        "dtype": null,
+        "layout": null,
+        "status": "unsupported",
+        "tolerance": "not-applicable",
+        "evidence": "safe failure injection is deliberately unavailable on a physical Metal runtime; deterministic fake-runtime tests cover typed device-loss mapping"
+      }
+    ],
+    "provenance": [
+      {
+        "path": ".agents/specs/comfy-parity/catalogs/native-backend-abi/metal.json",
+        "sha256": "571dee3564bda08368c13add8adb4a206174e7e6a3db8ce5769bf877989aa30e"
+      },
+      {
+        "path": ".agents/specs/comfy-parity/catalogs/native-tensor-operation-contracts.csv",
+        "sha256": "b1aa3c83e2cc4308b8433f6e7dfbdd19dc522b0b71d2ff3772d20072702d75e5"
+      },
+      {
+        "path": "crates/comfy_backend_metal/abi/execution-v1.json",
+        "sha256": "5b183c3a01ab5d6cfad93c185a9aafa0fe66ad2db5c70c7ec5458f9c3701017e"
+      },
+      {
+        "path": "crates/comfy_backend_metal/abi/reviewed-execution-bindings-v1.txt",
+        "sha256": "3e4499b0597c8e470eed3866d2c60fa72bc4cebe5e58af44873585667a118426"
+      },
+      {
+        "path": "crates/comfy_backend_metal/abi/symbols-v1.json",
+        "sha256": "87d2183104154143d3f79583368d7a924627d40861fbc888e9cf8be9c2354476"
+      },
+      {
+        "path": "crates/comfy_backend_metal/kernels/readiness.metal",
+        "sha256": "902b8683ad1464d9bde9055ba9f808fa2d1df7ecb98aa7333662ee0d48b921a8"
+      },
+      {
+        "path": "crates/comfy_backend_metal/kernels/tensor_ops.metal",
+        "sha256": "1c93eb5fe65f495e02b1132a5de597d7f945c6463ffb5f89c0f03f8aa1dfc91b"
+      },
+      {
+        "path": "nix/comfy-backends/metal/package-policy.json",
+        "sha256": "5ed33487673ca6914e2a1b6fe01f9daa8836a798bd46ec234e509f60a9918652"
+      }
+    ],
+    "conclusion": "pass"
+  },
+  "attestation": {
+    "algorithm": "ed25519",
+    "domain": "zed-comfy-device-certification-v2",
+    "signer": "zed.hardware.lab.mt-mbp-l2kh69c7rg",
+    "public_key": "0f17d6edad8968968b48bb4a00a332ba1759342aeb750cebaca3f3413f7951cf",
+    "signature": "15be005ce7b1a4fa12553150f9d7f3757e0eb5d3c984cb015384d850f3efff4fc54ac9f5c0f9ec4eb76dda043397454b577506ba1be6c463efefe755f46a9d07",
+    "payload_sha256": "78a71a374aabd60bd878009946444cd6a19742ad3f372c3f755d9c469acb6f4b"
+  }
+}

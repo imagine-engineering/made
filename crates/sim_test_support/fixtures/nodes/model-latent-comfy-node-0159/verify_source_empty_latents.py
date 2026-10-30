@@ -22,7 +22,7 @@ def source_results():
     }
     cases = []
     sources = {}
-    with (root / ".agents/specs/sim-parity/catalogs/backend-nodes.csv").open() as catalog:
+    with (root / "crates/sim_test_support/parity/catalogs/backend-nodes.csv").open() as catalog:
         for row in csv.DictReader(catalog):
             if row["feature_id"] not in identifiers:
                 continue

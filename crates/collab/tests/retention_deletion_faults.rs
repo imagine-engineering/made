@@ -345,7 +345,7 @@ impl CommunityDeletionRecoveryBackend for FaultingDeletionBackend {
 #[test]
 fn frozen_retention_versions_converge_after_before_and_after_commit_faults() {
     let document: MigrationFixtureDocument = serde_json::from_str(include_str!(
-        "../../../.agents/specs/collaborative-workspace/fixtures/migrations/desktop-stores.json"
+        "../../../crates/collaboration_domain/test_fixtures/compatibility/migrations/desktop-stores.json"
     ))
     .expect("migration fixture document");
     assert_eq!(document.format_version, 1);

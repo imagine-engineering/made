@@ -33,25 +33,25 @@ use std::{
 use uuid::Uuid;
 
 const COMMAND_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-commands.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-commands.csv");
 const PARAMETER_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-parameters.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-parameters.csv");
 const SCHEMA_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-schemas.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-schemas.csv");
 const EVENT_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-events.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-events.csv");
 const ERROR_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-errors.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-errors.csv");
 const CONFIG_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-config.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-config.csv");
 const FORMAT_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-formats.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-formats.csv");
 const LIFECYCLE_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-lifecycle.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-lifecycle.csv");
 const ENVIRONMENT_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-environment.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-environment.csv");
 const SCHEMA_MAPPING_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-schema-mappings.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-schema-mappings.csv");
 
 struct ContractCatalogSpec {
     name: &'static str,
@@ -2831,85 +2831,87 @@ mod tests {
         ("parameters", PARAMETER_CATALOG, 370),
         (
             "cql-policy",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-cql-policy.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-cql-policy.csv"),
             419,
         ),
         (
             "documentation",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/comfy-cli-documentation.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-documentation.csv"
             ),
             16,
         ),
         (
             "config",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-config.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-config.csv"),
             20,
         ),
         (
             "environment",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-environment.csv"),
+            include_str!(
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-environment.csv"
+            ),
             35,
         ),
         (
             "errors",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-errors.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-errors.csv"),
             99,
         ),
         (
             "events",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-events.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-events.csv"),
             12,
         ),
         (
             "extensions",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-extensions.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-extensions.csv"),
             17,
         ),
         (
             "formats",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-formats.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-formats.csv"),
             34,
         ),
         (
             "lifecycle",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-lifecycle.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-lifecycle.csv"),
             24,
         ),
         (
             "modules",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-modules.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-modules.csv"),
             104,
         ),
         (
             "partner-openapi",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/comfy-cli-partner-openapi.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-partner-openapi.csv"
             ),
             52,
         ),
         (
             "schema-mappings",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/comfy-cli-schema-mappings.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-schema-mappings.csv"
             ),
             66,
         ),
         (
             "schemas",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-schemas.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-schemas.csv"),
             23,
         ),
         (
             "source-coverage",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/comfy-cli-source-coverage.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-source-coverage.csv"
             ),
             312,
         ),
         (
             "tests",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-tests.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-tests.csv"),
             2295,
         ),
     ];
@@ -3601,7 +3603,7 @@ mod tests {
             && native_unavailable == 0
             && task_deferrals_are_owned;
         let reconciliation: Value = serde_json::from_str(include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/comfy-cli-reconciliation.json"
+            "../../../crates/sim_test_support/parity/catalogs/sim-cli-reconciliation.json"
         ))?;
         let artifact = json!({
             "validation": "VAL-CLI-001",
@@ -3619,7 +3621,7 @@ mod tests {
             "catalog_rows": row_counts,
             "catalog_sha256": catalog_digests,
             "catalog_accounting": catalog_rows,
-            "reconciliation_sha256": sha256(include_bytes!("../../../.agents/specs/comfy-parity/catalogs/comfy-cli-reconciliation.json")),
+            "reconciliation_sha256": sha256(include_bytes!("../../../crates/sim_test_support/parity/catalogs/sim-cli-reconciliation.json")),
             "reconciliation": reconciliation,
             "command_dispositions": {
                 "native": native_commands,

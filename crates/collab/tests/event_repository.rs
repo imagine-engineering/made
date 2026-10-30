@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 const EVENTS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/fixtures/protocol/events.json"
+    "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/events.json"
 ));
 const HEAD_MIGRATION: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),

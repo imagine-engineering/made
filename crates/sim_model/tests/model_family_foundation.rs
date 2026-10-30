@@ -2827,7 +2827,7 @@ fn state_transaction_prevalidates_errors_and_rolls_back_on_failure_or_cancellati
 const MODEL_FAMILY_CATALOG_INPUT_ALLOWLIST: [&str; 3] = [
     "projects/comfy/ComfyUI/sim/supported_models.py",
     "projects/comfy/ComfyUI/sim/supported_models_base.py",
-    ".agents/specs/comfy-parity/catalogs/backend-models.csv",
+    "crates/sim_test_support/parity/catalogs/backend-models.csv",
 ];
 
 fn normalize_catalog_source_bytes(bytes: Vec<u8>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {

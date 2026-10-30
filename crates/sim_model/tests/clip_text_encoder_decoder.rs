@@ -3237,7 +3237,8 @@ fn val_clip_001_decoder_rows_execute_and_extend_cumulative_ledger() -> Result<()
         .and_then(Path::parent)
         .ok_or("workspace root is unavailable")?;
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let mut contracts = Vec::new();
     let mut symbols = Vec::new();

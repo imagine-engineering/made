@@ -11,11 +11,11 @@ use std::{
 };
 
 pub const REGISTERED_NODE_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-nodes.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/backend-nodes.csv");
 pub const INACTIVE_NODE_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-inactive-nodes.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/backend-inactive-nodes.csv");
 pub const NODE_CONTRACT_CATALOG: &[u8] =
-    include_bytes!("../../../.agents/specs/comfy-parity/catalogs/backend-node-contracts.json");
+    include_bytes!("../../../crates/sim_test_support/parity/catalogs/backend-node-contracts.json");
 
 const MAX_CATALOG_BYTES: usize = 16 * 1024 * 1024;
 const MAX_CATALOG_ROWS: usize = 100_000;

@@ -9448,7 +9448,7 @@ mod tests {
     fn every_cataloged_provider_endpoint_requires_an_explicit_grant()
     -> Result<(), Box<dyn std::error::Error>> {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/backend-external-services.csv"
+            "../../../crates/sim_test_support/parity/catalogs/backend-external-services.csv"
         );
         let policy = ProviderPolicy::new(
             "profile-a",
@@ -9521,10 +9521,10 @@ mod tests {
             "script/package-sim-backend-rocm",
             "nix/sim-backends/rocm/package-policy.json",
             "crates/credentials_provider/src/credentials_provider.rs",
-            ".agents/specs/comfy-parity/catalogs/backend-external-services.csv",
-            ".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv",
-            ".agents/specs/comfy-parity/generate_ownership_catalog.py",
-            ".agents/specs/comfy-parity/ownership-policy.json",
+            "crates/sim_test_support/parity/catalogs/backend-external-services.csv",
+            "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
+            "crates/sim_test_support/parity/generate_ownership_catalog.py",
+            "crates/sim_test_support/parity/ownership-policy.json",
         ];
         let mut fixture_digests = BTreeMap::new();
         for relative_path in fixture_paths {
@@ -9685,7 +9685,7 @@ mod tests {
             root.join("crates/credentials_provider/src/credentials_provider.rs"),
         )?;
         let ownership_catalog = fs::read_to_string(
-            root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+            root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
         )?;
 
         let cases = BTreeMap::from([

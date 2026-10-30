@@ -1,0 +1,185 @@
+catalog_id,record_type,name,numeric_value,protocol_references,source_paths,capability_ids,status,summary
+KIND-KIND_PROFILE,event_kind,KIND_PROFILE,0,NIP-01,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,NIP-01: User profile metadata.
+KIND-KIND_TEXT_NOTE,event_kind,KIND_TEXT_NOTE,1,NIP-01,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-011;CAP-017,registered,NIP-01: Short text note.
+KIND-KIND_CONTACT_LIST,event_kind,KIND_CONTACT_LIST,3,NIP-02,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,NIP-02: Contact list / follow list.
+KIND-KIND_MUTE_LIST,event_kind,KIND_MUTE_LIST,10000,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,"NIP-51: Mute list (replaceable, 10000–19999 range) — pubkeys/events/threads/words a user has muted."
+KIND-KIND_PIN_LIST,event_kind,KIND_PIN_LIST,10001,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,NIP-51: Pin list (replaceable) — events the user has pinned to their profile.
+KIND-KIND_NIP65_RELAY_LIST_METADATA,event_kind,KIND_NIP65_RELAY_LIST_METADATA,10002,NIP-65,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,NIP-65: Relay list metadata (replaceable) — read/write relay preferences for the outbox model.
+KIND-KIND_BOOKMARK_LIST,event_kind,KIND_BOOKMARK_LIST,10003,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001,registered,NIP-51: Bookmark list (replaceable) — events/articles/hashtags/URLs the user has bookmarked.
+KIND-KIND_EMOJI_LIST,event_kind,KIND_EMOJI_LIST,10030,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-017,registered,NIP-51: Emoji list (replaceable) — user preferred emojis and pointers to emoji sets.
+KIND-KIND_FOLLOW_SET,event_kind,KIND_FOLLOW_SET,30000,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,"NIP-51: Follow set (parameterized replaceable, 30000–39999 range) — named curated lists of pubkeys."
+KIND-KIND_BOOKMARK_SET,event_kind,KIND_BOOKMARK_SET,30003,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,NIP-51: Bookmark set (parameterized replaceable) — named curated bookmark collections.
+KIND-KIND_EMOJI_SET,event_kind,KIND_EMOJI_SET,30030,NIP-30;NIP-33;NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-017,registered,NIP-51 / NIP-30: Emoji set (parameterized replaceable).
+KIND-KIND_CHANNEL_METADATA,event_kind,KIND_CHANNEL_METADATA,41,NIP-01,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,defined-unused,NIP-01: Channel metadata (replaceable). Not used by Buzz today.
+KIND-KIND_DELETION,event_kind,KIND_DELETION,5,NIP-09,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-011,registered,NIP-09: Event deletion request.
+KIND-KIND_REACTION,event_kind,KIND_REACTION,7,NIP-25,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-011,registered,NIP-25: Content is emoji char or `+`/`-`.
+KIND-KIND_GIFT_WRAP,event_kind,KIND_GIFT_WRAP,1059,NIP-17,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-012,registered,"NIP-17: Outer envelope for private DMs — hides sender, content, timestamp."
+KIND-KIND_FILE_METADATA,event_kind,KIND_FILE_METADATA,1063,NIP-94,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-031,registered,NIP-94: File metadata attachment.
+KIND-KIND_LONG_FORM,event_kind,KIND_LONG_FORM,30023,NIP-23;NIP-33,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-011;CAP-017,registered,"NIP-23: Long-form content (articles, blog posts, RFCs)."
+KIND-KIND_USER_STATUS,event_kind,KIND_USER_STATUS,30315,NIP-33;NIP-38,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007,registered,"NIP-38: User status (general, music, or custom d-tag)."
+KIND-KIND_READ_STATE,event_kind,KIND_READ_STATE,30078,NIP-33;NIP-44;NIP-78;NIP-RS,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-013,registered,NIP-78 / NIP-RS: Per-client read state blob for cross-device read position sync.
+KIND-KIND_AUTH,event_kind,KIND_AUTH,22242,NIP-42,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,NIP-42 auth event — never stored (carries bearer tokens).
+KIND-KIND_BLOSSOM_AUTH,event_kind,KIND_BLOSSOM_AUTH,24242,BUD-01,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008;CAP-031,registered,"BUD-01: Blossom upload auth (used in upload.rs, not stored)."
+KIND-KIND_NOSTR_IDENTITY_BINDING,event_kind,KIND_NOSTR_IDENTITY_BINDING,24243,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-008;CAP-009,registered,"Buzz custom one-time identity binding proof (ephemeral, not stored)."
+KIND-KIND_HTTP_AUTH,event_kind,KIND_HTTP_AUTH,27235,NIP-98,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,"NIP-98: HTTP auth event (used in nip98.rs, not stored)."
+KIND-KIND_AGENT_PROFILE,event_kind,KIND_AGENT_PROFILE,10100,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-023,registered,"Agent metadata + owner reference (replaceable, agent-authored)."
+KIND-KIND_AGENT_ENGRAM,event_kind,KIND_AGENT_ENGRAM,30174,NIP-AE,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-024,registered,"NIP-AE: Agent Engram (parameterized replaceable, agent-authored)."
+KIND-KIND_EVENT_REMINDER,event_kind,KIND_EVENT_REMINDER,30300,NIP-44;NIP-ER,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-013,registered,"NIP-ER: Event Reminder (parameterized replaceable, author-only)."
+KIND-KIND_PUSH_LEASE,event_kind,KIND_PUSH_LEASE,30350,NIP-44;NIP-PL,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-016,registered,"NIP-PL: encrypted push lease (parameterized replaceable, author-only)."
+KIND-KIND_PRIVATE_MANAGED_AGENT,event_kind,KIND_PRIVATE_MANAGED_AGENT,30179,NIP-44;NIP-PMA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-023,registered,NIP-PMA: owner-encrypted private managed-agent aggregate.
+KIND-KIND_PERSONA,event_kind,KIND_PERSONA,30175,NIP-AP,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-023,registered,"NIP-AP: Agent Persona (parameterized replaceable, owner-authored)."
+KIND-KIND_TEAM,event_kind,KIND_TEAM,30176,NIP-AP,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-023,registered,"NIP-AP: Agent Team (parameterized replaceable, owner-authored)."
+KIND-KIND_MANAGED_AGENT,event_kind,KIND_MANAGED_AGENT,30177,NIP-AP;NIP-OA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-023,registered,"NIP-AP: Managed Agent (parameterized replaceable, owner-authored)."
+KIND-KIND_TEAM_CATALOG,event_kind,KIND_TEAM_CATALOG,30178,NIP-33;NIP-AP,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-023,registered,"NIP-AP: Team Catalog projection (parameterized replaceable, owner-authored)."
+KIND-KIND_REPORT,event_kind,KIND_REPORT,1984,NIP-56,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-029,registered,"NIP-56: Report an event, pubkey, or blob to relay moderators (kind:1984)."
+KIND-KIND_PRODUCT_FEEDBACK,event_kind,KIND_PRODUCT_FEEDBACK,42000,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-017,registered,"Buzz product feedback submission. Accepted at ingest, sidecarred to the"
+KIND-KIND_NIP29_PUT_USER,event_kind,KIND_NIP29_PUT_USER,9000,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Add a user to a group.
+KIND-KIND_NIP29_REMOVE_USER,event_kind,KIND_NIP29_REMOVE_USER,9001,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Remove a user from a group.
+KIND-KIND_NIP29_EDIT_METADATA,event_kind,KIND_NIP29_EDIT_METADATA,9002,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Edit group metadata.
+KIND-KIND_NIP29_DELETE_EVENT,event_kind,KIND_NIP29_DELETE_EVENT,9005,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Delete an event from a group.
+KIND-KIND_NIP29_CREATE_GROUP,event_kind,KIND_NIP29_CREATE_GROUP,9007,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Create a new group.
+KIND-KIND_NIP29_DELETE_GROUP,event_kind,KIND_NIP29_DELETE_GROUP,9008,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Delete a group.
+KIND-KIND_NIP29_CREATE_INVITE,event_kind,KIND_NIP29_CREATE_INVITE,9009,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Create an invite to a group.
+KIND-KIND_NIP29_JOIN_REQUEST,event_kind,KIND_NIP29_JOIN_REQUEST,9021,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Request to join a group.
+KIND-KIND_NIP29_LEAVE_REQUEST,event_kind,KIND_NIP29_LEAVE_REQUEST,9022,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Request to leave a group.
+KIND-KIND_MODERATION_BAN,event_kind,KIND_MODERATION_BAN,9040,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-029,registered,"Moderation: ban a pubkey from the community (`p` tag target, optional"
+KIND-KIND_MODERATION_UNBAN,event_kind,KIND_MODERATION_UNBAN,9041,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-029,registered,Moderation: lift a community ban (`p` tag target).
+KIND-KIND_MODERATION_TIMEOUT,event_kind,KIND_MODERATION_TIMEOUT,9042,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-029,registered,Moderation: timeout (write-block) a pubkey until an `expiration` tag
+KIND-KIND_MODERATION_UNTIMEOUT,event_kind,KIND_MODERATION_UNTIMEOUT,9043,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-029,registered,Moderation: clear a timeout early (`p` tag target).
+KIND-KIND_MODERATION_RESOLVE_REPORT,event_kind,KIND_MODERATION_RESOLVE_REPORT,9044,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-029,registered,"Moderation: resolve a report (`report` tag = report event id hex,"
+KIND-RELAY_ADMIN_ADD_MEMBER,event_kind,RELAY_ADMIN_ADD_MEMBER,9030,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,NIP-43: Add a pubkey to the relay member list.
+KIND-RELAY_ADMIN_REMOVE_MEMBER,event_kind,RELAY_ADMIN_REMOVE_MEMBER,9031,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,NIP-43: Remove a pubkey from the relay member list.
+KIND-RELAY_ADMIN_CHANGE_ROLE,event_kind,RELAY_ADMIN_CHANGE_ROLE,9032,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,NIP-43: Change the role of an existing relay member.
+KIND-RELAY_ADMIN_SET_WORKSPACE_PROFILE,event_kind,RELAY_ADMIN_SET_WORKSPACE_PROFILE,9033,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-008,registered,Buzz: Set the workspace profile (icon). Admin/owner-signed command.
+KIND-KIND_NIP43_MEMBERSHIP_LIST,event_kind,KIND_NIP43_MEMBERSHIP_LIST,13534,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,"NIP-43: Relay membership list snapshot (relay-signed, replaceable by convention)."
+KIND-KIND_NIP43_MEMBER_ADDED,event_kind,KIND_NIP43_MEMBER_ADDED,8000,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,NIP-43: Member added announcement (relay-signed).
+KIND-KIND_NIP43_MEMBER_REMOVED,event_kind,KIND_NIP43_MEMBER_REMOVED,8001,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,NIP-43: Member removed announcement (relay-signed).
+KIND-KIND_NIP43_LEAVE_REQUEST,event_kind,KIND_NIP43_LEAVE_REQUEST,28936,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-008,registered,"NIP-43: User leave request (user-signed, ephemeral)."
+KIND-KIND_IA_ARCHIVE_REQUEST,event_kind,KIND_IA_ARCHIVE_REQUEST,9035,NIP-IA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-030,registered,NIP-IA: Request that the relay archive a target identity.
+KIND-KIND_IA_UNARCHIVE_REQUEST,event_kind,KIND_IA_UNARCHIVE_REQUEST,9036,NIP-IA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-030,registered,NIP-IA: Request that the relay unarchive a target identity.
+KIND-KIND_IA_ARCHIVED,event_kind,KIND_IA_ARCHIVED,8002,NIP-IA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-030,registered,NIP-IA: Archived-identity delta (relay-signed).
+KIND-KIND_IA_UNARCHIVED,event_kind,KIND_IA_UNARCHIVED,8003,NIP-IA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-030,registered,NIP-IA: Unarchived-identity delta (relay-signed).
+KIND-KIND_IA_ARCHIVED_LIST,event_kind,KIND_IA_ARCHIVED_LIST,13535,NIP-IA,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-007;CAP-030,registered,"NIP-IA: Archived identities list snapshot (relay-signed, replaceable)."
+KIND-KIND_NIP29_GROUP_METADATA,event_kind,KIND_NIP29_GROUP_METADATA,39000,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Addressable group metadata state.
+KIND-KIND_NIP29_GROUP_ADMINS,event_kind,KIND_NIP29_GROUP_ADMINS,39001,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Addressable group admins list.
+KIND-KIND_NIP29_GROUP_MEMBERS,event_kind,KIND_NIP29_GROUP_MEMBERS,39002,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Addressable group members list.
+KIND-KIND_NIP29_GROUP_ROLES,event_kind,KIND_NIP29_GROUP_ROLES,39003,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,NIP-29: Addressable group roles definition.
+KIND-KIND_THREAD_SUMMARY,event_kind,KIND_THREAD_SUMMARY,39005,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,"Thread summary overlay: `e`/`d` tag = root event id, content ="
+KIND-KIND_WINDOW_BOUNDS,event_kind,KIND_WINDOW_BOUNDS,39006,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001,registered,"Window bounds overlay: `d` tag = `<channel_id>:<request-cursor-or-head>`,"
+KIND-KIND_WORKFLOW_DEF,event_kind,KIND_WORKFLOW_DEF,30620,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,"Workflow definition (parameterized replaceable, d=workflow_uuid)."
+KIND-KIND_DM_VISIBILITY,event_kind,KIND_DM_VISIBILITY,30622,NIP-DV,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-012,registered,"NIP-DV: per-viewer DM visibility snapshot (relay-signed, parameterized"
+KIND-PARAM_REPLACEABLE_KIND_MIN,kind_range,PARAM_REPLACEABLE_KIND_MIN,30000,NIP-33,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001,range-boundary,Lower bound of the NIP-33 parameterized replaceable range (30000–39999).
+KIND-PARAM_REPLACEABLE_KIND_MAX,kind_range,PARAM_REPLACEABLE_KIND_MAX,39999,NIP-33,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001,range-boundary,Upper bound of the NIP-33 parameterized replaceable range (30000–39999).
+KIND-EPHEMERAL_KIND_MIN,kind_range,EPHEMERAL_KIND_MIN,20000,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001,range-boundary,Lower bound of the ephemeral event range (20000–29999). Never stored.
+KIND-EPHEMERAL_KIND_MAX,kind_range,EPHEMERAL_KIND_MAX,29999,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001,range-boundary,Upper bound of the ephemeral event range (20000–29999). Never stored.
+KIND-KIND_PRESENCE_UPDATE,event_kind,KIND_PRESENCE_UPDATE,20001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-014,registered,Ephemeral: user presence update (online/away/offline).
+KIND-KIND_PAIRING,event_kind,KIND_PAIRING,24134,NIP-AB,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-033,registered,NIP-AB: Device pairing event. Ephemeral — relay may discard after delivery.
+KIND-KIND_TYPING_INDICATOR,event_kind,KIND_TYPING_INDICATOR,20002,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-014,registered,Ephemeral: typing indicator for a channel.
+KIND-KIND_AGENT_OBSERVER_FRAME,event_kind,KIND_AGENT_OBSERVER_FRAME,24200,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-025,registered,Ephemeral: owner-scoped encrypted agent observer telemetry and control frame.
+KIND-KIND_HUDDLE_REACTION,event_kind,KIND_HUDDLE_REACTION,24810,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-032,registered,Ephemeral: huddle emoji reaction burst. Channel-scoped to the ephemeral
+KIND-KIND_STREAM_MESSAGE,event_kind,KIND_STREAM_MESSAGE,9,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,"NIP-29 group chat message kind. V1 used kind:10001 (replaceable range — wrong), then 40001."
+KIND-KIND_STREAM_MESSAGE_V2,event_kind,KIND_STREAM_MESSAGE_V2,40002,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,V1 used kind:10002 (replaceable range — wrong).
+KIND-KIND_STREAM_MESSAGE_EDIT,event_kind,KIND_STREAM_MESSAGE_EDIT,40003,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,V1 used kind:10004 (replaceable range + NIP-51 collision — wrong).
+KIND-KIND_STREAM_MESSAGE_PINNED,event_kind,KIND_STREAM_MESSAGE_PINNED,40004,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,A stream message that has been pinned in a channel.
+KIND-KIND_STREAM_MESSAGE_BOOKMARKED,event_kind,KIND_STREAM_MESSAGE_BOOKMARKED,40005,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011;CAP-013,registered,A stream message that has been bookmarked by a user.
+KIND-KIND_STREAM_MESSAGE_SCHEDULED,event_kind,KIND_STREAM_MESSAGE_SCHEDULED,40006,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011;CAP-013,registered,A stream message scheduled for future delivery.
+KIND-KIND_STREAM_REMINDER,event_kind,KIND_STREAM_REMINDER,40007,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-013,registered,A reminder attached to a stream message or time.
+KIND-KIND_STREAM_MESSAGE_DIFF,event_kind,KIND_STREAM_MESSAGE_DIFF,40008,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,A diff/patch message showing file changes (unified diff format).
+KIND-KIND_CANVAS,event_kind,KIND_CANVAS,40100,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,Canvas (shared document) for a channel.
+KIND-KIND_SYSTEM_MESSAGE,event_kind,KIND_SYSTEM_MESSAGE,40099,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,"System message for channel state changes (join, leave, rename, etc.)."
+KIND-KIND_CHANNEL_SUMMARY,event_kind,KIND_CHANNEL_SUMMARY,40901,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,Channel metadata with computed fields (relay-signed sidecar).
+KIND-KIND_PRESENCE_SNAPSHOT,event_kind,KIND_PRESENCE_SNAPSHOT,40902,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-014,registered,Bulk presence state (relay-signed sidecar).
+KIND-KIND_DM_OPEN,event_kind,KIND_DM_OPEN,41010,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-012,registered,Open/create DM (p-tags = participants).
+KIND-KIND_DM_ADD_MEMBER,event_kind,KIND_DM_ADD_MEMBER,41011,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-012,registered,Add member to group DM.
+KIND-KIND_DM_HIDE,event_kind,KIND_DM_HIDE,41012,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-012,registered,Hide DM from sidebar.
+KIND-KIND_DM_CREATED,event_kind,KIND_DM_CREATED,41001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-012,registered,A new direct-message conversation was created.
+KIND-KIND_JOB_REQUEST,event_kind,KIND_JOB_REQUEST,43001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-026,registered,An agent job was requested.
+KIND-KIND_JOB_ACCEPTED,event_kind,KIND_JOB_ACCEPTED,43002,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-026,registered,An agent accepted a job request.
+KIND-KIND_JOB_PROGRESS,event_kind,KIND_JOB_PROGRESS,43003,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-026,registered,Progress update for an in-flight agent job.
+KIND-KIND_JOB_RESULT,event_kind,KIND_JOB_RESULT,43004,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-026,registered,Final result of a completed agent job.
+KIND-KIND_JOB_CANCEL,event_kind,KIND_JOB_CANCEL,43005,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-026,registered,A job cancellation was requested.
+KIND-KIND_JOB_ERROR,event_kind,KIND_JOB_ERROR,43006,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-026,registered,An agent job failed with an error.
+KIND-KIND_MEMBER_ADDED_NOTIFICATION,event_kind,KIND_MEMBER_ADDED_NOTIFICATION,44100,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,Relay-signed notification: the target pubkey was added to a channel.
+KIND-KIND_MEMBER_REMOVED_NOTIFICATION,event_kind,KIND_MEMBER_REMOVED_NOTIFICATION,44101,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-010;CAP-011,registered,Relay-signed notification: the target pubkey was removed from a channel.
+KIND-KIND_AGENT_TURN_METRIC,event_kind,KIND_AGENT_TURN_METRIC,44200,NIP-42;NIP-44;NIP-AM,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-024,registered,NIP-AM: Agent Turn Metric — durable per-turn token-usage record (agent-authored).
+KIND-KIND_FORUM_POST,event_kind,KIND_FORUM_POST,45001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-017,registered,A forum post (thread root).
+KIND-KIND_FORUM_VOTE,event_kind,KIND_FORUM_VOTE,45002,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-017,registered,A vote on a forum post.
+KIND-KIND_FORUM_COMMENT,event_kind,KIND_FORUM_COMMENT,45003,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-017,registered,A comment reply on a forum post.
+KIND-KIND_WORKFLOW_TRIGGER,event_kind,KIND_WORKFLOW_TRIGGER,46020,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,Trigger workflow execution.
+KIND-KIND_APPROVAL_GRANT,event_kind,KIND_APPROVAL_GRANT,46030,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,Grant pending approval.
+KIND-KIND_APPROVAL_DENY,event_kind,KIND_APPROVAL_DENY,46031,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,Deny pending approval.
+KIND-KIND_WORKFLOW_TRIGGERED,event_kind,KIND_WORKFLOW_TRIGGERED,46001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A workflow was triggered by a matching event.
+KIND-KIND_WORKFLOW_STEP_STARTED,event_kind,KIND_WORKFLOW_STEP_STARTED,46002,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A workflow step began execution.
+KIND-KIND_WORKFLOW_STEP_COMPLETED,event_kind,KIND_WORKFLOW_STEP_COMPLETED,46003,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A workflow step completed successfully.
+KIND-KIND_WORKFLOW_STEP_FAILED,event_kind,KIND_WORKFLOW_STEP_FAILED,46004,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A workflow step failed.
+KIND-KIND_WORKFLOW_COMPLETED,event_kind,KIND_WORKFLOW_COMPLETED,46005,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,The entire workflow completed successfully.
+KIND-KIND_WORKFLOW_FAILED,event_kind,KIND_WORKFLOW_FAILED,46006,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,The entire workflow failed.
+KIND-KIND_WORKFLOW_CANCELLED,event_kind,KIND_WORKFLOW_CANCELLED,46007,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,The workflow was cancelled before completion.
+KIND-KIND_WORKFLOW_APPROVAL_REQUESTED,event_kind,KIND_WORKFLOW_APPROVAL_REQUESTED,46010,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A workflow step is waiting for human approval.
+KIND-KIND_WORKFLOW_APPROVAL_GRANTED,event_kind,KIND_WORKFLOW_APPROVAL_GRANTED,46011,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A pending workflow approval was granted.
+KIND-KIND_WORKFLOW_APPROVAL_DENIED,event_kind,KIND_WORKFLOW_APPROVAL_DENIED,46012,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-027,registered,A pending workflow approval was denied.
+KIND-KIND_AUDIT_ENTRY,event_kind,KIND_AUDIT_ENTRY,48001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-028,registered,An audit log entry was recorded.
+KIND-KIND_HUDDLE_STARTED,event_kind,KIND_HUDDLE_STARTED,48100,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-032,registered,A huddle (audio/video session) was started.
+KIND-KIND_HUDDLE_PARTICIPANT_JOINED,event_kind,KIND_HUDDLE_PARTICIPANT_JOINED,48101,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-032,registered,A participant joined a huddle.
+KIND-KIND_HUDDLE_PARTICIPANT_LEFT,event_kind,KIND_HUDDLE_PARTICIPANT_LEFT,48102,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-032,registered,A participant left a huddle.
+KIND-KIND_HUDDLE_ENDED,event_kind,KIND_HUDDLE_ENDED,48103,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-032,registered,A huddle ended.
+KIND-KIND_HUDDLE_GUIDELINES,event_kind,KIND_HUDDLE_GUIDELINES,48106,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-032,registered,Huddle channel guidelines/rules document.
+KIND-KIND_MEDIA_UPLOAD,event_kind,KIND_MEDIA_UPLOAD,49001,,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-031,internal-not-relay-event,Internal kind for media upload audit entries. Not a relay event kind.
+KIND-KIND_GIT_REPO_ANNOUNCEMENT,event_kind,KIND_GIT_REPO_ANNOUNCEMENT,30617,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,"NIP-34: Repository announcement (parameterized replaceable, d-tag = repo-id)."
+KIND-KIND_GIT_REPO_STATE,event_kind,KIND_GIT_REPO_STATE,30618,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,"NIP-34: Repository state — current branch/tag refs (parameterized replaceable, d-tag = repo-id)."
+KIND-KIND_GIT_PATCH,event_kind,KIND_GIT_PATCH,1617,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Patch (git format-patch output).
+KIND-KIND_GIT_PULL_REQUEST,event_kind,KIND_GIT_PULL_REQUEST,1618,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Pull request.
+KIND-KIND_GIT_PR_UPDATE,event_kind,KIND_GIT_PR_UPDATE,1619,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Pull request update (tip commit change).
+KIND-KIND_GIT_ISSUE,event_kind,KIND_GIT_ISSUE,1621,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Issue.
+KIND-KIND_GIT_STATUS_OPEN,event_kind,KIND_GIT_STATUS_OPEN,1630,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Status — Open.
+KIND-KIND_GIT_STATUS_MERGED,event_kind,KIND_GIT_STATUS_MERGED,1631,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Status — Applied / Merged.
+KIND-KIND_GIT_STATUS_CLOSED,event_kind,KIND_GIT_STATUS_CLOSED,1632,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Status — Closed.
+KIND-KIND_GIT_STATUS_DRAFT,event_kind,KIND_GIT_STATUS_DRAFT,1633,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-019;CAP-020,registered,NIP-34: Status — Draft.
+KIND-KIND_PROJECT,event_kind,KIND_PROJECT,30621,NIP-MP,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-018,registered,NIP-MP: Multi-repo project — a named grouping of `kind:30617` repository
+STANDARD-NIP-01,standard_nip,NIP-01,,NIP-01,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-001;CAP-002,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-02,standard_nip,NIP-02,,NIP-02,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-007,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-04,standard_nip,NIP-04,,NIP-04,projects/buzz/NOSTR.md,CAP-002;CAP-012,unsupported,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-05,standard_nip,NIP-05,,NIP-05,projects/buzz/NOSTR.md,CAP-002;CAP-007,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-09,standard_nip,NIP-09,,NIP-09,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-011,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-10,standard_nip,NIP-10,,NIP-10,projects/buzz/NOSTR.md,CAP-002;CAP-011,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-11,standard_nip,NIP-11,,NIP-11,projects/buzz/NOSTR.md,CAP-002;CAP-003,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-17,standard_nip,NIP-17,,NIP-17,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-012,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-23,standard_nip,NIP-23,,NIP-23,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-017,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-25,standard_nip,NIP-25,,NIP-25,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-011,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-28,standard_nip,NIP-28,,NIP-28,projects/buzz/NOSTR.md,CAP-002;CAP-010,removed,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-29,standard_nip,NIP-29,,NIP-29,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-010;CAP-011,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-30,standard_nip,NIP-30,,NIP-30,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-017,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-33,standard_nip,NIP-33,,NIP-33,projects/buzz/crates/buzz-core/src/kind.rs,CAP-001;CAP-002,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-34,standard_nip,NIP-34,,NIP-34,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-019;CAP-020,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-38,standard_nip,NIP-38,,NIP-38,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-007,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-42,standard_nip,NIP-42,,NIP-42,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-008,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-43,standard_nip,NIP-43,,NIP-43,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-003;CAP-008,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-44,standard_nip,NIP-44,,NIP-44,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-009;CAP-012;CAP-013;CAP-024,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-50,standard_nip,NIP-50,,NIP-50,projects/buzz/crates/buzz-core/src/kind.rs;projects/buzz/NOSTR.md,CAP-002;CAP-015,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-51,standard_nip,NIP-51,,NIP-51,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-007;CAP-013;CAP-017,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-56,standard_nip,NIP-56,,NIP-56,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-029,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-65,standard_nip,NIP-65,,NIP-65,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-007,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-70,standard_nip,NIP-70,,NIP-70,projects/buzz/NOSTR.md,CAP-002;CAP-003;CAP-008,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-78,standard_nip,NIP-78,,NIP-78,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-013,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-90,standard_nip,NIP-90,,NIP-90,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-021;CAP-026,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-94,standard_nip,NIP-94,,NIP-94,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-031,referenced,Standard Nostr protocol referenced by Buzz
+STANDARD-NIP-98,standard_nip,NIP-98,,NIP-98,projects/buzz/crates/buzz-core/src/kind.rs,CAP-002;CAP-008;CAP-019,referenced,Standard Nostr protocol referenced by Buzz
+DOC-NIP-AA-MD,custom_nip_document,NIP-AA.md,,NIP-AA,projects/buzz/docs/nips/NIP-AA.md,CAP-001;CAP-002;CAP-007;CAP-008;CAP-021,documented,Buzz extension document NIP-AA.md
+DOC-NIP-AE-MD,custom_nip_document,NIP-AE.md,,NIP-AE,projects/buzz/docs/nips/NIP-AE.md,CAP-001;CAP-002;CAP-024,documented,Buzz extension document NIP-AE.md
+DOC-NIP-AM-MD,custom_nip_document,NIP-AM.md,,NIP-AM,projects/buzz/docs/nips/NIP-AM.md,CAP-001;CAP-002;CAP-024;CAP-028,documented,Buzz extension document NIP-AM.md
+DOC-NIP-AO-MD,custom_nip_document,NIP-AO.md,,NIP-AO,projects/buzz/docs/nips/NIP-AO.md,CAP-001;CAP-002;CAP-025,documented,Buzz extension document NIP-AO.md
+DOC-NIP-AP-MD,custom_nip_document,NIP-AP.md,,NIP-AP,projects/buzz/docs/nips/NIP-AP.md,CAP-001;CAP-002;CAP-023,documented,Buzz extension document NIP-AP.md
+DOC-NIP-CW-MD,custom_nip_document,NIP-CW.md,,NIP-CW,projects/buzz/docs/nips/NIP-CW.md,CAP-001;CAP-002;CAP-011,documented,Buzz extension document NIP-CW.md
+DOC-NIP-DV-MD,custom_nip_document,NIP-DV.md,,NIP-DV,projects/buzz/docs/nips/NIP-DV.md,CAP-001;CAP-002;CAP-012,documented,Buzz extension document NIP-DV.md
+DOC-NIP-ER-MD,custom_nip_document,NIP-ER.md,,NIP-ER,projects/buzz/docs/nips/NIP-ER.md,CAP-001;CAP-002;CAP-013,documented,Buzz extension document NIP-ER.md
+DOC-NIP-GS-MD,custom_nip_document,NIP-GS.md,,NIP-GS,projects/buzz/docs/nips/NIP-GS.md,CAP-001;CAP-002;CAP-019,documented,Buzz extension document NIP-GS.md
+DOC-NIP-IA-MD,custom_nip_document,NIP-IA.md,,NIP-IA,projects/buzz/docs/nips/NIP-IA.md,CAP-001;CAP-002;CAP-007;CAP-030,documented,Buzz extension document NIP-IA.md
+DOC-NIP-MP-FIXTURES-JSON,protocol_fixture,NIP-MP.fixtures.json,,NIP-MP,projects/buzz/docs/nips/NIP-MP.fixtures.json,CAP-001;CAP-002;CAP-018;CAP-044,fixture,Protocol fixture NIP-MP.fixtures.json
+DOC-NIP-MP-FOLD-FIXTURES-JSON,protocol_fixture,NIP-MP.fold-fixtures.json,,NIP-MP,projects/buzz/docs/nips/NIP-MP.fold-fixtures.json,CAP-001;CAP-002;CAP-018;CAP-044,fixture,Protocol fixture NIP-MP.fold-fixtures.json
+DOC-NIP-MP-MD,custom_nip_document,NIP-MP.md,,NIP-MP,projects/buzz/docs/nips/NIP-MP.md,CAP-001;CAP-002;CAP-018,documented,Buzz extension document NIP-MP.md
+DOC-NIP-OA-MD,custom_nip_document,NIP-OA.md,,NIP-OA,projects/buzz/docs/nips/NIP-OA.md,CAP-001;CAP-002;CAP-007;CAP-008;CAP-021;CAP-023;CAP-024;CAP-025;CAP-026,documented,Buzz extension document NIP-OA.md
+DOC-NIP-PL-MD,custom_nip_document,NIP-PL.md,,NIP-PL,projects/buzz/docs/nips/NIP-PL.md,CAP-001;CAP-002;CAP-016,documented,Buzz extension document NIP-PL.md
+DOC-NIP-PMA-MD,custom_nip_document,NIP-PMA.md,,NIP-PMA,projects/buzz/docs/nips/NIP-PMA.md,CAP-001;CAP-002;CAP-023;CAP-024,documented,Buzz extension document NIP-PMA.md
+DOC-NIP-RS-MD,custom_nip_document,NIP-RS.md,,NIP-RS,projects/buzz/docs/nips/NIP-RS.md,CAP-001;CAP-002;CAP-013,documented,Buzz extension document NIP-RS.md
+DOC-NIP-WP-MD,custom_nip_document,NIP-WP.md,,NIP-WP,projects/buzz/docs/nips/NIP-WP.md,CAP-001;CAP-002;CAP-003;CAP-036,documented,Buzz extension document NIP-WP.md
+GUIDE-NOSTR-MD,protocol_guide,NOSTR.md,,NIP-01;NIP-02;NIP-04;NIP-05;NIP-09;NIP-10;NIP-11;NIP-17;NIP-23;NIP-25;NIP-28;NIP-29;NIP-30;NIP-33;NIP-34;NIP-38;NIP-42;NIP-43;NIP-44;NIP-50;NIP-51;NIP-56;NIP-65;NIP-70;NIP-78;NIP-90;NIP-94;NIP-98,projects/buzz/NOSTR.md,CAP-001;CAP-002;CAP-044,authoritative-guide,Buzz third-party Nostr interoperability and support-status guide

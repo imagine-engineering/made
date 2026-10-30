@@ -20,7 +20,7 @@ EXPECTED_MODEL_COUNT = 94
 EXPECTED_FEATURE_IDS = tuple(f"COMFY-MODEL-{number:04d}" for number in range(61, 155))
 MODEL_SOURCE_RELATIVE = Path("projects/sim/ComfyUI/sim/supported_models.py")
 BASE_SOURCE_RELATIVE = Path("projects/sim/ComfyUI/sim/supported_models_base.py")
-CATALOG_RELATIVE = Path(".agents/specs/sim-parity/catalogs/backend-models.csv")
+CATALOG_RELATIVE = Path("crates/sim_test_support/parity/catalogs/backend-models.csv")
 OUTPUT_RELATIVE = Path("crates/sim_model/catalog/model-families-v1.json")
 CATALOG_SOURCE_FILE = "sim/supported_models.py"
 

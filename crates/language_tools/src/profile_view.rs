@@ -1886,10 +1886,10 @@ mod tests {
     use project::profile_results::parse_samply_profile;
 
     const PROFILE: &[u8] = include_bytes!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
     );
     const SYMBOLS: &[u8] = include_bytes!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
     );
 
     #[test]
@@ -2516,7 +2516,7 @@ mod tests {
         let fs = project::FakeFs::new(cx.executor());
         fs.insert_tree("/fixture", serde_json::json!({
             ".git": {}, ".gitignore": "target\n", "target": {},
-            "workload.rs": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/workload.rs")
+            "workload.rs": include_str!("../../../crates/language_tools/test_fixtures/profiling/workload.rs")
         })).await;
         let project = Project::test(fs.clone(), ["/fixture".as_ref()], cx).await;
         let (container, cx) = cx.add_window_view(|window, cx| {
@@ -3405,7 +3405,7 @@ mod tests {
         fs.insert_tree("/fixture", serde_json::json!({
             "capture.json": std::str::from_utf8(PROFILE).expect("profile UTF-8"),
             "capture.syms.json": std::str::from_utf8(SYMBOLS).expect("symbols UTF-8"),
-            "workload.rs": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/workload.rs")
+            "workload.rs": include_str!("../../../crates/language_tools/test_fixtures/profiling/workload.rs")
         })).await;
         let project = Project::test(fs, ["/fixture".as_ref()], cx).await;
         let (container, cx) = cx.add_window_view(|window, cx| {
@@ -3752,9 +3752,7 @@ mod tests {
         let symbols = root.join("capture.syms.json");
         std::fs::write(
             &source,
-            include_bytes!(
-                "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/workload.rs"
-            ),
+            include_bytes!("../../../crates/language_tools/test_fixtures/profiling/workload.rs"),
         )
         .expect("source fixture");
         std::fs::write(&profile, PROFILE).expect("profile fixture");
@@ -3852,7 +3850,7 @@ mod tests {
             "capture.syms.json": std::str::from_utf8(SYMBOLS).expect("symbols"),
             "replacement.json": "invalid-json-private-payload",
             "replacement.syms.json": std::str::from_utf8(SYMBOLS).expect("symbols"),
-            "workload.rs": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/workload.rs")
+            "workload.rs": include_str!("../../../crates/language_tools/test_fixtures/profiling/workload.rs")
         })).await;
         let project =
             Project::test_with_worktree_trust(fs.clone(), ["/fixture".as_ref()], cx).await;
@@ -4193,7 +4191,7 @@ mod tests {
             serde_json::json!({
                 "capture.json": std::str::from_utf8(PROFILE).expect("profile UTF-8"),
                 "capture.syms.json": std::str::from_utf8(SYMBOLS).expect("symbols UTF-8").replace("/fixture/workload.rs", "/fixture-alias/workload.rs"),
-                "workload.rs": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/workload.rs")
+                "workload.rs": include_str!("../../../crates/language_tools/test_fixtures/profiling/workload.rs")
             }),
         )
         .await;

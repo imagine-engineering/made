@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 def generation_reference(root):
     path = root / 'projects/sim/ComfyUI/sim_extras/nodes_textgen.py'
-    rows = json.loads((root / '.agents/specs/sim-parity/catalogs/backend-node-contracts.json').read_text())['contracts']
+    rows = json.loads((root / 'crates/sim_test_support/parity/catalogs/backend-node-contracts.json').read_text())['contracts']
     rows = [r for r in rows if r['feature_id'] in ['COMFY-NODE-0671', 'COMFY-NODE-0672']]
     assert all((r['source']['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest() for r in rows))
     class Clip:
@@ -45,7 +45,7 @@ def generation_reference(root):
     return fixture
 
 def transform_reference(root):
-    rows = json.loads((root / '.agents/specs/sim-parity/catalogs/backend-node-contracts.json').read_text())['contracts']
+    rows = json.loads((root / 'crates/sim_test_support/parity/catalogs/backend-node-contracts.json').read_text())['contracts']
     rows = [r for r in rows if r['feature_id'] in [f'COMFY-NODE-{n:04}' for n in [649, 673, 674, 701]]]
     texts = ['', 'AbC HELLO world', 'Straße ﬃ İı ΟΣ ΣΟΣ', '\x1c\x1d\x1e\x1f\t  mixed\n\xa0\u2003\u202f', '👩\u200d💻 café é\n终点', '\u200bzero width\u200b', 'A\x00B', 'é' * 10001]
     cases = []

@@ -530,8 +530,8 @@ mod tests {
 
     fn capture() -> ProfileResults {
         parse_samply_profile(
-            include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"),
-            include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"),
+            include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"),
+            include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"),
             ProfileHost::MacOs,
             &AtomicBool::new(false),
             |_, _| Some(ProjectPath { worktree_id: WorktreeId::from_usize(3), path: util::rel_path::rel_path("workload.rs").into() }),

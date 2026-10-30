@@ -2055,7 +2055,7 @@ fn native_diffusion_fixture_catalog_and_provenance_are_exact()
     let workspace = workspace()?;
     let fixture = NativeDiffusionFixture::checked_in();
     let catalog: Value = serde_json::from_slice(&fs::read(
-        workspace.join(".agents/specs/comfy-parity/catalogs/native-diffusion-fixture.json"),
+        workspace.join("crates/sim_test_support/parity/catalogs/native-diffusion-fixture.json"),
     )?)?;
     let required = catalog
         .get("required_checkpoints")

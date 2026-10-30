@@ -43,15 +43,16 @@ use std::{
 const BREADTH_FIXTURE: &[u8] = include_bytes!("../fixtures/autograd/breadth-v1.json");
 const BREADTH_FIXTURE_SHA256: &str =
     "d8d0c41d9873dcc376489403fcc3bf9a19428719ac49eaee9ecc6fd0dee99c1a";
-const AUTOGRAD_CATALOG_PATH: &str = ".agents/specs/comfy-parity/catalogs/backend-autograd.csv";
+const AUTOGRAD_CATALOG_PATH: &str = "crates/sim_test_support/parity/catalogs/backend-autograd.csv";
 const AUTOGRAD_CATALOG: &[u8] =
-    include_bytes!("../../../.agents/specs/comfy-parity/catalogs/backend-autograd.csv");
+    include_bytes!("../../../crates/sim_test_support/parity/catalogs/backend-autograd.csv");
 const AUTOGRAD_CATALOG_SHA256: &str =
     "d51ff8465e2a161bef2093bbdb37f7547a6d6157d0fa1c4d6f0a30b8fd682670";
 const QUANT_LINEAR_FIXTURE_PATH: &str =
-    ".agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json";
-const QUANT_LINEAR_FIXTURE: &[u8] =
-    include_bytes!("../../../.agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json");
+    "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json";
+const QUANT_LINEAR_FIXTURE: &[u8] = include_bytes!(
+    "../../../crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json"
+);
 const QUANT_LINEAR_FIXTURE_SHA256: &str =
     "74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c";
 const QUANT_LINEAR_CATALOG_ID: &str = "COMFY-AUTOGRAD-30043B9C2264";
@@ -2389,7 +2390,7 @@ fn quant_linear_delegation_rejects_missing_stale_renamed_or_unused_fixture()
     let mut renamed = canonical_case.clone();
     renamed.source_observations = vec![SourceObservation {
         case: "delegated_fixture".to_owned(),
-        expected: ".agents/specs/comfy-parity/fixtures/renamed-quant-linear-source-oracle.json"
+        expected: "crates/sim_test_support/parity/fixtures/renamed-quant-linear-source-oracle.json"
             .to_owned(),
         sha256: Some(QUANT_LINEAR_FIXTURE_SHA256.to_owned()),
     }];

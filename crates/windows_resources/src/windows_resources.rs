@@ -74,8 +74,12 @@ pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
         String::new()
     };
 
-    let pkg_version =
-        std::env::var("RELEASE_VERSION").or_else(|_| std::env::var("CARGO_PKG_VERSION"))?;
+    let pkg_version = std::env::var("RELEASE_VERSION").or_else(|_| {
+        product_flavor::INITIAL_VERSION
+            .map(str::to_owned)
+            .map(Ok)
+            .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION"))
+    })?;
     let product_version = product_version(&pkg_version);
     let mut version_parts = pkg_version
         .split('.')

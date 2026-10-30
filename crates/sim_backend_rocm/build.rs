@@ -10,7 +10,8 @@ use std::{
 
 const EVIDENCE_PATH: &str = "abi/reviewed-bindings-v1.txt";
 const MANIFEST_PATH: &str = "abi/symbols-v1.json";
-const CATALOG_PATH: &str = "../../.agents/specs/comfy-parity/catalogs/native-backend-abi/rocm.json";
+const CATALOG_PATH: &str =
+    "../../crates/sim_test_support/parity/catalogs/native-backend-abi/rocm.json";
 const REVIEWED_HEADER_DIRECTORY_ENV: &str = "SIM_ROCM_REVIEWED_HEADER_DIR";
 const REQUIRE_COMPLETION_EVIDENCE_ENV: &str = "SIM_ROCM_REQUIRE_COMPLETION_EVIDENCE";
 const COMPLETION_EVIDENCE_OUTPUT_ENV: &str = "SIM_ROCM_COMPLETION_EVIDENCE_OUT";

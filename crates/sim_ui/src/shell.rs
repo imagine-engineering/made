@@ -435,30 +435,31 @@ mod tests {
     use uuid::Uuid;
 
     const COMMAND_CSV: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/frontend-commands.csv");
+        include_str!("../../../crates/sim_test_support/parity/catalogs/frontend-commands.csv");
     const NATIVE_COMMAND_DISPOSITIONS_CSV: &str = include_str!(
-        "../../../.agents/specs/comfy-parity/catalogs/native-command-dispositions.csv"
+        "../../../crates/sim_test_support/parity/catalogs/native-command-dispositions.csv"
     );
     const KEYBINDING_CSV: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/frontend-keybindings.csv");
+        include_str!("../../../crates/sim_test_support/parity/catalogs/frontend-keybindings.csv");
     const MENU_CSV: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/frontend-menus.csv");
-    const NATIVE_MENU_DISPOSITIONS_CSV: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/native-menu-dispositions.csv");
+        include_str!("../../../crates/sim_test_support/parity/catalogs/frontend-menus.csv");
+    const NATIVE_MENU_DISPOSITIONS_CSV: &str = include_str!(
+        "../../../crates/sim_test_support/parity/catalogs/native-menu-dispositions.csv"
+    );
     const COMPONENT_SURFACE_CSV: &str = include_str!(
-        "../../../.agents/specs/comfy-parity/catalogs/frontend-component-surfaces.csv"
+        "../../../crates/sim_test_support/parity/catalogs/frontend-component-surfaces.csv"
     );
     const NATIVE_COMPONENT_DISPOSITIONS_CSV: &str = include_str!(
-        "../../../.agents/specs/comfy-parity/catalogs/native-component-dispositions.csv"
+        "../../../crates/sim_test_support/parity/catalogs/native-component-dispositions.csv"
     );
     const NATIVE_SPEC_MAPPING: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/native-spec-mapping.json");
+        include_str!("../../../crates/sim_test_support/parity/catalogs/native-spec-mapping.json");
     const SHELL_TRACE_CLOSURE: &str = include_str!(
-        "../../../.agents/specs/comfy-parity/catalogs/native-shell-trace-closure.json"
+        "../../../crates/sim_test_support/parity/catalogs/native-shell-trace-closure.json"
     );
     const PARITY_MATRIX: &str =
-        include_str!("../../../.agents/specs/comfy-parity/parity-matrix.md");
-    const TASKS: &str = include_str!("../../../.agents/specs/comfy-parity/tasks.md");
+        include_str!("../../../crates/sim_test_support/parity/parity-matrix.md");
+    const TASKS: &str = include_str!("../../../crates/sim_test_support/parity/tasks.md");
     const DEFAULT_KEYMAP: &str = include_str!("../../../assets/keymaps/default-sim.json");
     const GRAPH_SHELL_TASK_ID: &str = "comfy-parity-graph-shell-accessibility";
 

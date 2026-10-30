@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "backend": "directml",
+  "task_id": "comfy-parity-device-foundation-directml-comfy-model-0018",
+  "status": "execution_supported",
+  "execution_task_id": "comfy-parity-directml-execution-resource-ownership-consolidation",
+  "canonical_abi_manifest": "crates/sim_backend_directml/abi/symbols-v1.json",
+  "canonical_abi_manifest_sha256": "54065e17bc9d69a4e377315caa6bcdef1b4898c660e2e0c1660ed4dcf4146e35",
+  "canonical_domain_binding": "sim_types::NativeBackendBindingStatus",
+  "certificate_issuer": "sim_runtime::NativeFfiRegistry",
+  "certificate_adapter": "sim_backend_directml::RegistryCertifiedDirectMlImage",
+  "retained_handle_owner": "sim_backend_directml::RetainedDirectMlLibraryHandles",
+  "unsafe_ffi_owner": "sim_backend_directml::{loader,execution}",
+  "discovery_dto": "sim_backend_directml::DirectMlDiscoveryPlan",
+  "discovery_is_authorization": false,
+  "package_receipt_is_authorization": false,
+  "binding_without_registry_certificate": "unbound",
+  "abi_floor": "1.13.1",
+  "target_version": "0x6200",
+  "minimum_feature_level": "DML_FEATURE_LEVEL_6_2",
+  "minimum_windows_build": 19041,
+  "targets": [
+    "aarch64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc"
+  ],
+  "libraries": [
+    {
+      "name": "D3D12.dll",
+      "abi_version": "windows-10.0.19041",
+      "symbols": [
+        "D3D12CreateDevice"
+      ]
+    },
+    {
+      "name": "DirectML.dll",
+      "abi_version": "1.13.1",
+      "symbols": [
+        "DMLCreateDevice",
+        "DMLCreateDevice1"
+      ]
+    },
+    {
+      "name": "DXGI.dll",
+      "abi_version": "windows-10.0.19041",
+      "symbols": [
+        "CreateDXGIFactory2"
+      ]
+    }
+  ],
+  "reviewed_redistributable": {
+    "package": "Microsoft.AI.DirectML/1.13.1",
+    "package_sha256": "a38cef0d59f314fbcc0cd6551c5a762db7cfdaf8a977f85df32a0b1e279d3ba7",
+    "file_version": "1.13.1.0",
+    "authenticode_required": true,
+    "final_application_signing_required": true,
+    "architectures": {
+      "aarch64-pc-windows-msvc": {
+        "byte_length": 13947936,
+        "sha256": "96a5b8b75c4cd5e47fe9a4a87d0146276930fa58083b0538fd1b503e98b842f4"
+      },
+      "x86_64-pc-windows-msvc": {
+        "byte_length": 14021152,
+        "sha256": "5ab77cc5db8e1544d386fd28586598317da8dcbef098fb86d8d8a60e739e0e5d"
+      }
+    }
+  },
+  "safe_runtime_wrappers": [
+    "CertifiedDirectMlExecutionInputs::create_dxgi_factory6",
+    "CertifiedDirectMlExecutionInputs::create_d3d12_device",
+    "CertifiedDirectMlExecutionInputs::create_directml_device",
+    "DirectMlExecutionSession::from_registry_certified_handles",
+    "DirectMlExecutionSession::allocate",
+    "DirectMlExecutionSession::copy_host_to_device",
+    "DirectMlExecutionSession::copy_device_to_host",
+    "DirectMlExecutionSession::dispatch_add",
+    "DirectMlExecutionSession::record_event",
+    "DirectMlExecutionSession::wait_event",
+    "DirectMlDevice::maximum_supported_feature_level",
+    "DirectMlDevice::tensor_data_type_supported",
+    "DirectMlDevice::create_operator",
+    "DirectMlDevice::compile_operator",
+    "DirectMlDevice::create_operator_initializer",
+    "DirectMlDevice::create_command_recorder",
+    "DirectMlDevice::create_binding_table",
+    "DirectMlOperatorInitializer::reset",
+    "DirectMlBindingTable::bind_inputs",
+    "DirectMlBindingTable::bind_outputs",
+    "DirectMlCommandRecorder::record_dispatch"
+  ],
+  "validation": [
+    "cargo check --locked -p comfy_backend_directml",
+    "cargo test --locked -p sim_backend_directml --all-targets",
+    "./script/clippy -p comfy_backend_directml",
+    "cargo check --locked -p sim_tensor --features directml",
+    "cargo test --locked -p sim_tensor --features directml --all-targets",
+    "./script/clippy -p sim_tensor --features directml",
+    "script/package-sim-backend-directml --self-test"
+  ],
+  "hardware_validation": {
+    "required_target": "signed Windows 10 build 19041 or newer with a DirectML-capable adapter",
+    "current_environment": "unavailable",
+    "failure_semantics": "typed unavailable or unbound state; never inferred from feature compilation, paths, manifests, or receipt structure"
+  }
+}

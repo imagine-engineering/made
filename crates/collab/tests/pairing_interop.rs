@@ -41,7 +41,7 @@ use zeroize::Zeroizing;
 const PAIRING_EVENT_KIND: u16 = 24_134;
 const CLIENT_FIXTURES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/fixtures/clients/manifest.json"
+    "/../../crates/collaboration_domain/test_fixtures/frozen-clients.json"
 ));
 const ZED_MANIFEST: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../zed/Cargo.toml"));
 

@@ -28,7 +28,8 @@ use sim_types::{
 use uuid::Uuid;
 
 const CANONICAL_DEFINITION: &str = "crates/sim_types/src/cancellation.rs";
-const OWNERSHIP_CATALOG: &str = ".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv";
+const OWNERSHIP_CATALOG: &str =
+    "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv";
 const DEVELOPMENT_ORACLE: &str = "projects/comfy/comfy-cli/comfy_cli/cancellation.py";
 const FIXTURE_SOURCES: &[&str] = &[
     OWNERSHIP_CATALOG,

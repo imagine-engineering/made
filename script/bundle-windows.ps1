@@ -131,6 +131,9 @@ function CheckEnvironmentVariables {
     $signingMode = python "$PSScriptRoot/check-signing-environment" --platform windows
     if ($LASTEXITCODE -ne 0) { throw "Signing environment validation failed" }
     $script:canCodeSign = $signingMode -eq 'production'
+    if ($script:canCodeSign -and -not (Get-Module -ListAvailable -Name TrustedSigning | Where-Object { $_.Version -eq [Version]'0.5.8' })) {
+        Install-Module -Name TrustedSigning -RequiredVersion 0.5.8 -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop
+    }
 
 }
 

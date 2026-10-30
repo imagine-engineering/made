@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::security::AuthenticatedPrincipal;
 
 const WEBSOCKET_CATALOG_CSV: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-websocket-events.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/backend-websocket-events.csv");
 
 pub const PREVIEW_IMAGE_EVENT_CODE: u32 = 1;
 pub const UNENCODED_PREVIEW_IMAGE_EVENT_CODE: u32 = 2;

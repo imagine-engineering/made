@@ -1,0 +1,216 @@
+{
+  "string_table": [
+    "UNKNOWN",
+    "start",
+    "std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>",
+    "<fn() as core::ops::function::FnOnce<()>>::call_once",
+    "<unmapped source>",
+    "<unmapped source>",
+    "std::rt::lang_start::<()>::{closure#0}",
+    "<unmapped source>",
+    "workload::leaf",
+    "core::hint::black_box::<u64>",
+    "<unmapped source>",
+    "workload::leaf::{closure#0}",
+    "/fixture/workload.rs",
+    "<core::ops::range::Range<u64> as core::iter::traits::iterator::Iterator>::fold::<u64, workload::leaf::{closure#0}>",
+    "<unmapped source>",
+    "workload::main",
+    "main",
+    "std::rt::lang_start_internal",
+    "<&dyn core::ops::function::Fn<(), Output = i32> + core::marker::Sync + core::panic::unwind_safe::RefUnwindSafe as core::ops::function::FnOnce<()>>::call_once",
+    "<unmapped source>",
+    "std::panicking::catch_unwind::do_call::<&dyn core::ops::function::Fn<(), Output = i32> + core::marker::Sync + core::panic::unwind_safe::RefUnwindSafe, i32>",
+    "<unmapped source>",
+    "std::panicking::catch_unwind::<i32, &dyn core::ops::function::Fn<(), Output = i32> + core::marker::Sync + core::panic::unwind_safe::RefUnwindSafe>",
+    "std::panic::catch_unwind::<&dyn core::ops::function::Fn<(), Output = i32> + core::marker::Sync + core::panic::unwind_safe::RefUnwindSafe, i32>",
+    "<unmapped source>",
+    "std::rt::lang_start_internal::{closure#0}",
+    "<unmapped source>",
+    "std::panicking::catch_unwind::do_call::<std::rt::lang_start_internal::{closure#0}, isize>",
+    "std::panicking::catch_unwind::<isize, std::rt::lang_start_internal::{closure#0}>",
+    "std::panic::catch_unwind::<std::rt::lang_start_internal::{closure#0}, isize>"
+  ],
+  "data": [
+    {
+      "debug_name": "dyld",
+      "debug_id": "74e52480-c2bd-3c8d-812d-95fe2b74a096",
+      "code_id": "74E52480C2BD3C8D812D95FE2B74A096",
+      "symbol_table": [
+        {
+          "rva": 125332,
+          "size": 7096,
+          "symbol": 1
+        }
+      ],
+      "known_addresses": [
+        [
+          132323,
+          0
+        ]
+      ]
+    },
+    {
+      "debug_name": "workload",
+      "debug_id": "db90c284-97b5-3f9f-9546-f14c552b8b12",
+      "code_id": "DB90C28497B53F9F9546F14C552B8B12",
+      "symbol_table": [
+        {
+          "rva": 2184,
+          "size": 20,
+          "symbol": 2,
+          "frames": [
+            {
+              "function": 3,
+              "file": 4,
+              "line": 250
+            },
+            {
+              "function": 2,
+              "file": 5,
+              "line": 166
+            }
+          ]
+        },
+        {
+          "rva": 2204,
+          "size": 28,
+          "symbol": 6,
+          "frames": [
+            {
+              "function": 6,
+              "file": 7,
+              "line": 206
+            }
+          ]
+        },
+        {
+          "rva": 2260,
+          "size": 64,
+          "symbol": 8,
+          "frames": [
+            {
+              "function": 9,
+              "file": 10,
+              "line": 491
+            },
+            {
+              "function": 11,
+              "file": 12,
+              "line": 4
+            },
+            {
+              "function": 13,
+              "file": 14,
+              "line": 2671
+            },
+            {
+              "function": 8,
+              "file": 12,
+              "line": 4
+            }
+          ]
+        },
+        {
+          "rva": 2324,
+          "size": 120,
+          "symbol": 15,
+          "frames": [
+            {
+              "function": 15,
+              "file": 12,
+              "line": 11
+            }
+          ]
+        },
+        {
+          "rva": 2460,
+          "size": 64,
+          "symbol": 16
+        },
+        {
+          "rva": 106400,
+          "size": 1560,
+          "symbol": 17,
+          "frames": [
+            {
+              "function": 18,
+              "file": 19,
+              "line": 287
+            },
+            {
+              "function": 20,
+              "file": 21,
+              "line": 581
+            },
+            {
+              "function": 22,
+              "file": 21,
+              "line": 544
+            },
+            {
+              "function": 23,
+              "file": 24,
+              "line": 359
+            },
+            {
+              "function": 25,
+              "file": 26,
+              "line": 175
+            },
+            {
+              "function": 27,
+              "file": 21,
+              "line": 581
+            },
+            {
+              "function": 28,
+              "file": 21,
+              "line": 544
+            },
+            {
+              "function": 29,
+              "file": 24,
+              "line": 359
+            },
+            {
+              "function": 17,
+              "file": 26,
+              "line": 171
+            }
+          ]
+        }
+      ],
+      "known_addresses": [
+        [
+          2195,
+          0
+        ],
+        [
+          2219,
+          1
+        ],
+        [
+          2284,
+          2
+        ],
+        [
+          2300,
+          2
+        ],
+        [
+          2395,
+          3
+        ],
+        [
+          2511,
+          4
+        ],
+        [
+          107351,
+          5
+        ]
+      ]
+    }
+  ]
+}

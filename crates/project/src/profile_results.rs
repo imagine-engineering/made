@@ -1254,10 +1254,10 @@ mod tests {
     }
 
     const PROFILE: &[u8] = include_bytes!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
     );
     const SYMBOLS: &[u8] = include_bytes!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
     );
 
     #[test]

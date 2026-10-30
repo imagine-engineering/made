@@ -6,7 +6,7 @@ use crate::{
 use std::{collections::BTreeMap, error::Error, fmt};
 
 pub const MODEL_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-models.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/backend-models.csv");
 
 const MAX_CATALOG_BYTES: usize = 16 * 1024 * 1024;
 const MAX_CATALOG_ROWS: usize = 100_000;

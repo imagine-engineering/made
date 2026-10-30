@@ -83,7 +83,7 @@ const METAL_REVIEWED_BINDINGS: &str =
     include_str!("../../sim_backend_metal/abi/reviewed-bindings-v1.txt");
 const METAL_LICENSES: &str = include_str!("../../sim_backend_metal/LICENSES");
 const METAL_ABI_CATALOG: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/metal.json");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/native-backend-abi/metal.json");
 const METAL_ADAPTER: &str = include_str!("../../sim_backend_metal/src/sim_backend_metal.rs");
 const METAL_LOADER: &str = include_str!("../../sim_backend_metal/src/loader.rs");
 const METAL_READINESS_SOURCE: &str =
@@ -104,7 +104,7 @@ const METAL_EXECUTION_SOURCE: &str = include_str!("../../sim_backend_metal/src/e
 const METAL_EXECUTION_ABI_SOURCE: &str =
     include_str!("../../sim_backend_metal/src/execution_abi.rs");
 const METAL_EXECUTION_CATALOG: &str = include_str!(
-    "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/metal-execution.json"
+    "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/metal-execution.json"
 );
 
 const PROFILE_ID: Uuid = Uuid::from_u128(0x5349_4d00_0000_0000_0000_0000_0000_3301);

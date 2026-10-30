@@ -266,7 +266,7 @@ fn validate_implementation_digests(workspace: &Path, result: &Value) -> Result<(
 
 fn text_encoder_rows(workspace: &Path) -> Result<Vec<CatalogRow>, Box<dyn Error>> {
     let records = parse_csv(&fs::read_to_string(workspace.join(
-        ".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv",
+        "crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv",
     ))?)?;
     let header = records.first().ok_or("conditioning catalog is empty")?;
     let index = |name: &str| {

@@ -1,0 +1,1230 @@
+{
+  "schema_version": 4,
+  "owner_task_id": "comfy-parity-quantized-autograd-adapter",
+  "oracle": {
+    "development_only": true,
+    "comfyui_version": "0.27.1",
+    "comfyui_file_count": 949,
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "ops_py_sha256": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "quant_ops_py_sha256": "aba7417553f4f25324b5397339ec25708e727b5f4fa7662de66a6554a3d45d6a",
+    "requirements_txt_sha256": "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
+    "quant_linear_symbol_sha256": "dc91a7dbcc41fb6dd94b65c4c445fb6e89bcd3fb55ae85413fb66b2b9b4024fb",
+    "python_major_minor": "3.12",
+    "runtime_profile": {
+      "python_implementation": "CPython",
+      "python_cache_tag": "cpython-312",
+      "python_abi": "cp312",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "sysconfig_platform": "macosx-11.0-arm64"
+    },
+    "dependencies": {
+      "torch": {
+        "version": "2.10.0",
+        "package_prefix": "torch/",
+        "python_source_file_count": 2156,
+        "python_source_sha256": "1b3ec473cbc22443afedce5567e5a1bdf9618944e3b0aec78b3061758848332b",
+        "metadata_sha256": "4b0f1217de69037355b4e582905cdb303a56a488ac6fd172f148d88fed634f54",
+        "record_sha256": "afed3d2c56b90ca742f83433f791ff1f0e7433eb4faa1a25bc6695d3af51d40d",
+        "record_entry_count": 14541,
+        "record_hashed_entry_count": 12341,
+        "supplemental_bytecode_file_count": 2199,
+        "supplemental_bytecode_sha256": "2a2eec5dc29068a730fd34b549647f0acdbf62e6669073c8972b8faab0e4da79",
+        "wheel_sha256": "29d9da686c1260684d7454c4edac4e2dc5a14da0b7ab0fbf1767f6b5a0022e41",
+        "wheel_tags": [
+          "cp312-none-macosx_11_0_arm64"
+        ],
+        "module_origins": [
+          "torch/__init__.py",
+          "torch/autograd/function.py",
+          "torch/nn/functional.py"
+        ]
+      },
+      "comfy-kitchen": {
+        "version": "0.2.16",
+        "package_prefix": "comfy_kitchen/",
+        "python_source_file_count": 27,
+        "python_source_sha256": "a19c43ef5e77a99e4a964c46cf9b19dc7ec809a97f9089aebce1550870603d66",
+        "metadata_sha256": "960ae131f195916695e0d51e8df9bb2135d1819fd3a1768bdab98f0409ac2c37",
+        "record_sha256": "139d248ca695d590822196738916ac1fd29e1c254bec81e9404a07d8ffa5a58e",
+        "record_entry_count": 66,
+        "record_hashed_entry_count": 38,
+        "supplemental_bytecode_file_count": 27,
+        "supplemental_bytecode_sha256": "2838d41338422e326773affb00e2e29dbf3d6896834d36e34e0cdf4cf999425c",
+        "wheel_sha256": "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9",
+        "wheel_tags": [
+          "py3-none-any"
+        ],
+        "module_origins": [
+          "comfy_kitchen/__init__.py",
+          "comfy_kitchen/tensor/__init__.py",
+          "comfy_kitchen/tensor/base.py"
+        ]
+      }
+    },
+    "generator": "crates/sim_test_support/parity/oracles/generate_quant_linear_oracle.py",
+    "generator_sha256": "beac9521a7dc3e1676e049504c665a4c372868e8c4cf3fe52cc24b9dae44c662",
+    "manifest": "crates/sim_test_support/parity/oracles/quant_linear_oracle_manifest.json",
+    "manifest_sha256": "0f1dc92eb5987737003e536f5a9841b8d0893e6ba3d028243fce39a5df5940dd",
+    "determinism": {
+      "algorithms": true,
+      "random_seed": 0,
+      "threads": 1,
+      "interop_threads": 1
+    }
+  },
+  "callable": {
+    "class_name": "QuantLinearFunc",
+    "forward_inputs": [
+      "input_float",
+      "weight",
+      "bias",
+      "layout_type",
+      "input_scale",
+      "compute_dtype"
+    ],
+    "backward_outputs": [
+      "grad_input",
+      "grad_weight",
+      "grad_bias",
+      null,
+      null,
+      null
+    ],
+    "higher_order_decorator": "torch.autograd.function.once_differentiable"
+  },
+  "fixture_inputs": {
+    "input_shape": [
+      2,
+      3
+    ],
+    "input": [
+      0.13,
+      -1.37,
+      2.11,
+      -0.77,
+      3.14,
+      -0.22
+    ],
+    "weight_shape": [
+      2,
+      3
+    ],
+    "weight": [
+      1.23,
+      -0.87,
+      0.31,
+      -0.46,
+      1.17,
+      2.29
+    ],
+    "bias": [
+      0.19,
+      -0.33
+    ],
+    "output_gradient_shape": [
+      2,
+      2
+    ],
+    "output_gradient": [
+      0.73,
+      -1.41,
+      0.27,
+      2.03
+    ]
+  },
+  "execution_cases": [
+    {
+      "id": "unquantized-f32-ordinary",
+      "source_layout": null,
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1958999633789062,
+        2.8391997814178467,
+        -3.5571000576019287,
+        3.194200038909912
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "unquantized-f32-fp8-backward",
+      "source_layout": null,
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1958999633789062,
+        2.8391997814178467,
+        -3.5571000576019287,
+        3.194200038909912
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": [
+        -0.09375,
+        -0.21875,
+        1.4453125,
+        -1.6875,
+        8.5625,
+        -3.4375
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "unquantized-f16-ordinary",
+      "source_layout": null,
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f16",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1953125,
+        2.8359375,
+        -3.55859375,
+        3.1953125
+      ],
+      "input_gradient": [
+        1.546875,
+        -2.28515625,
+        -3.001953125,
+        -0.60107421875,
+        2.138671875,
+        4.73046875
+      ],
+      "weight_gradient": [
+        -0.113037109375,
+        -0.152099609375,
+        1.48046875,
+        -1.74609375,
+        8.3046875,
+        -3.421875
+      ],
+      "bias_gradient": [
+        1.0,
+        0.619140625
+      ],
+      "output_dtype": "f16",
+      "gradient_dtypes": [
+        "f16",
+        "f16",
+        "f16"
+      ]
+    },
+    {
+      "id": "unquantized-bf16-ordinary",
+      "source_layout": null,
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "bf16",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.203125,
+        2.859375,
+        -3.5625,
+        3.203125
+      ],
+      "input_gradient": [
+        1.546875,
+        -2.28125,
+        -3.0,
+        -0.60546875,
+        2.140625,
+        4.75
+      ],
+      "weight_gradient": [
+        -0.1123046875,
+        -0.15234375,
+        1.484375,
+        -1.7421875,
+        8.3125,
+        -3.40625
+      ],
+      "bias_gradient": [
+        1.0,
+        0.625
+      ],
+      "output_dtype": "bf16",
+      "gradient_dtypes": [
+        "bf16",
+        "bf16",
+        "bf16"
+      ]
+    },
+    {
+      "id": "fp8-e4m3-ordinary",
+      "source_layout": "TensorCoreFP8E4M3Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1600000858306885,
+        2.583750009536743,
+        -3.627812385559082,
+        3.3165626525878906
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "fp8-e4m3-fp8-backward",
+      "source_layout": "TensorCoreFP8Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1600000858306885,
+        2.583750009536743,
+        -3.627812385559082,
+        3.3165626525878906
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": [
+        -0.09375,
+        -0.21875,
+        1.4453125,
+        -1.6875,
+        8.5625,
+        -3.4375
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "fp8-e5m2-ordinary",
+      "source_layout": "TensorCoreFP8E5M2Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.0512499809265137,
+        2.7300000190734863,
+        -3.4103124141693115,
+        3.024062395095825
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "fp8-e5m2-fp8-backward",
+      "source_layout": "TensorCoreFP8E5M2Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.0512499809265137,
+        2.7300000190734863,
+        -3.4103124141693115,
+        3.024062395095825
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": [
+        -0.09375,
+        -0.1875,
+        1.4453125,
+        -1.6875,
+        7.875,
+        -3.4375
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "mxfp8-ordinary",
+      "source_layout": "TensorCoreMXFP8Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1600000858306885,
+        2.583750009536743,
+        -3.627812385559082,
+        3.3165626525878906
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "mxfp8-fp8-backward",
+      "source_layout": "TensorCoreMXFP8Layout",
+      "input_scale": {
+        "kind": "explicit",
+        "value": 0.125
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1600000858306885,
+        2.583750009536743,
+        -3.627812385559082,
+        3.3165626525878906
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": [
+        -0.09375,
+        -0.21875,
+        1.4453125,
+        -1.6875,
+        8.5625,
+        -3.4375
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "nvfp4-ordinary",
+      "source_layout": "TensorCoreNVFP4Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.193432331085205,
+        2.6406641006469727,
+        -3.5884664058685303,
+        3.1056830883026123
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "nvfp4-fp8-backward",
+      "source_layout": "TensorCoreNVFP4Layout",
+      "input_scale": {
+        "kind": "recalculate"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.193432331085205,
+        2.6406641006469727,
+        -3.5884664058685303,
+        3.1056830883026123
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": [
+        -0.09375,
+        -0.21875,
+        1.4453125,
+        -1.6875,
+        8.5625,
+        -3.4375
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "fp8-e4m3-explicit-scale",
+      "source_layout": "TensorCoreFP8E4M3Layout",
+      "input_scale": {
+        "kind": "explicit",
+        "value": 0.5
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1600000858306885,
+        2.583750009536743,
+        -3.627812385559082,
+        3.3165626525878906
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "fp8-e4m3-recalculated-scale",
+      "source_layout": "TensorCoreFP8E4M3Layout",
+      "input_scale": {
+        "kind": "recalculate"
+      },
+      "weight_layout": null,
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": true,
+      "weight_runtime_type": "torch.Tensor",
+      "output": [
+        2.1417062282562256,
+        2.6600089073181152,
+        -3.576878786087036,
+        3.191286087036133
+      ],
+      "input_gradient": [
+        1.5464999675750732,
+        -2.2848000526428223,
+        -3.0025999546051025,
+        -0.601699948310852,
+        2.140199899673462,
+        4.732399940490723
+      ],
+      "weight_gradient": [
+        -0.11300000548362732,
+        -0.1522999405860901,
+        1.4809000492095947,
+        -1.746399998664856,
+        8.305900573730469,
+        -3.4216997623443604
+      ],
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        "f32",
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-fp8-e4m3-ordinary",
+      "source_layout": "TensorCoreFP8E4M3Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreFP8E4M3Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.174375057220459,
+        2.5645313262939453,
+        -3.659609317779541,
+        3.1856250762939453
+      ],
+      "input_gradient": [
+        1.5734374523162842,
+        -2.2249999046325684,
+        -2.9443747997283936,
+        -0.6140624284744263,
+        2.0475001335144043,
+        4.651875019073486
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-fp8-e4m3-fp8-backward",
+      "source_layout": "TensorCoreFP8E4M3Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreFP8E4M3Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.174375057220459,
+        2.5645313262939453,
+        -3.659609317779541,
+        3.1856250762939453
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-fp8-e5m2-ordinary",
+      "source_layout": "TensorCoreFP8E5M2Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreFP8E5M2Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.065000057220459,
+        3.0528125762939453,
+        -3.440859317779541,
+        3.2012500762939453
+      ],
+      "input_gradient": [
+        1.5293750762939453,
+        -2.401249885559082,
+        -3.296874761581421,
+        -0.5506249666213989,
+        2.3012499809265137,
+        5.159374713897705
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-fp8-e5m2-fp8-backward",
+      "source_layout": "TensorCoreFP8E5M2Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreFP8E5M2Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.065000057220459,
+        3.0528125762939453,
+        -3.440859317779541,
+        3.2012500762939453
+      ],
+      "input_gradient": [
+        1.59375,
+        -2.53125,
+        -3.515625,
+        -0.5625,
+        2.28125,
+        5.078125
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-mxfp8-ordinary",
+      "source_layout": "TensorCoreMXFP8Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreMXFP8Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.174375057220459,
+        2.5645313262939453,
+        -3.659609317779541,
+        3.1856250762939453
+      ],
+      "input_gradient": [
+        1.5734374523162842,
+        -2.2249999046325684,
+        -2.9443747997283936,
+        -0.6140624284744263,
+        2.0475001335144043,
+        4.651875019073486
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-mxfp8-fp8-backward",
+      "source_layout": "TensorCoreMXFP8Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreMXFP8Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.174375057220459,
+        2.5645313262939453,
+        -3.659609317779541,
+        3.1856250762939453
+      ],
+      "input_gradient": [
+        1.640625,
+        -2.34375,
+        -3.140625,
+        -0.625,
+        2.03125,
+        4.578125
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-nvfp4-ordinary",
+      "source_layout": "TensorCoreNVFP4Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreNVFP4Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": false,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.116053581237793,
+        2.687483787536621,
+        -3.4213500022888184,
+        2.965691566467285
+      ],
+      "input_gradient": [
+        1.4337034225463867,
+        -2.2114856243133545,
+        -3.005011558532715,
+        -0.4435511827468872,
+        2.1035284996032715,
+        4.731507778167725
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    },
+    {
+      "id": "quantized-weight-nvfp4-fp8-backward",
+      "source_layout": "TensorCoreNVFP4Layout",
+      "input_scale": {
+        "kind": "default"
+      },
+      "weight_layout": "TensorCoreNVFP4Layout",
+      "weight_scale": {
+        "kind": "default"
+      },
+      "compute_dtype": "f32",
+      "fp8_backward": true,
+      "weight_requires_grad": false,
+      "weight_runtime_type": "comfy_kitchen.tensor.base.QuantizedTensor",
+      "output": [
+        2.116053581237793,
+        2.687483787536621,
+        -3.4213500022888184,
+        2.965691566467285
+      ],
+      "input_gradient": [
+        1.5,
+        -2.296875,
+        -3.140625,
+        -0.4375,
+        2.046875,
+        4.578125
+      ],
+      "weight_gradient": null,
+      "bias_gradient": [
+        1.0,
+        0.6200000047683716
+      ],
+      "output_dtype": "f32",
+      "gradient_dtypes": [
+        "f32",
+        null,
+        "f32"
+      ]
+    }
+  ],
+  "source_probes": {
+    "runtime_backward": {
+      "output_arity": 6,
+      "none_indexes": [
+        3,
+        4,
+        5
+      ],
+      "tensor_shapes": [
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          1
+        ],
+        null,
+        null,
+        null
+      ],
+      "tensor_dtypes": [
+        "f32",
+        "f32",
+        "f32",
+        null,
+        null,
+        null
+      ]
+    },
+    "once_differentiable": {
+      "first_order_requires_grad": [
+        false,
+        false,
+        false
+      ],
+      "second_order_rejected": true,
+      "exception_type": "RuntimeError"
+    },
+    "released_state": {
+      "second_backward_rejected": true,
+      "exception_type": "RuntimeError"
+    },
+    "unsupported_layout": {
+      "source_name": "TensorCoreINT4Layout",
+      "rejected": true,
+      "exception_type": "KeyError",
+      "exception_arguments": [
+        "TensorCoreINT4Layout"
+      ]
+    }
+  },
+  "coverage": {
+    "case_count": 22,
+    "case_ids": [
+      "unquantized-f32-ordinary",
+      "unquantized-f32-fp8-backward",
+      "unquantized-f16-ordinary",
+      "unquantized-bf16-ordinary",
+      "fp8-e4m3-ordinary",
+      "fp8-e4m3-fp8-backward",
+      "fp8-e5m2-ordinary",
+      "fp8-e5m2-fp8-backward",
+      "mxfp8-ordinary",
+      "mxfp8-fp8-backward",
+      "nvfp4-ordinary",
+      "nvfp4-fp8-backward",
+      "fp8-e4m3-explicit-scale",
+      "fp8-e4m3-recalculated-scale",
+      "quantized-weight-fp8-e4m3-ordinary",
+      "quantized-weight-fp8-e4m3-fp8-backward",
+      "quantized-weight-fp8-e5m2-ordinary",
+      "quantized-weight-fp8-e5m2-fp8-backward",
+      "quantized-weight-mxfp8-ordinary",
+      "quantized-weight-mxfp8-fp8-backward",
+      "quantized-weight-nvfp4-ordinary",
+      "quantized-weight-nvfp4-fp8-backward"
+    ],
+    "source_layouts": [
+      "TensorCoreFP8E4M3Layout",
+      "TensorCoreFP8E5M2Layout",
+      "TensorCoreFP8Layout",
+      "TensorCoreMXFP8Layout",
+      "TensorCoreNVFP4Layout"
+    ],
+    "weight_layouts": [
+      "TensorCoreFP8E4M3Layout",
+      "TensorCoreFP8E5M2Layout",
+      "TensorCoreMXFP8Layout",
+      "TensorCoreNVFP4Layout"
+    ],
+    "compute_dtypes": [
+      "bf16",
+      "f16",
+      "f32"
+    ],
+    "input_scale_kinds": [
+      "default",
+      "explicit",
+      "recalculate"
+    ],
+    "fp8_backward_modes": [
+      false,
+      true
+    ],
+    "dense_weight_cases": 14,
+    "quantized_weight_cases": 8
+  }
+}

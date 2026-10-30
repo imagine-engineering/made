@@ -162,8 +162,9 @@ fn collaborative_owner_guard_rejects_a_synthetic_store() {
 
 #[test]
 fn reuse_matrix_covers_every_declared_collaborative_type() {
-    let matrix =
-        include_str!("../../../.agents/specs/collaborative-workspace/reuse-ownership-matrix.md");
+    let matrix = include_str!(
+        "../../../docs/collaboration/collaborative-workspace/reuse-ownership-matrix.md"
+    );
     for (source_name, source) in COLLABORATIVE_SOURCES {
         for type_name in declared_collaborative_types(source) {
             assert!(

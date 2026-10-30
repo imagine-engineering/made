@@ -3287,7 +3287,7 @@ mod tests {
                     1,
                     6,
                     breadth::HigherOrderPolicy::OnceDifferentiable,
-                    ".agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json#callable",
+                    "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json#callable",
                 ),
                 (
                     "HadaWeightTucker",

@@ -61,7 +61,8 @@ fn val_vae_001_audio_source_ledger_covers_every_catalog_contract() -> Result<(),
     assert_eq!(fixture.cases.len(), 7);
 
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let mut case_ids = BTreeSet::new();
     let mut contracts = BTreeSet::new();

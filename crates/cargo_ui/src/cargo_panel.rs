@@ -5103,8 +5103,14 @@ fn main() {
 "#,
         )
         .expect("controlled real Cargo Build script, never fabricated report JSON");
-        std::fs::write(installed.join("profile-template.json"), include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json")).expect("profile fixture");
-        std::fs::write(installed.join("profile-template.syms.json"), include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json")).expect("symbols fixture");
+        std::fs::write(
+            installed.join("profile-template.json"),
+            include_bytes!(
+                "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
+            ),
+        )
+        .expect("profile fixture");
+        std::fs::write(installed.join("profile-template.syms.json"), include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json")).expect("symbols fixture");
         let collector = installed.join("collector");
         std::fs::write(&collector, "#!/bin/sh\nbase=$(/usr/bin/dirname \"$0\")\ncase \"$1\" in\n--version) printf probe >> \"$base/probe.log\"; printf 'samply 0.13.1\\n';;\nrecord) [ -z \"${_NT_SYMBOL_PATH+x}\" ] && [ -z \"${ZED_PROFILE_TASK_TOKEN+x}\" ] && [ -z \"${ZED_PROFILE_BUILD_INVOCATION_ENV+x}\" ] && [ -z \"${ZED_PROFILE_NATIVE_INVOCATION_ENV+x}\" ] && [ -z \"${ZED_PROFILE_CARGO_RUNTIME_ENDPOINT+x}\" ] && [ -z \"${ZED_PROFILE_CARGO_RUNTIME_TOKEN+x}\" ] || exit 50\nout=\"${12}\"\nprintf '%s\\n' \"$out\" >> \"$base/capture.log\"\nprintf '%s\\0' \"$@\" > \"$base/$(/usr/bin/basename \"$out\").argv\"\nif [ -f \"$base/hold-first-capture\" ] && [ \"$(/usr/bin/wc -l < \"$base/capture.log\" | /usr/bin/tr -d ' ')\" = 1 ]; then printf '%s\\n' \"$$\" > \"$base/held-capture.pid\"; while [ ! -f \"$base/release-first-capture\" ]; do /bin/sleep 0.02; done; fi\nshift 13\n\"$@\" >/dev/null || exit 51\n/bin/cp \"$base/profile-template.json\" \"$out\" || exit 52\n/bin/cp \"$base/profile-template.syms.json\" \"${out%.json}.syms.json\" || exit 53;;\n*) exit 54;;\nesac\n").expect("controlled admitted collector");
         std::fs::set_permissions(&collector, std::fs::Permissions::from_mode(0o700))
@@ -6352,7 +6358,7 @@ fn main() {
             assert_eq!(
                 std::fs::read(root.join(profile)).expect("produced profile"),
                 include_bytes!(
-                    "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+                    "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
                 )
             );
             let profile_file_name = std::path::Path::new(profile)

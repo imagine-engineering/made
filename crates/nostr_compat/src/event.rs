@@ -148,7 +148,7 @@ mod tests {
 
     const EVENTS: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../.agents/specs/collaborative-workspace/fixtures/protocol/events.json"
+        "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/events.json"
     ));
 
     fn fixture_event(value: &Value) -> Result<CanonicalEvent, EventCodecError> {

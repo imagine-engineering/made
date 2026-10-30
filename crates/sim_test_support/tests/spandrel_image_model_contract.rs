@@ -3,7 +3,7 @@ use sha2::{Digest as _, Sha256};
 use std::collections::BTreeSet;
 
 const CONTRACT_BYTES: &[u8] = include_bytes!(
-    "../../../.agents/specs/comfy-parity/catalogs/spandrel-image-model-contract.json"
+    "../../../crates/sim_test_support/parity/catalogs/spandrel-image-model-contract.json"
 );
 const FIXTURE_BYTES: &[u8] =
     include_bytes!("../fixtures/models/spandrel-image-model-contract/contract-summary.json");

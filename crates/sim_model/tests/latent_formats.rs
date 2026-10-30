@@ -31,7 +31,7 @@ fn val_latent_001_all_formats_emit_complete_artifact() -> Result<(), Box<dyn std
         .parent()
         .and_then(Path::parent)
         .ok_or("workspace root is unavailable")?;
-    let catalog_path = workspace.join(".agents/specs/comfy-parity/catalogs/backend-models.csv");
+    let catalog_path = workspace.join("crates/sim_test_support/parity/catalogs/backend-models.csv");
     let catalog_bytes = fs::read(&catalog_path)?;
     let catalog_source = std::str::from_utf8(&catalog_bytes)?;
     let catalog_identities = latent_catalog_identities(catalog_source)?;
@@ -52,7 +52,8 @@ fn val_latent_001_all_formats_emit_complete_artifact() -> Result<(), Box<dyn std
         "comfy-parity-native-compute-breadth-integration",
         "comfy-parity-final-validation",
     ];
-    let task_source = fs::read_to_string(workspace.join(".agents/specs/comfy-parity/tasks.md"))?;
+    let task_source =
+        fs::read_to_string(workspace.join("crates/sim_test_support/parity/tasks.md"))?;
     for gate in release_gates {
         assert!(
             task_source

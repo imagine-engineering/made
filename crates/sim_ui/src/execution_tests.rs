@@ -41,23 +41,23 @@ use workspace::MultiWorkspace;
 
 const QUEUE_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/catalogs/frontend-features.csv"
+    "/../../crates/sim_test_support/parity/catalogs/frontend-features.csv"
 ));
 const COMMAND_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/catalogs/frontend-commands.csv"
+    "/../../crates/sim_test_support/parity/catalogs/frontend-commands.csv"
 ));
 const MENU_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/catalogs/frontend-menus.csv"
+    "/../../crates/sim_test_support/parity/catalogs/frontend-menus.csv"
 ));
 const COMPONENT_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/catalogs/frontend-component-surfaces.csv"
+    "/../../crates/sim_test_support/parity/catalogs/frontend-component-surfaces.csv"
 ));
 const PARITY_MATRIX: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/parity-matrix.md"
+    "/../../crates/sim_test_support/parity/parity-matrix.md"
 ));
 const EXECUTION_PANEL_SOURCE: &str = include_str!("execution_panel.rs");
 const EXECUTION_MODEL_SOURCE: &str = include_str!("execution_model.rs");
@@ -214,7 +214,7 @@ const DEFAULT_SIM_KEYMAP: &str = include_str!(concat!(
 ));
 const EXECUTION_LEDGER_GENERATOR: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/comfy-parity/regenerate_native_zed_evidence.py"
+    "/../../crates/sim_test_support/parity/regenerate_native_zed_evidence.py"
 ));
 
 struct ErrorOverlayProbe {

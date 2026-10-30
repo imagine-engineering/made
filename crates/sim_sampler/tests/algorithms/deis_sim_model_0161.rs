@@ -172,7 +172,7 @@ fn val_sampler_001_deis_definition_is_exact_and_not_an_alias() -> Result<(), Box
         fixture.source.sampler_sha256
     );
     assert_eq!(
-        file_digest(".agents/specs/comfy-parity/catalogs/backend-models.csv")?,
+        file_digest("crates/sim_test_support/parity/catalogs/backend-models.csv")?,
         fixture.source.catalog_sha256
     );
     Ok(())

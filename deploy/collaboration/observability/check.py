@@ -10,8 +10,8 @@ import sys
 DIRECTORY = pathlib.Path(__file__).resolve().parent
 REPOSITORY = DIRECTORY.parents[2]
 DASHBOARDS = DIRECTORY / "dashboards"
-LIMITS = REPOSITORY / ".agents/specs/collaborative-workspace/security/operational-limits.md"
-PRIVATE_FIXTURE = REPOSITORY / ".agents/specs/collaborative-workspace/fixtures/protocol/events.json"
+LIMITS = REPOSITORY / "docs/collaboration/operational-limits.md"
+PRIVATE_FIXTURE = REPOSITORY / "crates/collaboration_domain/test_fixtures/compatibility/protocol/events.json"
 REQUIRED_SIGNALS = {
     "STOP-CROSS-TENANT",
     "STOP-REPLAY-OR-STALE",

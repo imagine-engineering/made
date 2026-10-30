@@ -5,6 +5,7 @@ on:
   push:
     branches:
     - codex/**
+    - main
     paths:
     - .github/workflows/release_signing_check.yml
     - tooling/xtask/src/tasks/workflows/release.rs
@@ -17,7 +18,7 @@ on:
       version:
         description: Exact package version to validate; no tag or release is created
         type: string
-        default: 1.0.0
+        default: 0.1.0
       sign_artifacts:
         description: Contact Apple/Azure and build signed packages; requires approval and production credentials
         type: boolean
@@ -54,12 +55,12 @@ jobs:
             echo "tag="
         } >> "$GITHUB_OUTPUT"
       env:
-        VERSION: ${{ inputs.version || '1.0.0' }}
+        VERSION: ${{ inputs.version || '0.1.0' }}
         COMMIT_SHA: ${{ github.sha }}
     - name: release::release_signing_check
       run: CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
     - name: release::release_signing_check
-      run: python3 script/test-production-signing && cargo test -p xtask --locked
+      run: python3 script/check-repository-inputs && python3 script/test-production-signing && cargo test -p xtask --locked
     - name: release::generate_release_bundle_plans
       run: |
         mkdir -p release-bundle-plans
@@ -848,11 +849,9 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'linux'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
-        export ZED_BUNDLE_PHASE=package
-        script/bundle-linux
+        cargo xtask bundle --product rust --platform linux --target "$TARGET" --phase package --signing required
       env:
-        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
         CC: clang
         CXX: clang++
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
@@ -861,9 +860,7 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'macos'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
-        export ZED_BUNDLE_PHASE=package
-        script/bundle-mac "$TARGET"
+        cargo xtask bundle --product rust --platform macos --target "$TARGET" --phase package --signing required
       env:
         ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
         TARGET: ${{ matrix.target }}
@@ -875,17 +872,12 @@ jobs:
         APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
     - name: release::product_builds
       if: matrix.platform == 'windows'
-      run: Install-Module -Name TrustedSigning -RequiredVersion 0.5.8 -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop
-      shell: pwsh
-    - name: release::product_builds
-      if: matrix.platform == 'windows'
       run: |
-        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
-        $env:ZED_BUNDLE_PHASE = "package"
-        script/bundle-windows.ps1 -Architecture x86_64
+        cargo xtask bundle --product rust --platform windows --target $env:TARGET --phase package --signing required
+        if ($LASTEXITCODE -ne 0) { throw "Product-aware Windows bundling failed" }
       shell: pwsh
       env:
-        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -948,13 +940,13 @@ jobs:
     - name: release::product_builds
       if: always() && matrix.platform != 'windows'
       run: |
-        printf '### sccache: package-only job\n\nNo Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
+        printf '### sccache: package-only job\n\nOnly the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
     - name: release::product_builds
       if: always() && matrix.platform == 'windows'
       run: |
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### sccache: package-only job'
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'Only the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
       shell: pwsh
     - name: release::product_builds
       if: always() && matrix.platform == 'macos'

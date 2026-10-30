@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "backend": "cuda",
+  "source_model_id": "COMFY-MODEL-0022",
+  "foundation_task": "comfy-parity-device-foundation-nvidia-cuda-comfy-model-0022",
+  "binding_strategy": "checked CUDA Driver, NVRTC, cuBLASLt, and cuDNN C declarations with runtime symbol loading only from registry-certified retained images",
+  "abi_floor": "cuda-12.2.0-cublaslt-12.2.5.6-cudnn-9.0.0.312",
+  "targets": [
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu"
+  ],
+  "libraries": [
+    "libcuda.so.1 or nvcuda.dll",
+    "libnvrtc.so.12 or nvrtc64_122_0.dll",
+    "libcublasLt.so.12 or cublasLt64_12.dll",
+    "libcudnn.so.9 or cudnn64_9.dll"
+  ],
+  "discovery_order": [
+    "SIM_CUDA_ROOT",
+    "CUDA_PATH",
+    "signed_package_roots",
+    "installed_driver_library"
+  ],
+  "symbol_manifest": "crates/sim_backend_cuda/abi/symbols-v1.json",
+  "canonical_abi_manifest_sha256": "6bd8b7e8657a60a7e203c1c4bc2cea55f5b07781a2c9e9ba89ffad5b5dde0440",
+  "kernel_manifest": "crates/sim_backend_cuda/kernels/manifest-v1.json",
+  "kernel_manifest_state": "one precompiled deterministic f32 add PTX entry; runtime compilation is forbidden for core kernels",
+  "core_ptx_sha256": "b3f61b727de366a7cda5874ff0cad2f7e6dee1ad547bfabd5511e1bed0fafe33",
+  "unsafe_owner": "sim_backend_cuda::loader",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+  "semantic_capability_owner": "sim_tensor::BackendCapabilityMatrix",
+  "discovery_is_authorization": false,
+  "package_receipt_is_authorization": false,
+  "version_probe_is_authorization": false,
+  "feature_compilation_is_authorization": false,
+  "package": {
+    "script": "script/package-sim-backend-cuda",
+    "nix": "nix/sim-backends/cuda/default.nix",
+    "redistributes_driver": false,
+    "approved_vendor_redistributables": [],
+    "license_approval_required_for_vendor_runtime": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-cuda-package-v1",
+    "runtime_compilation_for_core_kernels": false
+  },
+  "provenance": {
+    "cuda_release": "12.2.2",
+    "cuda_driver_api_pdf_sha256": "9de29c80cfcae77678bf3bc8f82311d2bd2f33aa7aa8ebd8ecd159d0f021ffab",
+    "cuda_cudart_12_2_140_linux_x86_64_archive_sha256": "baebd331249bca0edf36776ead90e6b2024ffee01ea26cd9dd07344bebeaff08",
+    "cuda_h_sha256": "a2b4436404c3a9a4231d667c811f24e9ddac256ab3f30c7a486120550abd78d5",
+    "nvrtc_12_2_140_linux_x86_64_archive_sha256": "d13903b5785f9c2157bec4c0d48f2217bfd9079dae5e9873901e4723a83a31d4",
+    "nvrtc_h_sha256": "16da88110bccc18283eeb7a2834a059b3656744082469a50b300e5db98c43739",
+    "cublaslt_12_2_5_6_linux_x86_64_archive_sha256": "56ccf7ffbe7ea204fbb0c5c4c55829ef3fb81b2e811f8073fcd0bbef438b262e",
+    "cublasLt_h_sha256": "e752b21d073b4fdaf19957cd8a63fd3babe46bc26a05d79b8d928258a65a92de",
+    "cudnn_9_0_0_312_cuda12_linux_x86_64_archive_sha256": "d3890e609d6530ee5b88ff95b60c8e6b1c1ec7fa966ec533925f20f896fcc630",
+    "cudnn_v9_h_sha256": "1082d51d3b564bace8ef6fc6ee335b668b2bfa517f57c06efd428263e5c21855",
+    "cudnn_graph_v9_h_sha256": "6cb707f3e93193c9894c3a9037aa0319d3b5a58f28fe1e3a1c491c1150d3b49a",
+    "cudnn_version_v9_h_sha256": "6f784db48abd2094e0145cc18e6be42661f6c83a257adf15c9442d365fdf5ffd",
+    "reviewed_source": "official NVIDIA CUDA 12.2.2 Driver, NVRTC, and cuBLAS documentation plus official CUDA 12.2.2 and cuDNN 9.0.0 redistribution manifests; vendor files are not redistributed"
+  },
+  "unavailable": {
+    "manifest_is_availability": false,
+    "ordinary_paths_are_loadable": false,
+    "missing_target_library_symbol_version_certificate_or_license_is_typed": true,
+    "hardware_certification_task": "comfy-parity-certify-device-nvidia-cuda-comfy-model-0022"
+  },
+  "state": "ABI and package foundation implemented; always unbound until canonical registry certification and native tensor integration"
+}

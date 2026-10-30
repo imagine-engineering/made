@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn generated_catalog_maps_to_the_canonical_abi_and_registry_owner() {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/directml.json"
+            "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/directml.json"
         );
         assert!(catalog.contains(
             "\"canonical_abi_manifest_sha256\": \"54065e17bc9d69a4e377315caa6bcdef1b4898c660e2e0c1660ed4dcf4146e35\""

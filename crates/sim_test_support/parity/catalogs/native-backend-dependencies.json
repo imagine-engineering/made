@@ -1,0 +1,678 @@
+{
+  "schema_version": 1,
+  "owner_task": "comfy-parity-vendor-dependency-lock",
+  "ownership": {
+    "third_party_version_and_workspace_feature_owner": "Cargo.toml [workspace.dependencies]",
+    "canonical_device_domain_owner": "sim_types",
+    "semantic_backend_and_capability_owner": "sim_tensor::BackendCapabilityMatrix",
+    "vendor_abi_owner_boundary": "each focused sim_backend_* adapter",
+    "native_ffi_certificate_owner": "sim_runtime::NativeFfiRegistry",
+    "runtime_adapter_boundary": "enabled vendor adapters inspect exact immutable bytes and consume certificates before unsafe loading; CoreX is the sole zero-symbol typed-Unbound forwarding exception with no loader or certificate projection",
+    "platform_loader_non_owner_boundary": "Zed and GPUI platform/UI loaders own no Sim compute semantics"
+  },
+  "lockfile": {
+    "path": "Cargo.lock",
+    "sha256": "ea8ead2ba7d76f42cb9a8c0b9ec052249ab769da031c9c695bbc0de114fa3d9e"
+  },
+  "packages": {
+    "anyhow": {
+      "declared_requirement": "1.0.86",
+      "resolved_version": "1.0.102",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": []
+    },
+    "sim_types": {
+      "declared_requirement": "path:crates/sim_types",
+      "resolved_version": "0.1.0",
+      "source": "workspace-path",
+      "workspace_features": []
+    },
+    "libc": {
+      "declared_requirement": "0.2",
+      "resolved_version": "0.2.186",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": []
+    },
+    "metal": {
+      "declared_requirement": "0.33",
+      "resolved_version": "0.33.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": []
+    },
+    "objc": {
+      "declared_requirement": "0.2",
+      "resolved_version": "0.2.7",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": []
+    },
+    "serde": {
+      "declared_requirement": "1.0.221",
+      "resolved_version": "1.0.228",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": [
+        "derive",
+        "rc"
+      ]
+    },
+    "serde_json": {
+      "declared_requirement": "1.0.144",
+      "resolved_version": "1.0.145",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": [
+        "preserve_order",
+        "raw_value"
+      ]
+    },
+    "thiserror": {
+      "declared_requirement": "2.0.12",
+      "resolved_version": "2.0.21",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": []
+    },
+    "windows": {
+      "declared_requirement": "0.61",
+      "resolved_version": "0.61.3",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "workspace_features": [
+        "Data_Xml_Dom",
+        "Foundation_Numerics",
+        "Globalization_DateTimeFormatting",
+        "Storage_Search",
+        "Storage_Streams",
+        "System_Threading",
+        "UI_Notifications",
+        "UI_ViewManagement",
+        "Wdk_System_SystemServices",
+        "Win32_Foundation",
+        "Win32_Globalization",
+        "Win32_Graphics_Direct3D",
+        "Win32_Graphics_Direct3D11",
+        "Win32_Graphics_Direct3D12",
+        "Win32_Graphics_Direct3D_Fxc",
+        "Win32_Graphics_DirectComposition",
+        "Win32_Graphics_DirectWrite",
+        "Win32_Graphics_DirectManipulation",
+        "Win32_Graphics_Dwm",
+        "Win32_Graphics_Dxgi",
+        "Win32_Graphics_Dxgi_Common",
+        "Win32_Graphics_Gdi",
+        "Win32_Graphics_Imaging",
+        "Win32_Graphics_Hlsl",
+        "Win32_Networking_WinSock",
+        "Win32_Security",
+        "Win32_Security_Credentials",
+        "Win32_Security_Cryptography",
+        "Win32_Security_WinTrust",
+        "Win32_Storage_FileSystem",
+        "Win32_Storage_Packaging_Appx",
+        "Win32_System_Com",
+        "Win32_System_Com_StructuredStorage",
+        "Win32_System_Console",
+        "Win32_System_Diagnostics_Debug",
+        "Win32_System_DataExchange",
+        "Win32_System_IO",
+        "Win32_System_JobObjects",
+        "Win32_System_LibraryLoader",
+        "Win32_System_Memory",
+        "Win32_System_Ole",
+        "Win32_System_Performance",
+        "Win32_System_Pipes",
+        "Win32_System_RestartManager",
+        "Win32_System_SystemInformation",
+        "Win32_System_SystemServices",
+        "Win32_System_Threading",
+        "Win32_System_Variant",
+        "Win32_System_WinRT",
+        "Win32_UI_Controls",
+        "Win32_UI_HiDpi",
+        "Win32_UI_Input_Ime",
+        "Win32_UI_Input_KeyboardAndMouse",
+        "Win32_UI_Input_Pointer",
+        "Win32_UI_Shell",
+        "Win32_UI_Shell_Common",
+        "Win32_UI_Shell_PropertiesSystem",
+        "Win32_UI_WindowsAndMessaging",
+        "Win32_Media"
+      ]
+    }
+  },
+  "adapters": [
+    {
+      "package": "sim_backend_corex",
+      "manifest": "crates/sim_backend_corex/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "libc",
+          "target": "cfg(target_os = \"linux\")",
+          "features": [],
+          "reason": "Linux-only C ABI loader primitives and vendor declaration types."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_cuda",
+      "manifest": "crates/sim_backend_cuda/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "libc",
+          "target": "cfg(target_os = \"linux\")",
+          "features": [],
+          "reason": "Linux-only C ABI loader primitives and vendor declaration types."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_directml",
+      "manifest": "crates/sim_backend_directml/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "windows",
+          "target": "cfg(target_os = \"windows\")",
+          "features": [
+            "Win32_Foundation",
+            "Win32_Graphics_Direct3D12",
+            "Win32_Graphics_Dxgi",
+            "Win32_Graphics_Dxgi_Common",
+            "Win32_Security_WinTrust",
+            "Win32_System_Com",
+            "Win32_System_LibraryLoader"
+          ],
+          "reason": "Windows-only D3D12, DXGI, COM, library-loading, and signature-verification APIs."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_metal",
+      "manifest": "crates/sim_backend_metal/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "metal",
+          "target": "cfg(target_os = \"macos\")",
+          "features": [],
+          "reason": "macOS-only safe Metal framework binding pinned by the workspace."
+        },
+        {
+          "package": "objc",
+          "target": "cfg(target_os = \"macos\")",
+          "features": [],
+          "reason": "macOS-only checked Objective-C framework shims required beside Metal."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_mlu",
+      "manifest": "crates/sim_backend_mlu/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "libc",
+          "target": "cfg(target_os = \"linux\")",
+          "features": [],
+          "reason": "Linux-only C ABI loader primitives and vendor declaration types."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_npu",
+      "manifest": "crates/sim_backend_npu/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "libc",
+          "target": "cfg(target_os = \"linux\")",
+          "features": [],
+          "reason": "Linux-only C ABI loader primitives and vendor declaration types."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_rocm",
+      "manifest": "crates/sim_backend_rocm/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "libc",
+          "target": "cfg(target_os = \"linux\")",
+          "features": [],
+          "reason": "Linux-only C ABI loader primitives and vendor declaration types."
+        }
+      ]
+    },
+    {
+      "package": "sim_backend_xpu",
+      "manifest": "crates/sim_backend_xpu/Cargo.toml",
+      "dependencies": [
+        {
+          "package": "anyhow",
+          "target": "all",
+          "features": [],
+          "reason": "Adapter-local context for fallible ABI discovery and diagnostics."
+        },
+        {
+          "package": "sim_types",
+          "target": "all",
+          "features": [],
+          "reason": "Canonical device and native-binding domain types; adapters own no competing device state."
+        },
+        {
+          "package": "serde",
+          "target": "all",
+          "features": [],
+          "reason": "Versioned adapter ABI, package, and capability metadata serialization."
+        },
+        {
+          "package": "serde_json",
+          "target": "all",
+          "features": [],
+          "reason": "Machine-readable symbol, layout, package, and diagnostic manifests."
+        },
+        {
+          "package": "thiserror",
+          "target": "all",
+          "features": [],
+          "reason": "Typed adapter failures without a second device-error domain."
+        },
+        {
+          "package": "libc",
+          "target": "cfg(target_os = \"linux\")",
+          "features": [],
+          "reason": "Linux-only C ABI loader primitives and vendor declaration types."
+        }
+      ]
+    }
+  ],
+  "runtime_adapters": [
+    {
+      "feature": "corex",
+      "package": "sim_backend_corex",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Compiled CoreX structural adapter is forwarded only to preserve the identifier and canonical typed Unbound state; it has no callable contract, certificate projection, retained image, loader, or availability path in this pack."
+    },
+    {
+      "feature": "cuda",
+      "package": "sim_backend_cuda",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    },
+    {
+      "feature": "directml",
+      "package": "sim_backend_directml",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    },
+    {
+      "feature": "metal",
+      "package": "sim_backend_metal",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    },
+    {
+      "feature": "mlu",
+      "package": "sim_backend_mlu",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    },
+    {
+      "feature": "npu",
+      "package": "sim_backend_npu",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    },
+    {
+      "feature": "rocm",
+      "package": "sim_backend_rocm",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    },
+    {
+      "feature": "xpu",
+      "package": "sim_backend_xpu",
+      "manifest": "crates/sim_runtime/Cargo.toml",
+      "optional": true,
+      "reason": "Feature-gated runtime certification adapter consumes the focused vendor ABI crate while sim_runtime::NativeFfiRegistry remains the sole certificate issuer."
+    }
+  ],
+  "production_feature_adapters": [
+    {
+      "feature": "corex",
+      "worker": [
+        "sim_runtime/corex",
+        "sim_tensor/corex"
+      ],
+      "test_support": [
+        "sim_tensor/corex"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/corex"
+      ],
+      "reason": "CoreX forwarding compiles the zero-symbol structural adapter through each layer only so all production surfaces report the same canonical typed Unbound state; no layer may construct a runtime session, loader, capability row, certificate, availability claim, or CPU fallback."
+    },
+    {
+      "feature": "cuda",
+      "worker": [
+        "sim_runtime/cuda",
+        "sim_tensor/cuda"
+      ],
+      "test_support": [
+        "sim_tensor/cuda"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/cuda"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    },
+    {
+      "feature": "directml",
+      "worker": [
+        "sim_runtime/directml",
+        "sim_tensor/directml"
+      ],
+      "test_support": [
+        "sim_tensor/directml"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/directml"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    },
+    {
+      "feature": "metal",
+      "worker": [
+        "sim_runtime/metal",
+        "sim_tensor/metal"
+      ],
+      "test_support": [
+        "sim_runtime/metal",
+        "sim_tensor/metal"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/metal"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    },
+    {
+      "feature": "mlu",
+      "worker": [
+        "sim_runtime/mlu",
+        "sim_tensor/mlu"
+      ],
+      "test_support": [
+        "sim_tensor/mlu"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/mlu"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    },
+    {
+      "feature": "npu",
+      "worker": [
+        "sim_runtime/npu",
+        "sim_tensor/npu"
+      ],
+      "test_support": [
+        "sim_tensor/npu"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/npu"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    },
+    {
+      "feature": "rocm",
+      "worker": [
+        "sim_runtime/rocm",
+        "sim_tensor/rocm"
+      ],
+      "test_support": [
+        "sim_tensor/rocm"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/rocm"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    },
+    {
+      "feature": "xpu",
+      "worker": [
+        "sim_runtime/xpu",
+        "sim_tensor/xpu"
+      ],
+      "test_support": [
+        "sim_tensor/xpu"
+      ],
+      "zed": [
+        "sim",
+        "sim_runtime/xpu"
+      ],
+      "reason": "The private worker alone combines runtime certification and tensor execution in production; test support selects tensor conformance, with Metal additionally selecting the existing runtime verifier solely for development hardware certification, and host Zed selects runtime/profile presentation only."
+    }
+  ],
+  "prohibitions": [
+    "no bindgen",
+    "no user-build SDK downloads",
+    "no unscoped later Cargo manifest writer",
+    "no unscoped later Cargo.lock writer"
+  ]
+}

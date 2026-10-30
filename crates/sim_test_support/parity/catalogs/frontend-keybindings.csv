@@ -1,0 +1,35 @@
+feature_id,binding_index,combo,command_id,target_element_id,source_file,line,availability,evidence_level
+COMFY-SETTING-069,1,Ctrl + Enter,Comfy.QueuePrompt,global,src/platform/keybindings/defaults.ts,4,active,test-backed
+COMFY-SETTING-070,2,Ctrl + Shift + Enter,Comfy.QueuePromptFront,global,src/platform/keybindings/defaults.ts,11,active,test-backed
+COMFY-SETTING-071,3,Ctrl + Alt + Enter,Comfy.Interrupt,global,src/platform/keybindings/defaults.ts,19,active,test-backed
+COMFY-SETTING-072,4,r,Comfy.RefreshNodeDefinitions,global,src/platform/keybindings/defaults.ts,27,active,test-backed
+COMFY-SETTING-073,5,w,Workspace.ToggleSidebarTab.workflows,global,src/platform/keybindings/defaults.ts,33,active,test-backed
+COMFY-SETTING-074,6,n,Workspace.ToggleSidebarTab.node-library,global,src/platform/keybindings/defaults.ts,39,active,test-backed
+COMFY-SETTING-075,7,m,Workspace.ToggleSidebarTab.model-library,global,src/platform/keybindings/defaults.ts,45,active,test-backed
+COMFY-SETTING-076,8,a,Workspace.ToggleSidebarTab.assets,global,src/platform/keybindings/defaults.ts,51,active,test-backed
+COMFY-SETTING-077,9,Alt + m,Comfy.ToggleLinear,global,src/platform/keybindings/defaults.ts,57,active,test-backed
+COMFY-SETTING-078,10,Alt + µ,Comfy.ToggleLinear,global,src/platform/keybindings/defaults.ts,64,active,test-backed
+COMFY-SETTING-079,11,Ctrl + s,Comfy.SaveWorkflow,global,src/platform/keybindings/defaults.ts,71,active,test-backed
+COMFY-SETTING-080,12,Ctrl + o,Comfy.OpenWorkflow,global,src/platform/keybindings/defaults.ts,78,active,test-backed
+COMFY-SETTING-081,13,Ctrl + g,Comfy.Graph.GroupSelectedNodes,global,src/platform/keybindings/defaults.ts,85,active,test-backed
+COMFY-SETTING-082,14,"Ctrl + ,",Comfy.ShowSettingsDialog,global,src/platform/keybindings/defaults.ts,92,active,test-backed
+COMFY-SETTING-083,15,Alt + =,Comfy.Canvas.ZoomIn,graph-canvas,src/platform/keybindings/defaults.ts,99,active,test-backed
+COMFY-SETTING-084,16,Alt + Shift + +,Comfy.Canvas.ZoomIn,graph-canvas,src/platform/keybindings/defaults.ts,107,active,test-backed
+COMFY-SETTING-085,17,Alt + +,Comfy.Canvas.ZoomIn,graph-canvas,src/platform/keybindings/defaults.ts,116,active,test-backed
+COMFY-SETTING-086,18,Alt + -,Comfy.Canvas.ZoomOut,graph-canvas,src/platform/keybindings/defaults.ts,124,active,test-backed
+COMFY-SETTING-087,19,.,Comfy.Canvas.FitView,graph-canvas-container,src/platform/keybindings/defaults.ts,132,active,test-backed
+COMFY-SETTING-088,20,p,Comfy.Canvas.ToggleSelected.Pin,graph-canvas-container,src/platform/keybindings/defaults.ts,139,active,test-backed
+COMFY-SETTING-089,21,Alt + c,Comfy.Canvas.ToggleSelectedNodes.Collapse,graph-canvas-container,src/platform/keybindings/defaults.ts,146,active,test-backed
+COMFY-SETTING-090,22,Ctrl + b,Comfy.Canvas.ToggleSelectedNodes.Bypass,graph-canvas-container,src/platform/keybindings/defaults.ts,154,active,test-backed
+COMFY-SETTING-091,23,Ctrl + m,Comfy.Canvas.ToggleSelectedNodes.Mute,graph-canvas-container,src/platform/keybindings/defaults.ts,162,active,test-backed
+COMFY-SETTING-092,24,Ctrl + `,Workspace.ToggleBottomPanelTab.logs-terminal,global,src/platform/keybindings/defaults.ts,170,active,test-backed
+COMFY-SETTING-093,25,Ctrl + Shift + e,Comfy.Graph.ConvertToSubgraph,global,src/platform/keybindings/defaults.ts,177,active,test-backed
+COMFY-SETTING-094,26,Alt + Shift + m,Comfy.Canvas.ToggleMinimap,global,src/platform/keybindings/defaults.ts,185,active,test-backed
+COMFY-SETTING-095,27,Ctrl + Shift + k,Workspace.ToggleBottomPanel.Shortcuts,global,src/platform/keybindings/defaults.ts,193,active,test-backed
+COMFY-SETTING-096,28,v,Comfy.Canvas.Unlock,global,src/platform/keybindings/defaults.ts,201,active,test-backed
+COMFY-SETTING-097,29,h,Comfy.Canvas.Lock,global,src/platform/keybindings/defaults.ts,207,active,test-backed
+COMFY-A11Y-003,30,Escape,Comfy.Graph.ExitSubgraph,global,src/platform/keybindings/defaults.ts,213,active,test-backed
+COMFY-SETTING-098,31,Ctrl + a,Comfy.Canvas.SelectAll,graph-canvas-container,src/platform/keybindings/defaults.ts,219,active,test-backed
+COMFY-SETTING-099,32,Ctrl + Shift + v,Comfy.Canvas.PasteFromClipboardWithConnect,graph-canvas-container,src/platform/keybindings/defaults.ts,227,active,test-backed
+COMFY-A11Y-004,33,Delete,Comfy.Canvas.DeleteSelectedItems,graph-canvas-container,src/platform/keybindings/defaults.ts,236,active,test-backed
+COMFY-A11Y-005,34,Backspace,Comfy.Canvas.DeleteSelectedItems,graph-canvas-container,src/platform/keybindings/defaults.ts,243,active,test-backed

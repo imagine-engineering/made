@@ -1,0 +1,119 @@
+feature_id,command_id,label,tooltip,source_file,line,availability,evidence_level,test
+COMFY-UI-056,Comfy-Desktop.CheckForUpdates,Check for Updates,,src/extensions/core/electronAdapter.ts,174,platform-specific,code-inferred,
+COMFY-FRONTEXT-EXT-086,Comfy-Desktop.Folders.OpenCustomNodesFolder,Open Custom Nodes Folder,,src/extensions/core/electronAdapter.ts,136,platform-specific,code-inferred,
+COMFY-UI-057,Comfy-Desktop.Folders.OpenInputsFolder,Open Inputs Folder,,src/extensions/core/electronAdapter.ts,128,platform-specific,code-inferred,
+COMFY-UI-058,Comfy-Desktop.Folders.OpenLogsFolder,Open Logs Folder,,src/extensions/core/electronAdapter.ts,104,platform-specific,code-inferred,
+COMFY-UI-059,Comfy-Desktop.Folders.OpenModelConfig,Open extra_model_paths.yaml,,src/extensions/core/electronAdapter.ts,144,platform-specific,code-inferred,
+COMFY-UI-060,Comfy-Desktop.Folders.OpenModelsFolder,Open Models Folder,,src/extensions/core/electronAdapter.ts,112,platform-specific,code-inferred,
+COMFY-UI-061,Comfy-Desktop.Folders.OpenOutputsFolder,Open Outputs Folder,,src/extensions/core/electronAdapter.ts,120,platform-specific,code-inferred,
+COMFY-UI-062,Comfy-Desktop.OpenDevTools,Open DevTools,,src/extensions/core/electronAdapter.ts,152,platform-specific,code-inferred,
+COMFY-UI-063,Comfy-Desktop.OpenUserGuide,Desktop User Guide,,src/extensions/core/electronAdapter.ts,160,platform-specific,code-inferred,
+COMFY-UI-064,Comfy-Desktop.Quit,Quit,,src/extensions/core/electronAdapter.ts,244,platform-specific,code-inferred,
+COMFY-UI-065,Comfy-Desktop.Reinstall,Reinstall,,src/extensions/core/electronAdapter.ts,222,platform-specific,code-inferred,
+COMFY-UI-066,Comfy-Desktop.Restart,Restart,,src/extensions/core/electronAdapter.ts,236,platform-specific,code-inferred,
+COMFY-ASSET-053,Comfy.3DViewer.Open3DViewer,Open 3D Viewer (Beta) for Selected Node,,src/extensions/core/load3d.ts,254,experimental,code-inferred,
+COMFY-ASSET-054,Comfy.BrowseModelAssets,Experimental: Browse Model Assets,,src/composables/useCoreCommands.ts,1286,experimental,test-backed,browser_tests/tests/browseModelAssets.spec.ts
+COMFY-WORKFLOW-074,Comfy.BrowseTemplates,Browse Templates,,src/composables/useCoreCommands.ts,347,active,test-backed,browser_tests/tests/templateFilteringCount.spec.ts
+COMFY-GRAPH-087,Comfy.Canvas.CopySelected,Copy,,src/composables/useCoreCommands.ts,891,active,code-inferred,
+COMFY-GRAPH-088,Comfy.Canvas.DeleteSelectedItems,Delete Selected Items,,src/composables/useCoreCommands.ts,925,active,test-backed,browser_tests/tests/keybindingPanel.spec.ts
+COMFY-GRAPH-089,Comfy.Canvas.FitView,Fit view to selected nodes,,src/composables/useCoreCommands.ts,395,active,test-backed,browser_tests/tests/vueNodes/interactions/node/imagePreview.spec.ts
+COMFY-GRAPH-090,Comfy.Canvas.Lock,Lock Canvas,,src/composables/useCoreCommands.ts,421,active,test-backed,browser_tests/tests/canvasModeSelector.spec.ts
+COMFY-GRAPH-091,Comfy.Canvas.MoveSelectedNodes.Down,Move Selected Nodes Down,,src/composables/useCoreCommands.ts,1014,active,code-inferred,
+COMFY-GRAPH-092,Comfy.Canvas.MoveSelectedNodes.Left,Move Selected Nodes Left,,src/composables/useCoreCommands.ts,1021,active,code-inferred,
+COMFY-GRAPH-093,Comfy.Canvas.MoveSelectedNodes.Right,Move Selected Nodes Right,,src/composables/useCoreCommands.ts,1028,active,code-inferred,
+COMFY-GRAPH-094,Comfy.Canvas.MoveSelectedNodes.Up,Move Selected Nodes Up,,src/composables/useCoreCommands.ts,1007,active,code-inferred,
+COMFY-GRAPH-095,Comfy.Canvas.PasteFromClipboard,Paste,,src/composables/useCoreCommands.ts,901,active,code-inferred,
+COMFY-GRAPH-096,Comfy.Canvas.PasteFromClipboardWithConnect,Paste with Connect,,src/composables/useCoreCommands.ts,909,active,code-inferred,
+COMFY-GRAPH-097,Comfy.Canvas.ResetView,Reset View,,src/composables/useCoreCommands.ts,292,active,code-inferred,
+COMFY-GRAPH-098,Comfy.Canvas.Resize,Resize Selected Nodes,,src/composables/useCoreCommands.ts,690,active,code-inferred,
+COMFY-GRAPH-099,Comfy.Canvas.SelectAll,Select All,,src/composables/useCoreCommands.ts,917,active,test-backed,browser_tests/tests/canvasLayoutSettings.spec.ts
+COMFY-GRAPH-100,Comfy.Canvas.ToggleLinkVisibility,Canvas Toggle Link Visibility,,src/composables/useCoreCommands.ts,438,active,code-inferred,
+COMFY-GRAPH-101,Comfy.Canvas.ToggleLock,Canvas Toggle Lock,,src/composables/useCoreCommands.ts,412,active,code-inferred,
+COMFY-GRAPH-102,Comfy.Canvas.ToggleMinimap,Canvas Toggle Minimap,,src/composables/useCoreCommands.ts,468,active,code-inferred,
+COMFY-GRAPH-104,Comfy.Canvas.ToggleSelectedNodes.Bypass,Bypass/Unbypass Selected Nodes,,src/composables/useCoreCommands.ts,652,active,code-inferred,
+COMFY-GRAPH-105,Comfy.Canvas.ToggleSelectedNodes.Collapse,Collapse/Expand Selected Nodes,,src/composables/useCoreCommands.ts,703,active,code-inferred,
+COMFY-GRAPH-106,Comfy.Canvas.ToggleSelectedNodes.Mute,Mute/Unmute Selected Nodes,,src/composables/useCoreCommands.ts,641,active,code-inferred,
+COMFY-GRAPH-107,Comfy.Canvas.ToggleSelectedNodes.Pin,Pin/Unpin Selected Nodes,,src/composables/useCoreCommands.ts,663,active,test-backed,browser_tests/tests/interaction.spec.ts
+COMFY-GRAPH-103,Comfy.Canvas.ToggleSelected.Pin,Pin/Unpin Selected Items,,src/composables/useCoreCommands.ts,676,active,code-inferred,
+COMFY-GRAPH-108,Comfy.Canvas.Unlock,Unlock Canvas,,src/composables/useCoreCommands.ts,430,active,test-backed,browser_tests/tests/canvasModeSelector.spec.ts
+COMFY-GRAPH-109,Comfy.Canvas.ZoomIn,Zoom In,,src/composables/useCoreCommands.ts,355,active,code-inferred,
+COMFY-GRAPH-110,Comfy.Canvas.ZoomOut,Zoom Out,,src/composables/useCoreCommands.ts,369,active,code-inferred,
+COMFY-UI-067,Comfy.ClearPendingTasks,Clear Pending Tasks,,src/composables/useCoreCommands.ts,332,active,code-inferred,
+COMFY-WORKFLOW-075,Comfy.ClearWorkflow,Clear Workflow,,src/composables/useCoreCommands.ts,268,active,test-backed,browser_tests/tests/mobileBaseline.spec.ts
+COMFY-UI-068,Comfy.ContactSupport,Contact Support,,src/composables/useCoreCommands.ts,862,active,code-inferred,
+COMFY-UI-069,Comfy.Dev.ShowModelSelector,Show Model Selector (Dev),,src/composables/useCoreCommands.ts,1212,active,code-inferred,
+COMFY-WORKFLOW-076,Comfy.DuplicateWorkflow,Duplicate Current Workflow,,src/composables/useCoreCommands.ts,843,active,test-backed,browser_tests/tests/sidebar/workflows.spec.ts
+COMFY-WORKFLOW-077,Comfy.ExportWorkflow,Export Workflow,,src/composables/useCoreCommands.ts,222,active,code-inferred,
+COMFY-WORKFLOW-078,Comfy.ExportWorkflowAPI,Export Workflow (API Format),,src/composables/useCoreCommands.ts,232,active,code-inferred,
+COMFY-GRAPH-111,Comfy.Graph.ConvertToSubgraph,Convert Selection to Subgraph,,src/composables/useCoreCommands.ts,1035,active,test-backed,browser_tests/tests/appModeBuilder.spec.ts
+COMFY-GRAPH-112,Comfy.Graph.EditSubgraphWidgets,Edit Subgraph Widgets,,src/composables/useCoreCommands.ts,1071,active,code-inferred,
+COMFY-GRAPH-113,Comfy.Graph.ExitSubgraph,Exit Subgraph,,src/composables/useCoreCommands.ts,1128,active,test-backed,browser_tests/tests/subgraph/subgraphNavigation.spec.ts
+COMFY-GRAPH-114,Comfy.Graph.FitGroupToContents,Fit Group To Contents,,src/composables/useCoreCommands.ts,761,active,test-backed,browser_tests/tests/interaction.spec.ts
+COMFY-GRAPH-115,Comfy.Graph.GroupSelectedNodes,Group Selected Nodes,,src/composables/useCoreCommands.ts,595,active,test-backed,browser_tests/tests/canvasLayoutSettings.spec.ts
+COMFY-GRAPH-116,Comfy.Graph.ToggleWidgetPromotion,Toggle promotion of hovered widget,,src/composables/useCoreCommands.ts,1080,active,code-inferred,
+COMFY-GRAPH-117,Comfy.Graph.UnpackSubgraph,Unpack the selected Subgraph,,src/composables/useCoreCommands.ts,1061,active,code-inferred,
+COMFY-UI-070,Comfy.Help.AboutComfyUI,Open About ComfyUI,,src/composables/useCoreCommands.ts,833,active,code-inferred,
+COMFY-UI-071,Comfy.Help.OpenComfyOrgDiscord,Open Comfy-Org Discord,,src/composables/useCoreCommands.ts,809,active,code-inferred,
+COMFY-UI-072,Comfy.Help.OpenComfyUIDocs,Open ComfyUI Docs,,src/composables/useCoreCommands.ts,794,active,code-inferred,
+COMFY-UI-073,Comfy.Help.OpenComfyUIForum,Open ComfyUI Forum,,src/composables/useCoreCommands.ts,876,active,code-inferred,
+COMFY-UI-074,Comfy.Help.OpenComfyUIIssues,Open ComfyUI Issues,,src/composables/useCoreCommands.ts,779,active,code-inferred,
+COMFY-QUEUE-033,Comfy.Interrupt,Interrupt,,src/composables/useCoreCommands.ts,317,active,code-inferred,
+COMFY-WORKFLOW-079,Comfy.LoadDefaultWorkflow,Load Default Workflow,,src/composables/useCoreCommands.ts,151,active,test-backed,browser_tests/tests/sidebar/workflows.spec.ts
+COMFY-FRONTEXT-EXT-087,Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu,Custom Nodes Manager,,src/composables/useCoreCommands.ts,941,active,code-inferred,
+COMFY-FRONTEXT-EXT-088,Comfy.Manager.CustomNodesManager.ShowLegacyCustomNodesMenu,Custom Nodes (Legacy),,src/composables/useCoreCommands.ts,1223,deprecated/dead,code-inferred,
+COMFY-FRONTEXT-EXT-089,Comfy.Manager.ShowLegacyManagerMenu,Manager Menu (Legacy),,src/composables/useCoreCommands.ts,1236,deprecated/dead,code-inferred,
+COMFY-FRONTEXT-EXT-090,Comfy.Manager.ShowMissingPacks,Install Missing Custom Nodes,,src/composables/useCoreCommands.ts,977,active,code-inferred,
+COMFY-FRONTEXT-EXT-091,Comfy.Manager.ShowUpdateAvailablePacks,Check for Custom Node Updates,,src/composables/useCoreCommands.ts,952,active,code-inferred,
+COMFY-ASSET-055,Comfy.MaskEditor.BrushSize.Decrease,Decrease Brush Size in MaskEditor,,src/extensions/core/maskeditor.ts,98,active,code-inferred,
+COMFY-ASSET-056,Comfy.MaskEditor.BrushSize.Increase,Increase Brush Size in MaskEditor,,src/extensions/core/maskeditor.ts,92,active,code-inferred,
+COMFY-ASSET-057,Comfy.MaskEditor.ColorPicker,Open Color Picker in MaskEditor,,src/extensions/core/maskeditor.ts,104,active,code-inferred,
+COMFY-ASSET-058,Comfy.MaskEditor.Mirror.Horizontal,Mirror Horizontal in MaskEditor,,src/extensions/core/maskeditor.ts,133,active,code-inferred,
+COMFY-ASSET-059,Comfy.MaskEditor.Mirror.Vertical,Mirror Vertical in MaskEditor,,src/extensions/core/maskeditor.ts,142,active,code-inferred,
+COMFY-ASSET-060,Comfy.MaskEditor.OpenMaskEditor,Open Mask Editor for Selected Node,,src/extensions/core/maskeditor.ts,80,active,code-inferred,
+COMFY-ASSET-061,Comfy.MaskEditor.Rotate.Left,Rotate Left in MaskEditor,,src/extensions/core/maskeditor.ts,124,active,code-inferred,
+COMFY-ASSET-062,Comfy.MaskEditor.Rotate.Right,Rotate Right in MaskEditor,,src/extensions/core/maskeditor.ts,115,active,code-inferred,
+COMFY-UI-075,Comfy.Memory.UnloadModels,Unload Models,,src/composables/useCoreCommands.ts,1248,active,code-inferred,
+COMFY-QUEUE-034,Comfy.Memory.UnloadModelsAndExecutionCache,Unload Models and Execution Cache,,src/composables/useCoreCommands.ts,1267,active,code-inferred,
+COMFY-WORKFLOW-080,Comfy.NewBlankWorkflow,New Blank Workflow,,src/composables/useCoreCommands.ts,126,active,test-backed,browser_tests/tests/dialog.spec.ts
+COMFY-UI-076,Comfy.OpenClipspace,Clipspace,,src/composables/useCoreCommands.ts,300,active,code-inferred,
+COMFY-FRONTEXT-EXT-092,Comfy.OpenManagerDialog,Manager,,src/composables/useCoreCommands.ts,1087,active,test-backed,browser_tests/tests/dialogs/managerDialog.spec.ts
+COMFY-WORKFLOW-081,Comfy.OpenWorkflow,Open Workflow,,src/composables/useCoreCommands.ts,141,active,code-inferred,
+COMFY-GRAPH-118,Comfy.PublishSubgraph,Publish Subgraph,,src/composables/useCoreCommands.ts,177,active,test-backed,browser_tests/tests/nodeGhostPlacement.spec.ts
+COMFY-QUEUE-036,Comfy.QueuePrompt,Queue Prompt,,src/composables/useCoreCommands.ts,495,active,test-backed,browser_tests/tests/errorOverlay.spec.ts
+COMFY-QUEUE-037,Comfy.QueuePromptFront,Queue Prompt (Front),,src/composables/useCoreCommands.ts,518,active,code-inferred,
+COMFY-QUEUE-038,Comfy.QueueSelectedOutputNodes,Queue Selected Output Nodes,,src/composables/useCoreCommands.ts,541,active,test-backed,browser_tests/tests/execution.spec.ts
+COMFY-QUEUE-035,Comfy.Queue.ToggleOverlay,Toggle Job History,,src/composables/useCoreCommands.ts,483,active,code-inferred,
+COMFY-UI-077,Comfy.Redo,Redo,,src/composables/useCoreCommands.ts,255,active,code-inferred,
+COMFY-GRAPH-119,Comfy.RefreshNodeDefinitions,Refresh Node Definitions,,src/composables/useCoreCommands.ts,308,active,code-inferred,
+COMFY-WORKFLOW-082,Comfy.RenameWorkflow,Rename Workflow,,src/composables/useCoreCommands.ts,200,active,code-inferred,
+COMFY-WORKFLOW-083,Comfy.SaveWorkflow,Save Workflow,,src/composables/useCoreCommands.ts,164,active,test-backed,browser_tests/tests/keybindingPanel.spec.ts
+COMFY-WORKFLOW-084,Comfy.SaveWorkflowAs,Save Workflow As,,src/composables/useCoreCommands.ts,187,active,code-inferred,
+COMFY-SETTING-067,Comfy.ShowSettingsDialog,Show Settings Dialog,,src/composables/useCoreCommands.ts,585,active,test-backed,browser_tests/tests/cloudSecrets.spec.ts
+COMFY-GRAPH-120,Comfy.Subgraph.SetDescription,Set Subgraph Description,,src/composables/useCoreCommands.ts,1143,active,test-backed,browser_tests/tests/subgraph/subgraphSearch.spec.ts
+COMFY-GRAPH-121,Comfy.Subgraph.SetSearchAliases,Set Subgraph Search Aliases,,src/composables/useCoreCommands.ts,1175,active,test-backed,browser_tests/tests/subgraph/subgraphSearch.spec.ts
+COMFY-ASSET-063,Comfy.ToggleAssetAPI,Experimental: Enable AssetAPI,,src/composables/useCoreCommands.ts,1324,experimental,code-inferred,
+COMFY-GRAPH-122,Comfy.ToggleCanvasInfo,Canvas Performance,,src/composables/useCoreCommands.ts,1107,developer-only,code-inferred,
+COMFY-UI-078,Comfy.ToggleHelpCenter,Help Center,,src/composables/useCoreCommands.ts,1098,active,code-inferred,
+COMFY-WORKFLOW-085,Comfy.ToggleLinear,Toggle App Mode,,src/composables/useCoreCommands.ts,1346,active,code-inferred,
+COMFY-QUEUE-039,Comfy.ToggleQPOV2,Toggle Queue Panel V2,,src/composables/useCoreCommands.ts,1340,active,code-inferred,
+COMFY-SETTING-068,Comfy.ToggleTheme,Toggle Theme (Dark/Light),,src/composables/useCoreCommands.ts,715,active,code-inferred,
+COMFY-UI-079,Comfy.Undo,Undo,,src/composables/useCoreCommands.ts,241,active,code-inferred,
+COMFY-CLOUD-218,Comfy.User.OpenSignInDialog,Open Sign In Dialog,,src/composables/useCoreCommands.ts,989,cloud/paid,code-inferred,
+COMFY-UI-080,Comfy.User.SignOut,Sign Out,,src/composables/useCoreCommands.ts,998,active,code-inferred,
+COMFY-GRAPH-123,Experimental.ToggleVueNodes,Experimental: Enable Nodes 2.0,,src/composables/useCoreCommands.ts,383,experimental,code-inferred,
+COMFY-CLOUD-219,Workspace.CloseWorkflow,Close Current Workflow,,src/composables/useCoreCommands.ts,852,active,test-backed,browser_tests/tests/sidebar/workflows.spec.ts
+COMFY-CLOUD-220,Workspace.NextOpenedWorkflow,Next Opened Workflow,,src/composables/useCoreCommands.ts,623,active,code-inferred,
+COMFY-CLOUD-221,Workspace.PreviousOpenedWorkflow,Previous Opened Workflow,,src/composables/useCoreCommands.ts,632,active,code-inferred,
+COMFY-CLOUD-222,Workspace.SearchBox.Toggle,Toggle Search Box,,src/composables/useCoreCommands.ts,824,active,test-backed,browser_tests/tests/subgraph/subgraphSearch.spec.ts
+COMFY-CLOUD-223,Workspace.ToggleBottomPanel,Toggle Bottom Panel,,src/composables/useCoreCommands.ts,737,active,code-inferred,
+COMFY-CLOUD-225,Workspace.ToggleBottomPanelTab.command-terminal,Toggle Terminal Bottom Panel,,src/stores/workspace/bottomPanelStore.ts,,active,code-inferred,
+COMFY-CLOUD-226,Workspace.ToggleBottomPanelTab.logs-terminal,Toggle Logs Bottom Panel,,src/stores/workspace/bottomPanelStore.ts,,active,code-inferred,
+COMFY-CLOUD-227,Workspace.ToggleBottomPanelTab.shortcuts-essentials,Toggle Essential Bottom Panel,,src/stores/workspace/bottomPanelStore.ts,,active,code-inferred,
+COMFY-CLOUD-228,Workspace.ToggleBottomPanelTab.shortcuts-view-controls,Toggle View Controls Bottom Panel,,src/stores/workspace/bottomPanelStore.ts,,active,code-inferred,
+COMFY-CLOUD-224,Workspace.ToggleBottomPanel.Shortcuts,Show Keybindings Dialog,,src/composables/useCoreCommands.ts,1118,active,code-inferred,
+COMFY-CLOUD-229,Workspace.ToggleFocusMode,Toggle Focus Mode,,src/composables/useCoreCommands.ts,749,active,test-backed,browser_tests/tests/domWidget.spec.ts
+COMFY-CLOUD-230,Workspace.ToggleSidebarTab.apps,Toggle Apps Sidebar,Apps,src/stores/workspace/sidebarTabStore.ts,,active,code-inferred,
+COMFY-CLOUD-231,Workspace.ToggleSidebarTab.assets,Toggle Assets Sidebar,Assets,src/stores/workspace/sidebarTabStore.ts,,active,code-inferred,
+COMFY-CLOUD-232,Workspace.ToggleSidebarTab.model-library,Toggle Model Library Sidebar,Model Library,src/stores/workspace/sidebarTabStore.ts,,active,code-inferred,
+COMFY-CLOUD-233,Workspace.ToggleSidebarTab.node-library,Toggle Node Library Sidebar,Node Library,src/stores/workspace/sidebarTabStore.ts,,active,code-inferred,
+COMFY-CLOUD-234,Workspace.ToggleSidebarTab.workflows,Toggle Workflows Sidebar,Workflows,src/stores/workspace/sidebarTabStore.ts,,active,code-inferred,

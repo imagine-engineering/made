@@ -108,7 +108,7 @@ fn parse_csv_record(record: &str) -> Result<Vec<String>, Box<dyn Error>> {
 #[test]
 fn all_54_catalog_rows_have_exact_typed_contracts() -> Result<(), Box<dyn Error>> {
     let catalog_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../.agents/specs/comfy-parity/catalogs/backend-rng.csv");
+        .join("../../crates/sim_test_support/parity/catalogs/backend-rng.csv");
     let catalog = fs::read_to_string(catalog_path)?;
     let mut lines = catalog.lines();
     let header = lines.next().ok_or("RNG catalog is empty")?;

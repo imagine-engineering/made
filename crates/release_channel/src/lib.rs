@@ -103,6 +103,7 @@ impl AppVersion {
         } else {
             option_env!("RELEASE_VERSION")
                 .filter(|version| *version != "dev")
+                .or(product_flavor::INITIAL_VERSION)
                 .unwrap_or(pkg_version)
                 .parse()
                 .expect("invalid release version")
@@ -288,6 +289,26 @@ impl FromStr for ReleaseChannel {
 #[cfg(test)]
 mod tests {
     use super::ReleaseChannel;
+
+    #[test]
+    fn copper_version_uses_product_metadata_without_inheriting_upstream_version() {
+        if product_flavor::ID != "rust" {
+            return;
+        }
+        let version = super::AppVersion::load("1.16.2", None, None);
+        let expected = std::env::var("ZED_APP_VERSION").unwrap_or_else(|_| {
+            option_env!("RELEASE_VERSION")
+                .filter(|version| *version != "dev")
+                .or(product_flavor::INITIAL_VERSION)
+                .expect("Copper initial version")
+                .to_owned()
+        });
+        let expected = expected.parse::<semver::Version>().expect("version");
+        assert_eq!(
+            (version.major, version.minor, version.patch),
+            (expected.major, expected.minor, expected.patch)
+        );
+    }
 
     #[test]
     fn test_docs_url_for_release_channel() {

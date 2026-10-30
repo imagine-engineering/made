@@ -3229,7 +3229,7 @@ fn capture_collaborative_reference_comparison(
     std::fs::create_dir_all(&evidence_directory)?;
     record_collaborative_host_window_evidence(name, &evidence_directory)?;
     let reference_path = workspace_root
-        .join(".agents/specs/collaborative-workspace/screenshots")
+        .join("crates/collaboration_domain/test_fixtures/screenshots")
         .join(format!("{name}.png"));
     let reference = image::open(&reference_path)?.to_rgba8();
     native_actual.save(evidence_directory.join(format!("native-{name}.png")))?;

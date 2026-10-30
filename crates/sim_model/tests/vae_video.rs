@@ -81,7 +81,8 @@ fn val_vae_001_video_source_ledger_covers_all_rows_and_configurations() -> Resul
     );
     assert_eq!(fixture.cases.len(), 17);
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let mut ids = BTreeSet::new();
     let mut contracts = BTreeSet::new();
