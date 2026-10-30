@@ -2,6 +2,16 @@
 # Rebuild with `cargo xtask workflows`.
 name: release_signing_check
 on:
+  push:
+    branches:
+    - codex/**
+    paths:
+    - .github/workflows/release_signing_check.yml
+    - tooling/xtask/src/tasks/workflows/release.rs
+    - script/check-signing-environment
+    - script/test-production-signing
+    - script/sign-linux-archive
+    - script/lib/macos-signing.sh
   workflow_dispatch:
     inputs:
       version:
@@ -44,7 +54,7 @@ jobs:
             echo "tag="
         } >> "$GITHUB_OUTPUT"
       env:
-        VERSION: ${{ inputs.version }}
+        VERSION: ${{ inputs.version || '1.0.0' }}
         COMMIT_SHA: ${{ github.sha }}
     - name: release::release_signing_check
       run: CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
@@ -76,7 +86,7 @@ jobs:
   signing_preflight:
     needs:
     - prepare_release
-    if: inputs.sign_artifacts == true
+    if: github.event_name == 'workflow_dispatch' && inputs.sign_artifacts == true
     runs-on: ubuntu-22.04
     permissions:
       contents: read

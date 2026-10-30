@@ -106,7 +106,7 @@ pub(crate) fn release_signing_check() -> Workflow {
         } >> "$GITHUB_OUTPUT"
     "#})
     .id("resolve-signing-check")
-    .add_env(("VERSION", "${{ inputs.version }}"))
+    .add_env(("VERSION", "${{ inputs.version || '1.0.0' }}"))
     .add_env(("COMMIT_SHA", "${{ github.sha }}"));
     let commit_sha = StepOutput::new(&resolve, "commit_sha");
     let package_version = StepOutput::new(&resolve, "version");
@@ -147,9 +147,9 @@ pub(crate) fn release_signing_check() -> Workflow {
         tag: tag.as_job_output(&prepare),
     };
     let mut preflight = signing_preflight(&prepare, &prepared);
-    preflight.job = preflight
-        .job
-        .cond(Expression::new("inputs.sign_artifacts == true"));
+    preflight.job = preflight.job.cond(Expression::new(
+        "github.event_name == 'workflow_dispatch' && inputs.sign_artifacts == true",
+    ));
     let licenses = release_licenses(&prepare, &prepared);
     let applications = application_builds(&prepare, &prepared, &licenses);
     let remote_servers = remote_server_builds(&prepare, &prepared);
@@ -160,9 +160,17 @@ pub(crate) fn release_signing_check() -> Workflow {
         &applications,
         &remote_servers,
     );
+    let contract_push = Push::default()
+        .add_branch("codex/**")
+        .add_path(".github/workflows/release_signing_check.yml")
+        .add_path("tooling/xtask/src/tasks/workflows/release.rs")
+        .add_path("script/check-signing-environment")
+        .add_path("script/test-production-signing")
+        .add_path("script/sign-linux-archive")
+        .add_path("script/lib/macos-signing.sh");
     named::workflow()
         .name("release_signing_check")
-        .on(Event::default().workflow_dispatch(
+        .on(Event::default().push(contract_push).workflow_dispatch(
             WorkflowDispatch::default()
                 .add_input(version.name, version.input())
                 .add_input(sign_artifacts.name, sign_artifacts.input()),
@@ -1244,7 +1252,18 @@ mod release_workflow_tests {
         let check_jobs = check["jobs"].as_mapping().expect("validation jobs");
         assert_eq!(check_jobs.len(), 6);
         assert!(check["on"]["workflow_dispatch"].is_mapping());
-        assert!(check["on"]["push"].is_null());
+        assert_eq!(
+            check["on"]["push"]["branches"],
+            serde_yaml::to_value(["codex/**"])?
+        );
+        assert!(
+            check["on"]["push"]["paths"]
+                .as_sequence()
+                .expect("contract paths")
+                .contains(&serde_yaml::Value::String(
+                    ".github/workflows/release_signing_check.yml".to_owned()
+                ))
+        );
         assert!(check["on"]["workflow_run"].is_null());
         let mut preflight = check["jobs"]["signing_preflight"].clone();
         let condition = preflight
@@ -1254,7 +1273,8 @@ mod release_workflow_tests {
         assert_eq!(
             condition,
             Some(serde_yaml::Value::String(
-                "inputs.sign_artifacts == true".to_owned()
+                "github.event_name == 'workflow_dispatch' && inputs.sign_artifacts == true"
+                    .to_owned()
             ))
         );
         assert_eq!(preflight, production["jobs"]["signing_preflight"]);
