@@ -872,7 +872,7 @@ mod tests {
         };
         use workspace::TerminalProvider;
 
-        type ReceiverResult = anyhow::Result<Vec<(String, std::process::Output)>>;
+        type ReceiverResult = anyhow::Result<Vec<(String, std::process::Output, Vec<u8>)>>;
         type Received = (Vec<Option<ReceiverResult>>, Option<std::task::Waker>);
         struct ReceivingTerminal {
             launches: Rc<RefCell<Vec<SpawnInTerminal>>>,
@@ -932,6 +932,41 @@ mod tests {
                                 &task::Shell::Program(shell.into()),
                                 false,
                             );
+                            let baseline = terminal_view::terminal_panel::prepare_task_for_spawn(
+                                &SpawnInTerminal {
+                                    command: Some("/usr/bin/true".into()),
+                                    args: Vec::new(),
+                                    literal_prefix_args: 0,
+                                    ..task.clone()
+                                },
+                                &task::Shell::Program(shell.into()),
+                                false,
+                            );
+                            // Production terminals have a PTY; this piped receiver also gets
+                            // shell startup diagnostics about unavailable job control.
+                            let baseline = util::process::Child::spawn(
+                                {
+                                    let mut command =
+                                        std::process::Command::new(baseline.command.ok_or_else(
+                                            || anyhow::anyhow!("prepared baseline shell"),
+                                        )?);
+                                    command
+                                        .args(baseline.args)
+                                        .envs(&task.env)
+                                        .env("RUST_NATIVE_LITERAL_VALUE", "expanded");
+                                    command
+                                },
+                                std::process::Stdio::null(),
+                                std::process::Stdio::piped(),
+                                std::process::Stdio::piped(),
+                            )?
+                            .output()
+                            .await?;
+                            anyhow::ensure!(
+                                baseline.status.success() && baseline.stdout.is_empty(),
+                                "{shell} receiver baseline failed: {}",
+                                String::from_utf8_lossy(&baseline.stderr)
+                            );
                             let mut command =
                                 std::process::Command::new(prepared.command.ok_or_else(|| {
                                     anyhow::anyhow!("prepared native argument receiver shell")
@@ -948,7 +983,7 @@ mod tests {
                             )?
                             .output()
                             .await?;
-                            outputs.push((shell.to_owned(), output));
+                            outputs.push((shell.to_owned(), output, baseline.stderr));
                         }
                         Ok(outputs)
                     }
@@ -1208,7 +1243,7 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             assert_eq!(outputs.len(), if cfg!(target_os = "macos") { 3 } else { 2 });
-            for (shell, output) in outputs {
+            for (shell, output, startup_stderr) in outputs {
                 assert!(
                     output.status.success(),
                     "{shell} invocation {invocation}: {}",
@@ -1218,9 +1253,9 @@ mod tests {
                     output.stdout, expected,
                     "{shell} registered invocation {invocation}"
                 );
-                assert!(
-                    output.stderr.is_empty(),
-                    "receiver stderr must remain empty"
+                assert_eq!(
+                    output.stderr, startup_stderr,
+                    "{shell} receiver must not add stderr beyond shell startup diagnostics"
                 );
                 eprintln!(
                     "native-pair-registered-rerun shell={shell} invocation={invocation} reevaluate={reevaluate_context:?} task_id={} profile={} symbols={} argv_bytes={}",

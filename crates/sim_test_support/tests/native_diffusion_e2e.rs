@@ -236,7 +236,7 @@ fn val_native_e2e_002() -> Result<(), Box<dyn Error>> {
             && actual.pixels_bhwc == expected.pixels_bhwc
             && receipt.operation().sha256 == format!("{:x}", Sha256::digest(&actual_png)),
     );
-    let metadata = actual.metadata.comfy_metadata();
+    let metadata = actual.metadata.sim_metadata();
     let prompt_metadata = metadata
         .prompt
         .as_deref()

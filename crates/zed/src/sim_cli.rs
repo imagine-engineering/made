@@ -2072,7 +2072,7 @@ fn render_help(command_path: Option<&str>, output_mode: OutputMode) {
                     "{}\n\nUsage: {} {} [OPTIONS]",
                     command.help,
                     product_flavor::EXECUTABLE_NAME,
-                    &command.path
+                    command.path
                 );
                 let parameters = catalog
                     .parameters
