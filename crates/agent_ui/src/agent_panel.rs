@@ -9866,13 +9866,13 @@ mod tests {
                 &sibling,
                 sibling_pid,
                 "FOOTER_SIBLING_SURVIVES",
-                "printf 'FOOTER_SIBLING_SURVIVES\n'\n",
+                "printf 'FOOTER_SIBLING_SURVIVES\\n'\r",
             ),
             (
                 &other,
                 other_pid,
                 "FOOTER_OTHER_SURVIVES",
-                "printf 'FOOTER_OTHER_SURVIVES\n'\n",
+                "printf 'FOOTER_OTHER_SURVIVES\\n'\r",
             ),
         ] {
             assert_eq!(
@@ -12803,7 +12803,9 @@ mod tests {
         }
         match completion {
             InlineTerminalCompletion::NaturalExit => {
-                terminal.update(&mut cx, |terminal, _| terminal.input(b"exit\n".as_slice()));
+                terminal.update(&mut cx, |terminal, _| {
+                    terminal.input(b"printf 'INLINE_FINAL_%s\\n' DRAINED; exit\r".as_slice());
+                });
             }
             InlineTerminalCompletion::RequestedStop => {
                 terminal.update(&mut cx, |terminal, _| {
@@ -12928,6 +12930,9 @@ mod tests {
             terminal.snapshot().expect("actual exited PTY grid")
         }));
         assert!(closed_context.output.contains("inline_real_shell"));
+        if matches!(completion, InlineTerminalCompletion::NaturalExit) {
+            assert!(closed_context.output.contains("INLINE_FINAL_DRAINED"));
+        }
         assert_eq!(closed_context, &expected_context);
         assert!(!panel.read_with(&cx, |panel, _| panel.has_terminal(terminal_id)));
         panel.update_in(&mut cx, |panel, window, cx| {

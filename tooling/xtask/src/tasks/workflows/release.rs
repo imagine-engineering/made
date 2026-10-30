@@ -128,7 +128,7 @@ pub(crate) fn release_signing_check() -> Workflow {
                 "CARGO_BUILD_JOBS=2 cargo build -p xtask --locked",
             ))
             .add_step(named::bash(
-                "python3 script/check-repository-inputs && python3 script/test-production-signing && cargo test -p xtask --locked",
+                "python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && cargo test -p xtask --locked",
             ))
             .add_step(
                 generate_release_bundle_plans()

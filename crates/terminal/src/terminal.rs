@@ -2156,7 +2156,7 @@ impl Terminal {
             TerminalBackendEvent::Bell => {
                 cx.emit(Event::Bell);
             }
-            TerminalBackendEvent::Exit => self.register_task_finished(None, cx),
+            TerminalBackendEvent::Exit => self.register_task_finished(self.child_exited, cx),
             TerminalBackendEvent::MouseCursorDirty => {
                 //NOOP, Handled in render
             }
@@ -2183,7 +2183,12 @@ impl Terminal {
                 self.write_to_pty(format(color).into_bytes());
             }
             TerminalBackendEvent::ChildExit(exit_status) => {
-                self.register_task_finished(Some(exit_status), cx);
+                if self.is_pty() {
+                    // Alacritty emits ChildExit before draining the PTY, then Exit after it.
+                    self.child_exited = Some(exit_status);
+                } else {
+                    self.register_task_finished(Some(exit_status), cx);
+                }
             }
         }
     }
@@ -3692,6 +3697,14 @@ impl Terminal {
         exit_status: Option<ExitStatus>,
         cx: &mut Context<Terminal>,
     ) {
+        if self.process_finished
+            && self
+                .task
+                .as_ref()
+                .is_none_or(|task| task.status != TaskStatus::Running)
+        {
+            return;
+        }
         self.process_finished = true;
         if let Some(tx) = &self.completion_tx {
             tx.try_send(exit_status).ok();
@@ -5821,6 +5834,31 @@ mod tests {
                     .any(|event| matches!(event, InternalEvent::SetSelection(Some(_)))),
                 "shift+click should extend, not re-anchor, an existing selection"
             );
+        });
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    async fn test_pty_completion_preserves_final_output(cx: &mut TestAppContext) {
+        init_test(cx);
+        cx.executor().allow_parking();
+        let (terminal, completion) = build_test_terminal_with_arguments(
+            cx,
+            "/bin/sh".to_owned(),
+            vec![
+                "-c".to_owned(),
+                r#"index=0; while [ "$index" -lt 2000 ]; do printf '%080d\n' "$index"; index=$((index+1)); done; printf 'PTY_DRAIN_COMPLETED\n'"#.to_owned(),
+            ],
+        )
+        .await;
+        assert_eq!(
+            completion.recv().await.expect("PTY completion"),
+            Some(ExitStatus::default())
+        );
+        terminal.read_with(cx, |terminal, _| {
+            assert!(terminal.is_pty());
+            assert!(terminal.process_finished);
+            assert!(terminal.get_content().contains("PTY_DRAIN_COMPLETED"));
         });
     }
 

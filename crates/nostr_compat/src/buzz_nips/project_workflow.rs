@@ -693,10 +693,9 @@ mod tests {
 
     #[test]
     fn project_codec_matches_every_nip_mp_ingest_fixture() {
-        let fixtures: Value = serde_json::from_str(include_str!(
-            "../../../../projects/buzz/docs/nips/NIP-MP.fixtures.json"
-        ))
-        .expect("fixtures");
+        let fixtures: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/NIP-MP.fixtures.json"))
+                .expect("fixtures");
         let cases = fixtures["cases"].as_array().expect("cases");
         assert_eq!(cases.len(), 31);
         for case in cases {

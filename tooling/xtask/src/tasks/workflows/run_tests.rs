@@ -342,6 +342,7 @@ fn release_automation_validation() -> NamedJob {
                 git diff --exit-code
                 cargo xtask check-workflows
                 python3 script/check-repository-inputs
+                python3 script/test-repository-inputs.py
                 cargo xtask products --check
                 cargo xtask bundle --product rust \
                   --platform linux \
