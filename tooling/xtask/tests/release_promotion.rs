@@ -41,6 +41,11 @@ impl Promotion {
             path.join("crates/zed/Cargo.toml"),
             "[package]\nname = 'zed'\nversion = '1.0.0'\n",
         )?;
+        fs::create_dir_all(path.join("products"))?;
+        fs::write(
+            path.join("products/flavors.toml"),
+            "[[products]]\nid = 'rust'\ninitial_version = '0.1.0'\n",
+        )?;
         git(path, &["add", "."])?;
         git(path, &["commit", "-m", "Before migration"])?;
         git(
@@ -134,9 +139,9 @@ fn release_version_rejects_bootstrap_and_development_and_reuses_promotion() -> R
     );
     let decision: Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(decision["commit_sha"], promotion.promoted);
-    assert_eq!(decision["tag"], "rust-v1.0.0");
+    assert_eq!(decision["tag"], "rust-v0.1.0");
     assert_eq!(git(path, &["tag", "--list"])?, "");
-    git(path, &["tag", "rust-v1.0.0", &promotion.promoted])?;
+    git(path, &["tag", "rust-v0.1.0", &promotion.promoted])?;
     let retry = promotion.version(&promotion.promoted, &promotion.bootstrap)?;
     ensure!(retry.status.success());
     let retry: Value = serde_json::from_slice(&retry.stdout)?;
@@ -146,7 +151,7 @@ fn release_version_rejects_bootstrap_and_development_and_reuses_promotion() -> R
 }
 
 #[test]
-fn explicit_one_zero_zero_does_not_inherit_upstream_package_version() -> Result<()> {
+fn explicit_zero_one_zero_does_not_inherit_upstream_package_version() -> Result<()> {
     let promotion = Promotion::new()?;
     fs::write(
         promotion.directory.path().join("crates/zed/Cargo.toml"),
@@ -178,7 +183,7 @@ fn explicit_one_zero_zero_does_not_inherit_upstream_package_version() -> Result<
             "--bootstrap-commit",
             &promotion.bootstrap,
             "--explicit-version",
-            "1.0.0",
+            "0.1.0",
         ])
         .output()?;
     ensure!(
@@ -187,8 +192,8 @@ fn explicit_one_zero_zero_does_not_inherit_upstream_package_version() -> Result<
         String::from_utf8_lossy(&result.stderr)
     );
     let decision: Value = serde_json::from_slice(&result.stdout)?;
-    assert_eq!(decision["version"], "1.0.0");
-    assert_eq!(decision["tag"], "rust-v1.0.0");
+    assert_eq!(decision["version"], "0.1.0");
+    assert_eq!(decision["tag"], "rust-v0.1.0");
     assert_eq!(git(promotion.directory.path(), &["tag", "--list"])?, "");
     Ok(())
 }
@@ -207,6 +212,7 @@ fn release_triggers_and_both_publication_gates_are_guarded() -> Result<()> {
         workflow["on"]["workflow_run"]["branches"],
         serde_yaml::to_value(["release"])?
     );
+    assert!(workflow["on"]["push"].is_null());
     let guard = workflow["jobs"]["prepare_release"]["if"]
         .as_str()
         .context("job guard")?;

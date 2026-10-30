@@ -33,7 +33,7 @@ const SOURCE_PINS: [(&str, &str); 6] = [
         "48f4835af39b753fb2e637ec17813716024e08952e82e6e4e536a0fcfd944d0e",
     ),
     (
-        ".agents/specs/comfy-parity/baseline.md",
+        "crates/sim_test_support/parity/baseline.md",
         "7779e10ec20426f6c5e4e23e22290ee6bc6776d70e9cdc1712c7c8887e116cdd",
     ),
 ];

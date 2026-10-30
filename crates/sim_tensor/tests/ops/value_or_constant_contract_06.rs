@@ -102,7 +102,7 @@ fn assigned_catalog_rows_are_exact_and_never_enter_kernel_resolution()
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let catalog = fs::read_to_string(
         workspace_root
-            .join(".agents/specs/comfy-parity/catalogs/native-tensor-operation-contracts.csv"),
+            .join("crates/sim_test_support/parity/catalogs/native-tensor-operation-contracts.csv"),
     )?;
     let owned_rows = catalog
         .lines()

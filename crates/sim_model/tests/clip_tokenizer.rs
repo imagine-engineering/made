@@ -1911,7 +1911,8 @@ fn source_row_closure_is_exact_unique_and_backed_by_valid_and_invalid_fixtures()
         .and_then(Path::parent)
         .ok_or("workspace root is unavailable")?;
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     verify_tokenizer_implementation_closure(workspace)?;
     validate_fallible_allocation_atomicity_and_workspace_absence()?;
@@ -2342,7 +2343,8 @@ fn val_clip_001_tokenizer_rows_execute_and_publish_partial_ledger()
         .and_then(Path::parent)
         .ok_or("workspace root is unavailable")?;
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     verify_tokenizer_implementation_closure(workspace)?;
     validate_fallible_allocation_atomicity_and_workspace_absence()?;

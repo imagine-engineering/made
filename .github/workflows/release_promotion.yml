@@ -5,9 +5,6 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: '1'
 on:
-  push:
-    tags:
-    - rust-v*
   workflow_dispatch:
     inputs:
       bump:
@@ -33,7 +30,7 @@ permissions:
   contents: read
 jobs:
   prepare_release:
-    if: vars.COPPER_RELEASE_ENABLED == 'true' && vars.COPPER_RELEASE_BOOTSTRAP_SHA != '' && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'release' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha != vars.COPPER_RELEASE_BOOTSTRAP_SHA) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-v')))
+    if: vars.COPPER_RELEASE_ENABLED == 'true' && vars.COPPER_RELEASE_BOOTSTRAP_SHA != '' && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'release' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha != vars.COPPER_RELEASE_BOOTSTRAP_SHA) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release'))
     runs-on: ubuntu-22.04
     permissions:
       actions: read
@@ -98,9 +95,6 @@ jobs:
         if [[ -n "$EXPLICIT_VERSION" ]]; then
             ARGS+=(--explicit-version "$EXPLICIT_VERSION")
         fi
-        if [[ -n "$EXISTING_TAG" ]]; then
-            ARGS+=(--existing-tag "$EXISTING_TAG")
-        fi
         DECISION="$(cargo xtask "${ARGS[@]}")"
         jq -e '.commit_sha and .version and .tag' <<<"$DECISION" >/dev/null
         {
@@ -113,7 +107,6 @@ jobs:
         BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
         EXPLICIT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
         BOOTSTRAP_SHA: ${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}
-        EXISTING_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
     - name: release::generate_release_bundle_plans
       run: |
         mkdir -p release-bundle-plans
@@ -901,11 +894,9 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'linux'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
-        export ZED_BUNDLE_PHASE=package
-        script/bundle-linux
+        cargo xtask bundle --product rust --platform linux --target "$TARGET" --phase package --signing required
       env:
-        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
         CC: clang
         CXX: clang++
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
@@ -914,9 +905,7 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'macos'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
-        export ZED_BUNDLE_PHASE=package
-        script/bundle-mac "$TARGET"
+        cargo xtask bundle --product rust --platform macos --target "$TARGET" --phase package --signing required
       env:
         ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
         TARGET: ${{ matrix.target }}
@@ -928,17 +917,12 @@ jobs:
         APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
     - name: release::product_builds
       if: matrix.platform == 'windows'
-      run: Install-Module -Name TrustedSigning -RequiredVersion 0.5.8 -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop
-      shell: pwsh
-    - name: release::product_builds
-      if: matrix.platform == 'windows'
       run: |
-        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
-        $env:ZED_BUNDLE_PHASE = "package"
-        script/bundle-windows.ps1 -Architecture x86_64
+        cargo xtask bundle --product rust --platform windows --target $env:TARGET --phase package --signing required
+        if ($LASTEXITCODE -ne 0) { throw "Product-aware Windows bundling failed" }
       shell: pwsh
       env:
-        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -1001,13 +985,13 @@ jobs:
     - name: release::product_builds
       if: always() && matrix.platform != 'windows'
       run: |
-        printf '### sccache: package-only job\n\nNo Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
+        printf '### sccache: package-only job\n\nOnly the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
     - name: release::product_builds
       if: always() && matrix.platform == 'windows'
       run: |
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### sccache: package-only job'
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'Only the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
       shell: pwsh
     - name: release::product_builds
       if: always() && matrix.platform == 'macos'
@@ -1089,9 +1073,6 @@ jobs:
         if [[ -n "$EXPLICIT_VERSION" ]]; then
             ARGS+=(--explicit-version "$EXPLICIT_VERSION")
         fi
-        if [[ -n "$EXISTING_TAG" ]]; then
-            ARGS+=(--existing-tag "$EXISTING_TAG")
-        fi
         DECISION="$(cargo xtask "${ARGS[@]}")"
         ACTUAL_COMMIT="$(jq -r '.commit_sha' <<<"$DECISION")"
         ACTUAL_VERSION="$(jq -r '.version' <<<"$DECISION")"
@@ -1162,7 +1143,6 @@ jobs:
         BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
         EXPLICIT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
         BOOTSTRAP_SHA: ${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}
-        EXISTING_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
     timeout-minutes: 15

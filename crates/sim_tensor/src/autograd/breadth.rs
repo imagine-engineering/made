@@ -370,7 +370,7 @@ pub const CUSTOM_FUNCTIONS: [CustomFunctionContract; 7] = [
         1,
         6,
         HigherOrderPolicy::OnceDifferentiable,
-        ".agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json#callable",
+        "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json#callable",
     ),
     custom_function(
         "COMFY-AUTOGRAD-304CC342AC2A",

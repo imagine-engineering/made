@@ -1,0 +1,387 @@
+{
+  "format_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "app-data-sprout-v0",
+      "data_source_id": "DESKTOP-APP-DATA-001",
+      "version": "sprout-legacy-v0",
+      "migration_state": "pre-product-rename",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "agents/managed-agents.json", "kind": "file"},
+        {"path": "agents/personas.json", "kind": "file"},
+        {"path": "agents/teams", "kind": "directory"}
+      ],
+      "expected": {"destination": "buzz-release", "copy_policy": "absent-only", "source_preserved": true}
+    },
+    {
+      "fixture_id": "app-data-release-v1",
+      "data_source_id": "DESKTOP-APP-DATA-001",
+      "version": "buzz-release-v1",
+      "migration_state": "current-release-tree",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "agents/managed-agents.json", "kind": "file"},
+        {"path": "archive.db", "kind": "sqlite"}
+      ],
+      "expected": {"destination": "same-tree", "copy_policy": "none", "source_preserved": true}
+    },
+    {
+      "fixture_id": "app-data-dev-v1",
+      "data_source_id": "DESKTOP-APP-DATA-001",
+      "version": "buzz-dev-v1",
+      "migration_state": "worktree-sharing-enabled",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "agents/managed-agents.json", "kind": "symlink"},
+        {"path": "agents/personas.json", "kind": "symlink"},
+        {"path": "agents/teams", "kind": "symlink"}
+      ],
+      "expected": {"destination": "canonical-dev-tree", "identity_file_shared": false, "source_preserved": true}
+    },
+    {
+      "fixture_id": "agents-inline-fallback-v0",
+      "data_source_id": "DESKTOP-AGENTS-001",
+      "version": "inline-fallback-v0",
+      "migration_state": "protected-store-unavailable",
+      "contains_private_key_material": false,
+      "records": [
+        {"pubkey_alias": "agent-alpha", "name": "Build Agent", "runtime": "acp", "credential_state": "redacted-inline-fallback", "file_mode": "0600"}
+      ],
+      "expected": {"import_count": 1, "strip_inline_after_verified_write": true, "preserve_on_keyring_failure": true}
+    },
+    {
+      "fixture_id": "agents-key-reference-v1",
+      "data_source_id": "DESKTOP-AGENTS-001",
+      "version": "key-reference-v1",
+      "migration_state": "protected-store-authoritative",
+      "contains_private_key_material": false,
+      "records": [
+        {"pubkey_alias": "agent-alpha", "name": "Build Agent", "runtime": "acp", "credential_reference": "agent:agent-alpha", "credential_state": "external"}
+      ],
+      "expected": {"import_count": 1, "challenge_required": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "personas-provider-v0",
+      "data_source_id": "DESKTOP-PERSONAS-001",
+      "version": "provider-field-v0",
+      "migration_state": "legacy-json",
+      "contains_private_key_material": false,
+      "records": [
+        {"id": "reviewer", "display_name": "Reviewer", "provider": "local-acp", "system_prompt": "Review the active change."}
+      ],
+      "expected": {"fold_count": 1, "runtime": "local-acp", "legacy_file_preserved": true}
+    },
+    {
+      "fixture_id": "personas-runtime-v1",
+      "data_source_id": "DESKTOP-PERSONAS-001",
+      "version": "runtime-fold-v1",
+      "migration_state": "unified-agent-store",
+      "contains_private_key_material": false,
+      "records": [
+        {"id": "reviewer", "display_name": "Reviewer", "runtime": "local-acp", "is_active": true}
+      ],
+      "expected": {"fold_count": 0, "idempotent": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "teams-directory-v0",
+      "data_source_id": "DESKTOP-TEAMS-001",
+      "version": "directory-backed-v0",
+      "migration_state": "team-directory-authoritative",
+      "contains_private_key_material": false,
+      "records": [
+        {"team_id": "alpha-team", "members": ["reviewer"], "files": ["TEAM.md", "personas/reviewer.md", "skills/review/SKILL.md"]}
+      ],
+      "expected": {"team_count": 1, "consistency_boundary": "metadata-and-directory", "source_preserved": true}
+    },
+    {
+      "fixture_id": "teams-detached-v1",
+      "data_source_id": "DESKTOP-TEAMS-001",
+      "version": "detached-v1",
+      "migration_state": "portable-team-record",
+      "contains_private_key_material": false,
+      "records": [
+        {"team_id": "alpha-team", "members": ["reviewer"], "directory_reference": null}
+      ],
+      "expected": {"team_count": 1, "idempotent": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "retention-global-v0",
+      "data_source_id": "DESKTOP-RETENTION-001",
+      "version": "global-v0",
+      "migration_state": "unscoped-retention-db",
+      "contains_private_key_material": false,
+      "records": [
+        {"kind": 30175, "author_alias": "owner-a", "d_tag": "reviewer", "pending_sync": true},
+        {"kind": 5, "author_alias": "owner-a", "d_tag": "retired-agent", "pending_sync": true}
+      ],
+      "expected": {"copied_count": 2, "claim_once": true, "tombstone_first": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "retention-scoped-v1",
+      "data_source_id": "DESKTOP-RETENTION-001",
+      "version": "relay-owner-scoped-v1",
+      "migration_state": "scoped-retention-db",
+      "contains_private_key_material": false,
+      "records": [
+        {"scope_alias": "relay-a-owner-a", "kind": 30175, "d_tag": "reviewer", "pending_sync": false},
+        {"scope_alias": "relay-a-owner-a", "migration_marker": "legacy_global_retention_db"}
+      ],
+      "expected": {"copied_count_on_retry": 0, "cross_scope_reuse": false, "source_preserved": true}
+    },
+    {
+      "fixture_id": "archive-schema-v0",
+      "data_source_id": "DESKTOP-ARCHIVE-001",
+      "version": "schema-v0",
+      "migration_state": "pre-index-extension",
+      "contains_private_key_material": false,
+      "records": [
+        {"table": "archived_events", "rows": 2},
+        {"table": "archived_event_scopes", "rows": 2},
+        {"table": "save_subscriptions", "rows": 1},
+        {"table": "agent_metric_index", "columns": ["turn_input_tokens", "turn_output_tokens", "parse_status"]}
+      ],
+      "expected": {"archive_rows": 2, "rebuildable_indexes": true, "raw_events_preserved": true}
+    },
+    {
+      "fixture_id": "archive-harness-v1",
+      "data_source_id": "DESKTOP-ARCHIVE-001",
+      "version": "schema-v1-harness",
+      "migration_state": "add_harness_to_metric_index",
+      "contains_private_key_material": false,
+      "records": [
+        {"migration_marker": "add_harness_to_metric_index"},
+        {"table": "agent_metric_index", "columns": ["harness"], "rows": 2}
+      ],
+      "expected": {"rebuild_from_archived_events": true, "atomic": true, "idempotent": true}
+    },
+    {
+      "fixture_id": "archive-cache-read-v2",
+      "data_source_id": "DESKTOP-ARCHIVE-001",
+      "version": "schema-v2-cache-read",
+      "migration_state": "add_cache_read_tokens",
+      "contains_private_key_material": false,
+      "records": [
+        {"migration_marker": "add_cache_read_tokens"},
+        {"table": "agent_metric_index", "columns": ["turn_cache_read_tokens", "cumulative_cache_read_tokens"], "rows": 2}
+      ],
+      "expected": {"legacy_values": null, "partial_schema_self_repairs": true, "idempotent": true}
+    },
+    {
+      "fixture_id": "archive-pricing-v3",
+      "data_source_id": "DESKTOP-ARCHIVE-001",
+      "version": "schema-v3-pricing",
+      "migration_state": "add_cache_write_and_pricing",
+      "contains_private_key_material": false,
+      "records": [
+        {"migration_marker": "add_cache_write_and_pricing"},
+        {"table": "agent_metric_index", "columns": ["turn_cache_write_tokens", "cumulative_cache_write_tokens", "pricing_authority", "pricing_model", "pricing_cache_class"], "rows": 2}
+      ],
+      "expected": {"legacy_values": null, "partial_schema_self_repairs": true, "idempotent": true}
+    },
+    {
+      "fixture_id": "keyring-per-entry-v0",
+      "data_source_id": "DESKTOP-IDENTITY-KEYRING-001",
+      "version": "per-entry-v0",
+      "migration_state": "legacy-keyring-items",
+      "contains_private_key_material": false,
+      "records": [
+        {"service": "buzz-desktop", "entry_alias": "identity", "material": "omitted"},
+        {"service": "buzz-desktop", "entry_alias": "agent:agent-alpha", "material": "omitted"}
+      ],
+      "expected": {"identifier_count": 2, "read_back_challenge": true, "delete_source_before_verify": false}
+    },
+    {
+      "fixture_id": "keyring-blob-v1",
+      "data_source_id": "DESKTOP-IDENTITY-KEYRING-001",
+      "version": "namespaced-blob-v1",
+      "migration_state": "shared-secret-store",
+      "contains_private_key_material": false,
+      "records": [
+        {"service": "buzz-desktop", "entry_aliases": ["identity", "agent:agent-alpha"], "material": "omitted"}
+      ],
+      "expected": {"identifier_count": 2, "partial_migration_recoverable": true, "source_preserved_until_verify": true}
+    },
+    {
+      "fixture_id": "identity-file-v0",
+      "data_source_id": "DESKTOP-IDENTITY-FILE-001",
+      "version": "owner-file-v0",
+      "migration_state": "keyring-unavailable-fallback",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "identity.key", "mode": "0600", "material": "omitted", "pubkey_alias": "owner-a"}
+      ],
+      "expected": {"quarantine_corrupt": true, "preserve_on_keyring_failure": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "identity-file-marker-v1",
+      "data_source_id": "DESKTOP-IDENTITY-FILE-001",
+      "version": "migrated-marker-v1",
+      "migration_state": "protected-store-verified",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "identity.migrated", "kind": "marker", "pubkey_alias": "owner-a"}
+      ],
+      "expected": {"fallback_present": false, "lost_identity_fails_closed": true, "replacement_generated": false}
+    },
+    {
+      "fixture_id": "identity-backup-v1",
+      "data_source_id": "DESKTOP-KEY-BACKUP-001",
+      "version": "nip49-v1",
+      "migration_state": "encrypted-portable-backup",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "identity.ncryptsec", "format": "nip49", "payload": "omitted", "pubkey_alias": "owner-a"}
+      ],
+      "expected": {"password_verification_required": true, "kdf_bounds_required": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "legacy-webkit-v0",
+      "data_source_id": "DESKTOP-LEGACY-WEBKIT-001",
+      "version": "sprout-localstorage-v0",
+      "migration_state": "legacy-webkit-sqlite",
+      "contains_private_key_material": false,
+      "records": [
+        {"key": "workspace", "value": "relay-a"},
+        {"key": "active-workspace", "value": "relay-a"},
+        {"key": "onboarding-complete", "value": true}
+      ],
+      "expected": {"read_only_source": true, "import_count": 3, "idempotent": true}
+    },
+    {
+      "fixture_id": "nest-sprout-v0",
+      "data_source_id": "DESKTOP-NEST-001",
+      "version": "sprout-nest-v0",
+      "migration_state": "legacy-user-tree",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "AGENTS.md", "kind": "user-authored"},
+        {"path": "skills/review/SKILL.md", "kind": "user-authored"},
+        {"path": "repositories/project-a", "kind": "repository-checkout"}
+      ],
+      "expected": {"copy_user_authored": true, "blind_copy_repositories": false, "source_preserved": true}
+    },
+    {
+      "fixture_id": "nest-buzz-v1",
+      "data_source_id": "DESKTOP-NEST-001",
+      "version": "buzz-nest-v1",
+      "migration_state": "current-user-tree",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "AGENTS.md", "kind": "user-authored"},
+        {"path": ".dev-nest-migrated", "kind": "marker"}
+      ],
+      "expected": {"adopt_in_place": true, "idempotent": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "repos-dir-v1",
+      "data_source_id": "DESKTOP-REPOS-DIR-001",
+      "version": "marker-v1",
+      "migration_state": "repository-root-selected",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": ".repos-dir", "value": "/fixtures/projects"}
+      ],
+      "expected": {"map_without_copy": true, "canonical_project_count": 1, "source_preserved": true}
+    },
+    {
+      "fixture_id": "runtime-receipt-v1",
+      "data_source_id": "DESKTOP-RUNTIME-RECEIPTS-001",
+      "version": "receipt-v1",
+      "migration_state": "crash-recovery-evidence",
+      "contains_private_key_material": false,
+      "records": [
+        {"agent_alias": "agent-alpha", "relay_alias": "relay-a", "process_id": 4242, "started_at": 1700000000}
+      ],
+      "expected": {"reconcile_live_process": true, "cleanup_idempotent": true, "source_preserved_until_reconcile": true}
+    },
+    {
+      "fixture_id": "agent-logs-v1",
+      "data_source_id": "DESKTOP-AGENT-LOGS-001",
+      "version": "logs-v1",
+      "migration_state": "operator-evidence",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "agents/logs/agent-alpha__relay-a.log", "lines": 3},
+        {"path": "agents/logs/install-local-acp.log", "lines": 2}
+      ],
+      "expected": {"preserve_until_job_reconcile": true, "apply_target_retention_after_import": true, "secret_scan_required": true}
+    },
+    {
+      "fixture_id": "event-sync-v1",
+      "data_source_id": "DESKTOP-EVENT-SYNC-001",
+      "version": "json-retention-relay-v1",
+      "migration_state": "temporary-reconciliation-owner",
+      "contains_private_key_material": false,
+      "records": [
+        {"coordinate": "30175:owner-a:reviewer", "json_version": 1, "retention_version": 1, "relay_version": 1, "pending_sync": false},
+        {"coordinate": "30176:owner-a:alpha-team", "json_version": 2, "retention_version": 2, "relay_version": 1, "pending_sync": true}
+      ],
+      "expected": {"reconcile_count": 2, "remove_bridge": false, "source_preserved": true}
+    },
+    {
+      "fixture_id": "mesh-owner-v1",
+      "data_source_id": "DESKTOP-MESH-IDENTITY-001",
+      "version": "owner-keystore-v1",
+      "migration_state": "machine-identity-metadata",
+      "contains_private_key_material": false,
+      "records": [
+        {"path": "mesh-owner.json", "owner_alias": "mesh-owner-a", "material": "omitted", "file_mode": "0600"}
+      ],
+      "expected": {"stable_identity_required": true, "rebind_if_rotated": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "webview-local-v1",
+      "data_source_id": "DESKTOP-WEBVIEW-LOCAL-001",
+      "version": "local-storage-v1",
+      "migration_state": "user-owned-local-state",
+      "contains_private_key_material": false,
+      "records": [
+        {"identity_alias": "owner-a", "community_alias": "relay-a", "key": "draft:channel-a", "value": "Review the patch"},
+        {"identity_alias": "owner-a", "community_alias": "relay-a", "key": "manual-unread:channel-a", "value": true},
+        {"identity_alias": "owner-a", "community_alias": "relay-a", "key": "sidebar-stars", "value": ["channel-a"]}
+      ],
+      "expected": {"import_count": 3, "relay_snapshots_authoritative": false, "source_preserved": true}
+    },
+    {
+      "fixture_id": "webview-cache-v1",
+      "data_source_id": "DESKTOP-WEBVIEW-CACHE-001",
+      "version": "projection-cache-v1",
+      "migration_state": "derived-offline-bootstrap",
+      "contains_private_key_material": false,
+      "records": [
+        {"cache": "channel-snapshot", "source_version": 7, "entries": 2},
+        {"cache": "message-snapshot", "source_version": 9, "entries": 4},
+        {"cache": "profile-snapshot", "source_version": 3, "entries": 1}
+      ],
+      "expected": {"bootstrap_only": true, "evict_on_mismatch": true, "canonical_writes": 0}
+    },
+    {
+      "fixture_id": "webview-prefs-v1",
+      "data_source_id": "DESKTOP-WEBVIEW-PREFS-001",
+      "version": "presentation-prefs-v1",
+      "migration_state": "user-owned-preferences",
+      "contains_private_key_material": false,
+      "records": [
+        {"key": "theme", "value": "system"},
+        {"key": "sidebar-width", "value": 328},
+        {"key": "zoom", "value": 1.1},
+        {"key": "transcript-animation", "value": "reduced"}
+      ],
+      "expected": {"mapped_count": 4, "preserve_unknown_for_rollback": true, "source_preserved": true}
+    },
+    {
+      "fixture_id": "webview-session-v1",
+      "data_source_id": "DESKTOP-WEBVIEW-SESSION-001",
+      "version": "session-storage-v1",
+      "migration_state": "window-ephemeral-state",
+      "contains_private_key_material": false,
+      "records": [
+        {"key": "pending-welcome-route", "value": "community"},
+        {"key": "inbox-list-width", "value": 420},
+        {"key": "thread-panel-width", "value": 512}
+      ],
+      "expected": {"migrate_across_applications": false, "safe_reinitialize": true, "canonical_writes": 0}
+    }
+  ]
+}

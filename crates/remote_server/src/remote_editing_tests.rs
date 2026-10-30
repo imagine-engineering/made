@@ -17784,14 +17784,17 @@ async fn rust_tools_headless_runtime_separate_enabled_host_profile_and_coverage(
     std::fs::write(
         fixture.path().join("profile.json"),
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         ),
     )
     .expect("write captured profile");
     let symbols = include_str!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
     )
-    .replace("/fixture/workload.rs", &fixture.path().join("workload.rs").to_string_lossy());
+    .replace(
+        "/fixture/workload.rs",
+        &fixture.path().join("workload.rs").to_string_lossy(),
+    );
     std::fs::write(fixture.path().join("profile.syms.json"), symbols)
         .expect("write captured symbols");
     let coverage = json!({
@@ -18352,9 +18355,12 @@ async fn rust_tools_enabled_host_local_opt_in_fixture(
     )
     .expect("write captured multi-page profile");
     let symbols = include_str!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
     )
-    .replace("/fixture/workload.rs", &fixture.path().join("workload.rs").to_string_lossy());
+    .replace(
+        "/fixture/workload.rs",
+        &fixture.path().join("workload.rs").to_string_lossy(),
+    );
     std::fs::write(fixture.path().join("profile.syms.json"), symbols)
         .expect("write captured symbols");
     let coverage = json!({
@@ -20346,15 +20352,19 @@ async fn profile_task_binding_publishes_host_verified_workspace_artifacts(
     fs.insert_file(
         "/fixture/profile.json",
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         )
         .to_vec(),
     )
     .await;
     fs.insert_file(
         "/fixture/profile.syms.json",
-        include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json").to_vec(),
-    ).await;
+        include_bytes!(
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
+        )
+        .to_vec(),
+    )
+    .await;
     let (project, headless) = init_test(&fs, cx, server_cx).await;
     cx.update(|cx| {
         project::task_store::set_experimental_feature_for_test(
@@ -20646,7 +20656,7 @@ async fn profile_task_binding_publishes_host_verified_workspace_artifacts(
     fs.insert_file(
         "/fixture/profile.json",
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         )
         .to_vec(),
     )
@@ -20894,15 +20904,19 @@ async fn profile_task_binding_requires_host_completion_and_sealed_artifacts(
     fs.insert_file(
         "/fixture/profile.json",
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         )
         .to_vec(),
     )
     .await;
     fs.insert_file(
         "/fixture/profile.syms.json",
-        include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json").to_vec(),
-    ).await;
+        include_bytes!(
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
+        )
+        .to_vec(),
+    )
+    .await;
     let (project, headless) = init_test(&fs, cx, server_cx).await;
     cx.update(|cx| {
         project::task_store::set_experimental_feature_for_test(
@@ -21167,7 +21181,7 @@ async fn profile_task_binding_requires_host_completion_and_sealed_artifacts(
 
     fs.pause_events();
     let mut changed_profile = include_bytes!(
-        "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+        "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
     )
     .to_vec();
     changed_profile.push(b' ');
@@ -21893,13 +21907,15 @@ async fn profile_results_runtime_rejects_real_fifo_replacement(
     std::fs::write(
         &profile,
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         ),
     )
     .expect("captured profile");
     std::fs::write(
         &symbols,
-        include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"),
+        include_bytes!(
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
+        ),
     )
     .expect("captured symbols");
     let fs = Arc::new(fs::RealFs::new(None, server_cx.background_executor.clone()));
@@ -22040,13 +22056,15 @@ async fn profile_results_runtime_rejects_real_parent_symlink_replacement(
     std::fs::write(
         artifacts.join("profile.json"),
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         ),
     )
     .expect("captured profile");
     std::fs::write(
         artifacts.join("profile.syms.json"),
-        include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"),
+        include_bytes!(
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
+        ),
     )
     .expect("captured symbols");
     let fs = Arc::new(fs::RealFs::new(None, server_cx.background_executor.clone()));
@@ -22182,13 +22200,15 @@ async fn profile_results_runtime_rejects_real_root_replacement_with_original_fil
     std::fs::write(
         artifacts.join("profile.json"),
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         ),
     )
     .expect("captured profile");
     std::fs::write(
         artifacts.join("profile.syms.json"),
-        include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"),
+        include_bytes!(
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
+        ),
     )
     .expect("captured symbols");
     let original_root_inode = std::fs::metadata(&root)
@@ -22334,12 +22354,19 @@ async fn profile_results_runtime_imports_on_host_and_checks_admission(
     fs.insert_file(
         "/fixture/profile.json",
         include_bytes!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         )
         .to_vec(),
     )
     .await;
-    fs.insert_file("/fixture/profile.syms.json", include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json").to_vec()).await;
+    fs.insert_file(
+        "/fixture/profile.syms.json",
+        include_bytes!(
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"
+        )
+        .to_vec(),
+    )
+    .await;
     fs.insert_symlink(
         "/fixture/profile-link.json",
         PathBuf::from("/fixture/profile.json"),
@@ -22638,8 +22665,8 @@ mod profile_transport_tests {
     ) {
         let fs = FakeFs::new(server_cx.executor());
         fs.insert_tree("/fixture", json!({
-            "profile.json": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"),
-            "profile.syms.json": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json"),
+            "profile.json": include_str!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"),
+            "profile.syms.json": include_str!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json"),
         })).await;
         fs.insert_file("/fixture/profile-paged.json", paged_capture())
             .await;
@@ -22957,7 +22984,7 @@ mod profile_transport_tests {
     }
     pub(super) fn paged_capture() -> Vec<u8> {
         let mut profile: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+            "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
         ))
         .expect("captured JSON");
         let thread = &mut profile["threads"][0];
@@ -23030,7 +23057,7 @@ mod profile_transport_tests {
             serde_json::to_vec(&replacement_profile).expect("replacement capture bytes"),
         )
         .await;
-        fs.insert_file("/fixture/profile.syms.json", include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json").to_vec()).await;
+        fs.insert_file("/fixture/profile.syms.json", include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json").to_vec()).await;
         let (project, headless) = init_test(&fs, cx, server_cx).await;
         cx.update(|cx| {
             project::task_store::set_experimental_feature_for_test(
@@ -23431,9 +23458,9 @@ mod profile_transport_tests {
             .await;
         fs.insert_file("/fixture/profile.json", paged_capture())
             .await;
-        fs.insert_file("/fixture/profile.syms.json", include_bytes!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json").to_vec()).await;
+        fs.insert_file("/fixture/profile.syms.json", include_bytes!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json").to_vec()).await;
         fs.insert_tree("/outside", json!({
-            "profile.json": include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json")
+            "profile.json": include_str!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json")
         })).await;
         fs.insert_symlink(
             "/fixture/external.json",

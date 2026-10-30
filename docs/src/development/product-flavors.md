@@ -167,3 +167,16 @@ from Zed directories. Phase 1 deliberately provides no in-application importer:
 an automatic import cannot reliably distinguish upstream Zed data from data
 written by an older fork. Copy settings manually only after selecting and
 confirming the source, and leave the source installation intact.
+
+## Copper release version
+
+Copper's first release target is `0.1.0`. `products/flavors.toml` owns this as
+`initial_version`; upstream Cargo package and dependency versions are independent.
+`cargo xtask products` generates the runtime fallback used by About, CLI version
+output and the updater. An explicit `RELEASE_VERSION` embeds the selected later
+release in the app and platform metadata. `cargo xtask bundle --product rust`
+defaults to the catalog version, including package filenames and installer metadata.
+The release resolver uses it only before the first `rust-v*` tag; later releases
+follow Copper's tag history. Only successful same-repository push CI on `release`,
+or a guarded manual dispatch on `release`, can start publication. `main` and tag
+pushes cannot publish. See [production signing](copper-signing.md).

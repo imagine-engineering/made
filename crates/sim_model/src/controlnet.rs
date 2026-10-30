@@ -3012,7 +3012,7 @@ mod tests {
         let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let catalog = std::fs::read_to_string(
             repository
-                .join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+                .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
         )?;
         let cancellation: CancellationToken = Default::default();
         let (backend, _authority, context) = backend_and_context(&cancellation, MEMORY_BYTES)?;

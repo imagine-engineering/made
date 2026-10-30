@@ -837,7 +837,7 @@ fn parse_csv_row(row: &str) -> Result<Vec<String>, Box<dyn Error>> {
 
 fn catalog_memory_modes() -> Result<BTreeSet<String>, Box<dyn Error>> {
     let catalog = fs::read_to_string(
-        workspace_root()?.join(".agents/specs/comfy-parity/catalogs/backend-models.csv"),
+        workspace_root()?.join("crates/sim_test_support/parity/catalogs/backend-models.csv"),
     )?;
     let mut modes = BTreeSet::new();
     for row in catalog.lines().skip(1) {
@@ -1366,7 +1366,7 @@ fn write_artifact(cases: &BTreeMap<&str, bool>) -> Result<(), Box<dyn Error>> {
         return Err(format!("VAL-MEMORY-001 case failed: {name}").into());
     }
     let root = workspace_root()?;
-    let catalog_path = root.join(".agents/specs/comfy-parity/catalogs/backend-models.csv");
+    let catalog_path = root.join("crates/sim_test_support/parity/catalogs/backend-models.csv");
     let digest = fixture_digest(&catalog_path)?;
     let cases_json = cases
         .iter()
@@ -1379,7 +1379,7 @@ fn write_artifact(cases: &BTreeMap<&str, bool>) -> Result<(), Box<dyn Error>> {
             "  \"validation_id\": \"VAL-MEMORY-001\",\n",
             "  \"scope\": \"Task 34 native memory modes, placement, pressure, OOM, cancellation, and ownership\",\n",
             "  \"environment\": {{\"operating_system\": {}, \"architecture\": {}, \"backend\": \"native-rust-cpu-policy-plus-synthetic-multidevice\", \"development_oracle_executed\": false}},\n",
-            "  \"fixture_digests\": {{\".agents/specs/comfy-parity/catalogs/backend-models.csv\": {}}},\n",
+            "  \"fixture_digests\": {{\"crates/sim_test_support/parity/catalogs/backend-models.csv\": {}}},\n",
             "  \"summary\": {{\"passed\": {}, \"failed\": 0, \"skipped\": 0}},\n",
             "  \"cases\": {{{}}},\n",
             "  \"skipped\": [],\n",

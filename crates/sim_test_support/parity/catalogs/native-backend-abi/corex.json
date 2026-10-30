@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "backend": "corex",
+  "catalog_row": "COMFY-MODEL-0020",
+  "structural_task": "comfy-parity-corex-provenance-blocked-structural-foundation",
+  "reviewed_abi_task": "comfy-parity-device-foundation-iluvatar-corex-ixuca-comfy-model-0020",
+  "abi_floor": "CoreX-IXRT-0.8-ABI-profile",
+  "binding_strategy": "provenance-blocked-no-symbol-loading",
+  "targets": ["x86_64-unknown-linux-gnu"],
+  "required_libraries": ["libixblas.so", "libixrt.so"],
+  "discovery_order": ["SIM_COREX_ROOT", "IXRT_HOME", "signed_package_roots"],
+  "abi_manifest": "crates/sim_backend_corex/abi/symbols-v1.json",
+  "canonical_abi_manifest_sha256": "315597fb5ed4e1d0ae322ecda5437cb2583cb861e325a34c5259e534c58e166d",
+  "review_state": "blocked-missing-vendor-headers",
+  "review_evidence": {
+    "official_repository": "https://github.com/Deep-Spark/iluvatar-corex-ixrt",
+    "pinned_tag": "v4.3.0",
+    "pinned_commit": "0528f3ae5da5dd2255f21966b82bedcb2de65582",
+    "pinned_tree": "3b503f464cfbbe4adab6f54ec6bb46558bc4b386",
+    "finding": "The official OSS tree delegates IXRT headers to a separately downloaded SDK and contains no reviewed IXRT 0.8 or IXBLAS declarations."
+  },
+  "unsafe_owner": "sim_backend_corex::loader",
+  "certification_owner": "sim_runtime::NativeFfiRegistry",
+  "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+  "semantic_owner": "sim_tensor::TensorBackend",
+  "capability_owner": "sim_tensor::BackendCapabilityMatrix",
+  "discovery_is_authorization": false,
+  "package_receipt_is_authorization": false,
+  "packaging": {
+    "nix": "nix/sim-backends/corex/default.nix",
+    "script": "script/package-sim-backend-corex",
+    "redistributes_vendor_runtime": false,
+    "license_approval_required_for_redistribution": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-corex-package-v1",
+    "final_application_signing_required": true,
+    "runtime_loading_enabled": false
+  },
+  "foundation_state": "unbound-missing-reviewed-ixrt-0.8-and-ixblas-abi-evidence",
+  "hardware_certification": "not-observed"
+}

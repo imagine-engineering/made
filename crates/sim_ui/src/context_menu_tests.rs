@@ -470,7 +470,7 @@ fn val_gpui_014(cx: &mut TestAppContext) {
     assert_eq!(registrations.len(), 63);
     let parity_matrix = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../.agents/specs/comfy-parity/parity-matrix.md"
+        "/../../crates/sim_test_support/parity/parity-matrix.md"
     ));
     for registration in &registrations {
         let row_prefix = format!("| `{}` |", registration.feature_id);
@@ -1173,8 +1173,8 @@ fn val_gpui_014(cx: &mut TestAppContext) {
         "VAL-GPUI-014",
         json!({
             "workflow": format!("{:x}", Sha256::digest(&fixture_bytes)),
-            "frontend_menus": format!("{:x}", Sha256::digest(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.agents/specs/comfy-parity/catalogs/frontend-menus.csv")))),
-            "native_menu_dispositions": format!("{:x}", Sha256::digest(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.agents/specs/comfy-parity/catalogs/native-menu-dispositions.csv")))),
+            "frontend_menus": format!("{:x}", Sha256::digest(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../crates/sim_test_support/parity/catalogs/frontend-menus.csv")))),
+            "native_menu_dispositions": format!("{:x}", Sha256::digest(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../crates/sim_test_support/parity/catalogs/native-menu-dispositions.csv")))),
             "parity_matrix": format!("{:x}", Sha256::digest(parity_matrix.as_bytes())),
             "catalog_rows": 63,
             "actionable_rows": visible_feature_ids.len(),

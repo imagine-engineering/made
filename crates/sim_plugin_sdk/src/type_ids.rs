@@ -838,7 +838,7 @@ mod tests {
     fn registry_covers_the_cataloged_v1_and_v3_socket_contracts_exactly()
     -> Result<(), Box<dyn Error>> {
         let catalog =
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-nodes.csv");
+            include_str!("../../../crates/sim_test_support/parity/catalogs/backend-nodes.csv");
         let mut catalog_sockets = BTreeSet::new();
         for marker in ["IO.", "io."] {
             let mut remainder = catalog;
@@ -1058,14 +1058,16 @@ mod tests {
     fn registry_reconciliation_consumes_every_declared_task_catalog() {
         let catalogs = [
             (
-                include_bytes!("../../../.agents/specs/comfy-parity/catalogs/backend-nodes.csv")
-                    .as_slice(),
+                include_bytes!(
+                    "../../../crates/sim_test_support/parity/catalogs/backend-nodes.csv"
+                )
+                .as_slice(),
                 "4c966376f6b188f7bf42d00ace9ce99107708fa8d835cb68ba4a09d53d94b7c2",
                 b"schema_api".as_slice(),
             ),
             (
                 include_bytes!(
-                    "../../../.agents/specs/comfy-parity/catalogs/cross-compatibility.csv"
+                    "../../../crates/sim_test_support/parity/catalogs/cross-compatibility.csv"
                 )
                 .as_slice(),
                 "30c6d92d5df78fc439a2aaecc7ef1a78eb0a23cd2733c1556f280e16588b6fc3",
@@ -1073,7 +1075,7 @@ mod tests {
             ),
             (
                 include_bytes!(
-                    "../../../.agents/specs/comfy-parity/catalogs/frontend-extensions.csv"
+                    "../../../crates/sim_test_support/parity/catalogs/frontend-extensions.csv"
                 )
                 .as_slice(),
                 "14280a8d1907a49292735692667eecff579fa5d4bf462dc8ef3287ec3bd7141b",
@@ -1081,7 +1083,7 @@ mod tests {
             ),
             (
                 include_bytes!(
-                    "../../../.agents/specs/comfy-parity/catalogs/docs-extension-contracts.csv"
+                    "../../../crates/sim_test_support/parity/catalogs/docs-extension-contracts.csv"
                 )
                 .as_slice(),
                 "0f1f4e0b8ebb5cb2e956d2a96018b38c8e01afd340045915284a315147122f54",
@@ -1089,7 +1091,7 @@ mod tests {
             ),
             (
                 include_bytes!(
-                    "../../../.agents/specs/comfy-parity/catalogs/backend-external-services.csv"
+                    "../../../crates/sim_test_support/parity/catalogs/backend-external-services.csv"
                 )
                 .as_slice(),
                 "ffad144fcc049f61dea8704837c311c5a92ba60f0742f7b9f9d8720bded8f4a2",

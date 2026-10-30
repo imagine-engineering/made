@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "owner_task": "comfy-parity-device-foundation-amd-rocm-comfy-model-0014",
+  "feature_id": "COMFY-MODEL-0014",
+  "backend": "rocm",
+  "adapter_crate": "sim_backend_rocm",
+  "binding": "checked HIP, hipRTC, rocBLAS, and MIOpen C declarations with contained runtime symbol loading",
+  "abi_floor": "6.1.0",
+  "targets": ["x86_64-unknown-linux-gnu"],
+  "libraries": ["libamdhip64.so", "libhiprtc.so", "librocblas.so", "libMIOpen.so"],
+  "discovery_order": ["SIM_ROCM_ROOT", "ROCM_PATH", "signed package roots"],
+  "ambient_linker_search": false,
+  "dynamic_dependency_policy": {
+    "metadata_source": "loader-consumed PT_LOAD plus exactly one PT_DYNAMIC; section metadata may not substitute",
+    "forbid_rpath_and_runpath": true,
+    "exact_candidate_soname": true,
+    "foundation_vendor_dependencies": "rejected even when another top-level candidate asserts the same SONAME",
+    "vendor_dependency_closure_owner": "comfy-parity-native-device-amd-rocm-comfy-model-0014",
+    "vendor_dependencies_require_sealed_certified_candidates_and_proven_binding": true,
+    "system_sonames": [
+      "ld-linux-x86-64.so.2",
+      "libc.so.6",
+      "libdl.so.2",
+      "libgcc_s.so.1",
+      "libm.so.6",
+      "libpthread.so.0",
+      "librt.so.1",
+      "libstdc++.so.6"
+    ]
+  },
+  "symbol_manifest": "crates/sim_backend_rocm/abi/symbols-v1.json",
+  "symbol_manifest_sha256": "3259ee5fc5657e3d06597d8b1782a04024540287135b9d6ec7edb10935e83d8c",
+  "reviewed_symbol_count": 52,
+  "reviewed_binding_count": 74,
+  "reviewed_constant_sets": {
+    "hipError": {
+      "header_range": "hip_runtime_api.h:286-398",
+      "excerpt_sha256": "393cfb2eaf79282c9024270b749bba4da3f9bf478f1b9caf7f03107ee7642c8e",
+      "values": {
+        "hipSuccess": 0,
+        "hipErrorOutOfMemory": 2,
+        "hipErrorInvalidContext": 201,
+        "hipErrorIllegalAddress": 700,
+        "hipErrorContextIsDestroyed": 709,
+        "hipErrorLaunchFailure": 719
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "hipExecutionFlags": {
+      "header_range": "hip_runtime_api.h:657-675",
+      "excerpt_sha256": "174f2f6c72fe07d4dc46a73af15916967fb07d4025faf65027da573e839e53dc",
+      "values": {
+        "hipStreamNonBlocking": 1,
+        "hipEventDisableTiming": 2
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "hipDeviceAttributeComputeCapability": {
+      "header_range": "hip_runtime_api.h:402-539",
+      "excerpt_sha256": "530debb30f3aeb2f2a47d0d2511c025e98fc858ae6b9e05ee4997aac9bdb721e",
+      "major": 23,
+      "minor": 61,
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "hipInitFlags": {
+      "header_range": "hip_runtime_api.h:1577-1580",
+      "excerpt_sha256": "6b47b263b00e4f097829a909c5548cb584fc4043e0a4ddae857adcc2730d7d56",
+      "zero_only": 0,
+      "proof": "the reviewed hipInit declaration requires zero; generated Rust and C proof constants preserve that contract"
+    },
+    "hipMemcpyKind": {
+      "header_range": "driver_types.h:333-341",
+      "excerpt_sha256": "26e1b9196db645a222e0388098da64f40a671ae927cd340784529a72d8857e0b",
+      "values": {
+        "hipMemcpyHostToDevice": 1,
+        "hipMemcpyDeviceToHost": 2,
+        "hipMemcpyDeviceToDevice": 3
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "rocblasOperation": {
+      "header_range": "rocblas-types.h:122-128",
+      "excerpt_sha256": "2cad3e6d81d57ee777ca66b2c4ddf49a4ccda4e601450c4f965808355420186f",
+      "values": {
+        "rocblas_operation_none": 111
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "rocblasStatus": {
+      "header_range": "rocblas-types.h:202-223",
+      "excerpt_sha256": "7afbb6e4c253a9935e4395d7143af5fe3691904bc0e2656055ac3154638fbb00",
+      "values": {
+        "rocblas_status_success": 0,
+        "rocblas_status_memory_error": 5
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "hiprtcResult": {
+      "header_range": "hiprtc.h:49-63",
+      "excerpt_sha256": "29792b6f4f1cc38b1b6e102193a6a9dd0f1adaadeb44ae2c7a096502ce99fcbb",
+      "values": {
+        "HIPRTC_SUCCESS": 0
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    },
+    "miopenStatus": {
+      "header_range": "miopen.h:101-117",
+      "excerpt_sha256": "a37269d4ef5461b6abbef3b2425032fff7de723db833f206031ccfafd269961c",
+      "values": {
+        "miopenStatusSuccess": 0
+      },
+      "proof": "generated named Rust constants plus native and x86_64-linux C11 static assertions"
+    }
+  },
+  "reviewed_binding_evidence": "crates/sim_backend_rocm/abi/reviewed-bindings-v1.txt",
+  "full_header_audit": "bash crates/sim_backend_rocm/abi/verify-completion-evidence.sh <flat ROCm 6.1.2 header directory> <durable artifact path>",
+  "ordinary_offline_build_state": "typed CompletionEvidence::Unavailable; cannot claim Task 103 completion",
+  "completion_evidence": "nine full pinned header hashes and exact declaration ranges; native C and generated Rust layout measurements; native and x86_64-linux C11 constant assertions; compiler, target, command, source and object digests",
+  "unsafe_owner": "sim_backend_rocm::loader",
+  "domain_owners": {
+    "device_identity": "sim_tensor::DeviceId",
+    "capability_matrix": "sim_tensor::BackendCapabilityMatrix",
+    "unavailable_and_binding_status": "sim_types",
+    "vendor_abi_loader": "sim_backend_rocm",
+    "generic_artifact_paths": "sim_model::ArtifactRoot (not used or replaced by SDK discovery)",
+    "sdk_library_discovery": "sim_backend_rocm::loader (four fixed vendor filenames only; rejects final symlinks and exposes no generic path capability)",
+    "package_signature_verification": "injected platform package verifier after comfy_backend_rocm enforces the reviewed policy, exact canonical tree/type/size/digest coverage, forbidden runtime payloads, and before/after stability"
+  },
+  "package": {
+    "redistributes_amd_runtime": false,
+    "reviewed_adapter_metadata_only": true,
+    "signature_required": true,
+    "signature_algorithm": "platform-package-signature-v1",
+    "signature_coverage": "package-coverage-v1",
+    "runtime_root": "signature-covered absolute path to a separately installed SDK outside the metadata package",
+    "license_notice": "crates/sim_backend_rocm/LICENSES",
+    "nix_expression": "nix/sim-backends/rocm/default.nix",
+    "packager": "script/package-sim-backend-rocm"
+  },
+  "availability": {
+    "requires_target": "x86_64-unknown-linux-gnu",
+    "requires_complete_library_set_in_one_root": true,
+    "requires_all_manifest_symbols": true,
+    "requires_no_final_symlinks": true,
+    "requires_accounted_dynamic_dependencies": true,
+    "requires_loader_consumed_program_header_validation": true,
+    "requires_exact_soname": true,
+    "requires_bounded_cancellation_during_read_hash_parse_and_snapshot": true,
+    "requires_exact_signed_package_tree_validation": true,
+    "requires_live_immutable_sealed_memfd_images": true,
+    "requires_runtime_floor": true,
+    "requires_driver_initialization": true,
+    "requires_driver_floor": true,
+    "requires_complete_isolated_namespace_proof": true,
+    "device_property_projection": {
+      "name": "hipDeviceGetName",
+      "total_memory": "hipDeviceTotalMem",
+      "major_minor": "hipDeviceGetAttribute with reviewed HIP 6.1.2 compute-capability enum values",
+      "architecture": "bounded hip-compute-{major}.{minor} projection",
+      "fp16": "false until the instance capability matrix implements and advertises FP16 kernels"
+    },
+    "missing_contract_result": "sim_types::BackendUnavailable"
+  },
+  "hardware_certification": "pending comfy-parity-certify-device-amd-rocm-comfy-model-0014"
+}

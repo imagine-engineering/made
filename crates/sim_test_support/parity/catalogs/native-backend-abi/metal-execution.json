@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "owner_task": "comfy-parity-metal-execution-resource-ownership-consolidation",
+  "feature_id": "COMFY-MODEL-0015",
+  "backend": "metal",
+  "contract": "zed-sim-metal-execution-v1",
+  "abi_floor": "macos-13-metal-3",
+  "targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin"
+  ],
+  "execution_abi": "crates/sim_backend_metal/abi/execution-v1.json",
+  "execution_abi_sha256": "5b183c3a01ab5d6cfad93c185a9aafa0fe66ad2db5c70c7ec5458f9c3701017e",
+  "reviewed_bindings": "crates/sim_backend_metal/abi/reviewed-execution-bindings-v1.txt",
+  "reviewed_bindings_sha256": "7851b6c85fc4fea3a37154448fb2ef10ef261e2c3e9dad5ad360ea4db2f334ef",
+  "sdk_abi_verifier": "crates/sim_backend_metal/abi/verify-execution-bindings.m",
+  "sdk_abi_verifier_sha256": "2465de287c9557d628d257985065f9eaf51b1147b2b131f1ab998416c1df6b01",
+  "license_notice": "crates/sim_backend_metal/LICENSES.execution",
+  "license_notice_sha256": "a41f64e75ac4c3e527d5beaee1b1359c6d3ea13b2118f60672c8362b5b30c990",
+  "kernel_source": "crates/sim_backend_metal/kernels/tensor_ops.metal",
+  "kernel_source_sha256": "1c93eb5fe65f495e02b1132a5de597d7f945c6463ffb5f89c0f03f8aa1dfc91b",
+  "metallib_sha256_by_target": {
+    "aarch64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b",
+    "x86_64-apple-darwin": "eccf507f1837d51f95ec80f31e066e7db2b1015fc456ca4336c39b49134ef48b"
+  },
+  "package_policy": "nix/sim-backends/metal/execution-policy.json",
+  "package_policy_sha256": "6f3f2bd6e33835663e1bf4e81ddf122a626d73988321d39cc8b755c55d30b125",
+  "packager": "script/package-sim-backend-metal-execution",
+  "packager_sha256": "e00124edf972a3cf6fc8578f2a9154ff6b6d9f66e8873a7856c7b24b76752bde",
+  "unsafe_owner": "sim_backend_metal::execution",
+  "domain_owners": {
+    "tensor_storage_identity_and_views": "sim_tensor::Storage/BackendStorage",
+    "backend_storage_projection": "sim_tensor::Tensor::backend_storage",
+    "stream_resource_bounds": "sim_tensor::BackendResourceRegistry",
+    "event_sequence_completion_and_retirement": "sim_tensor::BackendEventTracker",
+    "workspace_authorization": "sim_tensor::BackendWorkspaceAuthority",
+    "memory_accounting": "sim_tensor::BackendMemoryTracker",
+    "device_identity": "sim_tensor::DeviceId",
+    "device_properties": "sim_tensor::NativeDeviceProperties",
+    "capability_matrix": "sim_tensor::BackendCapabilityMatrix",
+    "cancellation": "sim_types::CancellationToken",
+    "framework_and_package_certification": "sim_runtime::NativeFfiRegistry (dependent signed-contract task)",
+    "metal_execution_resources": "sim_backend_metal::MetalRuntime",
+    "renderer_resources": "gpui_macos (separate presentation domain)",
+    "media_resources": "media (separate media domain)"
+  },
+  "storage_semantics": {
+    "unified_memory": "shared",
+    "discrete_memory": "managed",
+    "recommended_working_set_size": "allocation ceiling only; never host physical memory",
+    "managed_cpu_write": "didModifyRange",
+    "managed_gpu_write": "synchronizeResource before host read"
+  },
+  "planned_capability_rows": [
+    {"operation": "allocate", "dtype": "f16", "layout": "contiguous", "role": "output"},
+    {"operation": "allocate", "dtype": "f32", "layout": "contiguous", "role": "output"},
+    {"operation": "copy", "dtype": "f16", "layout": "contiguous", "role": "input"},
+    {"operation": "copy", "dtype": "f16", "layout": "contiguous", "role": "output"},
+    {"operation": "copy", "dtype": "f32", "layout": "contiguous", "role": "input"},
+    {"operation": "copy", "dtype": "f32", "layout": "contiguous", "role": "output"},
+    {"operation": "binary_add", "dtype": "f16", "layout": "contiguous", "role": "input"},
+    {"operation": "binary_add", "dtype": "f16", "layout": "contiguous", "role": "output"},
+    {"operation": "binary_add", "dtype": "f32", "layout": "contiguous", "role": "input"},
+    {"operation": "binary_add", "dtype": "f32", "layout": "contiguous", "role": "output"},
+    {"operation": "record_event", "dtype": null, "layout": null, "role": "event"},
+    {"operation": "wait_event", "dtype": null, "layout": null, "role": "event"}
+  ],
+  "availability": {
+    "task_109_grants_global_availability": false,
+    "runtime_compilation_forbidden": true,
+    "requires_native_ffi_registry_certification": true,
+    "requires_signed_execution_package": true,
+    "requires_supported_device": true,
+    "requires_adapter_task": "comfy-parity-native-device-apple-metal-mps-comfy-model-0015",
+    "requires_production_integration_task": "comfy-parity-integrate-device-apple-metal-mps-comfy-model-0015"
+  },
+  "task_108_artifacts_modified": false
+}

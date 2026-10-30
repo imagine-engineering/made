@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-13",
+  "clients": {
+    "buzz-cli": {"version":"0.1.0","version_authority":"projects/buzz/Cargo.toml"},
+    "buzz-mobile": {"version":"0.0.0+1","version_authority":"projects/buzz/mobile/pubspec.yaml"},
+    "buzz-web": {"version":"0.1.0","version_authority":"projects/buzz/web/package.json"},
+    "buzz-admin-web": {"version":"0.1.0","version_authority":"projects/buzz/admin-web/package.json"}
+  },
+  "contracts": [
+    {
+      "id":"CLIENT-CLI-001","category":"cli_command","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"argv":["buzz","--help"]},
+      "expected_output":{"exit_code":0,"stream":"stdout","contains":["Buzz CLI — interact with a Buzz relay","Exit codes: 0=ok  1=bad input  2=relay/network error  3=auth error  4=other  5=write conflict"],"secret_env_values_visible":false},
+      "authority":["projects/buzz/crates/buzz-cli/src/lib.rs"]
+    },
+    {
+      "id":"CLIENT-CLI-002","category":"cli_command","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"argv":["buzz","<group>","<subcommand>"],"operation":"command_inventory"},
+      "expected_output":{"groups":["agents","canvas","channels","dms","emoji","feed","issues","media","mem","messages","moderation","notes","pack","patches","pr","projects","reactions","repos","social","upload","users","workflows"]},
+      "authority":["projects/buzz/crates/buzz-cli/src/lib.rs"]
+    },
+    {
+      "id":"CLIENT-CLI-003","category":"cli_error","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"argv":["buzz","channels","list"],"environment":{"BUZZ_PRIVATE_KEY":"absent"}},
+      "expected_output":{"exit_code":3,"stream":"stderr","json":{"error":"auth_error","message":"auth error: BUZZ_PRIVATE_KEY is required (use --private-key or set env var)","retryable":false}},
+      "authority":["projects/buzz/crates/buzz-cli/src/lib.rs","projects/buzz/crates/buzz-cli/src/error.rs"]
+    },
+    {
+      "id":"CLIENT-CLI-004","category":"cli_error","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"operation":"error_to_exit_code"},
+      "expected_output":{"usage":1,"not_found":1,"network":2,"relay_non_auth":2,"delivery_unknown":2,"auth":3,"key":3,"relay_401_403":3,"other":4,"conflict":5},
+      "authority":["projects/buzz/crates/buzz-cli/src/error.rs"]
+    },
+    {
+      "id":"CLIENT-CLI-005","category":"cli_error","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"operation":"error_envelope"},
+      "expected_output":{"format":{"error":"<category>","message":"<detail>","retryable":"<boolean>"},"retryable_relay_statuses":[429,502,503,504],"delivery_unknown_retryable":false},
+      "authority":["projects/buzz/crates/buzz-cli/src/error.rs"]
+    },
+    {
+      "id":"CLIENT-CLI-006","category":"deep_link","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"owner":"71d67180ba17e749ee825fc8819c9c6ee7003617e1c126504f9b658070ab9224","event_id":"c3b589fa5713ba25bad6dc095e2de00a4ac8f50050fdea00fc6444e603be1dd1","repo_id":"buzz-world"},
+      "expected_output":{"repo":"buzz://repo?owner=71d67180ba17e749ee825fc8819c9c6ee7003617e1c126504f9b658070ab9224&d=buzz-world","pr":"buzz://pr?id=c3b589fa5713ba25bad6dc095e2de00a4ac8f50050fdea00fc6444e603be1dd1&owner=71d67180ba17e749ee825fc8819c9c6ee7003617e1c126504f9b658070ab9224&d=buzz-world","issue":"buzz://issue?id=c3b589fa5713ba25bad6dc095e2de00a4ac8f50050fdea00fc6444e603be1dd1&owner=71d67180ba17e749ee825fc8819c9c6ee7003617e1c126504f9b658070ab9224&d=buzz-world"},
+      "authority":["projects/buzz/crates/buzz-cli/src/links.rs"]
+    },
+    {
+      "id":"CLIENT-CLI-007","category":"cli_command","client":"buzz-cli","client_version":"0.1.0",
+      "input":{"argv":["buzz","pack","validate","<path>"],"environment":{"BUZZ_PRIVATE_KEY":"absent"}},
+      "expected_output":{"relay_connection":false,"authentication_required":false,"success_exit_code":0,"validation_failure_exit_code":1},
+      "authority":["projects/buzz/crates/buzz-cli/src/lib.rs","projects/buzz/crates/buzz-cli/src/commands/pack.rs"]
+    },
+
+    {
+      "id":"CLIENT-WEB-001","category":"route","client":"buzz-web","client_version":"0.1.0",
+      "input":{"operation":"route_inventory"},
+      "expected_output":{"routes":["/","/invite/$code","/repos","/repos/$repoId","/repos/$repoId/blob/$"]},
+      "authority":["projects/buzz/web/src/app/routes.ts"]
+    },
+    {
+      "id":"CLIENT-WEB-002","category":"route","client":"buzz-web","client_version":"0.1.0",
+      "input":{"method":"GET","path":"/invite/demo-code","join_policy":{"version":"policy-v1","age_attestation_required":true,"has_legal_documents":true}},
+      "expected_output":{"accept_invite_enabled_before_consent":false,"requires_age":true,"requires_legal_agreement":true,"accept_invite_enabled_after_both":true},
+      "authority":["projects/buzz/web/src/features/invite/ui/InvitePage.tsx","projects/buzz/web/tests/e2e/smoke.spec.ts"]
+    },
+    {
+      "id":"CLIENT-WEB-003","category":"deep_link","client":"buzz-web","client_version":"0.1.0",
+      "input":{"relay":"wss://relay.example.com","code":"abc123","policy_receipt":"receipt.value"},
+      "expected_output":{"app_handoff":"buzz://join?relay=wss%3A%2F%2Frelay.example.com&code=abc123&policy_receipt=receipt.value"},
+      "authority":["projects/buzz/web/src/features/invite/ui/InvitePage.tsx"]
+    },
+    {
+      "id":"CLIENT-WEB-004","category":"route","client":"buzz-web","client_version":"0.1.0",
+      "input":{"method":"POST","path":"/api/invites/claim","body":{"code":"browser-code"},"identity":"NIP-07"},
+      "expected_output":{"auth":"NIP-98","auth_tags":["u","method","payload","nonce"],"success_statuses":["joined","already_member"],"redirect":"/","timeout_ms":15000},
+      "authority":["projects/buzz/web/src/features/invite/invite-api.ts","projects/buzz/web/tests/e2e/smoke.spec.ts"]
+    },
+
+    {
+      "id":"CLIENT-ADMIN-001","category":"route","client":"buzz-admin-web","client_version":"0.1.0",
+      "input":{"operation":"route_inventory"},
+      "expected_output":{"routes":["/reports","/reports/:id","/feedback","/feedback/:id"],"unknown_route_fallback":"/reports"},
+      "authority":["projects/buzz/admin-web/src/App.tsx","projects/buzz/admin-web/tests/routes.spec.ts"]
+    },
+    {
+      "id":"CLIENT-ADMIN-002","category":"route","client":"buzz-admin-web","client_version":"0.1.0",
+      "input":{"method":"GET","path":"/api/admin/v1/reports?status=open&limit=100","response_status":403},
+      "expected_output":{"heading":"Access denied","retry_action":true,"credentials":"same-origin"},
+      "authority":["projects/buzz/admin-web/src/App.tsx","projects/buzz/admin-web/src/api.ts","projects/buzz/admin-web/tests/routes.spec.ts"]
+    },
+    {
+      "id":"CLIENT-ADMIN-003","category":"route","client":"buzz-admin-web","client_version":"0.1.0",
+      "input":{"method":"GET","path":"/api/admin/v1/reports/:id","reported_message":null},
+      "expected_output":{"message":"Message content is unavailable. It may have expired or been removed from event storage."},
+      "authority":["projects/buzz/admin-web/src/App.tsx","projects/buzz/admin-web/tests/routes.spec.ts"]
+    },
+    {
+      "id":"CLIENT-ADMIN-004","category":"lifecycle","client":"buzz-admin-web","client_version":"0.1.0",
+      "input":{"operation":"feedback_status_update","feedback_id":"feedback-one","reload":true},
+      "expected_output":{"storage_key":"buzz-admin-feedback-status","persists_across_reload":true,"scope":"local-browser-only"},
+      "authority":["projects/buzz/admin-web/src/App.tsx","projects/buzz/admin-web/tests/routes.spec.ts"]
+    },
+
+    {
+      "id":"CLIENT-MOBILE-001","category":"deep_link","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"uri":"buzz://message?channel=d14cd131&id=abc123&thread=root99"},
+      "expected_output":{"type":"message","channel_id":"d14cd131","message_id":"abc123","thread_root_id":"root99"},
+      "authority":["projects/buzz/mobile/lib/shared/deeplink/deep_link.dart","projects/buzz/mobile/test/shared/deeplink/deep_link_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-002","category":"deep_link","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"uri":"https://relay.example.com/invite/abc123"},
+      "expected_output":{"type":"invite","relay_url":"wss://relay.example.com","code":"abc123","policy_receipt":null},
+      "authority":["projects/buzz/mobile/lib/shared/deeplink/deep_link.dart","projects/buzz/mobile/test/shared/deeplink/deep_link_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-003","category":"deep_link","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"uri":"buzz://join?relay=javascript%3Aalert%281%29&code=abc"},
+      "expected_output":{"result":null,"reason":"relay scheme allowlist"},
+      "authority":["projects/buzz/mobile/lib/shared/deeplink/deep_link.dart","projects/buzz/mobile/test/shared/deeplink/deep_link_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-004","category":"deep_link","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"lifecycle":"cold_start","link":"message","channels_state":"loading_then_ready","channel_exists":true},
+      "expected_output":{"while_loading":"park","after_ready":"consume_and_navigate","destination_context":["channel","message","thread"]},
+      "authority":["projects/buzz/mobile/lib/features/channels/deep_link_dispatcher.dart","projects/buzz/mobile/test/features/channels/deep_link_dispatcher_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-005","category":"deep_link","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"lifecycle":"cold_start","link":"invite","authentication":"not_complete","prepare_result":"error"},
+      "expected_output":{"dispatch_before_auth":true,"retain_pending_link":true,"message":"Could not open this invite. Re-open the invite link to try again."},
+      "authority":["projects/buzz/mobile/lib/features/channels/deep_link_dispatcher.dart","projects/buzz/mobile/test/features/channels/deep_link_dispatcher_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-006","category":"lifecycle","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"transition":"paused_to_resumed","background_seconds":4,"prior_session":"connected"},
+      "expected_output":{"socket_disposed":false,"new_socket_count":0,"session_status":"connected"},
+      "authority":["projects/buzz/mobile/lib/shared/relay/relay_session.dart","projects/buzz/mobile/test/shared/relay/relay_session_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-007","category":"lifecycle","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"transition":"paused_to_resumed","background_seconds":300,"prior_session":"connected"},
+      "expected_output":{"socket_disposed":true,"new_socket_count":1,"session_status":"reconnecting","reconnect_delay_reset_ms":1000},
+      "authority":["projects/buzz/mobile/lib/shared/relay/relay_session.dart","projects/buzz/mobile/test/shared/relay/relay_session_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-008","category":"lifecycle","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"transition":"background_grace_elapsed","in_flight":["history","event"]},
+      "expected_output":{"grace_seconds":5,"session_status":"disconnected","history_error":"App moved to background","event_error":"App moved to background","reconnect_timer":"cancelled"},
+      "authority":["projects/buzz/mobile/lib/shared/relay/relay_session.dart","projects/buzz/mobile/test/shared/relay/relay_session_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-009","category":"negotiation","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"protocol":"nostrpair","uri_version":"omitted"},
+      "expected_output":{"selected_version":1,"accepted":true},
+      "authority":["projects/buzz/mobile/lib/features/pairing/pairing_crypto.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-010","category":"negotiation","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"protocol":"nostrpair","uri_version":2},
+      "expected_output":{"accepted":false,"error":"Unsupported protocol version 2. Please update the app."},
+      "authority":["projects/buzz/mobile/lib/features/pairing/pairing_crypto.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-011","category":"negotiation","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"relay_closed":"unsupported: filter extension"},
+      "expected_output":{"classification":"terminal","automatic_retry":false},
+      "authority":["projects/buzz/mobile/lib/shared/relay/relay_closed_policy.dart","projects/buzz/mobile/test/shared/relay/relay_closed_policy_test.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-012","category":"negotiation","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"relay_closed":"rate-limited: quota exceeded; retry in 17s"},
+      "expected_output":{"classification":"rateLimited","retry_hint_seconds":17,"shared_request_gate":"armed"},
+      "authority":["projects/buzz/mobile/lib/shared/relay/relay_closed_policy.dart","projects/buzz/mobile/test/shared/relay/relay_closed_policy_test.dart","projects/buzz/mobile/lib/shared/relay/relay_session.dart"]
+    },
+    {
+      "id":"CLIENT-MOBILE-013","category":"negotiation","client":"buzz-mobile","client_version":"0.0.0+1",
+      "input":{"operation":"startup_feature_negotiation"},
+      "expected_output":{"global_capability_endpoint":"absent","version_signals":["nostrpair v=1","NIP-44 payload version 2","terminal unsupported: CLOSED"],"migration_implication":"Task 43.2 must add explicit common feature negotiation before companion-client cutover"},
+      "authority":["projects/buzz/mobile/lib/shared/relay/relay_session.dart","projects/buzz/mobile/lib/features/pairing/pairing_crypto.dart","projects/buzz/mobile/lib/shared/crypto/nip44.dart","projects/buzz/mobile/lib/shared/relay/relay_closed_policy.dart"]
+    }
+  ]
+}

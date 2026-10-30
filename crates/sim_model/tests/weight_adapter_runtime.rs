@@ -1575,7 +1575,8 @@ fn val_weight_adapter_001_exact_catalog_manifest_and_artifact_are_current()
     ];
     let repository = repository_root()?;
     let catalog = std::fs::read_to_string(
-        repository.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        repository
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let expected = EXPECTED
         .iter()

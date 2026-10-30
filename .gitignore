@@ -70,7 +70,7 @@ mobile-dev/
 .local*
 
 # Original evidence authorities remain lossless locally; publish their labelled successor derivatives.
-.agents/
+/.agents/
 .factory/
 .github/workflows/archive/
 .zed/

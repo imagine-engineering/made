@@ -63,15 +63,12 @@ pub(crate) fn release_promotion() -> Workflow {
 
     named::workflow()
         .name("release_promotion")
-        .on(Event::default()
-            .push(Push::default().tags(vec!["rust-v*".to_string()]))
-            .workflow_dispatch(dispatch)
-            .workflow_run(
-                WorkflowRun::default()
-                    .add_workflow("run_tests")
-                    .add_type(WorkflowRunType::Completed)
-                    .add_branch("release"),
-            ))
+        .on(Event::default().workflow_dispatch(dispatch).workflow_run(
+            WorkflowRun::default()
+                .add_workflow("run_tests")
+                .add_type(WorkflowRunType::Completed)
+                .add_branch("release"),
+        ))
         .concurrency(Concurrency::new(Expression::new("copper-release")).cancel_in_progress(false))
         .with_minimal_permissions()
         .add_env(("CARGO_TERM_COLOR", "always"))
@@ -87,7 +84,14 @@ pub(crate) fn release_promotion() -> Workflow {
 }
 
 pub(crate) fn release_signing_check() -> Workflow {
-    let version = WorkflowInput::string("version", Some("1.0.0".to_owned()))
+    let manifest = ProductManifest::load().expect("product catalog must be valid");
+    let initial_version = manifest
+        .product("rust")
+        .expect("Copper product")
+        .initial_version
+        .clone()
+        .expect("Copper initial version");
+    let version = WorkflowInput::string("version", Some(initial_version.clone()))
         .description("Exact package version to validate; no tag or release is created");
     let sign_artifacts = WorkflowInput::bool("sign_artifacts", Some(false)).description(
         "Contact Apple/Azure and build signed packages; requires approval and production credentials",
@@ -106,7 +110,7 @@ pub(crate) fn release_signing_check() -> Workflow {
         } >> "$GITHUB_OUTPUT"
     "#})
     .id("resolve-signing-check")
-    .add_env(("VERSION", "${{ inputs.version || '1.0.0' }}"))
+    .add_env(("VERSION", format!("${{{{ inputs.version || '{initial_version}' }}}}")))
     .add_env(("COMMIT_SHA", "${{ github.sha }}"));
     let commit_sha = StepOutput::new(&resolve, "commit_sha");
     let package_version = StepOutput::new(&resolve, "version");
@@ -124,7 +128,7 @@ pub(crate) fn release_signing_check() -> Workflow {
                 "CARGO_BUILD_JOBS=2 cargo build -p xtask --locked",
             ))
             .add_step(named::bash(
-                "python3 script/test-production-signing && cargo test -p xtask --locked",
+                "python3 script/check-repository-inputs && python3 script/test-production-signing && cargo test -p xtask --locked",
             ))
             .add_step(
                 generate_release_bundle_plans()
@@ -162,6 +166,7 @@ pub(crate) fn release_signing_check() -> Workflow {
     );
     let contract_push = Push::default()
         .add_branch("codex/**")
+        .add_branch("main")
         .add_path(".github/workflows/release_signing_check.yml")
         .add_path("tooling/xtask/src/tasks/workflows/release.rs")
         .add_path("script/check-signing-environment")
@@ -255,8 +260,7 @@ const RELEASE_BUMP: &str =
     "${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}";
 const RELEASE_EXPLICIT_VERSION: &str =
     "${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}";
-const RELEASE_EXISTING_TAG: &str = "${{ github.event_name == 'push' && github.ref_name || '' }}";
-const AUTOMATIC_RELEASE_GUARD: &str = "vars.COPPER_RELEASE_ENABLED == 'true' && vars.COPPER_RELEASE_BOOTSTRAP_SHA != '' && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'release' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha != vars.COPPER_RELEASE_BOOTSTRAP_SHA) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-v')))";
+const AUTOMATIC_RELEASE_GUARD: &str = "vars.COPPER_RELEASE_ENABLED == 'true' && vars.COPPER_RELEASE_BOOTSTRAP_SHA != '' && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'release' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha != vars.COPPER_RELEASE_BOOTSTRAP_SHA) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release'))";
 
 fn release_promotion_guard() -> &'static str {
     indoc::indoc! {r#"
@@ -318,9 +322,6 @@ fn prepare_release() -> (NamedJob, PreparedRelease) {
         if [[ -n "$EXPLICIT_VERSION" ]]; then
             ARGS+=(--explicit-version "$EXPLICIT_VERSION")
         fi
-        if [[ -n "$EXISTING_TAG" ]]; then
-            ARGS+=(--existing-tag "$EXISTING_TAG")
-        fi
         DECISION="$(cargo xtask "${ARGS[@]}")"
         jq -e '.commit_sha and .version and .tag' <<<"$DECISION" >/dev/null
         {
@@ -333,8 +334,7 @@ fn prepare_release() -> (NamedJob, PreparedRelease) {
     .add_env(("COMMIT_SHA", RELEASE_COMMIT))
     .add_env(("BUMP", RELEASE_BUMP))
     .add_env(("EXPLICIT_VERSION", RELEASE_EXPLICIT_VERSION))
-    .add_env(("BOOTSTRAP_SHA", "${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}"))
-    .add_env(("EXISTING_TAG", RELEASE_EXISTING_TAG));
+    .add_env(("BOOTSTRAP_SHA", "${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}"));
     let commit_sha = StepOutput::new(&resolve, "commit_sha");
     let version = StepOutput::new(&resolve, "version");
     let tag = StepOutput::new(&resolve, "tag");
@@ -942,12 +942,10 @@ fn product_builds(
         )
         .add_step(
             named::bash(indoc::indoc! {r#"
-                export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
-                export ZED_BUNDLE_PHASE=package
-                script/bundle-linux
+                cargo xtask bundle --product rust --platform linux --target "$TARGET" --phase package --signing required
             "#})
                 .if_condition(Expression::new("matrix.platform == 'linux'"))
-                .add_env(("ARTIFACT_SUFFIX", "${{ matrix.artifact_suffix }}"))
+                .add_env(("TARGET", "${{ matrix.target }}"))
                 .add_env(("CC", "clang"))
                 .add_env(("CXX", "clang++"))
                 .add_env(("LINUX_SIGNING_KEY", "${{ secrets.LINUX_SIGNING_KEY }}"))
@@ -956,9 +954,7 @@ fn product_builds(
         )
         .add_step(
             named::bash(indoc::indoc! {r#"
-                export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
-                export ZED_BUNDLE_PHASE=package
-                script/bundle-mac "$TARGET"
+                cargo xtask bundle --product rust --platform macos --target "$TARGET" --phase package --signing required
             "#})
                 .if_condition(Expression::new("matrix.platform == 'macos'"))
                 .add_env(("ARTIFACT_SUFFIX", "${{ matrix.artifact_suffix }}"))
@@ -971,17 +967,12 @@ fn product_builds(
                 .add_env(("APPLE_NOTARIZATION_ISSUER_ID", "${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}")),
         )
         .add_step(
-            named::pwsh("Install-Module -Name TrustedSigning -RequiredVersion 0.5.8 -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop")
-                .if_condition(Expression::new("matrix.platform == 'windows'")),
-        )
-        .add_step(
             named::pwsh(indoc::indoc! {r#"
-                $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
-                $env:ZED_BUNDLE_PHASE = "package"
-                script/bundle-windows.ps1 -Architecture x86_64
+                cargo xtask bundle --product rust --platform windows --target $env:TARGET --phase package --signing required
+                if ($LASTEXITCODE -ne 0) { throw "Product-aware Windows bundling failed" }
             "#})
                 .if_condition(Expression::new("matrix.platform == 'windows'"))
-                .add_env(("ARTIFACT_SUFFIX", "${{ matrix.artifact_suffix }}"))
+                .add_env(("TARGET", "${{ matrix.target }}"))
                 .add_env(("AZURE_TENANT_ID", "${{ secrets.AZURE_TENANT_ID }}"))
                 .add_env(("AZURE_CLIENT_ID", "${{ secrets.AZURE_CLIENT_ID }}"))
                 .add_env(("AZURE_CLIENT_SECRET", "${{ secrets.AZURE_CLIENT_SECRET }}"))
@@ -1041,7 +1032,7 @@ fn product_builds(
         )
         .add_step(
             named::bash(indoc::indoc! {r#"
-                printf '### sccache: package-only job\n\nNo Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
+                printf '### sccache: package-only job\n\nOnly the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
             "#})
                 .if_condition(Expression::new("always() && matrix.platform != 'windows'")),
         )
@@ -1049,7 +1040,7 @@ fn product_builds(
             named::pwsh(indoc::indoc! {r#"
                 Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### sccache: package-only job'
                 Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
-                Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No Rust compilation ran; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
+                Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'Only the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
             "#})
                 .if_condition(Expression::new("always() && matrix.platform == 'windows'")),
         )
@@ -1083,9 +1074,6 @@ fn publish_product(prepare: &NamedJob, prepared: &PreparedRelease, build: &Named
         ARGS=(release-version --commit "$COMMIT_SHA" --bootstrap-commit "$BOOTSTRAP_SHA" --bump "$BUMP")
         if [[ -n "$EXPLICIT_VERSION" ]]; then
             ARGS+=(--explicit-version "$EXPLICIT_VERSION")
-        fi
-        if [[ -n "$EXISTING_TAG" ]]; then
-            ARGS+=(--existing-tag "$EXISTING_TAG")
         fi
         DECISION="$(cargo xtask "${{ARGS[@]}}")"
         ACTUAL_COMMIT="$(jq -r '.commit_sha' <<<"$DECISION")"
@@ -1156,7 +1144,6 @@ fn publish_product(prepare: &NamedJob, prepared: &PreparedRelease, build: &Named
     .add_env(("BUMP", RELEASE_BUMP))
     .add_env(("EXPLICIT_VERSION", RELEASE_EXPLICIT_VERSION))
     .add_env(("BOOTSTRAP_SHA", "${{ vars.COPPER_RELEASE_BOOTSTRAP_SHA }}"))
-    .add_env(("EXISTING_TAG", RELEASE_EXISTING_TAG))
     .add_env(("GH_TOKEN", vars::GITHUB_TOKEN))
     .add_env(("LINUX_SIGNING_KEY_FINGERPRINT", "${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}"));
 
@@ -1254,7 +1241,7 @@ mod release_workflow_tests {
         assert!(check["on"]["workflow_dispatch"].is_mapping());
         assert_eq!(
             check["on"]["push"]["branches"],
-            serde_yaml::to_value(["codex/**"])?
+            serde_yaml::to_value(["codex/**", "main"])?
         );
         assert!(
             check["on"]["push"]["paths"]
@@ -1302,7 +1289,7 @@ mod release_workflow_tests {
         }
         assert_eq!(
             check["on"]["workflow_dispatch"]["inputs"]["version"]["default"],
-            "1.0.0"
+            "0.1.0"
         );
         assert_eq!(
             production["jobs"]["product_builds"]["env"]["ZED_PRODUCT_SIGNING"],
@@ -1335,15 +1322,19 @@ mod release_workflow_tests {
     }
 
     #[test]
-    fn manual_release_inputs_and_tag_recovery_are_present() {
+    fn manual_release_inputs_require_release_branch_without_tag_trigger() {
         let yaml = yaml();
         assert!(yaml.contains("bump:"));
         assert!(yaml.contains("default: patch"));
         assert!(yaml.contains("version:"));
         assert!(yaml.contains("commit_sha:"));
         assert!(yaml.contains("--explicit-version"));
-        assert!(yaml.contains("--existing-tag"));
-        assert!(yaml.contains("rust-v*"));
+        let workflow =
+            serde_json::to_value(release_promotion()).expect("serialize release workflow");
+        assert!(workflow["on"]["push"].is_null());
+        assert!(workflow["on"]["pull_request"].is_null());
+        assert!(!yaml.contains("startsWith(github.ref, 'refs/tags/"));
+        assert!(yaml.contains("github.ref == 'refs/heads/release'"));
     }
 
     #[test]
@@ -1401,7 +1392,12 @@ mod release_workflow_tests {
         assert!(!yaml.contains("LICENSES_HASH=\"$(git hash-object"));
         assert!(yaml.contains("export ZED_BUNDLE_PHASE=application"));
         assert!(yaml.contains("export ZED_BUNDLE_PHASE=remote-server"));
-        assert!(yaml.contains("export ZED_BUNDLE_PHASE=package"));
+        for platform in ["linux", "macos", "windows"] {
+            assert!(yaml.contains(&format!(
+                "cargo xtask bundle --product rust --platform {platform}"
+            )));
+        }
+        assert!(yaml.contains("--phase package --signing required"));
         assert!(yaml.contains("script/bundle-windows.ps1 -Architecture x86_64"));
         assert!(!yaml.contains("cargo xtask bundle --phase"));
         assert!(yaml.contains(
@@ -1585,7 +1581,8 @@ mod tests {
         assert!(workflow.contains("runner: ubuntu-22.04"));
         assert!(workflow.contains("runner: macos-15"));
         assert!(workflow.contains("runner: windows-2022"));
-        assert!(workflow.contains("export ZED_BUNDLE_PHASE=package"));
+        assert!(workflow.contains("cargo xtask bundle --product rust --platform"));
+        assert!(workflow.contains("--phase package --signing required"));
         assert!(!workflow.contains("cargo xtask bundle --phase"));
         assert!(workflow.contains("product: rust"));
         assert!(workflow.contains("target: x86_64-unknown-linux-gnu"));

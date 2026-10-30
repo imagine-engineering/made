@@ -17,7 +17,7 @@ use std::{
 use thiserror::Error;
 
 const ROUTE_CATALOG_CSV: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-http-routes.csv");
+    include_str!("../../../crates/sim_test_support/parity/catalogs/backend-http-routes.csv");
 
 pub const HTTP_ROUTE_COUNT: usize = 141;
 pub const HTTP_FORWARDING_SUPPORTED: bool = false;

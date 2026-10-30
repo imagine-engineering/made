@@ -1334,8 +1334,8 @@ mod tests {
         }
         let mut fixture_digests = BTreeMap::new();
         for relative_path in [
-            ".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv",
-            ".agents/specs/comfy-parity/ownership-policy.json",
+            "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
+            "crates/sim_test_support/parity/ownership-policy.json",
             "crates/sim_runtime/src/persistence.rs",
             "crates/sim_runtime/src/legacy_connections.rs",
             "crates/sim_runtime/src/queue_history.rs",

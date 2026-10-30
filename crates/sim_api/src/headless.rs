@@ -1632,80 +1632,84 @@ mod tests {
     const CLI_CATALOGS: &[(&str, &str, usize, &str)] = &[
         (
             "commands",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-commands.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-commands.csv"),
             123,
             "commands",
         ),
         (
             "config",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-config.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-config.csv"),
             20,
             "config",
         ),
         (
             "cql-policy",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-cql-policy.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-cql-policy.csv"),
             419,
             "cql_rows",
         ),
         (
             "documentation",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-documentation.csv"),
+            include_str!(
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-documentation.csv"
+            ),
             16,
             "documentation_claims",
         ),
         (
             "environment",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-environment.csv"),
+            include_str!(
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-environment.csv"
+            ),
             35,
             "environment",
         ),
         (
             "errors",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-errors.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-errors.csv"),
             99,
             "errors",
         ),
         (
             "events",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-events.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-events.csv"),
             12,
             "events",
         ),
         (
             "extensions",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-extensions.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-extensions.csv"),
             17,
             "extensions",
         ),
         (
             "formats",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-formats.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-formats.csv"),
             34,
             "formats",
         ),
         (
             "lifecycle",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-lifecycle.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-lifecycle.csv"),
             24,
             "lifecycle",
         ),
         (
             "modules",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-modules.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-modules.csv"),
             104,
             "modules",
         ),
         (
             "parameters",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-parameters.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-parameters.csv"),
             370,
             "parameters",
         ),
         (
             "partner-openapi",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/sim-cli-partner-openapi.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-partner-openapi.csv"
             ),
             52,
             "partner_endpoints",
@@ -1713,39 +1717,41 @@ mod tests {
         (
             "schema-mappings",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/sim-cli-schema-mappings.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-schema-mappings.csv"
             ),
             66,
             "schema_mappings",
         ),
         (
             "schemas",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-schemas.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-schemas.csv"),
             23,
             "schemas",
         ),
         (
             "source-coverage",
             include_str!(
-                "../../../.agents/specs/comfy-parity/catalogs/sim-cli-source-coverage.csv"
+                "../../../crates/sim_test_support/parity/catalogs/sim-cli-source-coverage.csv"
             ),
             312,
             "source_rows",
         ),
         (
             "tests",
-            include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-tests.csv"),
+            include_str!("../../../crates/sim_test_support/parity/catalogs/sim-cli-tests.csv"),
             2_295,
             "tests",
         ),
     ];
 
-    const CLI_RECONCILIATION: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/sim-cli-reconciliation.json");
+    const CLI_RECONCILIATION: &str = include_str!(
+        "../../../crates/sim_test_support/parity/catalogs/sim-cli-reconciliation.json"
+    );
     const HTTP_CATALOG: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-http-routes.csv");
-    const WEBSOCKET_CATALOG: &str =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-websocket-events.csv");
+        include_str!("../../../crates/sim_test_support/parity/catalogs/backend-http-routes.csv");
+    const WEBSOCKET_CATALOG: &str = include_str!(
+        "../../../crates/sim_test_support/parity/catalogs/backend-websocket-events.csv"
+    );
 
     #[derive(Default)]
     struct MemoryIdempotencyStore {

@@ -3308,9 +3308,9 @@ async fn val_plugin_host_001(executor: BackgroundExecutor) {
         }
 
         let fixture_paths = [
-            ".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv",
-            ".agents/specs/comfy-parity/catalogs/backend-nodes.csv",
-            ".agents/specs/comfy-parity/ownership-policy.json",
+            "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
+            "crates/sim_test_support/parity/catalogs/backend-nodes.csv",
+            "crates/sim_test_support/parity/ownership-policy.json",
             "crates/sim_api/src/http.rs",
             "crates/sim_api/src/services.rs",
             "crates/sim_nodes/src/registry_generator.rs",
@@ -3649,14 +3649,13 @@ fn exercise_legacy_mapping_fixture(
         .into());
     }
 
-    let documented_python_contracts =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/docs-extension-contracts.csv")
-            .lines()
-            .skip(1)
-            .filter(|line| {
-                line.contains(",Python V1 legacy,") || line.contains(",Python V3 legacy,")
-            })
-            .collect::<Vec<_>>();
+    let documented_python_contracts = include_str!(
+        "../../../crates/sim_test_support/parity/catalogs/docs-extension-contracts.csv"
+    )
+    .lines()
+    .skip(1)
+    .filter(|line| line.contains(",Python V1 legacy,") || line.contains(",Python V3 legacy,"))
+    .collect::<Vec<_>>();
     if documented_python_contracts.len() != 24
         || documented_python_contracts
             .iter()
@@ -3685,9 +3684,9 @@ fn exercise_legacy_frontend_extension_fixture()
         return Err("legacy frontend extension fixture has an unsupported contract".into());
     }
     let source_catalog =
-        include_str!("../../../.agents/specs/comfy-parity/catalogs/frontend-extensions.csv");
+        include_str!("../../../crates/sim_test_support/parity/catalogs/frontend-extensions.csv");
     let disposition_catalog = include_str!(
-        "../../../.agents/specs/comfy-parity/catalogs/frontend-extension-dispositions.csv"
+        "../../../crates/sim_test_support/parity/catalogs/frontend-extension-dispositions.csv"
     );
     let source_ids = source_catalog
         .lines()
@@ -3803,7 +3802,7 @@ fn write_report(
             "fuel_hang": format!("{:x}", Sha256::digest(hang_component)),
             "legacy_python_nodes": format!("{:x}", Sha256::digest(include_bytes!("../fixtures/legacy_python_nodes/mapping_cases.json"))),
             "legacy_frontend_extensions": format!("{:x}", Sha256::digest(include_bytes!("../fixtures/legacy_frontend_extensions/compatibility_cases.json"))),
-            "frontend_extension_dispositions": format!("{:x}", Sha256::digest(include_bytes!("../../../.agents/specs/comfy-parity/catalogs/frontend-extension-dispositions.csv"))),
+            "frontend_extension_dispositions": format!("{:x}", Sha256::digest(include_bytes!("../../../crates/sim_test_support/parity/catalogs/frontend-extension-dispositions.csv"))),
         },
         "compiled_wit_provenance": {
             "guest_source": "crates/sim_plugin_host/tests/fixtures/list_ports_component/guest.rs",

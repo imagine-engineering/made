@@ -2465,7 +2465,7 @@ mod tests {
                 }),
         );
 
-        let fixture_path = ".agents/specs/comfy-parity/catalogs/backend-tensor-operations.csv";
+        let fixture_path = "crates/sim_test_support/parity/catalogs/backend-tensor-operations.csv";
         let fixture_digest = validation_artifacts::workspace_fixture_digest(
             fixture_path,
             "e60844bdf259418b8f808f1122408edaeac11bffdf03a65d205a79b251e9911b",

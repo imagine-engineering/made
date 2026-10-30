@@ -4,6 +4,7 @@ schema_version = 1
 id = "rust"
 status = "enabled"
 display_name = "Copper"
+initial_version = "0.1.0"
 appearance = { theme = "assets/themes/fractal-neutral/fractal-neutral.json", light = "Fractal Neutral Light", dark = "Fractal Neutral Dark", font_family = "Figtree", font_asset = "assets/fonts/figtree/Figtree.ttf" }
 executable_name = "copper"
 bundle_identifier = "dev.ideflavors.rust"

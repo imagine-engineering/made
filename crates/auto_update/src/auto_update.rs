@@ -1742,6 +1742,28 @@ mod tests {
     }
 
     #[test]
+    fn copper_initial_release_updates_only_to_newer_versions() {
+        if product_flavor::ID != "rust" {
+            return;
+        }
+        let installed = product_flavor::INITIAL_VERSION
+            .expect("Copper initial version")
+            .parse::<semver::Version>()
+            .expect("semantic product version");
+        for (candidate, expected) in [("0.0.9", false), ("0.1.0", false), ("0.1.1", true)] {
+            let result = AutoUpdater::check_if_fetched_version_is_newer(
+                ReleaseChannel::Stable,
+                Ok(None),
+                installed.clone(),
+                candidate.to_owned(),
+                AutoUpdateStatus::Idle,
+            )
+            .expect("version comparison");
+            assert_eq!(result.is_some(), expected);
+        }
+    }
+
+    #[test]
     fn test_stable_does_update_when_fetched_version_is_higher_than_cached() {
         let release_channel = ReleaseChannel::Stable;
         let app_commit_sha = Ok(Some("a".to_string()));

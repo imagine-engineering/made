@@ -6,7 +6,7 @@
     "projects/sim/ComfyUI/sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
     "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
     "projects/sim/ComfyUI/sim/ldm/modules/sub_quadratic_attention.py": "c804fbbda0fbc6404999be734d3c33b868375959736f8e21ad417782ab0638a0",
-    ".agents/specs/sim-parity/catalogs/backend-models.csv": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4"
+    "crates/sim_test_support/parity/catalogs/backend-models.csv": "12afc10d34d0eb7a103b648d0d7a21797bf5fc687cec73b5bb0a6a7f7220e7b4"
   },
   "catalog_feature_ids": [
     "COMFY-MODEL-0001",

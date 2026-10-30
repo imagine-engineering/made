@@ -2044,7 +2044,7 @@ mod tests {
                 .is_err(),
             ),
         ]);
-        let fixture_path = ".agents/specs/comfy-parity/catalogs/backend-rng.csv";
+        let fixture_path = "crates/sim_test_support/parity/catalogs/backend-rng.csv";
         let fixture_digest = validation_artifacts::workspace_fixture_digest(
             fixture_path,
             "d207ea66d8949eb73067828da6f2ed160ab8bdf641b4cf6ed1789faa0f65d06b",

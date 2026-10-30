@@ -21,16 +21,19 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const ORACLE_FIXTURE: &[u8] =
-    include_bytes!("../../../.agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json");
+const ORACLE_FIXTURE: &[u8] = include_bytes!(
+    "../../../crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json"
+);
 const ORACLE_FIXTURE_SHA256: &str =
     "74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c";
-const ORACLE_GENERATOR: &[u8] =
-    include_bytes!("../../../.agents/specs/comfy-parity/oracles/generate_quant_linear_oracle.py");
+const ORACLE_GENERATOR: &[u8] = include_bytes!(
+    "../../../crates/sim_test_support/parity/oracles/generate_quant_linear_oracle.py"
+);
 const ORACLE_GENERATOR_SHA256: &str =
     "beac9521a7dc3e1676e049504c665a4c372868e8c4cf3fe52cc24b9dae44c662";
-const ORACLE_MANIFEST: &[u8] =
-    include_bytes!("../../../.agents/specs/comfy-parity/oracles/quant_linear_oracle_manifest.json");
+const ORACLE_MANIFEST: &[u8] = include_bytes!(
+    "../../../crates/sim_test_support/parity/oracles/quant_linear_oracle_manifest.json"
+);
 const ORACLE_MANIFEST_SHA256: &str =
     "0f1dc92eb5987737003e536f5a9841b8d0893e6ba3d028243fce39a5df5940dd";
 
@@ -482,7 +485,7 @@ fn source_oracle_fixture_is_pinned_and_declares_the_exact_callable_contract()
     );
     assert_eq!(
         fixture["oracle"]["generator"],
-        ".agents/specs/comfy-parity/oracles/generate_quant_linear_oracle.py"
+        "crates/sim_test_support/parity/oracles/generate_quant_linear_oracle.py"
     );
     assert_eq!(
         fixture["oracle"]["generator_sha256"],
@@ -490,7 +493,7 @@ fn source_oracle_fixture_is_pinned_and_declares_the_exact_callable_contract()
     );
     assert_eq!(
         fixture["oracle"]["manifest"],
-        ".agents/specs/comfy-parity/oracles/quant_linear_oracle_manifest.json"
+        "crates/sim_test_support/parity/oracles/quant_linear_oracle_manifest.json"
     );
     assert_eq!(fixture["oracle"]["manifest_sha256"], ORACLE_MANIFEST_SHA256);
     assert_eq!(

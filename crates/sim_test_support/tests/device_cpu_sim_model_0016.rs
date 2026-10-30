@@ -25,7 +25,7 @@ use sim_test_support::{
 use smol::process::Command;
 
 const CERTIFICATION_RELATIVE_PATH: &str =
-    ".agents/specs/comfy-parity/catalogs/native-device-certification/cpu-comfy-model-0016.json";
+    "crates/sim_test_support/parity/catalogs/native-device-certification/cpu-comfy-model-0016.json";
 const ATTESTATION_SIGNER: &str = "zed.hardware.lab.cpu.mt-mbp-l2kh69c7rg";
 const ATTESTATION_PUBLIC_KEY: &str =
     "627d26c97f76a810b90828422cff3e6cdaa083ed885d40169bae0e08255d07eb";

@@ -94,7 +94,8 @@ fn audit_phase_one_consumers() -> Result<()> {
         "CI workflow is missing the exact Rust product feature row"
     );
     ensure!(
-        release.contains("export ZED_BUNDLE_PHASE=package")
+        release.contains("cargo xtask bundle --product rust --platform")
+            && release.contains("--phase package --signing required")
             && !release.contains("cargo xtask bundle --phase")
             && release.contains("needs:\n    - prepare_release\n    - product_builds")
             && release.contains("workflow_run:")
@@ -132,6 +133,7 @@ fn render(product: &crate::product_manifest::Product) -> Result<String> {
     Ok(format!(
         concat!(
             "/// The stable selected product ID.\npub const ID: &str = {id:?};\n",
+            "/// Initial release version, independent of upstream crate versions.\npub const INITIAL_VERSION: Option<&str> = {initial_version:?};\n",
             "/// The selected product's default light theme.\npub const DEFAULT_LIGHT_THEME: &str = {light_theme:?};\n",
             "/// The selected product's default dark theme.\npub const DEFAULT_DARK_THEME: &str = {dark_theme:?};\n",
             "/// The selected product's default UI font family.\npub const UI_FONT_FAMILY: &str = {font_family:?};\n",
@@ -184,6 +186,7 @@ fn render(product: &crate::product_manifest::Product) -> Result<String> {
         font_family = appearance.font_family,
         ui_logo_asset = format!("{icon_set}/app-icon.png"),
         display = product.display_name,
+        initial_version = product.initial_version.as_deref(),
         install_cli_error_title = format!("Cannot install the {} CLI", product.display_name),
         register_scheme_error_title = format!("Error registering {} scheme", product.url_scheme),
         dev_display = format!("{} Dev", product.display_name),

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-13",
+  "authority": {
+    "event_serialization": "projects/buzz/crates/buzz-core/src/verification.rs",
+    "kind_and_privacy_policy": "projects/buzz/crates/buzz-core/src/kind.rs",
+    "replaceable_ordering": "projects/buzz/crates/buzz-db/src/lib.rs",
+    "relay_trace_schema": "projects/buzz/crates/buzz-conformance/TRACE_SCHEMA.md",
+    "relay_trace_fixtures": "projects/buzz/crates/buzz-conformance/tests/fixtures/*.jsonl",
+    "client_interop": "projects/buzz/crates/buzz-test-client/tests/e2e_nostr_interop.rs"
+  },
+  "events_sha256": "1da0e4ea313652e5a6c513814d1ae80d1a3de644e83016bb8d2153b6559ac7fd",
+  "wire_traces_sha256": "71f63acbaa9394c54fefb44e02a2f47338b06d59cb66efaf9c46518508888a93",
+  "notes": [
+    "All keys and signatures are deterministic public test vectors; no private key material is stored.",
+    "The checker reimplements NIP-01 serialization, BIP-340 verification, replacement ordering, privacy projection and relay transitions without importing Buzz reducers.",
+    "Kinds 9 and 40002 are Buzz's simultaneously accepted legacy and v2 stream-message representations.",
+    "A live-ingest replay must inject a clock at Unix second 1786579251; frozen timestamps are intentionally not rewritten because that would invalidate IDs and signatures."
+  ],
+  "event_cases": [
+    {"id":"PROTO-EVENT-001","event":"legacy_message","expected":"accept"},
+    {"id":"PROTO-EVENT-002","event":"v2_message","expected":"accept"},
+    {"id":"PROTO-EVENT-003","event":"malformed_tampered_content","expected":"reject","expected_error":"invalid_id"},
+    {"id":"PROTO-EVENT-004","event":"malformed_signature","expected":"reject","expected_error":"invalid_signature"},
+    {"id":"PROTO-EVENT-005","event":"malformed_pubkey","expected":"reject","expected_error":"invalid_pubkey"},
+    {"id":"PROTO-EVENT-006","event":"malformed_tags","expected":"reject","expected_error":"invalid_tags"},
+    {"id":"PROTO-EVENT-007","event":"malformed_kind","expected":"reject","expected_error":"invalid_kind"}
+  ],
+  "replaceable_cases": [
+    {"id":"PROTO-HEAD-001","events":["profile_old","profile_new"],"winner":"profile_new","rule":"greatest_created_at"},
+    {"id":"PROTO-HEAD-002","events":["profile_tie_b","profile_tie_a"],"winner":"profile_tie_a","rule":"lowest_event_id_on_timestamp_tie"}
+  ],
+  "privacy_cases": [
+    {"id":"PROTO-PRIVACY-001","event":"author_only_push","reader":"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","visible":true,"gate":"author_only"},
+    {"id":"PROTO-PRIVACY-002","event":"author_only_push","reader":"f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9","visible":false,"gate":"author_only"},
+    {"id":"PROTO-PRIVACY-003","event":"p_gated_visibility","reader":"c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5","visible":true,"gate":"p_tag"},
+    {"id":"PROTO-PRIVACY-004","event":"p_gated_visibility","reader":"f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9","visible":false,"gate":"p_tag"},
+    {"id":"PROTO-PRIVACY-005","event":"persona_private","reader":"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","visible":true,"gate":"shared"},
+    {"id":"PROTO-PRIVACY-006","event":"persona_private","reader":"f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9","visible":false,"gate":"shared"},
+    {"id":"PROTO-PRIVACY-007","event":"persona_shared","reader":"f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9","visible":true,"gate":"shared"}
+  ],
+  "mixed_version_cases": [
+    {"id":"PROTO-VERSION-001","events":["legacy_message","v2_message"],"kinds":[9,40002],"expected":"accept_both"}
+  ],
+  "relay_trace_cases": [
+    {"id":"PROTO-RELAY-001","file":"relay-good.jsonl","sha256":"7a4d3dc7cd4082b78eacf49cbf04826138dade3b9eff2ac15c8b3609aeb41ddb","expected":"accept"},
+    {"id":"PROTO-RELAY-002","file":"relay-bad-host-channel.jsonl","sha256":"af7ebabd2f51553f82b8fdeba72f8e5c38279cd908fb514004bab5b6a803eb33","expected":"reject","expected_error":"illegal_transition"},
+    {"id":"PROTO-RELAY-003","file":"relay-bad-foreign-row.jsonl","sha256":"ee4f0448240e231baa700a39b8645c0d74b835b43f63449bdb18c5baed9478e7","expected":"reject","expected_error":"non_interference"},
+    {"id":"PROTO-RELAY-004","file":"relay-bad-coverage.jsonl","sha256":"7e6ccec1e01dc11c439a12f140bc6f194d86755188ef037c1ec1d97f5d875598","expected":"reject","expected_error":"coverage_breach"}
+  ]
+}

@@ -294,7 +294,8 @@ fn task_62_resolution_slice_seals_executables_and_keeps_math_atan2_external()
         );
     }
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/native-tensor-operation-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/native-tensor-operation-contracts.csv"),
     )?;
     let row = catalog
         .lines()

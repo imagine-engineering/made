@@ -784,7 +784,8 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
         VAE_SELECTOR_SOURCE_SHA256
     );
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let catalog_rows = parse_catalog(&catalog)?;
     const LOADER_TASK: &str = "comfy-parity-vae-domain-loader-foundation";

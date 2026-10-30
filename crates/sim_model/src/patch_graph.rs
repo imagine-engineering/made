@@ -4390,7 +4390,7 @@ mod tests {
             .collect::<BTreeMap<_, _>>();
         let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let catalog_path = repository
-            .join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv");
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv");
         let catalog = std::fs::read_to_string(&catalog_path)
             .map_err(|error| PatchGraphError::Serialization(error.to_string()))?;
         let mut seen = BTreeSet::new();
@@ -5392,7 +5392,7 @@ mod tests {
     fn source_pinned_oft_boft_constraint_rescale_and_strength_are_exact()
     -> Result<(), PatchGraphError> {
         const SOURCE_CONTRACTS: &str = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"
+            "../../../crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"
         );
         assert!(SOURCE_CONTRACTS.contains(concat!(
             "projects/comfy/ComfyUI/sim/weight_adapter/oft.py,calculate_weight,172,",

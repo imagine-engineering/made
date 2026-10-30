@@ -25467,6 +25467,7 @@ name = "windows_resources"
 version = "0.1.0"
 dependencies = [
  "embed-resource",
+ "product_flavor",
 ]
 
 [[package]]

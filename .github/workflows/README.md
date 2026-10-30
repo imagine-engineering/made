@@ -66,7 +66,7 @@ As checked on 7 September 2026, neither repository-level nor available organizat
 After checking Amplify's queue for an accepted or running build, use **Actions → website_refresh → Run workflow → Branch: main → release_tag: the existing tag**, or:
 
 ```sh
-gh workflow run website_refresh.yml --repo simtropolis/made --ref main \
+gh workflow run website_refresh.yml --repo imagine-engineering/made --ref main \
   -f release_tag=rust-v1.16.6
 ```
 
@@ -85,16 +85,17 @@ References: [Amplify incoming webhooks](https://docs.aws.amazon.com/amplify/late
 ## Copper releases
 
 Copper is the only product currently enabled in `products/flavors.toml`. The
-generated `release_promotion.yml` has three supported entry points:
+generated `release_promotion.yml` has two supported entry points:
 
 - a successful completion of push-triggered `run_tests` on `release` from this repository;
-- manual dispatch on `release` for a patch, minor, major, or explicit recovery version;
-- a manually created `rust-v*` tag that points to a tested promotion commit on
-  `release` after the bootstrap boundary.
+- manual dispatch on `release` for a patch, minor, major, or explicit recovery version.
+
+Tag pushes, `main` pushes and manual dispatch on `main` cannot publish.
 
 The automatic path checks out `workflow_run.head_sha`, so it packages the exact
 commit that passed CI. If there is no existing `rust-v*` tag, the first release
-uses `crates/zed/Cargo.toml`; subsequent automatic releases increment the patch
+uses Copper's `initial_version = "0.1.0"` in `products/flavors.toml`, independently
+of upstream crate versions; subsequent automatic releases increment the patch
 component. Tags use `rust-vX.Y.Z`, and releases are titled `Copper X.Y.Z`.
 
 The workflow resolves the version, builds Linux x86_64, macOS ARM64, and
@@ -109,15 +110,15 @@ entire release operation without cancelling an active release.
 Request a manual release from the release branch with:
 
 ```sh
-gh workflow run release_promotion.yml --repo simtropolis/made --ref release -f bump=minor
-gh workflow run release_promotion.yml --repo simtropolis/made --ref release -f bump=major
+gh workflow run release_promotion.yml --repo imagine-engineering/made --ref release -f bump=minor
+gh workflow run release_promotion.yml --repo imagine-engineering/made --ref release -f bump=major
 ```
 
 For recovery, `version` may contain an exact stable `X.Y.Z` and `commit_sha`
 may identify a full tested promotion commit SHA on `release`:
 
 ```sh
-gh workflow run release_promotion.yml --repo simtropolis/made --ref release \
+gh workflow run release_promotion.yml --repo imagine-engineering/made --ref release \
   -f bump=patch \
   -f version=<X.Y.Z> \
   -f commit_sha=<FULL_COMMIT_SHA>
@@ -129,7 +130,7 @@ updated, and missing assets are uploaded without duplicating existing assets.
 A tag conflict fails visibly and is never moved. The final publication job alone has
 `contents: write`; preparation and build jobs have `contents: read`. New
 releases remain drafts until the remote asset list exactly matches the three
-validated local artifacts.
+validated platform artifacts and the Linux signature/public key.
 
 ### Development and release promotion
 
@@ -151,7 +152,7 @@ Before preparation and again before publication, the workflow requires:
 
 The automatic path also verifies the triggering CI run ID. Manual dispatch
 must select `--ref release`; its optional commit must pass the same checks.
-Tag pushes use the same gate. API errors and missing/invalid configuration
+Tag pushes do not trigger this workflow. API errors and missing/invalid configuration
 block publication. A failed or in-progress rerun cannot borrow an earlier
 successful result. Preparation evaluates the gate before checking out and
 executing candidate code; publication repeats it before resolving the version
@@ -160,13 +161,12 @@ and writing tags or releases. Only the two gate jobs need `actions: read`.
 ### Safe one-time cutover
 
 Do not dispatch a release or perform a release promotion to test the migration.
-Use explicit `--repo simtropolis/made` on every `gh` command: this checkout also
-has an upstream remote, which GitHub CLI can otherwise select by default.
+Use explicit `--repo imagine-engineering/made` on every `gh` command: verify the destination rather than relying on GitHub CLI remote selection.
 
 1. Record the current remote `rust-v*` refs and GitHub Releases (including drafts).
    Disable the old workflow with
-   `gh workflow disable release.yml --repo simtropolis/made` and set
-   `gh variable set COPPER_RELEASE_ENABLED --repo simtropolis/made --body false`.
+   `gh workflow disable release.yml --repo imagine-engineering/made` and set
+   `gh variable set COPPER_RELEASE_ENABLED --repo imagine-engineering/made --body false`.
    List **all** non-completed runs of the old workflow, cancel them, and verify
    they are terminal before proceeding. Disabling alone does not drain runs.
 2. Land the generator, generated YAML, tests, and documentation on `main`.
@@ -177,7 +177,7 @@ has an upstream remote, which GitHub CLI can otherwise select by default.
 3. Create `release` at that exact migrated `origin/main` SHA and push it normally.
    Never overwrite an existing branch; inspect it if it already exists.
    Record this exact SHA in `COPPER_RELEASE_BOOTSTRAP_SHA` **before enabling**:
-   `gh variable set COPPER_RELEASE_BOOTSTRAP_SHA --repo simtropolis/made --body <FULL_INITIAL_SHA>`.
+   `gh variable set COPPER_RELEASE_BOOTSTRAP_SHA --repo imagine-engineering/made --body <FULL_INITIAL_SHA>`.
    Confirm the remote release tip matches it and no new tags or releases exist.
 4. Set `COPPER_RELEASE_ENABLED` to `true`. Ensure `release_promotion.yml` is active
    and the old `release.yml` remains disabled. Initial branch CI may finish before

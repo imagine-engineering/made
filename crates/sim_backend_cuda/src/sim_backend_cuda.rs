@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn catalog_maps_boundary_dtos_to_canonical_domain_owners() {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/cuda.json"
+            "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/cuda.json"
         );
         assert!(catalog.contains("\"certificate_owner\": \"sim_runtime::NativeFfiRegistry\""));
         assert!(

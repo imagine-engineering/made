@@ -30,7 +30,7 @@ use sim_types::DeviceKind;
 use smol::process::Command;
 use tempfile::TempDir;
 
-const CERTIFICATION_RELATIVE_PATH: &str = ".agents/specs/comfy-parity/catalogs/native-device-certification/apple-metal-mps-comfy-model-0015.json";
+const CERTIFICATION_RELATIVE_PATH: &str = "crates/sim_test_support/parity/catalogs/native-device-certification/apple-metal-mps-comfy-model-0015.json";
 const PACKAGE_SIGNER: &str = "metal.lab.mt-mbp-l2kh69c7rg";
 const ATTESTATION_SIGNER: &str = "zed.hardware.lab.mt-mbp-l2kh69c7rg";
 const ATTESTATION_PUBLIC_KEY: &str =
@@ -426,7 +426,7 @@ fn execute_hardware_matrix(
         contract: ContractEvidence {
             abi_contract_sha256: sha256_file(
                 &workspace
-                    .join(".agents/specs/comfy-parity/catalogs/native-backend-abi/metal.json"),
+                    .join("crates/sim_test_support/parity/catalogs/native-backend-abi/metal.json"),
             )?,
             abi_manifest_sha256: sha256_file(
                 &workspace.join("crates/sim_backend_metal/abi/symbols-v1.json"),
@@ -663,8 +663,8 @@ fn observe_environment() -> Result<CertificationEnvironment> {
 
 fn collect_provenance(workspace: &Path) -> Result<Vec<CertificationProvenance>> {
     let paths = [
-        ".agents/specs/comfy-parity/catalogs/native-backend-abi/metal.json",
-        ".agents/specs/comfy-parity/catalogs/native-tensor-operation-contracts.csv",
+        "crates/sim_test_support/parity/catalogs/native-backend-abi/metal.json",
+        "crates/sim_test_support/parity/catalogs/native-tensor-operation-contracts.csv",
         "crates/sim_backend_metal/abi/execution-v1.json",
         "crates/sim_backend_metal/abi/reviewed-execution-bindings-v1.txt",
         "crates/sim_backend_metal/abi/symbols-v1.json",

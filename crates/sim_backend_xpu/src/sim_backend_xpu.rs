@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn generated_catalog_maps_to_the_canonical_owners() {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/xpu.json"
+            "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/xpu.json"
         );
         assert!(catalog.contains("\"certificate_owner\": \"sim_runtime::NativeFfiRegistry\""));
         assert!(

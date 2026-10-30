@@ -126,7 +126,13 @@ pub fn run(args: BundleArgs) -> Result<()> {
         Platform::Windows => "exe",
     };
     let (platform_name, architecture) = target_key.split_once('-').context("invalid target key")?;
-    let version = env::var("RELEASE_VERSION").unwrap_or_else(|_| "dev".to_string());
+    let version = env::var("RELEASE_VERSION").unwrap_or(
+        product
+            .initial_version
+            .clone()
+            .context("enabled product has no initial version")?,
+    );
+    semver::Version::parse(&version).context("bundle version must be a semantic version")?;
     let artifact_name = product.render_name(
         &product.artifact_name,
         &version,

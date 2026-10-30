@@ -8,7 +8,7 @@ identifiers = {'COMFY-NODE-' + str(i).zfill(4) for i in [149, 150, 151, 153, 154
 namespace = {'torch': torch, 'io': SimpleNamespace(NodeOutput=lambda *values: values), 'IO': SimpleNamespace(NodeOutput=lambda *values: values), 'sim': SimpleNamespace(model_management=SimpleNamespace(intermediate_device=lambda: 'cpu', intermediate_dtype=lambda: torch.float32))}
 cases = []
 sources = {}
-for row in csv.DictReader((root / '.agents/specs/sim-parity/catalogs/backend-nodes.csv').open()):
+for row in csv.DictReader((root / 'crates/sim_test_support/parity/catalogs/backend-nodes.csv').open()):
     if row['feature_id'] not in identifiers:
         continue
     path = source / row['source_file']

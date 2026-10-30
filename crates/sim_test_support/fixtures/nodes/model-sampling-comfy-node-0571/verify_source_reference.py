@@ -13,7 +13,7 @@ ROOT = arguments.repository or Path(__file__).resolve().parents[5]
 FIXTURE = Path(__file__).with_name("fixture.json")
 SOURCE = ROOT / 'projects/sim/ComfyUI'
 IDENTIFIERS = {f'COMFY-NODE-{number:04}' for number in [571,572,573,574,575,576,577,578,580,581]}
-contracts = json.loads((ROOT/'.agents/specs/sim-parity/catalogs/backend-node-contracts.json').read_text())['contracts']
+contracts = json.loads((ROOT/'crates/sim_test_support/parity/catalogs/backend-node-contracts.json').read_text())['contracts']
 rows = [row for row in contracts if row['feature_id'] in IDENTIFIERS]
 assert len(rows) == 10
 

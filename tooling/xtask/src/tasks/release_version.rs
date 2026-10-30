@@ -28,7 +28,7 @@ pub struct ReleaseVersionArgs {
     /// Exact X.Y.Z version for manual recovery.
     #[arg(long)]
     explicit_version: Option<Version>,
-    /// Existing rust-vX.Y.Z tag supplied by a tag-push event.
+    /// Existing rust-vX.Y.Z tag to validate during recovery.
     #[arg(long)]
     existing_tag: Option<String>,
 }
@@ -119,15 +119,21 @@ fn load_release_tags() -> Result<Vec<ReleaseTag>> {
 }
 
 fn initial_product_version() -> Result<Version> {
-    let manifest = fs::read_to_string("crates/zed/Cargo.toml")
-        .context("failed to read crates/zed/Cargo.toml")?;
+    let manifest = fs::read_to_string("products/flavors.toml")
+        .context("failed to read products/flavors.toml")?;
     let manifest: toml::Value =
-        toml::from_str(&manifest).context("failed to parse crates/zed/Cargo.toml")?;
+        toml::from_str(&manifest).context("failed to parse products/flavors.toml")?;
     let version = manifest
-        .get("package")
-        .and_then(|package| package.get("version"))
+        .get("products")
+        .and_then(toml::Value::as_array)
+        .and_then(|products| {
+            products
+                .iter()
+                .find(|product| product.get("id").and_then(toml::Value::as_str) == Some("rust"))
+        })
+        .and_then(|product| product.get("initial_version"))
         .and_then(toml::Value::as_str)
-        .context("crates/zed/Cargo.toml has no package.version")?;
+        .context("Copper has no initial_version in products/flavors.toml")?;
     parse_version(version)
 }
 
@@ -319,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn first_release_uses_application_version() -> Result<()> {
+    fn first_release_uses_product_initial_version() -> Result<()> {
         let decision = resolve_release("new", version("1.16.2"), &[], BumpType::Patch, None, None)?;
         assert_eq!(decision.version, version("1.16.2"));
         assert_eq!(decision.tag, "rust-v1.16.2");

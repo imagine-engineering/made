@@ -223,7 +223,7 @@ fn resolution_slice_seals_only_executable_contracts_and_external_roll_stays_uncl
     }
 
     let disposition = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-tensor-operations.csv"),
+        workspace.join("crates/sim_test_support/parity/catalogs/backend-tensor-operations.csv"),
     )?;
     let row = disposition
         .lines()

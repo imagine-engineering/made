@@ -1755,7 +1755,7 @@ mod tests {
         let root = workspace()?;
         let fixture_root = root.join("crates/sim_test_support/fixtures/models/sd15-tiny-v1");
         let catalog_path =
-            root.join(".agents/specs/comfy-parity/catalogs/native-diffusion-fixture.json");
+            root.join("crates/sim_test_support/parity/catalogs/native-diffusion-fixture.json");
         let manifest_path = fixture_root.join("state-dict-manifest.json");
         let provenance_path = fixture_root.join("oracle-provenance.json");
         let model_path = fixture_root.join("model.safetensors");

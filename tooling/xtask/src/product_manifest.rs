@@ -22,6 +22,7 @@ pub struct Product {
     pub id: String,
     pub status: ProductStatus,
     pub display_name: String,
+    pub initial_version: Option<String>,
     pub appearance: Option<ProductAppearance>,
     pub executable_name: String,
     pub bundle_identifier: String,
@@ -264,7 +265,19 @@ impl Product {
             "product `{}` has an invalid Windows installer ID",
             self.id
         );
+        if let Some(version) = &self.initial_version {
+            let version =
+                semver::Version::parse(version).context("invalid initial product version")?;
+            ensure!(
+                version.pre.is_empty() && version.build.is_empty(),
+                "initial product version must be X.Y.Z"
+            );
+        }
         if self.status == ProductStatus::Enabled {
+            ensure!(
+                self.initial_version.is_some(),
+                "enabled product must declare its initial version"
+            );
             self.appearance
                 .as_ref()
                 .context("enabled product must select its appearance")?
@@ -393,6 +406,19 @@ mod tests {
     #[test]
     fn repository_catalog_is_valid() {
         ProductManifest::load().expect("repository product catalog should be valid");
+    }
+
+    #[test]
+    fn enabled_product_requires_a_stable_initial_version() -> Result<()> {
+        let manifest = ProductManifest::load()?;
+        let mut product = manifest.product("rust")?.clone();
+        assert_eq!(product.initial_version.as_deref(), Some("0.1.0"));
+        for version in [None, Some("dev"), Some("0.1.0-rc.1"), Some("0.1.0+build")] {
+            product.initial_version = version.map(str::to_owned);
+            assert!(product.validate(&workspace_root()).is_err());
+        }
+        assert!(manifest.product("jvm")?.initial_version.is_none());
+        Ok(())
     }
 
     #[test]

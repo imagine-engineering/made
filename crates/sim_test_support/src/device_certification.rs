@@ -25,7 +25,7 @@ const IMPLEMENTATION_MANIFEST_DOMAIN: &[u8] = b"zed-sim-device-certification-imp
 
 const CPU_IMPLEMENTATION_FILES: &[&str] = &[
     ".cargo/config.toml",
-    ".agents/specs/comfy-parity/catalogs/native-tensor-operation-contracts.csv",
+    "crates/sim_test_support/parity/catalogs/native-tensor-operation-contracts.csv",
     "Cargo.lock",
     "Cargo.toml",
     "crates/sim_tensor/Cargo.toml",

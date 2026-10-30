@@ -123,7 +123,8 @@ fn val_vae_001_structured_source_ledger_covers_both_contracts() -> Result<(), Bo
     );
     assert_eq!(fixture.cases.len(), 2);
     let catalog = fs::read_to_string(
-        workspace.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let mut case_ids = BTreeSet::new();
     let mut kinds = BTreeSet::new();

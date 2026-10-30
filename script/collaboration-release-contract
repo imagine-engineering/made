@@ -23,7 +23,7 @@ REPOSITORY = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_WORKFLOW = REPOSITORY / ".github/workflows/collaboration-release.yml"
 COMPATIBILITY = REPOSITORY / "docs/collaboration/compatibility.md"
 CLIENT_FIXTURES = (
-    REPOSITORY / ".agents/specs/collaborative-workspace/fixtures/clients/manifest.json"
+    REPOSITORY / "crates/collaboration_domain/test_fixtures/frozen-clients.json"
 )
 MIGRATION_MANIFEST = REPOSITORY / "deploy/collaboration/migrations/manifest.json"
 MAX_INPUT_FILE_BYTES = 512 * 1024 * 1024

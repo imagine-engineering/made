@@ -3,8 +3,9 @@ use sha2::{Digest as _, Sha256};
 use sim_types::CancellationToken;
 use std::collections::BTreeSet;
 
-const EMBEDDED_CONTRACT: &str =
-    include_str!("../../../.agents/specs/comfy-parity/catalogs/spandrel-image-model-contract.json");
+const EMBEDDED_CONTRACT: &str = include_str!(
+    "../../../crates/sim_test_support/parity/catalogs/spandrel-image-model-contract.json"
+);
 
 pub const NATIVE_UPSCALE_CONTRACT_SCHEMA_VERSION: u32 = 1;
 pub const NATIVE_UPSCALE_CONTRACT_ID: &str = "zed-sim-spandrel-image-model-contract-v1";

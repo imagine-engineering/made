@@ -505,7 +505,7 @@ impl RustTestDiscoveryRunner for RelayCancellationDiscoveryRunner {
 #[cfg(feature = "rust-tools-test")]
 fn relay_paged_profile() -> Vec<u8> {
     let mut profile: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"
+        "../../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
     ))
     .expect("captured profile fixture");
     let thread = &mut profile["threads"][0];
@@ -1914,7 +1914,7 @@ async fn rust_tools_relay_enforces_guest_capability(
         .fs()
         .insert_file(
             "/relay/profile.syms.json",
-            include_str!("../../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json")
+            include_str!("../../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json")
                 .replace("/fixture/", "/relay/")
                 .into_bytes(),
         )
@@ -4134,7 +4134,7 @@ async fn rust_tools_relay_reports_missing_host_capabilities(
         .fs()
         .insert_file(
             "/relay/profile.syms.json",
-            include_str!("../../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json")
+            include_str!("../../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json")
                 .replace("/fixture/", "/relay/")
                 .into_bytes(),
         )
@@ -4715,7 +4715,7 @@ async fn run_separate_enabled_host_tools(
         .expect("write paged profile");
     std::fs::write(
         fixture.path().join("profile.syms.json"),
-        include_str!("../../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json")
+        include_str!("../../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json")
             .replace("/fixture/", &format!("{}/", fixture.path().display())),
     )
     .expect("write profile symbols");
@@ -8263,12 +8263,14 @@ async fn rust_tools_relay_separate_disabled_host_returns_typed_unsupported(
     std::fs::write(fixture.path().join("coverage.json"), "{}").expect("write coverage artifact");
     std::fs::write(
         fixture.path().join("profile.json"),
-        include_str!("../../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json"),
+        include_str!(
+            "../../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
+        ),
     )
     .expect("write profile artifact");
     std::fs::write(
         fixture.path().join("profile.syms.json"),
-        include_str!("../../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json")
+        include_str!("../../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json")
             .replace("/fixture/", &format!("{}/", fixture.path().display())),
     )
     .expect("write profile symbols");

@@ -326,7 +326,7 @@ fn val_vae_001_image_source_fixture_covers_every_native_profile() -> Result<(), 
     assert_eq!(fixture.cases.len(), 17);
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
     )?;
     let mut covered_profiles = std::collections::BTreeSet::new();
     let mut covered_contracts = std::collections::BTreeSet::new();

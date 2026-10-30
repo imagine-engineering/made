@@ -383,7 +383,7 @@ fn write_model_family_breadth_artifact(
     let inputs = [
         (
             "backend-models.csv",
-            root.join(".agents/specs/comfy-parity/catalogs/backend-models.csv"),
+            root.join("crates/sim_test_support/parity/catalogs/backend-models.csv"),
         ),
         (
             "model-families-v1.json",
@@ -391,7 +391,7 @@ fn write_model_family_breadth_artifact(
         ),
         (
             "native-model-family-closure.json",
-            root.join(".agents/specs/comfy-parity/catalogs/native-model-family-closure.json"),
+            root.join("crates/sim_test_support/parity/catalogs/native-model-family-closure.json"),
         ),
         ("build.rs", root.join("crates/sim_model/build.rs")),
         (

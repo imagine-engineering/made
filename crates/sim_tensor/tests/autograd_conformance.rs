@@ -96,7 +96,8 @@ fn close(actual: &[f32], expected: &[f32]) {
 
 #[test]
 fn strict_fixture_registry_has_exact_unique_coverage_and_canonical_owners() {
-    let catalog = include_str!("../../../.agents/specs/comfy-parity/catalogs/backend-autograd.csv");
+    let catalog =
+        include_str!("../../../crates/sim_test_support/parity/catalogs/backend-autograd.csv");
     let fixture: BreadthFixture = serde_json::from_str(include_str!(
         "../../sim_test_support/fixtures/autograd/breadth-v1.json"
     ))
@@ -184,14 +185,14 @@ fn strict_fixture_registry_has_exact_unique_coverage_and_canonical_owners() {
         if contract.symbol == "QuantLinearFunc" {
             assert_eq!(
                 contract.fixture,
-                ".agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json#callable"
+                "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json#callable"
             );
             assert_eq!(catalog_case.execution_case, "quant_linear_model_adapter");
             assert_eq!(
                 catalog_case.source_observations,
                 vec![serde_json::json!({
                     "case": "delegated_fixture",
-                    "expected": ".agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json",
+                    "expected": "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json",
                     "sha256": "74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c",
                 })]
             );

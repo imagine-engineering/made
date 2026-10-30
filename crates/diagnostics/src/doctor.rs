@@ -14268,8 +14268,16 @@ pub(crate) mod tests {
     ) {
         let (project, directory, _servers, _buffer) = project_repair_fixture(cx).await;
         let fs = project.read_with(cx, |owner, _| owner.fs().clone());
-        fs.atomic_write("/repair/profile.json".into(), include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.json").into()).await.expect("Profile fixture");
-        fs.atomic_write("/repair/profile.syms.json".into(), include_str!("../../../.agents/specs/rust-workspace/rust-profiling/fixtures/macos-samply-0.13.1.syms.json").into()).await.expect("Symbols fixture");
+        fs.atomic_write(
+            "/repair/profile.json".into(),
+            include_str!(
+                "../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.json"
+            )
+            .into(),
+        )
+        .await
+        .expect("Profile fixture");
+        fs.atomic_write("/repair/profile.syms.json".into(), include_str!("../../../crates/language_tools/test_fixtures/profiling/macos-samply-0.13.1.syms.json").into()).await.expect("Symbols fixture");
         cx.run_until_parked();
         let paths = ["profile.json", "profile.syms.json"].map(|path| project::ProjectPath {
             worktree_id: directory.worktree_id,

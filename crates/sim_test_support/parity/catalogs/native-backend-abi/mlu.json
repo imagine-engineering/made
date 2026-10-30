@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "backend": "mlu",
+  "source_model_id": "COMFY-MODEL-0017",
+  "foundation_task": "comfy-parity-device-foundation-cambricon-mlu-comfy-model-0017",
+  "binding_strategy": "checked CNRT/CNNL C declarations with runtime symbol loading only from registry-certified retained images",
+  "abi_floor": "neuware-1.20-cnnl-1.20.4-cnrt-6.6.0",
+  "targets": ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"],
+  "libraries": ["libcnrt.so", "libcnnl.so"],
+  "discovery_order": ["SIM_MLU_ROOT", "NEUWARE_HOME", "signed_package_roots"],
+  "symbol_manifest": "crates/sim_backend_mlu/abi/symbols-v1.json",
+    "canonical_abi_manifest_sha256": "40dbc7cbdda33dd1f0cd59b43057a8c00b2574393f3bd56838a57aa565068660",
+    "reviewed_execution_bindings": "crates/sim_backend_mlu/abi/reviewed-bindings-v1.txt",
+    "reviewed_execution_bindings_sha256": "a911c48172acf579a4fc8b6a1383c8b9c118bd7d539f49375ee2dc1f0eb8310e",
+    "native_execution_verifier": "crates/sim_backend_mlu/abi/verify-bindings.c",
+    "native_execution_verifier_sha256": "1c16fc41948b4fb5200926b28188d41c55b4c81de14d57e8a08cf2efdf26e30c",
+    "execution_owner": "sim_backend_mlu::MluExecutionRuntime",
+    "execution_status_contract": {
+        "cnrt_success": 0,
+        "cnrt_device_lost": 100004,
+        "cnrt_out_of_memory": 100100,
+        "cnnl_success": 0,
+        "cnnl_out_of_memory": 2,
+        "ambiguous_statuses_are_promoted": false
+    },
+  "unsafe_owner": "sim_backend_mlu::loader",
+  "certificate_owner": "sim_runtime::NativeFfiRegistry",
+  "binding_status_owner": "sim_types::NativeBackendBindingStatus",
+  "semantic_capability_owner": "sim_tensor::BackendCapabilityMatrix",
+  "discovery_is_authorization": false,
+  "package_receipt_is_authorization": false,
+  "package": {
+    "script": "script/package-sim-backend-mlu",
+    "nix": "nix/sim-backends/mlu/default.nix",
+    "redistributes_vendor_runtime": false,
+    "license_approval_required_for_vendor_runtime": true,
+    "signature_algorithm": "ed25519",
+    "signature_domain": "zed-sim-mlu-package-v1",
+    "runtime_compilation_forbidden": true
+  },
+  "provenance": {
+    "cnnl_package_url": "https://sdk.cambricon.com/static/Basis/MLU370_X86_ubuntu20.04/cnnl_1.20.4-1.ubuntu20.04_amd64.deb",
+    "cntoolkit_package_url": "https://sdk.cambricon.com/static/Basis/MLU370_X86_ubuntu20.04/cntoolkit_3.6.1-1.ubuntu20.04_amd64.deb",
+    "cnnl_header_sha256": "69eaa4fa560fa02e1e636a0d19917244a2badd94a960721e57fa36059f6fa031",
+    "cnrt_header_sha256": "0c8ca727c2db85c60f69cf8cd96157ee1d547b175ddeaf45c0e94108f794a8f2",
+    "cnnl_package_sha256": "8874376ecdb81fb555d523197c922baace34d5a6abe567b68e1e74254f2b11e8",
+    "cnrt_package_sha256": "70e23ae6197f68f9c0440db985f7a20dc174837b4190ba6c70d70117e3d8fb51",
+    "reviewed_source": "Cambricon public CNNL 1.20.4 and CNToolkit 3.6.1 packages; vendor headers are not redistributed"
+  },
+  "unavailable": {
+    "feature_compilation_is_availability": false,
+    "discovery_is_availability": false,
+    "manifest_is_availability": false,
+    "ordinary_paths_are_loadable": false,
+    "missing_target_library_symbol_version_certificate_or_license_is_typed": true,
+    "hardware_certification_task": "comfy-parity-certify-device-cambricon-mlu-comfy-model-0017"
+  },
+    "state": "ABI foundation, opaque serialized execution-resource ownership, native tensor adapter, and production selection integration implemented; remains unavailable until registry/package certification and hardware certification"
+}

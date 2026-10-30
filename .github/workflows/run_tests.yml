@@ -67,7 +67,7 @@ jobs:
           echo '::notice::Collaborative workspace source is absent; full inventory audit deferred'
         fi
     - name: run_tests::shared_clippy
-      run: python3 .agents/specs/collaborative-workspace/scripts/test-inventory.py
+      run: python3 script/test-collaborative-workspace-inventory.py
     - name: steps::cleanup_cargo_config
       if: always()
       run: |
@@ -323,6 +323,7 @@ jobs:
         cargo xtask workflows
         git diff --exit-code
         cargo xtask check-workflows
+        python3 script/check-repository-inputs
         cargo xtask products --check
         cargo xtask bundle --product rust \
           --platform linux \

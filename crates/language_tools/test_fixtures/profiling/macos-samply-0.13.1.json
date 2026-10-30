@@ -1,0 +1,423 @@
+{
+  "meta": {
+    "version": 24,
+    "preprocessedProfileVersion": 49,
+    "symbolicated": false
+  },
+  "libs": [
+    {
+      "name": "dyld",
+      "path": "/fixture/dyld",
+      "debugName": "dyld",
+      "debugPath": "/fixture/dyld",
+      "breakpadId": "74E52480C2BD3C8D812D95FE2B74A0960",
+      "codeId": "74E52480C2BD3C8D812D95FE2B74A096",
+      "arch": "arm64e"
+    },
+    {
+      "name": "workload",
+      "path": "/fixture/workload",
+      "debugName": "workload",
+      "debugPath": "/fixture/workload",
+      "breakpadId": "DB90C28497B53F9F9546F14C552B8B120",
+      "codeId": "DB90C28497B53F9F9546F14C552B8B12",
+      "arch": "arm64"
+    }
+  ],
+  "threads": [
+    {
+      "frameTable": {
+        "length": 8,
+        "address": [
+          132323,
+          2511,
+          107351,
+          2219,
+          2195,
+          2395,
+          2284,
+          2300
+        ],
+        "inlineDepth": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "category": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "subcategory": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "func": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "nativeSymbol": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "innerWindowID": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "implementation": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "line": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "column": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "funcTable": {
+        "length": 8,
+        "name": [
+          1,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "isJS": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "relevantForJS": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "resource": [
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "fileName": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "lineNumber": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "columnNumber": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "nativeSymbols": {
+        "length": 0,
+        "address": [],
+        "functionSize": [],
+        "libIndex": [],
+        "name": []
+      },
+      "resourceTable": {
+        "length": 2,
+        "lib": [
+          0,
+          1
+        ],
+        "name": [
+          0,
+          2
+        ],
+        "host": [
+          null,
+          null
+        ],
+        "type": [
+          1,
+          1
+        ]
+      },
+      "samples": {
+        "length": 30,
+        "weightType": "samples",
+        "stack": [
+          6,
+          6,
+          6,
+          7,
+          7,
+          7,
+          6,
+          7,
+          7,
+          7,
+          7,
+          7,
+          6,
+          6,
+          6,
+          6,
+          6,
+          7,
+          7,
+          6,
+          7,
+          6,
+          7,
+          7,
+          7,
+          7,
+          6,
+          7,
+          7,
+          7
+        ],
+        "time": [
+          206.322167,
+          217.520458,
+          226.754458,
+          237.928375,
+          246.534708,
+          258.25575,
+          266.60575,
+          277.59675,
+          286.446417,
+          296.421625,
+          308.258417,
+          318.3415,
+          326.453125,
+          336.789375,
+          346.908583,
+          356.694625,
+          366.75525,
+          376.75,
+          386.40675,
+          397.406417,
+          406.750958,
+          418.75275,
+          427.705542,
+          437.245792,
+          446.59875,
+          458.265292,
+          466.61,
+          478.77875,
+          486.494875,
+          497.684167
+        ],
+        "weight": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "threadCPUDelta": [
+          7101,
+          10894,
+          7939,
+          9154,
+          7089,
+          9450,
+          6706,
+          9024,
+          7368,
+          8263,
+          9839,
+          8362,
+          6859,
+          8580,
+          8567,
+          8140,
+          8515,
+          8919,
+          8600,
+          9476,
+          8273,
+          11763,
+          8486,
+          8664,
+          7660,
+          9691,
+          6602,
+          9784,
+          6236,
+          9059
+        ]
+      },
+      "stackTable": {
+        "length": 8,
+        "prefix": [
+          null,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          5
+        ],
+        "frame": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "category": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "subcategory": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "stringArray": [
+        "dyld",
+        "0x204e3",
+        "workload",
+        "0x9cf",
+        "0x1a357",
+        "0x8ab",
+        "0x893",
+        "0x95b",
+        "0x8ec",
+        "0x8fc"
+      ]
+    }
+  ],
+  "pages": [],
+  "profilerOverhead": [],
+  "counters": []
+}

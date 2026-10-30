@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 
 const DESKTOP_FIXTURES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.agents/specs/collaborative-workspace/fixtures/migrations/desktop-stores.json"
+    "/../../crates/collaboration_domain/test_fixtures/compatibility/migrations/desktop-stores.json"
 ));
 const AGENT_SECRET: [u8; 32] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,

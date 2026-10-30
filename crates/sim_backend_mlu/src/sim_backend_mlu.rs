@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn catalog_maps_the_manifest_to_canonical_runtime_owners() {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/mlu.json"
+            "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/mlu.json"
         );
         assert!(catalog.contains(
             "\"canonical_abi_manifest_sha256\": \"40dbc7cbdda33dd1f0cd59b43057a8c00b2574393f3bd56838a57aa565068660\""

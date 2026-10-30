@@ -53,10 +53,12 @@ use nostr_compat::{
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-const PROTOCOL_EVENTS: &str =
-    include_str!("../../../.agents/specs/collaborative-workspace/fixtures/protocol/events.json");
-const PROTOCOL_MANIFEST: &str =
-    include_str!("../../../.agents/specs/collaborative-workspace/fixtures/protocol/manifest.json");
+const PROTOCOL_EVENTS: &str = include_str!(
+    "../../../crates/collaboration_domain/test_fixtures/compatibility/protocol/events.json"
+);
+const PROTOCOL_MANIFEST: &str = include_str!(
+    "../../../crates/collaboration_domain/test_fixtures/compatibility/protocol/manifest.json"
+);
 
 struct CatalogFixture {
     name: String,

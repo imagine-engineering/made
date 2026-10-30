@@ -306,7 +306,7 @@ fn val_workflow_ownership_001() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let fixture_paths = [
-        ".agents/specs/comfy-parity/ownership-policy.json",
+        "crates/sim_test_support/parity/ownership-policy.json",
         "crates/sim_types/src/json_compat.rs",
         "crates/sim_types/src/workflow.rs",
         "crates/sim_runtime/src/workflow_formats.rs",

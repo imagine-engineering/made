@@ -139,8 +139,8 @@ fn native_compute_breadth_is_exact_and_byte_stable() -> Result<(), Box<dyn std::
     let expected = build_closure()?;
     validate_closure(&expected)?;
     let serialized = stable_json(&expected)?;
-    let path =
-        repository_root().join(".agents/specs/comfy-parity/catalogs/native-compute-closure.json");
+    let path = repository_root()
+        .join("crates/sim_test_support/parity/catalogs/native-compute-closure.json");
     if std::env::var_os(UPDATE_ENV).is_some_and(|value| value == "1") {
         fs::write(&path, &serialized)?;
     }
@@ -231,13 +231,13 @@ fn build_closure() -> Result<NativeComputeClosure, Box<dyn std::error::Error>> {
         "crates/sim_test_support/fixtures/tensor_operations",
         "crates/sim_tensor/src/ops",
         "crates/sim_tensor/src/backends",
-        ".agents/specs/comfy-parity/catalogs/backend-models.csv",
-        ".agents/specs/comfy-parity/catalogs/native-model-family-closure.json",
+        "crates/sim_test_support/parity/catalogs/backend-models.csv",
+        "crates/sim_test_support/parity/catalogs/native-model-family-closure.json",
         "crates/sim_model/src/latent_formats",
         "crates/sim_sampler/src/algorithms",
         "crates/sim_sampler/src/schedulers",
-        ".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv",
-        ".agents/specs/comfy-parity/catalogs/native-spec-mapping.json",
+        "crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv",
+        "crates/sim_test_support/parity/catalogs/native-spec-mapping.json",
         "crates/sim_sampler/tests/breadth_closure.rs",
         "crates/sim_test_support/fixtures/samplers/lms_comfy_model_0192/source_high_orders.json",
         "crates/sim_test_support/fixtures/samplers/lms_comfy_model_0192/verify_source_high_orders.py",
@@ -273,7 +273,7 @@ fn build_closure() -> Result<NativeComputeClosure, Box<dyn std::error::Error>> {
         tensor_resolutions,
         devices,
         model_family_closure_sha256: digest_file(
-            &root.join(".agents/specs/comfy-parity/catalogs/native-model-family-closure.json"),
+            &root.join("crates/sim_test_support/parity/catalogs/native-model-family-closure.json"),
         )?,
         latent_formats,
         samplers,
@@ -286,7 +286,8 @@ fn build_closure() -> Result<NativeComputeClosure, Box<dyn std::error::Error>> {
 fn external_release_gates(
     root: &Path,
 ) -> Result<Vec<ExternalReleaseGate>, Box<dyn std::error::Error>> {
-    let mapping_path = root.join(".agents/specs/comfy-parity/catalogs/native-spec-mapping.json");
+    let mapping_path =
+        root.join("crates/sim_test_support/parity/catalogs/native-spec-mapping.json");
     let mapping: serde_json::Value = serde_json::from_slice(&fs::read(mapping_path)?)?;
     [
         ("corex_enablement", "/scope_transfers/corex_enablement"),
@@ -515,7 +516,8 @@ fn is_generated_row_module(module: &str) -> bool {
 }
 
 fn patch_rows(root: &Path) -> Result<Vec<PatchRow>, Box<dyn std::error::Error>> {
-    let path = root.join(".agents/specs/comfy-parity/catalogs/backend-conditioning-contracts.csv");
+    let path =
+        root.join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv");
     let rows = parse_csv(&fs::read_to_string(path)?)?;
     let header = rows.first().ok_or("conditioning catalog is empty")?;
     let contract = column(header, "contract_id")?;

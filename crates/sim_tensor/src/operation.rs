@@ -3761,8 +3761,8 @@ mod tests {
             );
         }
 
-        let ledger_path =
-            workspace.join(".agents/specs/comfy-parity/catalogs/native-backend-dependencies.json");
+        let ledger_path = workspace
+            .join("crates/sim_test_support/parity/catalogs/native-backend-dependencies.json");
         let ledger_bytes = fs::read(&ledger_path)?;
         let lock_bytes = fs::read(workspace.join("Cargo.lock"))?;
         let mut fixture_digests = BTreeMap::from([
@@ -3819,8 +3819,8 @@ mod tests {
                 "nix/sim-backends/metal/execution-policy.json",
                 "nix/sim-backends/metal/ffi-contracts-v1.schema.json",
                 "nix/sim-backends/metal/default.nix",
-                ".agents/specs/comfy-parity/catalogs/native-backend-abi/metal.json",
-                ".agents/specs/comfy-parity/catalogs/native-backend-abi/metal-execution.json",
+                "crates/sim_test_support/parity/catalogs/native-backend-abi/metal.json",
+                "crates/sim_test_support/parity/catalogs/native-backend-abi/metal-execution.json",
             ] {
                 fixture_digests.insert(
                     relative.to_owned(),

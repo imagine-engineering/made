@@ -270,7 +270,7 @@ fn val_sampler_001_dpm_adaptive_definition_and_provenance_are_exact() -> Result<
         fixture.source.equation_sha256
     );
     assert_eq!(
-        digest(".agents/specs/comfy-parity/catalogs/backend-models.csv")?,
+        digest("crates/sim_test_support/parity/catalogs/backend-models.csv")?,
         fixture.source.catalog_sha256
     );
     Ok(())

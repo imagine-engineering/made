@@ -214,7 +214,7 @@ for selected_profile in "${profiles[@]}"; do
     fi
 done
 
-python3 .agents/skills/feature-spec/scripts/validate_spec.py \
-    .agents/specs/collaborative-workspace
+python3 script/validate-spec.py \
+    docs/collaboration/collaborative-workspace
 
 echo "multiplayer-tools $mode matrix passed for: ${profiles[*]}"

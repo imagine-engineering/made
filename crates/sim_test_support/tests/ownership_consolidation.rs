@@ -93,9 +93,9 @@ fn task403_conditioning_control_ownership_is_singular_and_sampler_consumed()
     assert!(!nodes.contains("struct ControlNetRebindRequest"));
     assert!(!nodes.contains("BTreeMap<String, ConditioningMetadataValue>"));
     let ownership =
-        fs::read_to_string(root.join(".agents/specs/comfy-parity/ownership-policy.json"))?;
+        fs::read_to_string(root.join("crates/sim_test_support/parity/ownership-policy.json"))?;
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     for evidence in [
         "native_conditioning_control_metadata",
@@ -234,7 +234,7 @@ fn task404_model_transform_ownership_is_singular_and_executable()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -343,7 +343,7 @@ fn task405_model_training_ownership_is_singular_and_runtime_injected()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -379,7 +379,7 @@ fn task405_model_training_ownership_is_singular_and_runtime_injected()
         );
     }
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -779,7 +779,7 @@ fn task390_depth_anything_tensor_oracle_is_only_a_development_reference()
 
     let root = repository_root()?;
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let policy_concerns = policy
         .get("concerns")
@@ -826,7 +826,7 @@ fn task390_depth_anything_tensor_oracle_is_only_a_development_reference()
     }
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -994,7 +994,7 @@ fn task391_dinov2_has_one_crate_private_backbone_owner() -> Result<(), Box<dyn s
     assert!(da3.contains("reconstruct_checkpoint"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -1014,7 +1014,7 @@ fn task391_dinov2_has_one_crate_private_backbone_owner() -> Result<(), Box<dyn s
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = parse_csv_records(&catalog)?
         .into_iter()
@@ -1076,7 +1076,7 @@ fn task392_moge_has_one_native_resource_and_dino_adapter_owner()
     assert!(payload.contains("NativeModelBackingKind::NativeMogeResource"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy["concerns"]
         .as_array()
@@ -1129,7 +1129,7 @@ fn task392_moge_has_one_native_resource_and_dino_adapter_owner()
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -1223,7 +1223,7 @@ fn val_ownership_task393_style_model_resource_001() -> Result<(), Box<dyn std::e
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy["concerns"]
         .as_array()
@@ -1257,7 +1257,7 @@ fn val_ownership_task393_style_model_resource_001() -> Result<(), Box<dyn std::e
     assert!(!concern_text.contains("NativeGligenResource"));
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -1336,7 +1336,7 @@ fn val_ownership_task397_conditioning_auxiliary_resources_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy["concerns"]
         .as_array()
@@ -1396,7 +1396,7 @@ fn val_ownership_task397_conditioning_auxiliary_resources_001()
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -1517,7 +1517,7 @@ fn val_ownership_task398_model_store_stream_source_001() -> Result<(), Box<dyn s
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -1544,7 +1544,7 @@ fn val_ownership_task398_model_store_stream_source_001() -> Result<(), Box<dyn s
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -1618,7 +1618,7 @@ fn val_ownership_task399_model_source_worker_bridge_001() -> Result<(), Box<dyn 
     assert!(controller.contains("replace_model_source_service()"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -1650,7 +1650,7 @@ fn val_ownership_task399_model_source_worker_bridge_001() -> Result<(), Box<dyn 
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -1806,7 +1806,7 @@ fn val_ownership_task733_model_source_auxiliary_artifact_stream_001()
     assert!(resilience.contains("assert_eq!(bridged, config)"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let matching_concerns = policy["concerns"]
         .as_array()
@@ -1858,7 +1858,7 @@ fn val_ownership_task733_model_source_auxiliary_artifact_stream_001()
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -1973,7 +1973,7 @@ fn val_ownership_task400_native_model_resource_service_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -1994,7 +1994,7 @@ fn val_ownership_task400_native_model_resource_service_001()
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -2195,7 +2195,7 @@ fn val_ownership_task401_native_model_resource_service_recipes_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -2223,7 +2223,7 @@ fn val_ownership_task401_native_model_resource_service_recipes_001()
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -2451,7 +2451,7 @@ fn val_ownership_native_model_resource_execution_001() -> Result<(), Box<dyn std
     assert!(!worker_protocol.contains("NativeModelPayload"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -2479,7 +2479,7 @@ fn val_ownership_native_model_resource_execution_001() -> Result<(), Box<dyn std
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let mut records = parse_csv_records(&catalog)?.into_iter();
     let header = records.next().ok_or("ownership catalog has no header")?;
@@ -3097,9 +3097,10 @@ fn run_ownership_validation(
         fs::read_to_string(root.join("script/package-sim-backend-metal-execution"))?;
     let backend_metal_execution_package_policy =
         fs::read_to_string(root.join("nix/sim-backends/metal/execution-policy.json"))?;
-    let backend_metal_execution_catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/native-backend-abi/metal-execution.json"),
-    )?;
+    let backend_metal_execution_catalog =
+        fs::read_to_string(root.join(
+            "crates/sim_test_support/parity/catalogs/native-backend-abi/metal-execution.json",
+        ))?;
     let gpui_metal_renderer =
         fs::read_to_string(root.join("crates/gpui_macos/src/metal_renderer.rs"))?;
     let media_owner = fs::read_to_string(root.join("crates/media/src/media.rs"))?;
@@ -3222,19 +3223,20 @@ fn run_ownership_validation(
         fs::read_to_string(root.join("crates/zed/src/sim_plugin_services.rs"))?;
     let zed_cli = fs::read_to_string(root.join("crates/zed/src/sim_cli.rs"))?;
     let ownership_policy_source =
-        fs::read_to_string(root.join(".agents/specs/comfy-parity/ownership-policy.json"))?;
+        fs::read_to_string(root.join("crates/sim_test_support/parity/ownership-policy.json"))?;
     let ownership_policy: serde_json::Value = serde_json::from_str(&ownership_policy_source)?;
-    let ownership_generator =
-        fs::read_to_string(root.join(".agents/specs/comfy-parity/generate_ownership_catalog.py"))?;
-    let ownership_catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+    let ownership_generator = fs::read_to_string(
+        root.join("crates/sim_test_support/parity/generate_ownership_catalog.py"),
     )?;
-    let task_source = fs::read_to_string(root.join(".agents/specs/comfy-parity/tasks.md"))?;
+    let ownership_catalog = fs::read_to_string(
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
+    )?;
+    let task_source = fs::read_to_string(root.join("crates/sim_test_support/parity/tasks.md"))?;
     let native_spec_mapping: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/native-spec-mapping.json"),
+        root.join("crates/sim_test_support/parity/catalogs/native-spec-mapping.json"),
     )?)?;
     let corex_future_task_source =
-        fs::read_to_string(root.join(".agents/specs/comfy-corex-enablement/tasks.md"))?;
+        fs::read_to_string(root.join("docs/sim/corex-enablement/tasks.md"))?;
     let tensor_external_kernel_part_one =
         fs::read_to_string(root.join("crates/sim_tensor/src/ops/external_tensor_kernel_01.rs"))?;
     let tensor_external_kernel_part_two =
@@ -8587,7 +8589,7 @@ fn run_ownership_validation(
         .pointer("/scope_transfers/corex_enablement")
         .is_some_and(|transfer| {
             transfer.get("destination_spec").and_then(serde_json::Value::as_str)
-                == Some(".agents/specs/comfy-corex-enablement")
+                == Some("docs/sim/corex-enablement")
                 && transfer
                     .get("retained_task_id")
                     .and_then(serde_json::Value::as_str)
@@ -12374,7 +12376,7 @@ fn run_ownership_validation(
         "nix/sim-backends/metal/ffi-contracts-v1.schema.json",
         "nix/sim-backends/metal/default.nix",
         "crates/sim_runtime/src/native_ffi_metal.rs",
-        ".agents/specs/comfy-parity/catalogs/native-backend-abi/metal.json",
+        "crates/sim_test_support/parity/catalogs/native-backend-abi/metal.json",
         "crates/sim_backend_mlu/src/sim_backend_mlu.rs",
         "crates/sim_backend_mlu/src/abi.rs",
         "crates/sim_backend_mlu/src/loader.rs",
@@ -12384,7 +12386,7 @@ fn run_ownership_validation(
         "crates/sim_backend_mlu/LICENSES",
         "script/package-sim-backend-mlu",
         "nix/sim-backends/mlu/package-policy.json",
-        ".agents/specs/comfy-parity/catalogs/native-backend-abi/mlu.json",
+        "crates/sim_test_support/parity/catalogs/native-backend-abi/mlu.json",
         "crates/sim_backend_directml/src/sim_backend_directml.rs",
         "crates/sim_backend_directml/src/abi.rs",
         "crates/sim_backend_directml/src/loader.rs",
@@ -12396,7 +12398,7 @@ fn run_ownership_validation(
         "crates/gpui_windows/src/directx_renderer.rs",
         "script/package-sim-backend-directml",
         "nix/sim-backends/directml/package-policy.json",
-        ".agents/specs/comfy-parity/catalogs/native-backend-abi/directml.json",
+        "crates/sim_test_support/parity/catalogs/native-backend-abi/directml.json",
         "crates/sim_backend_npu/src/sim_backend_npu.rs",
         "crates/sim_backend_npu/src/abi.rs",
         "crates/sim_backend_npu/src/loader.rs",
@@ -12408,7 +12410,7 @@ fn run_ownership_validation(
         "crates/sim_backend_npu/LICENSES",
         "script/package-sim-backend-npu",
         "nix/sim-backends/npu/package-policy.json",
-        ".agents/specs/comfy-parity/catalogs/native-backend-abi/npu.json",
+        "crates/sim_test_support/parity/catalogs/native-backend-abi/npu.json",
         "crates/sim_backend_rocm/src/sim_backend_rocm.rs",
         "crates/sim_backend_xpu/src/sim_backend_xpu.rs",
         "crates/sim_backend_rocm/src/loader.rs",
@@ -12444,7 +12446,7 @@ fn run_ownership_validation(
         "crates/sim_model/src/quantization.rs",
         "crates/sim_model/src/quantized_autograd.rs",
         "crates/sim_model/tests/quantized_autograd.rs",
-        ".agents/specs/comfy-parity/fixtures/quant-linear-source-oracle.json",
+        "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json",
         "crates/sim_test_support/fixtures/autograd/breadth-v1.json",
         "crates/sim_test_support/tests/autograd_breadth.rs",
         "crates/sim_tensor/src/ops/external_tensor_kernel_01.rs",
@@ -12497,7 +12499,7 @@ fn run_ownership_validation(
         "crates/sim_backend_metal/kernels/tensor_ops.metal",
         "nix/sim-backends/metal/execution-policy.json",
         "script/package-sim-backend-metal-execution",
-        ".agents/specs/comfy-parity/catalogs/native-backend-abi/metal-execution.json",
+        "crates/sim_test_support/parity/catalogs/native-backend-abi/metal-execution.json",
         "crates/sim_model/src/artifact_index.rs",
         "crates/sim_model/src/clip.rs",
         "crates/sim_model/src/clip_text_encoder_t5.rs",
@@ -12526,10 +12528,10 @@ fn run_ownership_validation(
         "crates/sim_api/src/transport.rs",
         "crates/zed/src/zed.rs",
         "crates/zed/src/sim_plugin_services.rs",
-        ".agents/specs/comfy-parity/ownership-policy.json",
-        ".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv",
-        ".agents/specs/comfy-parity/generate_ownership_catalog.py",
-        ".agents/specs/comfy-parity/regenerate_native_planning.py",
+        "crates/sim_test_support/parity/ownership-policy.json",
+        "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
+        "crates/sim_test_support/parity/generate_ownership_catalog.py",
+        "crates/sim_test_support/parity/regenerate_native_planning.py",
         "crates/sim_test_support/tests/ownership_consolidation.rs",
     ];
     let fixture_digests = fixture_paths
@@ -13557,7 +13559,7 @@ fn cpu_vae_convolution_bridge_preserves_canonical_owners() -> Result<(), Box<dyn
     let vae_image = fs::read_to_string(root.join("crates/sim_model/src/vae_image.rs"))?;
     let assets = fs::read_to_string(root.join("crates/sim_runtime/src/assets.rs"))?;
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
 
     assert!(cpu_backend.contains("ConvolutionGeometry::new"));
@@ -13670,7 +13672,7 @@ fn val_ownership_001_task353_vae_tiling_preserves_canonical_owners()
     assert!(!production.to_ascii_lowercase().contains("retry"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -13758,7 +13760,7 @@ fn val_ownership_001_task354_image_vae_preserves_canonical_owners()
     );
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -13866,7 +13868,7 @@ fn val_ownership_001_task346_audio_vae_preserves_canonical_owners()
     assert!(assets.contains("pub fn load_and_execute_audio_vae_with_context"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -13983,7 +13985,7 @@ fn val_ownership_001_task347_structured_vae_preserves_canonical_owners()
     assert!(authorization < admission && admission < model_load);
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -14104,7 +14106,7 @@ fn val_ownership_001_task346_text_encoder_registry_preserves_canonical_owners()
         .collect::<Result<Vec<_>, std::io::Error>>()?;
     let registry = fs::read_to_string(root.join("crates/sim_model/src/clip_text_encoders.rs"))?;
     let module_root = fs::read_to_string(root.join("crates/sim_model/src/sim_model.rs"))?;
-    let design = fs::read_to_string(root.join(".agents/specs/comfy-parity/design.md"))?;
+    let design = fs::read_to_string(root.join("crates/sim_test_support/parity/design.md"))?;
 
     assert_eq!(
         production_source_occurrences(&sources, "pub struct TextEncoderArchitectureRegistry {")
@@ -14140,7 +14142,7 @@ fn val_ownership_001_task346_text_encoder_registry_preserves_canonical_owners()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -14982,8 +14984,9 @@ fn validate_native_shader_execution_boundary(
     let executor = fs::read_to_string(root.join("crates/sim_runtime/src/executor.rs"))?;
     let controller =
         fs::read_to_string(root.join("crates/sim_runtime/src/native_execution_controller.rs"))?;
-    let policy = fs::read_to_string(root.join(".agents/specs/comfy-parity/ownership-policy.json"))?;
-    let tasks = fs::read_to_string(root.join(".agents/specs/comfy-parity/tasks.md"))?;
+    let policy =
+        fs::read_to_string(root.join("crates/sim_test_support/parity/ownership-policy.json"))?;
+    let tasks = fs::read_to_string(root.join("crates/sim_test_support/parity/tasks.md"))?;
 
     for required in [
         "naga = { version = \"29.0.4\", features = [\"glsl-in\"] }",
@@ -15289,7 +15292,8 @@ fn validate_native_text_regex_boundary(
     assert!(execution.contains("fn validate_workflow_text("));
     assert!(execution.contains("'\\n' | '\\r' | '\\t'"));
     assert!(execution.contains("fn validate_identifier("));
-    let policy = fs::read_to_string(root.join(".agents/specs/comfy-parity/ownership-policy.json"))?;
+    let policy =
+        fs::read_to_string(root.join("crates/sim_test_support/parity/ownership-policy.json"))?;
     assert!(policy.contains("comfy-parity-native-text-transform-foundation"));
     assert!(policy.contains("canonical-text-transforms-to-generated-text-leaves"));
     assert!(policy.contains(r"regex\\s*\\.replace\\("));
@@ -15387,7 +15391,7 @@ fn validate_native_image_source_compatibility_boundary(
     assert!(runtime.contains(".prepare_image_preview(&image, \"ComfyUI_temp\")"));
     assert!(runtime.contains("let (effects, ui) = preview.into_parts();"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15486,7 +15490,7 @@ fn val_ownership_001_native_decoder_text_generation_has_one_boundary()
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15552,7 +15556,7 @@ fn val_ownership_task400p_sdpose_projection_001() -> Result<(), Box<dyn std::err
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15609,7 +15613,7 @@ fn val_ownership_task402_sdpose_sd2_capture_001() -> Result<(), Box<dyn std::err
         assert!(manifest.contains(required), "SD2 manifest lacks {required}");
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15678,7 +15682,7 @@ fn val_ownership_task403_sdpose_model_resource_001() -> Result<(), Box<dyn std::
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15747,7 +15751,7 @@ fn val_ownership_task407_sdpose_execution_001() -> Result<(), Box<dyn std::error
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15884,7 +15888,7 @@ fn val_ownership_native_sampling_profile_guidance_001() -> Result<(), Box<dyn st
         assert!(!source.contains(forbidden), "{path} duplicates {forbidden}");
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15917,7 +15921,7 @@ fn val_ownership_video_output_prefix_foundation_001() -> Result<(), Box<dyn std:
     assert!(committer.contains("fn normalize_output_prefix("));
     assert!(committer.contains("normalize_optional_relative_path(Path::new(prefix))"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -15977,7 +15981,7 @@ fn val_ownership_video_component_foundation_001() -> Result<(), Box<dyn std::err
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16053,7 +16057,7 @@ fn val_ownership_native_video_codec_plan_foundation_001() -> Result<(), Box<dyn 
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16145,7 +16149,7 @@ fn val_ownership_native_video_codec_ffi_certification_001() -> Result<(), Box<dy
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16244,7 +16248,7 @@ fn val_ownership_native_video_codec_package_capture_001() -> Result<(), Box<dyn 
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16350,7 +16354,7 @@ fn val_ownership_native_video_codec_elf_inspection_001() -> Result<(), Box<dyn s
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16426,7 +16430,7 @@ fn val_ownership_native_video_codec_inspected_certification_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16520,7 +16524,7 @@ fn val_ownership_native_video_codec_dependency_contract_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16630,7 +16634,7 @@ fn val_ownership_native_video_codec_dependency_closure_certification_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16723,7 +16727,7 @@ fn val_ownership_native_video_codec_retained_loader_001() -> Result<(), Box<dyn 
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16823,7 +16827,7 @@ fn val_ownership_native_video_codec_reviewed_abi_001() -> Result<(), Box<dyn std
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -16977,7 +16981,7 @@ fn val_ownership_task555_general_video_codec_declarations_001()
     );
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -17151,7 +17155,7 @@ fn val_ownership_task563_video_demux_decode_001() -> Result<(), Box<dyn std::err
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()
@@ -17175,7 +17179,7 @@ fn val_ownership_task563_video_demux_decode_001() -> Result<(), Box<dyn std::err
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -17301,7 +17305,7 @@ fn val_ownership_task562_video_codec_package_bootstrap_001()
     assert!(worker.contains("append_video_codec_cache_configuration("));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy["concerns"]
         .as_array()
@@ -17341,7 +17345,7 @@ fn val_ownership_task562_video_codec_package_bootstrap_001()
     }
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -17431,7 +17435,7 @@ fn val_ownership_native_video_codec_callable_symbol_certification_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     for concern_name in [
         "native_execution_elf_dynamic_contract_inspection",
@@ -17519,7 +17523,7 @@ fn val_ownership_native_video_codec_symbol_binding_001() -> Result<(), Box<dyn s
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -17618,7 +17622,7 @@ fn val_ownership_native_video_codec_data_plane_abi_001() -> Result<(), Box<dyn s
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -17701,7 +17705,7 @@ fn val_ownership_native_video_codec_bounded_avio_001() -> Result<(), Box<dyn std
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -17780,7 +17784,7 @@ fn val_ownership_native_video_codec_ltxv_h264_admission_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -17874,7 +17878,7 @@ fn val_ownership_native_video_codec_suite_admission_001() -> Result<(), Box<dyn 
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -17950,7 +17954,7 @@ fn val_ownership_native_video_codec_vp9_webm_encode_001() -> Result<(), Box<dyn 
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -18025,7 +18029,7 @@ fn val_ownership_native_video_codec_vp9_webm_batch_encode_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -18111,7 +18115,7 @@ fn val_ownership_native_video_codec_vp9_webm_thread_bridge_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -18203,7 +18207,7 @@ fn val_ownership_native_video_codec_av1_webm_thread_bridge_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -18300,7 +18304,7 @@ fn val_ownership_native_video_codec_h264_mp4_thread_bridge_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -18406,7 +18410,7 @@ fn val_ownership_native_video_codec_webm_node_service_001() -> Result<(), Box<dy
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -18520,7 +18524,7 @@ fn val_ownership_native_video_component_h264_mp4_backing_service_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -18632,7 +18636,7 @@ fn val_ownership_native_video_backing_representation_001() -> Result<(), Box<dyn
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -18718,7 +18722,7 @@ fn val_ownership_native_video_save_webm_node_001() -> Result<(), Box<dyn std::er
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -18819,7 +18823,7 @@ fn val_ownership_native_video_codec_vp9_webm_crf_001() -> Result<(), Box<dyn std
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task_id = "comfy-parity-native-video-codec-vp9-webm-crf-foundation";
     let mapped_concerns = policy
@@ -18925,7 +18929,7 @@ fn val_ownership_native_video_codec_vp9_webm_container_metadata_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task_id = "comfy-parity-native-video-codec-vp9-webm-container-metadata-foundation";
     let mapped_concerns = policy
@@ -19049,7 +19053,7 @@ fn val_ownership_native_video_codec_vp9_webm_alpha_001() -> Result<(), Box<dyn s
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task_id = "comfy-parity-native-video-codec-vp9-webm-alpha-foundation";
     let mapped_concerns = policy
@@ -19170,7 +19174,7 @@ fn val_ownership_native_video_codec_av1_webm_sequence_encode_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task_id = "comfy-parity-native-video-codec-av1-webm-sequence-encode-foundation";
     let mapped_concerns = policy
@@ -19239,7 +19243,7 @@ fn val_ownership_native_video_codec_h264_mp4_sequence_encode_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -19323,7 +19327,7 @@ fn val_ownership_native_video_codec_h264_mp4_10bit_sequence_encode_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task_id = "comfy-parity-native-video-codec-h264-mp4-10bit-sequence-encode-foundation";
     let mapped_concerns = policy
@@ -19399,7 +19403,7 @@ fn val_ownership_native_video_codec_h264_mp4_10bit_thread_bridge_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -19491,7 +19495,7 @@ fn val_ownership_native_video_component_h264_mp4_10bit_backing_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task_id = "comfy-parity-native-video-component-h264-mp4-10bit-backing-foundation";
     let mapped_concerns = policy
@@ -19572,7 +19576,7 @@ fn val_ownership_native_video_codec_ltxv_h264_mp4_encode_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -19647,7 +19651,7 @@ fn val_ownership_native_video_codec_ltxv_h264_mp4_demux_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -19722,7 +19726,7 @@ fn val_ownership_native_video_codec_ltxv_h264_mp4_decode_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -19801,7 +19805,7 @@ fn val_ownership_native_video_codec_ltxv_tensor_preprocess_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -19886,7 +19890,7 @@ fn val_ownership_native_video_codec_ltxv_thread_service_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20001,7 +20005,7 @@ fn val_ownership_native_video_codec_ltxv_node_service_001() -> Result<(), Box<dy
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20079,7 +20083,7 @@ fn val_ownership_native_video_codec_ltxv_node_adapter_001() -> Result<(), Box<dy
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20161,7 +20165,7 @@ fn val_ownership_native_video_component_create_node_001() -> Result<(), Box<dyn 
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20225,7 +20229,7 @@ fn val_ownership_native_video_component_extract_node_001() -> Result<(), Box<dyn
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20309,7 +20313,7 @@ fn val_ownership_native_frame_interpolate_node_001() -> Result<(), Box<dyn std::
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20349,7 +20353,7 @@ fn val_ownership_video_output_media_foundation_001() -> Result<(), Box<dyn std::
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20391,7 +20395,7 @@ fn val_ownership_video_output_projection_foundation_001() -> Result<(), Box<dyn 
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20435,7 +20439,7 @@ fn val_ownership_frame_interpolation_model_foundation_001() -> Result<(), Box<dy
     assert!(!model.contains("NativeCache"));
     assert!(!model.contains("NativeStoredPayload"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20470,7 +20474,7 @@ fn val_ownership_frame_interpolation_resource_foundation_001()
     assert!(stored.contains("NativeModelResourceRole::FrameInterpolation"));
     assert!(stored.contains("resource.frame_interpolation_resource().is_some()"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20573,7 +20577,7 @@ fn val_ownership_audio_encoder_resource_foundation_001() -> Result<(), Box<dyn s
     ));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -20612,7 +20616,7 @@ fn val_ownership_audio_encoder_resource_foundation_001() -> Result<(), Box<dyn s
     );
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -20651,7 +20655,7 @@ fn val_ownership_frame_interpolation_invocation_foundation_001()
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20689,7 +20693,7 @@ fn val_ownership_native_tensor_grid_sample_foundation_001() -> Result<(), Box<dy
     assert!(tests.contains("grid_sample_tensor_is_bounded_dtype_preserving_and_failure_atomic"));
     assert!(tests.contains("WorkspaceAuthorizationExceeded"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20736,7 +20740,7 @@ fn val_ownership_native_tensor_interpolate_foundation_001() -> Result<(), Box<dy
     assert!(tests.contains("interpolate_tensor_is_bounded_dtype_preserving_and_failure_atomic"));
     assert!(tests.contains("WorkspaceAuthorizationExceeded"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20795,7 +20799,7 @@ fn val_ownership_native_rife_tensor_arithmetic_foundation_001()
             .contains("bounded_real_arithmetic_preserves_dtype_broadcasting_and_failure_atomicity")
     );
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20855,7 +20859,7 @@ fn val_ownership_native_rife_execution_foundation_001() -> Result<(), Box<dyn st
     assert!(fixture.contains("\"licensed_checkpoint_included\": false"));
     assert!(fixture.contains("\"full_production_numeric_parity\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20919,7 +20923,7 @@ fn val_ownership_native_rife_sequence_execution_foundation_001()
     assert!(fixture.contains("\"codec_execution\": false"));
     assert!(fixture.contains("\"output_publication\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -20942,7 +20946,7 @@ fn val_ownership_native_rife_sequence_execution_foundation_001()
             }))
     );
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -20993,7 +20997,7 @@ fn val_ownership_native_film_tensor_average_pool_foundation_001()
     assert!(fixture.contains("\"film_checkpoint_execution\": false"));
     assert!(fixture.contains("\"codec_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21045,7 +21049,7 @@ fn val_ownership_native_film_warp_foundation_001() -> Result<(), Box<dyn std::er
     assert!(fixture.contains("\"rife_grid_semantics\": false"));
     assert!(fixture.contains("\"codec_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21094,7 +21098,7 @@ fn val_ownership_native_film_subtree_foundation_001() -> Result<(), Box<dyn std:
     assert!(fixture.contains("\"production_dense_numeric_parity\": false"));
     assert!(fixture.contains("\"film_feature_diagonal_concatenation\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21144,7 +21148,7 @@ fn val_ownership_native_film_feature_pyramid_foundation_001()
     assert!(fixture.contains("\"production_dense_weight_numeric_parity\": false"));
     assert!(fixture.contains("\"flow_estimator_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21197,7 +21201,7 @@ fn val_ownership_native_film_flow_pyramid_synthesis_foundation_001()
     assert!(fixture.contains("\"coarsest_output_aliases_source\": true"));
     assert!(fixture.contains("\"flow_predictor_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21252,7 +21256,7 @@ fn val_ownership_native_film_flow_estimator_foundation_001()
     assert!(fixture.contains("\"shared_predictor_levels\": [6, 5, 4, 3]"));
     assert!(fixture.contains("\"production_dense_weight_numeric_parity\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21304,7 +21308,7 @@ fn val_ownership_native_film_fusion_foundation_001() -> Result<(), Box<dyn std::
     assert!(fixture.contains("\"multi_timestep_or_sequence_execution\": false"));
     assert!(fixture.contains("\"effect_or_publication_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21359,7 +21363,7 @@ fn val_ownership_native_film_multi_timestep_foundation_001()
     assert!(fixture.contains("\"adjacent_pair_sequence_reuse\": false"));
     assert!(fixture.contains("\"effect_or_publication_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21417,7 +21421,7 @@ fn val_ownership_native_film_sequence_foundation_001() -> Result<(), Box<dyn std
     assert!(fixture.contains("\"multi_to_single_oom_downgrade\": false"));
     assert!(fixture.contains("\"native_cache_or_persistent_feature_state\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21504,7 +21508,7 @@ fn val_ownership_native_frame_interpolation_resource_exhaustion_foundation_001()
     assert!(fixture.contains("\"retry_or_fallback_execution\": false"));
     assert!(fixture.contains("\"effect_or_publication_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21580,7 +21584,7 @@ fn val_ownership_native_frame_interpolation_sequence_fallback_foundation_001()
     assert!(fixture.contains("\"allocator_or_workspace_owner\": false"));
     assert!(fixture.contains("\"effect_or_publication_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21636,7 +21640,7 @@ fn val_ownership_native_film_pyramid_algebra_foundation_001()
     assert!(fixture.contains("\"fusion_execution\": false"));
     assert!(fixture.contains("\"effect_or_publication_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21686,7 +21690,7 @@ fn val_ownership_native_film_image_pyramid_foundation_001() -> Result<(), Box<dy
     assert!(fixture.contains("\"film_feature_extractor_execution\": false"));
     assert!(fixture.contains("\"codec_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21737,7 +21741,7 @@ fn val_ownership_native_film_padded_convolution_foundation_001()
     assert!(fixture.contains("\"film_checkpoint_execution\": false"));
     assert!(fixture.contains("\"codec_execution\": false"));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     assert!(
         policy
@@ -21792,7 +21796,7 @@ fn val_ownership_task404_bounded_dense_spatial_inference_001()
     assert!(module.contains("pub fn instance_norm_2d_tensor_with_context_exact_native("));
     assert!(module.contains("canonical_group_norm_tensor("));
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task = "comfy-parity-native-bounded-dense-spatial-inference-foundation";
     let concerns = policy
@@ -21867,7 +21871,7 @@ fn val_ownership_task405_lotusd_sampling_001() -> Result<(), Box<dyn std::error:
         );
     }
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task = "comfy-parity-native-lotusd-sampling-foundation";
     let concerns = policy
@@ -21944,7 +21948,7 @@ fn val_ownership_task406_sdpose_head_projection_001() -> Result<(), Box<dyn std:
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task = "comfy-parity-native-sdpose-head-projection-foundation";
     let concerns = policy
@@ -22026,7 +22030,7 @@ fn val_ownership_task411_provider_worker_stream_protocol_001()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let task = "comfy-parity-provider-worker-stream-protocol";
     assert!(
@@ -22223,7 +22227,7 @@ fn val_ownership_task412_provider_runtime_stream_progress_001()
     );
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concerns = policy
         .get("concerns")
@@ -22486,7 +22490,7 @@ fn val_ownership_latent_upscale_model_resource_foundation_001()
     );
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -22576,7 +22580,7 @@ fn val_ownership_task415_provider_input_host_reuses_canonical_v1_abi()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = repository_root()?;
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -22660,7 +22664,7 @@ fn val_ownership_task415_provider_input_host_reuses_canonical_v1_abi()
     assert_eq!(input_host.matches(": func(").count(), 9);
 
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -22779,7 +22783,7 @@ fn task408_compile_policy_bridge_has_one_canonical_owner() -> Result<(), Box<dyn
     assert!(runtime_controller.contains("NativeStoredModelPayload::native_compiled_diffusion"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -22807,7 +22811,7 @@ fn task408_compile_policy_bridge_has_one_canonical_owner() -> Result<(), Box<dyn
         }));
     }
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -22960,7 +22964,7 @@ fn task409_model_accelerator_execution_preserves_canonical_owners()
     }
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy
         .get("concerns")
@@ -22981,7 +22985,7 @@ fn task409_model_accelerator_execution_preserves_canonical_owners()
             }))
     );
     let catalog = fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/catalogs/authoritative-ownership.csv"),
+        root.join("crates/sim_test_support/parity/catalogs/authoritative-ownership.csv"),
     )?;
     let row = catalog
         .lines()
@@ -23001,8 +23005,9 @@ fn task409_model_accelerator_execution_preserves_canonical_owners()
             "Task409 catalog row lacks {required}"
         );
     }
-    let backend_models =
-        fs::read_to_string(root.join(".agents/specs/comfy-parity/catalogs/backend-models.csv"))?;
+    let backend_models = fs::read_to_string(
+        root.join("crates/sim_test_support/parity/catalogs/backend-models.csv"),
+    )?;
     let cpu = backend_models
         .lines()
         .find(|line| line.starts_with("hardware backend,CPU,"))
@@ -23214,7 +23219,7 @@ fn task415_media_text_has_one_font_raster_and_composition_owner()
     assert!(restart.contains("recovered.replacement_pixel_sha256"));
 
     let policy: serde_json::Value = serde_json::from_str(&fs::read_to_string(
-        root.join(".agents/specs/comfy-parity/ownership-policy.json"),
+        root.join("crates/sim_test_support/parity/ownership-policy.json"),
     )?)?;
     let concern = policy["concerns"]
         .as_array()

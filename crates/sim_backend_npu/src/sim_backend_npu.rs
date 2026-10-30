@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn catalog_maps_the_manifest_to_canonical_runtime_owners() {
         let catalog = include_str!(
-            "../../../.agents/specs/comfy-parity/catalogs/native-backend-abi/npu.json"
+            "../../../crates/sim_test_support/parity/catalogs/native-backend-abi/npu.json"
         );
         assert!(catalog.contains(
             "\"canonical_abi_manifest_sha256\": \"2df75a090079b923cdeea2f5464b29a9c78ef35223b6a16884ed07a778466b2d\""
