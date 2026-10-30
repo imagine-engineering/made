@@ -172,7 +172,8 @@ pub(crate) fn release_signing_check() -> Workflow {
         .add_path("script/check-signing-environment")
         .add_path("script/test-production-signing")
         .add_path("script/sign-linux-archive")
-        .add_path("script/lib/macos-signing.sh");
+        .add_path("script/lib/macos-signing.sh")
+        .add_path("crates/auto_update_helper/**");
     named::workflow()
         .name("release_signing_check")
         .on(Event::default().push(contract_push).workflow_dispatch(

@@ -465,10 +465,10 @@ pub(crate) fn perform_update(app_dir: &Path, hwnd: Option<isize>, launch: bool) 
 
 #[cfg(test)]
 mod test {
-    use super::{Job, perform_update};
+    use super::{Job, managed_runtime_update_jobs, perform_update};
 
     #[test]
-    fn managed_runtime_upgrade_and_rollback_preserve_payloads() -> Result<()> {
+    fn managed_runtime_upgrade_and_rollback_preserve_payloads() -> anyhow::Result<()> {
         for existing in [false, true] {
             let temporary = tempfile::tempdir()?;
             let root = temporary.path();

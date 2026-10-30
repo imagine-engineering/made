@@ -13,6 +13,7 @@ on:
     - script/test-production-signing
     - script/sign-linux-archive
     - script/lib/macos-signing.sh
+    - crates/auto_update_helper/**
   workflow_dispatch:
     inputs:
       version:
