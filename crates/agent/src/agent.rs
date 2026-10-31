@@ -201,9 +201,10 @@ pub struct SkillLoadingIssuesUpdated {
     pub issues: Vec<SkillLoadingIssue>,
 }
 
+#[derive(Clone)]
 pub struct DoctorOpenRequest {
     pub project: Entity<Project>,
-    completion: std::cell::RefCell<Option<futures::channel::oneshot::Sender<Result<()>>>>,
+    completion: Rc<std::cell::RefCell<Option<futures::channel::oneshot::Sender<Result<()>>>>>,
 }
 
 impl DoctorOpenRequest {
@@ -4067,15 +4068,26 @@ impl acp_thread::AgentSessionClientUserMessageIds for NativeAgentConnection {
                 let (completion, acknowledged) = futures::channel::oneshot::channel();
                 let request = DoctorOpenRequest {
                     project: project_state.project.clone(),
-                    completion: std::cell::RefCell::new(Some(completion)),
+                    completion: Rc::new(std::cell::RefCell::new(Some(completion))),
                 };
                 self.0.update(cx, |_, cx| cx.emit(request));
                 let agent = self.0.clone();
                 return cx.spawn(async move |cx| {
-                    acknowledged.await.map_err(|_| anyhow!("Made Doctor's desktop surface is unavailable; no diagnosis or repair was performed"))??;
+                    let result = acknowledged.await.map_err(|_| anyhow!("Made Doctor's desktop surface is unavailable; no diagnosis or repair was performed")).and_then(|result| result);
+                    let output = match &result {
+                        Ok(()) => "/doctor — Made Doctor is open in the project editor. Select a worktree, execution host and checks, then choose Collect checks. No checks, repairs or permission grants have run as part of this invocation.".to_owned(),
+                        Err(error) => format!("/doctor could not open Made Doctor: {error:#}. No checks, repairs or permission grants have run as part of this invocation."),
+                    };
                     agent.update(cx, |agent, cx| {
-                        agent.send_local_command_output(session_id, "Opened Made Doctor for this project. Select a worktree, execution host and checks; no diagnostic collection, probe, repair or permission grant was performed.".to_owned(), cx)
-                    }).await
+                        let session = agent.sessions.get(&session_id).ok_or_else(|| anyhow!("Session not found"))?;
+                        let changed = session.thread.update(cx, |thread, cx| thread.record_local_command(client_user_message_id, "/doctor", &output, cx));
+                        if result.is_ok() && changed {
+                            session.acp_thread.update(cx, |thread, cx| thread.push_local_command_output(output, cx));
+                        }
+                        anyhow::Ok(())
+                    })?;
+                    result?;
+                    Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
                 });
             }
             if parsed_command.is_unqualified("schedules") {
@@ -5757,7 +5769,7 @@ mod internal_tests {
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
-        let (_connection, agent, project, thread) = setup_native_agent_session(cx).await;
+        let (connection, agent, project, thread) = setup_native_agent_session(cx).await;
         let session = thread.read_with(cx, |thread, _| thread.session_id().clone());
         let model = Arc::new(FakeLanguageModel::default());
         model.forbid_requests();
@@ -5767,9 +5779,10 @@ mod internal_tests {
         });
         let opened = Rc::new(std::cell::Cell::new(0));
         let observed = opened.clone();
+        let desktop_project = project.clone();
         let _subscription = cx.update(|cx| {
             cx.subscribe(&agent, move |_, request: &DoctorOpenRequest, _| {
-                assert_eq!(request.project, project);
+                assert_eq!(request.project, desktop_project);
                 observed.set(observed.get() + 1);
                 request.complete(Ok(()));
             })
@@ -5781,6 +5794,32 @@ mod internal_tests {
         assert_eq!(response.stop_reason, acp::StopReason::EndTurn);
         assert_eq!(opened.get(), 1);
         assert_eq!(model.completion_count(), 0);
+        send_native_command_through_acp_thread_for_test(&thread, "/doctor", cx)
+            .await
+            .expect("Repeated dispatch")
+            .expect("Local response");
+        assert_eq!(
+            opened.get(),
+            2,
+            "Every invocation must reveal the actual desktop view"
+        );
+        cx.update(|cx| {
+            let native = native_thread_for_session(&agent, &session, cx);
+            let history = native.read(cx).to_markdown();
+            assert!(history.contains("/doctor"));
+            assert!(history.contains("Collect checks"));
+            assert!(history.contains("No checks, repairs or permission grants have run"));
+            assert_eq!(
+                native.read(cx).recipe_message_count(),
+                2,
+                "One command/status pair is retained without duplicate adjacent acknowledgements"
+            );
+        });
+        assert_eq!(
+            thread.read_with(cx, |thread, _| thread.entries().len()),
+            1,
+            "Repeated open does not duplicate transient acknowledgements"
+        );
         thread.read_with(cx, |thread, cx| {
             assert!(
                 thread
@@ -5788,9 +5827,46 @@ mod internal_tests {
                     .last()
                     .expect("Acknowledged output")
                     .to_markdown(cx)
-                    .contains("Opened Made Doctor")
+                    .contains("Made Doctor is open")
             );
         });
+        cx.update(|cx| connection.clone().close_session(&session, cx))
+            .await
+            .expect("Save and close local-command session");
+        cx.update(|cx| {
+            connection.clone().load_session(
+                session.clone(),
+                project.clone(),
+                PathList::new(&["/a"]),
+                None,
+                cx,
+            )
+        })
+        .await
+        .expect("Reload through the existing session owner");
+        cx.run_until_parked();
+        let restored = cx.update(|cx| native_thread_for_session(&agent, &session, cx));
+        let history = restored.read_with(cx, |thread, _| thread.to_markdown());
+        assert!(history.contains("/doctor") && history.contains("Collect checks"));
+        assert_eq!(opened.get(), 2, "Restoration never replays the command");
+        assert_eq!(model.completion_count(), 0);
+        restored.update(cx, |thread, cx| thread.set_model(model.clone(), cx));
+        let request = restored
+            .read_with(cx, |thread, cx| {
+                thread.build_completion_request(CompletionIntent::UserPrompt, cx)
+            })
+            .expect("Follow-up model context");
+        let context = request
+            .messages
+            .iter()
+            .map(language_model::LanguageModelRequestMessage::string_contents)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            context.contains("/doctor")
+                && context.contains("Collect checks")
+                && context.contains("No checks, repairs or permission grants have run")
+        );
     }
 
     #[gpui::test]

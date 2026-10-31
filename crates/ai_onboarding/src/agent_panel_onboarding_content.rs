@@ -78,6 +78,8 @@ impl Render for AgentPanelOnboarding {
             .child(
                 h_flex().gap_2()
                     .child(Button::new("choose-local-models", "Local models")
+                        .style(ButtonStyle::Outlined).toggle_state(self.local_setup.is_some())
+                        .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
                         .on_click(cx.listener(|this, _, window, cx| {
                             let provider = LanguageModelRegistry::read_global(cx)
                                 .provider(&LanguageModelProviderId::new("llama.cpp"));
@@ -92,6 +94,8 @@ impl Render for AgentPanelOnboarding {
                             cx.notify();
                         })))
                     .child(Button::new("choose-cloud-providers", "Cloud providers")
+                        .style(ButtonStyle::Outlined).toggle_state(self.show_cloud_setup)
+                        .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.local_setup = None;
                             this.show_cloud_setup = true;
@@ -100,7 +104,7 @@ impl Render for AgentPanelOnboarding {
                         }))),
             )
             .when(self.has_configured_providers, |this| {
-                this.child(Button::new("continue-native-agent", "Continue with selected model").on_click({
+                this.child(Button::new("continue-native-agent", "Continue with selected model").style(ButtonStyle::Filled).on_click({
                     let callback = self.continue_with_zed_ai.clone();
                     move |_, window, cx| callback(window, cx)
                 }))

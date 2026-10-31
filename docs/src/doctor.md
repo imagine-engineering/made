@@ -4,6 +4,8 @@ Doctor gathers scoped evidence and offers reviewed actions through Made's existi
 
 Copper exposes Rust development checks. Groovy exposes JVM development checks when its existing JVM feature is enabled; this does not establish Groovy release readiness. Missing integrations or host capabilities remain explicitly unsupported. Generic checks and local diagnosis remain available without an agent or GitHub account.
 
+Opening Doctor reveals and focuses its editor tab, including when the agent panel was zoomed. Invoking it again reuses that project's Doctor interface and keeps its selections. In the native agent, `/doctor` and its opening result become conversation context for follow-up questions; adjacent repeated invocations do not add duplicate acknowledgements. An opening result is not a diagnostic result. Use **Collect checks** to gather actual evidence, and separately review any proposed repair.
+
 ## Diagnose and repair
 
 1. Collect product checks. For an investigation, choose product health, development health, or application correctness/performance, and specify the symptom and relevant validation target.

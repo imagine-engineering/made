@@ -38,6 +38,9 @@ pub struct ManagedModels {
     polling: Option<Task<()>>,
     busy_model: Option<String>,
     cpu_only: bool,
+    selected_model: Option<String>,
+    expanded_models: BTreeSet<String>,
+    hardware_details: bool,
 }
 
 pub fn init(http: Arc<dyn HttpClient>, cx: &mut App) {
@@ -76,6 +79,9 @@ pub fn init(http: Arc<dyn HttpClient>, cx: &mut App) {
             polling: None,
             busy_model: None,
             cpu_only: !cfg!(all(target_os = "macos", target_arch = "aarch64")),
+            selected_model: None,
+            expanded_models: BTreeSet::new(),
+            hardware_details: false,
         }
     });
     cx.set_global(ManagedModelsGlobal(entity.clone()));
@@ -211,7 +217,8 @@ impl ManagedModels {
                         }
                     }
                     if let Some(runtime) = &this.runtime {
-                        let active = Self::selected_default(cx).as_deref() == Some(runtime.model_id.as_str());
+                        let active = Self::selected_default(cx).as_deref() == Some(runtime.model_id.as_str())
+                            && AllLanguageModelSettings::get_global(cx).llama_cpp.managed_model.as_deref() == Some(runtime.model_id.as_str());
                         let state = if active { ModelState::Active } else { ModelState::Ready };
                         if this.states.get(&runtime.model_id) != Some(&state) {
                             this.states.insert(runtime.model_id.clone(), state);
@@ -335,11 +342,13 @@ impl ManagedModels {
         if self.operation.is_some() {
             return;
         }
+        self.selected_model = Some(model.id.clone());
         if select_default
             && self
                 .runtime
                 .as_ref()
                 .is_some_and(|runtime| runtime.model_id == model.id)
+            && self.endpoint.is_some()
         {
             Self::persist_default(model.id, cx);
             cx.notify();
@@ -397,7 +406,9 @@ impl ManagedModels {
                             == Some(id.as_str());
                         this.states.insert(
                             id.clone(),
-                            if select_default || selected {
+                            if selected
+                                && Self::selected_default(cx).as_deref() == Some(id.as_str())
+                            {
                                 ModelState::Active
                             } else {
                                 ModelState::Ready
@@ -463,8 +474,66 @@ impl ManagedModels {
 
 impl Render for ManagedModels {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use llama_cpp::managed::RecommendationLevel;
         let busy = self.operation.is_some();
-        let selected = Self::selected_default(cx);
+        let native_default = Self::selected_default(cx);
+        let native_default_display = language_model::LanguageModelRegistry::read_global(cx)
+            .default_model()
+            .map(|configured| {
+                format!(
+                    "{} / {}",
+                    configured.provider.name().0,
+                    configured.model.name().0
+                )
+            })
+            .unwrap_or_else(|| "None".to_owned());
+        let saved_default = AllLanguageModelSettings::get_global(cx)
+            .llama_cpp
+            .managed_model
+            .clone();
+        let loaded = self
+            .runtime
+            .as_ref()
+            .map(|runtime| runtime.model_id.clone());
+        let name_for = |id: Option<&str>| {
+            self.catalog
+                .as_ref()
+                .and_then(|catalog| {
+                    catalog
+                        .models
+                        .iter()
+                        .find(|model| Some(model.id.as_str()) == id)
+                })
+                .map(|model| model.name.clone())
+                .unwrap_or_else(|| "None".to_owned())
+        };
+        let suggested = self.catalog.as_ref().and_then(|catalog| {
+            self.hardware.as_ref().and_then(|hardware| {
+                catalog
+                    .models
+                    .iter()
+                    .filter(|model| {
+                        hardware
+                            .recommendation(
+                                model,
+                                !self.downloaded.contains(&model.id),
+                                loaded.as_deref() == Some(&model.id),
+                                self.cpu_only,
+                            )
+                            .level
+                            == RecommendationLevel::Recommended
+                    })
+                    .min_by_key(|model| model.estimated_memory_bytes())
+                    .map(|model| model.name.clone())
+            })
+        });
+        let backend = if self.cpu_only {
+            "CPU fallback"
+        } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            "Automatic (Metal, with CPU fallback)"
+        } else {
+            "Automatic (Vulkan, with CPU fallback)"
+        };
         let mut rows = Vec::new();
         if let Some(catalog) = &self.catalog {
             for (index, model) in catalog.models.clone().into_iter().enumerate() {
@@ -473,16 +542,28 @@ impl Render for ManagedModels {
                     .get(&model.id)
                     .cloned()
                     .unwrap_or(ModelState::NotDownloaded);
+                let is_loaded = loaded.as_deref() == Some(model.id.as_str());
+                let is_default = saved_default.as_deref() == Some(model.id.as_str());
+                let is_selected = self.selected_model.as_deref() == Some(model.id.as_str());
+                let downloaded = self.downloaded.contains(&model.id);
                 let state_label = if state == ModelState::Downloading {
                     format!(
                         "Downloading {:.2} / {:.2} GiB",
                         gib(self.progress.load(Ordering::Relaxed)),
                         gib(model.bytes)
                     )
+                } else if matches!(state, ModelState::Ready | ModelState::Active) {
+                    if is_default
+                        && native_default.as_deref() == Some(model.id.as_str())
+                        && is_loaded
+                    {
+                        "Active · loaded default".to_owned()
+                    } else {
+                        "Ready · loaded".to_owned()
+                    }
                 } else {
-                    state.label().to_string()
+                    state.label().to_owned()
                 };
-                let downloaded = self.downloaded.contains(&model.id);
                 let mut actions = h_flex().gap_1().flex_wrap();
                 if !downloaded && matches!(state, ModelState::NotDownloaded | ModelState::Failed(_))
                 {
@@ -496,6 +577,7 @@ impl Render for ManagedModels {
                                 "Download"
                             },
                         )
+                        .style(ButtonStyle::Filled)
                         .disabled(busy)
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.download(download.clone(), cx)),
@@ -503,43 +585,48 @@ impl Render for ManagedModels {
                     );
                 }
                 if downloaded {
-                    if matches!(state, ModelState::Downloaded | ModelState::Failed(_)) {
-                        let load = model.clone();
-                        actions =
-                            actions.child(
-                                Button::new(
-                                    ("load-local", index),
-                                    if matches!(state, ModelState::Failed(_)) {
-                                        "Retry load"
-                                    } else {
-                                        "Load"
-                                    },
-                                )
-                                .disabled(busy)
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| this.load(load.clone(), false, cx),
-                                )),
-                            );
-                    }
                     let load = model.clone();
                     actions = actions.child(
                         Button::new(
-                            ("default-local", index),
-                            if selected.as_deref() == Some(model.id.as_str()) {
-                                "Load default"
+                            ("load-local", index),
+                            if is_loaded {
+                                "Loaded"
+                            } else if matches!(state, ModelState::Failed(_)) {
+                                "Retry load"
+                            } else {
+                                "Load"
+                            },
+                        )
+                        .style(ButtonStyle::Outlined)
+                        .disabled(busy || is_loaded)
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| this.load(load.clone(), false, cx)),
+                        ),
+                    );
+                    let select = model.clone();
+                    actions = actions.child(
+                        Button::new(
+                            ("select-local", index),
+                            if is_default && native_default.as_deref() == Some(model.id.as_str()) {
+                                "Saved default"
                             } else {
                                 "Set as default"
                             },
                         )
-                        .disabled(busy)
+                        .style(ButtonStyle::Filled)
+                        .disabled(
+                            busy || (is_default
+                                && native_default.as_deref() == Some(model.id.as_str())),
+                        )
                         .on_click(
-                            cx.listener(move |this, _, _, cx| this.load(load.clone(), true, cx)),
+                            cx.listener(move |this, _, _, cx| this.load(select.clone(), true, cx)),
                         ),
                     );
                 }
                 if matches!(state, ModelState::Ready | ModelState::Active) {
                     actions = actions.child(
                         Button::new(("unload-local", index), "Unload")
+                            .style(ButtonStyle::Outlined)
                             .disabled(busy)
                             .on_click(cx.listener(|this, _, _, cx| this.stop(cx))),
                     );
@@ -554,6 +641,7 @@ impl Render for ManagedModels {
                     let remove = model.clone();
                     actions = actions.child(
                         Button::new(("remove-local", index), "Remove")
+                            .style(ButtonStyle::OutlinedGhost)
                             .disabled(busy)
                             .on_click(
                                 cx.listener(move |this, _, _, cx| this.remove(remove.clone(), cx)),
@@ -563,35 +651,199 @@ impl Render for ManagedModels {
                 if self.busy_model.as_deref() == Some(model.id.as_str()) {
                     actions = actions.child(
                         Button::new(("cancel-local", index), "Cancel")
+                            .style(ButtonStyle::Outlined)
                             .on_click(cx.listener(|this, _, _, cx| this.cancel(cx))),
                     );
                 }
-                let recommendation = self
-                    .hardware
-                    .as_ref()
-                    .map(|hardware| hardware.recommendation(&model))
-                    .unwrap_or_else(|| "Checking hardware and storage…".into());
-                rows.push(v_flex().gap_1().py_3().border_b_1().border_color(cx.theme().colors().border_variant)
-                    .child(h_flex().gap_3().items_start()
-                        .child(v_flex().flex_1().min_w_0().child(Label::new(format!("{}{}",model.name,if selected.as_deref()==Some(model.id.as_str()){" · Default"}else{""})))
-                            .child(Label::new(format!("{} · {:.2} GiB download · estimated {:.1} GiB memory",model.quantization,gib(model.bytes),gib(model.estimated_memory_bytes()))).size(LabelSize::Small).color(Color::Muted)))
-                        .child(div().w_56().child(actions)).child(div().w_32().child(Label::new(state_label))))
-                    .child(Label::new(recommendation).size(LabelSize::Small).color(Color::Muted))
-                    .child(Label::new(format!("{} · {} bytes",model.filename,model.bytes)).size(LabelSize::Small).color(Color::Muted))
-                    .child(Label::new(format!("{} tokens · {} · native-agent qualification pending",model.context_tokens,model.license)).size(LabelSize::Small).color(Color::Muted))
-                    .child(Button::new(("license-local",index),"Publisher, license and artifact details").on_click({let url=model.license_url.clone();move |_,_,cx|cx.open_url(&url)}))
-                    .when_some(if let ModelState::Failed(message)=state {Some(message)}else {None},|row,message|row.child(Label::new(message).color(Color::Error)))
-                    .into_any_element());
+                let recommendation = self.hardware.as_ref().map(|hardware| {
+                    hardware.recommendation(&model, !downloaded, is_loaded, self.cpu_only)
+                });
+                let expanded = self.expanded_models.contains(&model.id);
+                let detail_id = model.id.clone();
+                let selected_id = model.id.clone();
+                let mut row = v_flex()
+                    .gap_2()
+                    .p_3()
+                    .border_1()
+                    .rounded_md()
+                    .border_color(if is_selected {
+                        cx.theme().colors().border_focused
+                    } else {
+                        cx.theme().colors().border_variant
+                    })
+                    .child(
+                        h_flex()
+                            .gap_3()
+                            .flex_wrap()
+                            .items_start()
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_48()
+                                    .child(
+                                        Button::new(
+                                            ("local-model-name", index),
+                                            model.name.clone(),
+                                        )
+                                        .toggle_state(is_selected)
+                                        .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.selected_model = Some(selected_id.clone());
+                                                cx.notify();
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        Label::new(format!(
+                                            "{} · {:.2} GiB download · ~{:.1} GiB runtime",
+                                            model.quantization,
+                                            gib(model.bytes),
+                                            gib(model.estimated_memory_bytes())
+                                        ))
+                                        .size(LabelSize::Small)
+                                        .color(Color::Muted),
+                                    )
+                                    .when(is_default, |view| {
+                                        view.child(
+                                            Label::new("Persisted local default")
+                                                .size(LabelSize::Small)
+                                                .color(Color::Accent),
+                                        )
+                                    }),
+                            )
+                            .child(div().w_48().child(actions))
+                            .child(
+                                v_flex()
+                                    .w_32()
+                                    .gap_1()
+                                    .child(Label::new(state_label))
+                                    .child(
+                                        Label::new(if model.qualified {
+                                            "Native-agent qualification recorded"
+                                        } else {
+                                            "Native-agent qualification pending"
+                                        })
+                                        .size(LabelSize::Small)
+                                        .color(
+                                            if model.qualified {
+                                                Color::Muted
+                                            } else {
+                                                Color::Warning
+                                            },
+                                        ),
+                                    ),
+                            ),
+                    )
+                    .when_some(recommendation, |row, recommendation| {
+                        row.child(
+                            Label::new(format!(
+                                "{}: {}",
+                                recommendation.level.label(),
+                                recommendation.reason
+                            ))
+                            .size(LabelSize::Small)
+                            .color(match recommendation.level {
+                                RecommendationLevel::Recommended => Color::Muted,
+                                RecommendationLevel::LimitedHeadroom => Color::Warning,
+                                RecommendationLevel::InsufficientCapacity => Color::Error,
+                            }),
+                        )
+                    })
+                    .child(
+                        Button::new(
+                            ("local-model-details", index),
+                            if expanded {
+                                "Hide model details"
+                            } else {
+                                "Model details"
+                            },
+                        )
+                        .toggle_state(expanded)
+                        .style(ButtonStyle::OutlinedGhost)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.expanded_models.remove(&detail_id) {
+                                this.expanded_models.insert(detail_id.clone());
+                            }
+                            cx.notify();
+                        })),
+                    )
+                    .when_some(
+                        if let ModelState::Failed(message) = state {
+                            Some(message)
+                        } else {
+                            None
+                        },
+                        |row, message| row.child(Label::new(message).color(Color::Error)),
+                    );
+                if expanded {
+                    row = row.child(
+                        v_flex().gap_1().p_2().bg(cx.theme().colors().element_background)
+                            .child(Label::new(format!("{} · {} bytes", model.filename, model.bytes)).size(LabelSize::Small))
+                            .child(Label::new(format!(
+                                "Context: {} tokens (model limit {}). Estimated memory: {:.2} GiB weights + {:.2} GiB FP16 KV cache + {:.2} GiB runtime overhead. The 1 GiB system reserve is additional.",
+                                model.context_tokens, model.training_context, gib(model.bytes), gib(model.kv_cache_bytes()), gib(model.runtime_overhead_bytes())
+                            )).size(LabelSize::Small))
+                            .child(Label::new(format!("Publisher: {} · revision {} · license {}", model.repository, model.revision, model.license)).size(LabelSize::Small))
+                            .child(Label::new(format!("SHA-256: {}", model.sha256)).size(LabelSize::Small))
+                            .child(Label::new(format!("Template: {}. Tool support: {}. A healthy loaded runtime does not qualify native-agent tool reliability.", model.chat_template, model.tool_support)).size(LabelSize::Small))
+                            .child(Button::new(("license-local", index), "Publisher and license")
+                                .style(ButtonStyle::Outlined)
+                                .on_click({ let url = model.license_url.clone(); move |_, _, cx| cx.open_url(&url) })),
+                    );
+                }
+                rows.push(row.into_any_element());
             }
         }
-        v_flex().gap_2().w_full()
+        let runtime_backend = self
+            .runtime
+            .as_ref()
+            .map(|runtime| {
+                if runtime.cpu_only {
+                    "CPU"
+                } else {
+                    "Automatic acceleration (runtime chooses devices)"
+                }
+            })
+            .unwrap_or("Not running");
+        let summary = v_flex().gap_1().p_3().border_1().rounded_md()
+            .border_color(cx.theme().colors().border_variant)
+            .child(Label::new(format!("Selected backend preference (this session): {backend}")))
+            .child(Label::new(format!("Loaded: {} · Runtime mode: {runtime_backend} · Persisted local default: {}", name_for(loaded.as_deref()), name_for(saved_default.as_deref()))).size(LabelSize::Small))
+            .child(Label::new(format!("Native-agent default: {native_default_display} · Suggested starting model: {}", suggested.unwrap_or_else(|| "No model has comfortable estimated capacity; review warnings below".to_owned()))).size(LabelSize::Small))
+            .when_some(self.hardware.as_ref(), |view, hardware| view.child(Label::new(hardware.summary()).size(LabelSize::Small)))
+            .child(h_flex().gap_2().flex_wrap()
+                .child(Button::new("refresh-local-capacity", "Refresh capacity")
+                    .style(ButtonStyle::Outlined).disabled(busy)
+                    .on_click(cx.listener(|this, _, _, cx| this.refresh_hardware(cx))))
+                .child(Button::new("local-cpu-fallback", match (self.cpu_only, loaded.is_some()) {
+                    (true, true) => "Reload with acceleration",
+                    (false, true) => "Reload on CPU",
+                    (true, false) => "Use acceleration",
+                    (false, false) => "Use CPU fallback",
+                })
+                    .style(ButtonStyle::Outlined).disabled(busy)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_backend(cx))))
+                .child(Button::new("local-hardware-details", if self.hardware_details { "Hide hardware details" } else { "Hardware details" })
+                    .style(ButtonStyle::OutlinedGhost).toggle_state(self.hardware_details)
+                    .on_click(cx.listener(|this, _, _, cx| { this.hardware_details = !this.hardware_details; cx.notify(); }))))
+            .when(self.hardware_details, |view| view.child(v_flex().gap_1()
+                .children(self.hardware.as_ref().map(|hardware| Label::new(if hardware.unified_memory {
+                    "CPU and GPU share one memory pool; their capacities are not added together."
+                } else {
+                    "RAM and dedicated GPU memory are separate limits; unknown GPU capacity requires a load test."
+                }).size(LabelSize::Small)))
+                .children(self.hardware.iter().flat_map(|hardware| hardware.device_details()).map(|line| Label::new(line).size(LabelSize::Small)))
+                .child(Label::new("Capacity is an estimate using full weights, context/KV cache and runtime overhead. Loading measures runtime compatibility. Active means a loaded native-agent default; conversations may keep their own model selection. The suggested starting model is the smallest with comfortable estimated capacity.").size(LabelSize::Small))));
+        v_flex().gap_3().w_full().min_w_0()
             .child(Headline::new("Local models").size(HeadlineSize::Small))
-            .child(Label::new("Download a model, then choose Set as default. Downloads start only when you choose Download. Inference stays on this computer; failures never switch to cloud.").size(LabelSize::Small).color(Color::Muted))
-            .child(Label::new("Memory figures are estimates for the single context listed for each model, including full weights, conservative FP16 KV cache and runtime overhead. They are not measured compatibility results.").size(LabelSize::Small).color(Color::Muted))
-            .when_some(self.hardware.as_ref(),|view,hardware|view.child(Label::new(format!("{} · {:.1} GiB estimated available RAM / {:.1} GiB total · {:.1} GiB free disk · {}",hardware.architecture,gib(hardware.available_memory),gib(hardware.total_memory),gib(hardware.free_disk),hardware.backend)).size(LabelSize::Small)))
-            .child(Button::new("refresh-local-capacity", "Refresh capacity").disabled(busy).on_click(cx.listener(|this, _, _, cx| this.refresh_hardware(cx))))
-            .child(Button::new("local-cpu-fallback",if self.cpu_only{"Use acceleration"}else{"Use CPU fallback"}).disabled(busy).on_click(cx.listener(|this,_,_,cx|this.toggle_backend(cx))))
-            .child(h_flex().gap_3().child(div().flex_1().child(Label::new("Name"))).child(div().w_56().child(Label::new("Actions"))).child(div().w_32().child(Label::new("State")))).children(rows)
-            .when_some(self.error.clone(),|view,error|view.child(Label::new(error).color(Color::Error)))
+            .child(Label::new("Choose Download to obtain weights, then Load to try a model or Set as default to save it. Inference stays on this computer; there is no cloud fallback.").size(LabelSize::Small).color(Color::Muted))
+            .child(summary)
+            .child(h_flex().gap_3().flex_wrap()
+                .child(div().flex_1().min_w_48().child(Label::new("Name")))
+                .child(div().w_48().child(Label::new("Actions")))
+                .child(div().w_32().child(Label::new("State"))))
+            .children(rows)
+            .when_some(self.error.clone(), |view, error| view.child(Label::new(error).color(Color::Error)))
     }
 }

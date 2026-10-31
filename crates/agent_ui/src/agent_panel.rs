@@ -6065,33 +6065,30 @@ impl AgentPanel {
                 if request.project != this.project {
                     return;
                 }
-                let result = this
-                    .workspace
-                    .update(cx, |workspace, cx| {
-                        anyhow::ensure!(
-                            workspace.project() == &request.project,
-                            "Doctor project scope changed"
-                        );
+                let workspace = this.workspace.clone();
+                let request = request.clone();
+                // Revealing the editor inspects dock panels, including this subscriber.
+                window.defer(cx, move |window, cx| {
+                    let result = workspace.update(cx, |workspace, cx| {
+                        anyhow::ensure!(workspace.project() == &request.project, "Doctor project scope changed");
                         anyhow::ensure!(
                             !request.project.read(cx).is_isolated_recipe_test(),
                             "Isolated recipe execution cannot open other desktop surfaces"
                         );
-                        diagnostics::doctor_view::DoctorView::deploy(
-                            workspace,
-                            &diagnostics::Doctor,
-                            window,
-                            cx,
-                        );
-                        anyhow::ensure!(
-                            workspace
-                                .item_of_type::<diagnostics::doctor_view::DoctorView>(cx)
-                                .is_some(),
-                            "Doctor desktop view is unavailable"
-                        );
-                        Ok(())
-                    })
-                    .and_then(|result| result);
-                request.complete(result);
+                        diagnostics::doctor_view::DoctorView::deploy(workspace, &diagnostics::Doctor, window, cx);
+                        workspace.item_of_type::<diagnostics::doctor_view::DoctorView>(cx)
+                            .ok_or_else(|| anyhow::anyhow!("Doctor desktop view is unavailable"))
+                    }).and_then(|result| result);
+                    match result {
+                        Ok(view) => window.on_next_frame(move |window, cx| {
+                            let focused = view.focus_handle(cx).contains_focused(window, cx);
+                            request.complete(if focused { Ok(()) } else {
+                                Err(anyhow::anyhow!("Doctor could not receive focus in the project editor; invoke Doctor again"))
+                            });
+                        }),
+                        Err(error) => request.complete(Err(error)),
+                    }
+                });
             },
         );
         self._doctor_subscription = Some((id, subscription));
@@ -22152,18 +22149,41 @@ mod tests {
         native.update(&mut visual, |thread, cx| {
             thread.set_model(model.clone(), cx)
         });
+        workspace.update_in(&mut visual, |workspace, window, cx| {
+            workspace.focus_panel::<AgentPanel>(window, cx);
+        });
+        panel.update_in(&mut visual, |panel, window, cx| {
+            panel.toggle_zoom(&ToggleZoom, window, cx);
+        });
+        visual.run_until_parked();
+        assert!(panel.read_with(&visual, |panel, _| panel.zoomed));
+        assert!(workspace.read_with(&visual, |workspace, _| workspace.zoomed_item().is_some()));
         let mut observed = None;
         for _ in 0..2 {
             let command = thread.update(&mut visual, |thread, cx| {
                 thread.send_command(vec!["/doctor".into()], cx)
             });
-            visual
-                .foreground_executor()
-                .spawn(command)
+            let command = visual.foreground_executor().spawn(command);
+            visual.run_until_parked();
+            for _ in 0..2 {
+                visual.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                    window.simulate_next_frame(cx);
+                });
+                visual.run_until_parked();
+            }
+            command
                 .await
                 .expect("Native desktop command")
                 .expect("Local response");
+            visual
+                .refresh()
+                .expect("Paint the revealed editor after command completion");
             visual.run_until_parked();
+            assert!(
+                workspace.read_with(&visual, |workspace, _| workspace.zoomed_item().is_none()),
+                "Doctor must replace the zoomed overlay"
+            );
             let view = workspace.read_with(&visual, |workspace, cx| {
                 workspace
                     .item_of_type::<diagnostics::doctor_view::DoctorView>(cx)
@@ -22173,10 +22193,24 @@ mod tests {
                 assert_eq!(view.entity_id(), previous);
             }
             observed = Some(view.entity_id());
+            assert_eq!(
+                workspace.read_with(&visual, |workspace, cx| workspace
+                    .active_item(cx)
+                    .map(|item| item.item_id())),
+                Some(view.entity_id()),
+                "Doctor is the active center item"
+            );
+            view.update(&mut visual, |_, cx| cx.notify());
+            visual.refresh().expect("Paint Doctor controls");
+            visual.run_until_parked();
             assert!(
                 visual.debug_bounds("made-doctor").is_some(),
                 "Actual native Doctor surface"
             );
+            assert!(workspace.read_with(&visual, |workspace, _| workspace.zoomed_item().is_none()));
+            visual.update(|window, cx| {
+                assert!(view.focus_handle(cx).contains_focused(window, cx));
+            });
             assert_eq!(model.completion_count(), 0);
         }
         assert_eq!(

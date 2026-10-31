@@ -39,7 +39,9 @@ External profiling remains task-first. A configured external profiler may wrap a
 
 The Tests panel discovers Rust unit, integration, binary-harness, example-harness, benchmark, ignored, and doctest cases using bounded structured output on the project host. Run, cancel, rerun-failed, terminal reveal, source navigation, and supported debug actions route through the same Tasks and DAP systems. Doctest debugging is currently unavailable and is reported as an action-specific reason rather than silently running another command.
 
-Cargo metadata and test discovery require a trusted project and an available Cargo toolchain on the authoritative host. They run offline and do not install tools, fetch dependencies, or fall back to a client-local filesystem. Partial failures retain safe stale results where possible. A disconnected host or feature/protocol mismatch produces a stable actionable state until the connection or build capability changes.
+Cargo metadata and test discovery require a trusted project and an available Cargo toolchain on the authoritative host. Metadata follows that host’s Cargo network settings and can download missing dependencies during normal operation. Explicit `CARGO_NET_OFFLINE` and Cargo `net.offline` settings remain effective. This is independent of local-model inference network isolation. Toolchain auto-installation remains blocked, and passive compiler/test collectors retain their offline policy. These operations never fall back to a client-local filesystem. Partial failures retain safe stale results where possible. A disconnected host or feature/protocol mismatch produces a stable actionable state until the connection or build capability changes.
+
+Failed metadata rows show the affected manifest and Cargo’s full bounded diagnostic, including a missing dependency and offline restriction when Cargo reports them. Double-click a row to open its manifest, review the workspace/host Cargo configuration or environment, and fetch dependencies explicitly in a network-enabled terminal if intended. Use **Refresh** to retry. Copper never silently overrides an intentional offline setting.
 
 ### Scope and roadmap
 

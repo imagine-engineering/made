@@ -189,23 +189,25 @@ impl CargoTreeProvider {
                     "Cargo metadata error"
                 }
             };
+            let failure_id = id(&format!(
+                "failure:{}:{}",
+                failure.manifest_path.worktree_id.to_proto(),
+                failure.manifest_path.path.as_unix_str()
+            ));
+            navigation.insert(failure_id.clone(), failure.manifest_path.clone());
             roots.push(LanguageToolNode {
-                id: id(&format!(
-                    "failure:{}:{}",
-                    failure.manifest_path.worktree_id.to_proto(),
-                    failure.manifest_path.path.as_unix_str()
-                )),
+                id: failure_id,
                 label: failure_label.to_string(),
                 secondary_label: Some(format!(
-                    "{} · {}",
+                    "{}\n{}\nDouble-click to open this workspace's Cargo.toml. Use Refresh to retry.",
                     failure.manifest_path.path.as_unix_str(),
                     failure.message
                 )),
                 icon: Some(IconName::CircleHelp),
-                accessibility_label: format!("Cargo metadata error: {}", failure.message),
+                accessibility_label: format!("Cargo metadata error in {}: {}. Open manifest; Refresh to retry.", failure.manifest_path.path.as_unix_str(), failure.message),
                 children: Vec::new(),
-                enabled: false,
-                activation_label: None,
+                enabled: true,
+                activation_label: Some("Open Cargo.toml".to_owned()),
             });
         }
         let status = if roots.is_empty() && snapshot.failures.is_empty() {
@@ -1000,6 +1002,7 @@ pub struct CargoPanel {
     preset_serialization_key: Option<String>,
     preset_notice: Option<String>,
     pending_preset_serialization: Option<gpui::Task<()>>,
+    diagnostic_list: gpui::ListState,
     last_snapshot: Option<Arc<CargoWorkspaceSnapshot>>,
     input_snapshot: Option<Arc<CargoWorkspaceSnapshot>>,
     projection_task: gpui::Task<()>,
@@ -1109,6 +1112,7 @@ impl CargoPanel {
                     preset_serialization_key,
                     preset_notice: recovered.notice,
                     pending_preset_serialization,
+                    diagnostic_list: gpui::ListState::new(0, gpui::ListAlignment::Top, px(200.)),
                     last_snapshot: None,
                     input_snapshot: None,
                     projection_task: gpui::Task::ready(()),
@@ -1326,6 +1330,7 @@ impl CargoPanel {
         self.execution_host_available =
             self.input_host_available && !self.refresh_pending && self.refresh_error.is_none();
         self.host.apply_refresh(refresh_generation, Ok(tree));
+        self.diagnostic_list.reset(self.host.visible_rows().len());
         if self.host.take_dirty() && !covers_current_inputs {
             self.schedule_debounced_refresh(cx);
         }
@@ -1482,7 +1487,17 @@ impl CargoPanel {
     }
 
     fn reveal_selection(&self, strategy: ScrollStrategy) {
-        self.host.reveal_selection(strategy);
+        if self
+            .last_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| !snapshot.failures.is_empty())
+        {
+            if let Some(index) = self.host.selected_index() {
+                self.diagnostic_list.scroll_to_reveal_item(index);
+            }
+        } else {
+            self.host.reveal_selection(strategy);
+        }
     }
 
     fn action_runtime(&self, selection: &CargoActionSelection, cx: &App) -> CargoActionRuntime {
@@ -2137,6 +2152,18 @@ impl Render for CargoPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rows = self.host.visible_rows_snapshot();
         let selected = self.host.selected().cloned();
+        let scroll = if self
+            .last_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| !snapshot.failures.is_empty())
+        {
+            if self.diagnostic_list.item_count() != rows.len() {
+                self.diagnostic_list.reset(rows.len());
+            }
+            language_tool_tree::LanguageToolTreeScrollHandle::Wrapped(self.diagnostic_list.clone())
+        } else {
+            self.host.scroll_handle().clone().into()
+        };
         let status = status_message(self.host.status());
         let can_expand_all = self.host.can_expand_all();
         let can_collapse_all = self.host.can_collapse_all();
@@ -2336,7 +2363,7 @@ impl Render for CargoPanel {
                 rows,
                 selected,
                 status,
-                self.host.scroll_handle().clone(),
+                scroll,
                 move |id, click_count, window, cx| {
                     click_panel
                         .update(cx, |panel, cx| {
@@ -4065,6 +4092,37 @@ mod tests {
             LanguageToolProviderStatus::Partial(message)
                 if message.contains("configuration facts")
         ));
+    }
+
+    #[test]
+    fn failed_metadata_rows_preserve_diagnostics_and_offer_manifest_recovery() {
+        let mut source = snapshot();
+        source.workspaces.clear();
+        source.completeness = CargoSnapshotCompleteness::Partial;
+        for manifest in [
+            "browser/Cargo.toml",
+            "planning/Cargo.toml",
+            "simulation/Cargo.toml",
+        ] {
+            source.failures.push(CargoCandidateFailure {
+                manifest_path: path(manifest), category: CargoWorkspaceErrorCategory::CargoFailed,
+                message: "failed to download arrayref v0.3.6\nCaused by:\nattempting to make an HTTP request, but --offline was specified".into(),
+                has_stale_model: false,
+            });
+        }
+        let (tree, provider) = CargoTreeProvider::project(&source);
+        assert_eq!(tree.roots.len(), 3);
+        for (node, failure) in tree.roots.iter().zip(&source.failures) {
+            assert!(node.enabled);
+            assert_eq!(provider.navigation(&node.id), Some(&failure.manifest_path));
+            let details = node.secondary_label.as_ref().expect("full diagnostic");
+            assert!(
+                details.contains(&failure.message)
+                    && details.contains("Refresh")
+                    && details.contains("Double-click")
+            );
+            assert!(node.accessibility_label.contains(&failure.message));
+        }
     }
 
     #[test]
