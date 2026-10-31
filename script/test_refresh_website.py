@@ -46,6 +46,24 @@ class RefreshTests(unittest.TestCase):
                     refresh.refresh(TAG, webhook)
                 request.assert_not_called()
 
+    def test_verification_assets_do_not_require_website_download_buttons(self):
+        release = json.loads(json.dumps(RELEASE))
+        for filename in ("rust-1.16.6-verification.json", "verification-rust-macos-aarch64.json", "rust-1.16.6-SHA256SUMS", "rust-1.16.6-linux-x86_64.tar.gz.asc", "rust-1.16.6-linux-x86_64.tar.gz.pub"):
+            release["assets"].append({"state": "uploaded", "browser_download_url": URL.rsplit("/", 1)[0] + "/" + filename})
+        optional_url = release["assets"][-1]["browser_download_url"]
+        with_auxiliary = HTML.replace("</article>", '<a href="' + optional_url + '">Signature key</a></article>')
+        for page in (CURRENT, (200, {}, with_auxiliary.encode())):
+            result, posts, _, _ = self.run_refresh([(200, {}, json.dumps(release).encode()), page])
+            self.assertEqual(result, "already-current")
+            self.assertEqual(posts, [])
+
+    def test_auxiliary_only_release_is_not_a_desktop_release(self):
+        release = json.loads(json.dumps(RELEASE))
+        release["assets"][0]["browser_download_url"] += ".json"
+        result, posts, _, _ = self.run_refresh([(200, {}, json.dumps(release).encode())])
+        self.assertIsInstance(result, refresh.RefreshError)
+        self.assertEqual(posts, [])
+
     def test_already_current_content_avoids_duplicate_build(self):
         result, posts, _, log = self.run_refresh([API, CURRENT])
         self.assertEqual(result, "already-current")
@@ -118,7 +136,7 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(len(posts), 0)
 
     def test_version_date_and_actual_links_must_match_inside_release_article(self):
-        expected = {"tag": TAG, "version": "1.16.6", "published": "2026-09-05T12:00:00.000Z", "urls": {URL}}
+        expected = {"tag": TAG, "version": "1.16.6", "published": "2026-09-05T12:00:00.000Z", "urls": {URL}, "all_urls": {URL}}
         for html in [HTML.replace(URL, URL + "-invented"), HTML.replace(TAG, "rust-v1.16.5", 1), HTML.replace("Copper 1.16.6", "Copper 1.16.5"), HTML.replace("2026-09-05", "2026-09-04"), HTML.replace("href=", "data-href="), HTML.replace("</article>", '<a href="' + URL + '-removed">Extra</a></article>'), HTML + HTML, '<script>' + HTML + '</script>']:
             with self.subTest(html=html), patch.object(refresh, "request", return_value=(200, {}, html.encode())):
                 self.assertFalse(refresh.page_is_current(expected, object()))

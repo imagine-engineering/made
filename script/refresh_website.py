@@ -124,8 +124,14 @@ def published_release(tag, opener, token="", sleep=time.sleep):
             raise ValueError()
     except (ValueError, TypeError, KeyError, AttributeError):
         raise RefreshError("Invalid, draft, or incomplete Copper release metadata; no webhook was sent.") from None
+    extensions = {"linux": ".tar.gz", "macos": ".dmg", "windows": ".exe"}
+    package_suffixes = tuple({extensions[target.split("-", 1)[0]] for target in product["targets"]})
+    all_urls = urls
+    urls = {url for url in all_urls if urlsplit(url).path.endswith(package_suffixes)}
+    if not urls:
+        raise RefreshError("Published release has no supported desktop packages; no webhook was sent.")
     diagnostic("publication", 200, "Published release metadata verified: " + tag + ".")
-    return {"tag": tag, "version": tag[len(prefix):], "urls": urls, "published": published.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")}
+    return {"tag": tag, "version": tag[len(prefix):], "urls": urls, "all_urls": all_urls, "published": published.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")}
 
 
 class ReleasePage(HTMLParser):
@@ -167,7 +173,7 @@ def page_is_current(release, opener):
         parser.feed(body.decode("utf-8"))
     except (UnicodeError, ValueError):
         return False
-    return parser.found == 1 and parser.urls == release["urls"] and release["published"] in parser.dates and "Copper " + release["version"] in "".join(parser.text)
+    return parser.found == 1 and release["urls"] <= parser.urls <= release["all_urls"] and release["published"] in parser.dates and "Copper " + release["version"] in "".join(parser.text)
 
 
 def wait_for_deployment(release, opener, sleep=time.sleep, monotonic=time.monotonic, timeout=900):
