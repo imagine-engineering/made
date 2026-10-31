@@ -1,0 +1,799 @@
+# Generated from xtask::workflows::release_prepare
+# Rebuild with `cargo xtask workflows`.
+name: release_prepare
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing catalog product tag, e.g. rust-v0.1.0 or rust-v0.2.0-rc.1
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  prepare_release:
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+    steps:
+    - name: release::prepare_release
+      run: |
+        if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Release preparation must be manually dispatched from main" >&2
+            exit 1
+        fi
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        fetch-depth: 0
+        fetch-tags: true
+        ref: ${{ github.sha }}
+    - name: release::setup_signing_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: release::prepare_release
+      run: |-
+        git fetch origin main --tags
+        CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
+    - id: resolve-release
+      name: release::prepare_release
+      run: python3 script/product_release.py resolve --tag "$RELEASE_TAG"
+      env:
+        RELEASE_TAG: ${{ inputs.release_tag }}
+        RELEASE_GATES: ${{ toJSON(vars) }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: release::generate_release_bundle_plans
+      run: python3 script/product_release.py bundle-plans
+      env:
+        COMMIT_SHA: ${{ steps.resolve-release.outputs.commit_sha }}
+        RELEASE_VERSION: ${{ steps.resolve-release.outputs.version }}
+        ZED_RELEASE_CHANNEL: ${{ steps.resolve-release.outputs.channel }}
+    - name: release::prepare_release
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: release-bundle-plans
+        path: release-bundle-plans
+        if-no-files-found: error
+    outputs:
+      commit_sha: ${{ steps.resolve-release.outputs.commit_sha }}
+      version: ${{ steps.resolve-release.outputs.version }}
+      tag: ${{ steps.resolve-release.outputs.tag }}
+      product_id: ${{ steps.resolve-release.outputs.product_id }}
+      channel: ${{ steps.resolve-release.outputs.channel }}
+      matrix: ${{ steps.resolve-release.outputs.matrix }}
+    timeout-minutes: 20
+  signing_preflight:
+    needs:
+    - prepare_release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::signing_preflight
+      if: contains(needs.prepare_release.outputs.matrix, '"platform":"macos"')
+      run: python3 script/check-signing-environment --platform macos --policy required
+      env:
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
+        APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+        APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+    - name: release::signing_preflight
+      if: contains(needs.prepare_release.outputs.matrix, '"platform":"windows"')
+      run: python3 script/check-signing-environment --platform windows --policy required
+      env:
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ACCOUNT_NAME: ${{ secrets.ACCOUNT_NAME }}
+        CERT_PROFILE_NAME: ${{ secrets.CERT_PROFILE_NAME }}
+        ENDPOINT: ${{ secrets.ENDPOINT }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        FILE_DIGEST: ${{ secrets.FILE_DIGEST }}
+        TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
+        TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
+    - name: release::signing_preflight
+      if: contains(needs.prepare_release.outputs.matrix, '"platform":"linux"')
+      run: python3 script/check-signing-environment --platform linux --policy required
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        LINUX_SIGNING_KEY_PASSWORD: ${{ secrets.LINUX_SIGNING_KEY_PASSWORD }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+    timeout-minutes: 5
+  release_licenses:
+    needs:
+    - prepare_release
+    - signing_preflight
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: steps::install_cargo_about
+      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+      with:
+        tool: cargo-about@0.8.2
+        fallback: none
+    - name: release::release_licenses
+      run: |
+        sha256_file() {
+            sha256sum "$1" | awk '{print $1}'
+        }
+        test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+        git diff --quiet "$COMMIT_SHA" -- Cargo.lock
+        script/generate-licenses
+        mkdir -p release-licenses
+        cp assets/licenses.md release-licenses/licenses.md
+        CARGO_LOCK_BLOB="$(git rev-parse "${COMMIT_SHA}:Cargo.lock")"
+        LICENSES_HASH="$(sha256_file release-licenses/licenses.md)"
+        jq -n \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg cargo_lock_blob "$CARGO_LOCK_BLOB" \
+            --arg licenses_hash "$LICENSES_HASH" \
+            '{commit_sha: $commit_sha, cargo_lock_blob: $cargo_lock_blob, licenses_hash: $licenses_hash}' \
+            > release-licenses/metadata.json
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::release_licenses
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: release-licenses
+        path: release-licenses
+        if-no-files-found: error
+    timeout-minutes: 20
+  application_builds:
+    needs:
+    - prepare_release
+    - release_licenses
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
+      SCCACHE_GHA_ENABLED: on
+      SCCACHE_IDLE_TIMEOUT: '0'
+      RUSTC_WRAPPER: sccache
+      CARGO_TARGET_DIR: target/products/${{ matrix.product }}
+      ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
+      ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
+      ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
+      ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
+      ZED_PRODUCT_URL_SCHEME: ${{ matrix.url_scheme }}
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/${{ matrix.icon_set }}
+      ZED_PRODUCT_DATA_NAMESPACE: ${{ matrix.data_namespace }}
+      ZED_PRODUCT_UPDATE_NAMESPACE: ${{ matrix.update_namespace }}
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
+      ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
+      ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
+      RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::application_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-licenses
+        path: release-licenses
+    - name: release::verify_release_licenses
+      run: |
+        sha256_file() {
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
+                shasum -a 256 "$1" | awk '{print $1}'
+            else
+                sha256sum "$1" | awk '{print $1}'
+            fi
+        }
+        test -s release-licenses/licenses.md
+        test -s release-licenses/metadata.json
+        test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+        git diff --quiet "$COMMIT_SHA" -- Cargo.lock
+        CARGO_LOCK_BLOB="$(git rev-parse "${COMMIT_SHA}:Cargo.lock")"
+        LICENSES_HASH="$(sha256_file release-licenses/licenses.md)"
+        jq -e \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg cargo_lock_blob "$CARGO_LOCK_BLOB" \
+            --arg licenses_hash "$LICENSES_HASH" \
+            '.commit_sha == $commit_sha and .cargo_lock_blob == $cargo_lock_blob and .licenses_hash == $licenses_hash' \
+            release-licenses/metadata.json >/dev/null
+        cp release-licenses/licenses.md assets/licenses.md
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::configure_release_cache_namespace
+      run: |
+        TOOLCHAIN_HASH="$(git hash-object rust-toolchain.toml)"
+        echo "SCCACHE_GHA_VERSION=release-v2-${RUNNER_OS}-${CACHE_TARGET}-${TOOLCHAIN_HASH}" >> "$GITHUB_ENV"
+      env:
+        CACHE_TARGET: ${{ matrix.target }}
+    - name: steps::setup_release_sccache
+      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+      with:
+        version: v0.16.0
+        disable_annotations: 'true'
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: release::application_builds
+      if: matrix.platform == 'linux'
+      run: ./script/linux && ./script/download-wasi-sdk
+    - name: release::application_builds
+      if: matrix.platform == 'linux'
+      run: |
+        export ZED_BUNDLE_PHASE=application
+        script/bundle-linux
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        ZED_PREGENERATED_LICENSES: '1'
+        CC: clang
+        CXX: clang++
+    - name: release::application_builds
+      if: matrix.platform == 'macos'
+      run: |
+        export ZED_BUNDLE_PHASE=application
+        script/bundle-mac "$TARGET"
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
+        ZED_PREGENERATED_LICENSES: '1'
+    - name: release::application_builds
+      if: matrix.platform == 'windows'
+      run: |
+        cargo test -p auto_update_helper --locked
+        if ($LASTEXITCODE -ne 0) { throw "Windows updater tests failed" }
+        bash ./script/clippy --no-all-features -p auto_update_helper
+        if ($LASTEXITCODE -ne 0) { throw "Windows updater Clippy failed" }
+      shell: pwsh
+    - name: release::application_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $env:ZED_BUNDLE_PHASE = "application"
+        script/bundle-windows.ps1 -Architecture x86_64
+      shell: pwsh
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        ZED_PREGENERATED_LICENSES: '1'
+    - name: release::application_builds
+      if: matrix.platform != 'windows'
+      run: |
+        SOURCE="target/products/${PRODUCT_ID}/${TARGET}/release"
+        mkdir -p release-application
+        cp "$SOURCE/zed" "$SOURCE/cli" release-application/
+        if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]]; then
+            cp "$SOURCE/native-cargo-runtime-observer" release-application/
+        fi
+        jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$FEATURES" \
+            '{commit_sha: $commit_sha, target: $target, features: $features, version: env.RELEASE_VERSION, product_id: env.ZED_PRODUCT_ID, channel: env.ZED_RELEASE_CHANNEL}' > release-application/metadata.json
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        FEATURES: ${{ matrix.application_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::application_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $source = "target/products/$env:PRODUCT_ID/$env:TARGET/release"
+        New-Item -ItemType Directory -Path release-application -Force | Out-Null
+        Copy-Item "$source/zed.exe", "$source/cli.exe", "$source/auto_update_helper.exe", "$source/zed.pdb", "$source/cli.pdb", "$source/auto_update_helper.pdb" -Destination release-application
+        @{
+            commit_sha = $env:COMMIT_SHA
+            target = $env:TARGET
+            features = $env:FEATURES
+            version = $env:RELEASE_VERSION
+            product_id = $env:ZED_PRODUCT_ID
+            channel = $env:ZED_RELEASE_CHANNEL
+        } | ConvertTo-Json | Set-Content release-application/metadata.json
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        FEATURES: ${{ matrix.application_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::application_builds
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.application_artifact }}
+        path: release-application
+        if-no-files-found: error
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform != 'windows'
+      run: |
+        STATS="$(sccache --show-stats)"
+        printf '%s\n' "$STATS"
+        {
+            printf '### sccache: %s / %s\n\n```text\n' "$RUNNER_OS" "$SCCACHE_GHA_VERSION"
+            printf '%s\n' "$STATS"
+            printf '```\n'
+        } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform == 'windows'
+      run: |
+        $stats = (& sccache --show-stats | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --show-stats failed with exit code $LASTEXITCODE"
+        }
+        Write-Host $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('### sccache: {0} / {1}' -f $env:RUNNER_OS, $env:SCCACHE_GHA_VERSION)
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+        & sccache --stop-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --stop-server failed with exit code $LASTEXITCODE"
+        }
+      shell: pwsh
+    timeout-minutes: 180
+  remote_server_builds:
+    needs:
+    - prepare_release
+    - signing_preflight
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
+      SCCACHE_GHA_ENABLED: on
+      SCCACHE_IDLE_TIMEOUT: '0'
+      RUSTC_WRAPPER: sccache
+      CARGO_TARGET_DIR: target/products/${{ matrix.product }}
+      ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
+      ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
+      ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
+      ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
+      ZED_PRODUCT_URL_SCHEME: ${{ matrix.url_scheme }}
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/${{ matrix.icon_set }}
+      ZED_PRODUCT_DATA_NAMESPACE: ${{ matrix.data_namespace }}
+      ZED_PRODUCT_UPDATE_NAMESPACE: ${{ matrix.update_namespace }}
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
+      ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
+      ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
+      RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::configure_release_cache_namespace
+      run: |
+        TOOLCHAIN_HASH="$(git hash-object rust-toolchain.toml)"
+        echo "SCCACHE_GHA_VERSION=release-v2-${RUNNER_OS}-${CACHE_TARGET}-${TOOLCHAIN_HASH}" >> "$GITHUB_ENV"
+      env:
+        CACHE_TARGET: ${{ matrix.remote_target }}
+    - name: steps::setup_release_sccache
+      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+      with:
+        version: v0.16.0
+        disable_annotations: 'true'
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: release::remote_server_builds
+      if: matrix.platform == 'linux'
+      run: ./script/linux && ./script/download-wasi-sdk
+    - name: release::remote_server_builds
+      if: matrix.platform == 'linux'
+      run: |
+        export ZED_BUNDLE_PHASE=remote-server
+        script/bundle-linux
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        CC: clang
+        CXX: clang++
+    - name: release::remote_server_builds
+      if: matrix.platform == 'macos'
+      run: |
+        export ZED_BUNDLE_PHASE=remote-server
+        script/bundle-mac "$TARGET"
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
+    - name: release::remote_server_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $env:ZED_BUNDLE_PHASE = "remote-server"
+        script/bundle-windows.ps1 -Architecture x86_64
+      shell: pwsh
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+    - name: release::remote_server_builds
+      if: matrix.platform != 'windows'
+      run: |
+        SOURCE="target/products/${PRODUCT_ID}/${REMOTE_TARGET}/release"
+        mkdir -p release-remote-server
+        cp "$SOURCE/remote_server" release-remote-server/
+        jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$REMOTE_TARGET" --arg features "$FEATURES" \
+            '{commit_sha: $commit_sha, target: $target, features: $features, version: env.RELEASE_VERSION, product_id: env.ZED_PRODUCT_ID, channel: env.ZED_RELEASE_CHANNEL}' > release-remote-server/metadata.json
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::remote_server_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $source = "target/products/$env:PRODUCT_ID/$env:REMOTE_TARGET/release"
+        New-Item -ItemType Directory -Path release-remote-server -Force | Out-Null
+        Copy-Item "$source/remote_server.exe", "$source/remote_server.pdb" -Destination release-remote-server
+        @{
+            commit_sha = $env:COMMIT_SHA
+            target = $env:REMOTE_TARGET
+            features = $env:FEATURES
+            version = $env:RELEASE_VERSION
+            product_id = $env:ZED_PRODUCT_ID
+            channel = $env:ZED_RELEASE_CHANNEL
+        } | ConvertTo-Json | Set-Content release-remote-server/metadata.json
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::remote_server_builds
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.remote_artifact }}
+        path: release-remote-server
+        if-no-files-found: error
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform != 'windows'
+      run: |
+        STATS="$(sccache --show-stats)"
+        printf '%s\n' "$STATS"
+        {
+            printf '### sccache: %s / %s\n\n```text\n' "$RUNNER_OS" "$SCCACHE_GHA_VERSION"
+            printf '%s\n' "$STATS"
+            printf '```\n'
+        } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server
+    - name: steps::finalize_release_sccache
+      if: always() && matrix.platform == 'windows'
+      run: |
+        $stats = (& sccache --show-stats | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --show-stats failed with exit code $LASTEXITCODE"
+        }
+        Write-Host $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('### sccache: {0} / {1}' -f $env:RUNNER_OS, $env:SCCACHE_GHA_VERSION)
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $stats
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+        & sccache --stop-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "sccache --stop-server failed with exit code $LASTEXITCODE"
+        }
+      shell: pwsh
+    timeout-minutes: 120
+  product_builds:
+    needs:
+    - prepare_release
+    - release_licenses
+    - application_builds
+    - remote_server_builds
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
+      ZED_PRODUCT_SIGNING: required
+      CARGO_TARGET_DIR: target/products/${{ matrix.product }}
+      ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
+      ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
+      ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
+      ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
+      ZED_PRODUCT_URL_SCHEME: ${{ matrix.url_scheme }}
+      ZED_PRODUCT_ICON_SET: ${{ github.workspace }}/${{ matrix.icon_set }}
+      ZED_PRODUCT_DATA_NAMESPACE: ${{ matrix.data_namespace }}
+      ZED_PRODUCT_UPDATE_NAMESPACE: ${{ matrix.update_namespace }}
+      ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
+      ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
+      ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
+      RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
+      fail-fast: false
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        ref: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::setup_signing_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-licenses
+        path: release-licenses
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-bundle-plans
+        path: release-bundle-plans
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: ${{ matrix.application_artifact }}
+        path: release-application
+    - name: release::product_builds
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: ${{ matrix.remote_artifact }}
+        path: release-remote-server
+    - name: release::verify_release_licenses
+      run: |
+        sha256_file() {
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
+                shasum -a 256 "$1" | awk '{print $1}'
+            else
+                sha256sum "$1" | awk '{print $1}'
+            fi
+        }
+        test -s release-licenses/licenses.md
+        test -s release-licenses/metadata.json
+        test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+        git diff --quiet "$COMMIT_SHA" -- Cargo.lock
+        CARGO_LOCK_BLOB="$(git rev-parse "${COMMIT_SHA}:Cargo.lock")"
+        LICENSES_HASH="$(sha256_file release-licenses/licenses.md)"
+        jq -e \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg cargo_lock_blob "$CARGO_LOCK_BLOB" \
+            --arg licenses_hash "$LICENSES_HASH" \
+            '.commit_sha == $commit_sha and .cargo_lock_blob == $cargo_lock_blob and .licenses_hash == $licenses_hash' \
+            release-licenses/metadata.json >/dev/null
+        cp release-licenses/licenses.md assets/licenses.md
+      env:
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: matrix.platform != 'windows'
+      run: |
+        jq -e --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$APPLICATION_FEATURES" \
+            '.commit_sha == $commit_sha and .target == $target and .features == $features and .version == env.RELEASE_VERSION and .product_id == env.ZED_PRODUCT_ID and .channel == env.ZED_RELEASE_CHANNEL' \
+            release-application/metadata.json >/dev/null
+        jq -e --arg commit_sha "$COMMIT_SHA" --arg target "$REMOTE_TARGET" --arg features "$REMOTE_FEATURES" \
+            '.commit_sha == $commit_sha and .target == $target and .features == $features and .version == env.RELEASE_VERSION and .product_id == env.ZED_PRODUCT_ID and .channel == env.ZED_RELEASE_CHANNEL' \
+            release-remote-server/metadata.json >/dev/null
+        APPLICATION_DEST="target/products/${PRODUCT_ID}/${TARGET}/release"
+        REMOTE_DEST="target/products/${PRODUCT_ID}/${REMOTE_TARGET}/release"
+        mkdir -p "$APPLICATION_DEST" "$REMOTE_DEST"
+        cp release-application/zed release-application/cli "$APPLICATION_DEST/"
+        cp release-remote-server/remote_server "$REMOTE_DEST/"
+        if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]]; then
+            cp release-application/native-cargo-runtime-observer "$APPLICATION_DEST/"
+            chmod +x "$APPLICATION_DEST/native-cargo-runtime-observer"
+        fi
+        chmod +x "$APPLICATION_DEST/zed" "$APPLICATION_DEST/cli" "$REMOTE_DEST/remote_server"
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        APPLICATION_FEATURES: ${{ matrix.application_features }}
+        REMOTE_FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: |
+        $applicationMetadata = Get-Content release-application/metadata.json | ConvertFrom-Json
+        $remoteMetadata = Get-Content release-remote-server/metadata.json | ConvertFrom-Json
+        if ($applicationMetadata.commit_sha -ne $env:COMMIT_SHA -or $applicationMetadata.target -ne $env:TARGET -or $applicationMetadata.features -ne $env:APPLICATION_FEATURES -or $applicationMetadata.version -ne $env:RELEASE_VERSION -or $applicationMetadata.product_id -ne $env:ZED_PRODUCT_ID -or $applicationMetadata.channel -ne $env:ZED_RELEASE_CHANNEL) {
+            throw "Application artifact metadata does not match the release plan"
+        }
+        if ($remoteMetadata.commit_sha -ne $env:COMMIT_SHA -or $remoteMetadata.target -ne $env:REMOTE_TARGET -or $remoteMetadata.features -ne $env:REMOTE_FEATURES -or $remoteMetadata.version -ne $env:RELEASE_VERSION -or $remoteMetadata.product_id -ne $env:ZED_PRODUCT_ID -or $remoteMetadata.channel -ne $env:ZED_RELEASE_CHANNEL) {
+            throw "Remote-server artifact metadata does not match the release plan"
+        }
+        $applicationDest = "target/products/$env:PRODUCT_ID/$env:TARGET/release"
+        $remoteDest = "target/products/$env:PRODUCT_ID/$env:REMOTE_TARGET/release"
+        New-Item -ItemType Directory -Path $applicationDest, $remoteDest -Force | Out-Null
+        Copy-Item release-application/zed.exe, release-application/cli.exe, release-application/auto_update_helper.exe, release-application/zed.pdb, release-application/cli.pdb, release-application/auto_update_helper.pdb -Destination $applicationDest
+        Copy-Item release-remote-server/remote_server.exe, release-remote-server/remote_server.pdb -Destination $remoteDest
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        REMOTE_TARGET: ${{ matrix.remote_target }}
+        APPLICATION_FEATURES: ${{ matrix.application_features }}
+        REMOTE_FEATURES: ${{ matrix.remote_features }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::cache_macos_cargo_bundle
+      if: matrix.platform == 'macos'
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ~/.cargo/bin/cargo-bundle
+        key: release-tool-v1-cargo-bundle-0.11.0-${{ runner.os }}-${{ runner.arch }}
+    - name: release::product_builds
+      if: matrix.platform == 'macos'
+      run: uname -m && rustc -vV && df -h . && xcode-select -p
+    - name: steps::enable_windows_long_paths
+      if: matrix.platform == 'windows'
+      run: git config --global core.longpaths true
+      shell: pwsh
+    - name: release::product_builds
+      if: matrix.platform == 'linux'
+      run: ./script/linux && ./script/download-wasi-sdk
+    - name: release::product_builds
+      if: matrix.platform == 'linux'
+      run: |
+        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform linux --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing required
+      env:
+        TARGET: ${{ matrix.target }}
+        CC: clang
+        CXX: clang++
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        LINUX_SIGNING_KEY_PASSWORD: ${{ secrets.LINUX_SIGNING_KEY_PASSWORD }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+    - name: release::product_builds
+      if: matrix.platform == 'macos'
+      run: |
+        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform macos --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing required
+      env:
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        TARGET: ${{ matrix.target }}
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
+        APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+        APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: |
+        cargo xtask bundle --product $env:ZED_PRODUCT_ID --platform windows --target $env:TARGET --channel $env:ZED_RELEASE_CHANNEL --phase package --signing required
+        if ($LASTEXITCODE -ne 0) { throw "Product-aware Windows bundling failed" }
+      shell: pwsh
+      env:
+        TARGET: ${{ matrix.target }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ACCOUNT_NAME: ${{ secrets.ACCOUNT_NAME }}
+        CERT_PROFILE_NAME: ${{ secrets.CERT_PROFILE_NAME }}
+        ENDPOINT: ${{ secrets.ENDPOINT }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        FILE_DIGEST: ${{ secrets.FILE_DIGEST }}
+        TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
+        TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
+    - name: release::product_builds
+      if: matrix.platform != 'windows'
+      run: |
+        python3 script/smoke-product-bundle \
+            --product "$PRODUCT_ID" \
+            --platform "$PLATFORM" \
+            --target "$TARGET" \
+            --plan "release-bundle-plans/$PLAN_FILE" \
+            --commit-sha "$COMMIT_SHA"
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        PLATFORM: ${{ matrix.platform }}
+        TARGET: ${{ matrix.target }}
+        PLAN_FILE: ${{ matrix.plan_file }}
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: matrix.platform == 'windows'
+      run: |
+        python script/smoke-product-bundle `
+            --product $env:PRODUCT_ID `
+            --platform windows `
+            --target $env:TARGET `
+            --plan "release-bundle-plans/$env:PLAN_FILE" `
+            --commit-sha $env:COMMIT_SHA
+      shell: pwsh
+      env:
+        PRODUCT_ID: ${{ matrix.product }}
+        TARGET: ${{ matrix.target }}
+        PLAN_FILE: ${{ matrix.plan_file }}
+        ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+    - name: release::product_builds
+      if: always() && matrix.platform == 'macos'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.artifact }}-signing-evidence
+        path: target/products/${{ matrix.product }}/signing-evidence
+    - name: release::product_builds
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.artifact }}
+        path: |-
+          ${{ matrix.artifact_path }}
+          target/products/${{ matrix.product }}/release/verification-*.json
+        if-no-files-found: error
+    - name: release::product_builds
+      if: always() && matrix.platform != 'windows'
+      run: |
+        printf '### sccache: package-only job\n\nOnly the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.\n' >> "$GITHUB_STEP_SUMMARY"
+    - name: release::product_builds
+      if: always() && matrix.platform == 'windows'
+      run: |
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### sccache: package-only job'
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'Only the xtask orchestrator is compiled here; this job consumed commit-bound application, remote-server, license, and bundle-plan artifacts. Cache requests: 0.'
+      shell: pwsh
+    - name: release::product_builds
+      if: always() && matrix.platform == 'macos'
+      run: df -h . && du -sh target
+    timeout-minutes: 90
+  draft_product:
+    needs:
+    - prepare_release
+    - product_builds
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+    - name: steps::checkout_repo
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      with:
+        clean: false
+        fetch-depth: 0
+        fetch-tags: true
+        ref: ${{ github.sha }}
+    - name: release::setup_signing_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: release::draft_product
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: release-bundle-plans
+        path: release-bundle-plans
+    - name: release::draft_product
+      run: python3 script/product_release.py download-packages
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: release::draft_product
+      run: python3 script/product_release.py draft
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_GATES: ${{ toJSON(vars) }}
+        EXPECTED_COMMIT: ${{ needs.prepare_release.outputs.commit_sha }}
+        EXPECTED_PRODUCT: ${{ needs.prepare_release.outputs.product_id }}
+        EXPECTED_TAG: ${{ needs.prepare_release.outputs.tag }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+    timeout-minutes: 20
+concurrency:
+  group: product-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash -euxo pipefail {0}

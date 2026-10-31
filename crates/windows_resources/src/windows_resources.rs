@@ -20,6 +20,9 @@ fn git_sha() -> Option<String> {
 }
 
 fn product_version(version: &str) -> String {
+    if std::env::var("RELEASE_VERSION").as_deref() == Ok(version) {
+        return version.to_owned();
+    }
     let commit_sha = git_sha();
     let channel = std::env::var("RELEASE_CHANNEL").unwrap_or_else(|_| "dev".into());
     let build_id = std::env::var("GITHUB_RUN_NUMBER").ok();
@@ -34,7 +37,24 @@ fn product_version(version: &str) -> String {
         metadata.push_str(sha);
     }
 
-    format!("{version}+{metadata}")
+    let separator = if version.contains('+') { "." } else { "+" };
+    format!("{version}{separator}{metadata}")
+}
+
+fn numeric_file_version(version: &str) -> Result<String, std::num::ParseIntError> {
+    let core = version.split(['-', '+']).next().unwrap_or(version);
+    let components = core
+        .split('.')
+        .map(str::parse::<u16>)
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut components = components.into_iter().chain(std::iter::repeat(0));
+    Ok(format!(
+        "{},{},{},{}",
+        components.next().unwrap_or(0),
+        components.next().unwrap_or(0),
+        components.next().unwrap_or(0),
+        components.next().unwrap_or(0)
+    ))
 }
 
 const ICON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../zed/resources/windows");
@@ -81,17 +101,7 @@ pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION"))
     })?;
     let product_version = product_version(&pkg_version);
-    let mut version_parts = pkg_version
-        .split('.')
-        .map(|part| part.parse::<u16>().unwrap_or(0))
-        .chain(std::iter::repeat(0));
-    let file_version = format!(
-        "{},{},{},{}",
-        version_parts.next().unwrap_or(0),
-        version_parts.next().unwrap_or(0),
-        version_parts.next().unwrap_or(0),
-        version_parts.next().unwrap_or(0),
-    );
+    let file_version = numeric_file_version(&pkg_version)?;
 
     let rc_content = format!(
         r#"1 ICON "{icon_escaped}"
@@ -140,4 +150,27 @@ END
     embed_resource::compile(&rc_path, embed_resource::NONE).manifest_optional()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn numeric_resources_preserve_patch_for_prerelease_tags()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for version in ["4.5.6", "4.5.6-rc.2", "4.5.6-rc.2+build.7"] {
+            assert_eq!(numeric_file_version(version)?, "4,5,6,0");
+        }
+        assert!(numeric_file_version("65536.1.2").is_err());
+        assert!(numeric_file_version("not-a-version").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn product_version_extends_existing_build_metadata() {
+        let version = product_version("4.5.6-rc.2+build.7");
+        assert!(version.starts_with("4.5.6-rc.2+build.7."));
+        assert_eq!(version.matches('+').count(), 1);
+    }
 }

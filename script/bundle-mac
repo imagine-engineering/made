@@ -255,8 +255,10 @@ mv "${app_path}/Contents/MacOS/zed" "${app_path}/Contents/MacOS/${ZED_PRODUCT_EX
 /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${ZED_PRODUCT_DISPLAY_NAME}" "${plist}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${ZED_PRODUCT_BUNDLE_ID}" "${plist}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${ZED_PRODUCT_EXECUTABLE}" "${plist}"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${RELEASE_VERSION}" "${plist}"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${RELEASE_VERSION}" "${plist}"
+package_numeric_version="${RELEASE_VERSION%%[-+]*}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${package_numeric_version}" "${plist}"
+/usr/libexec/PlistBuddy -c "Add :ProductReleaseVersion string ${RELEASE_VERSION}" "${plist}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${package_numeric_version}" "${plist}"
 python3 - "${plist}" "${ZED_PRODUCT_DISPLAY_NAME}" <<'PY'
 import pathlib
 import plistlib
@@ -289,8 +291,8 @@ fi
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "${plist}")" == "${ZED_PRODUCT_DISPLAY_NAME}" ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${plist}")" == "${ZED_PRODUCT_BUNDLE_ID}" ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "${plist}")" == "${ZED_PRODUCT_EXECUTABLE}" ]]
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")" == "${RELEASE_VERSION}" ]]
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")" == "${RELEASE_VERSION}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")" == "${package_numeric_version}" ]]
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")" == "${package_numeric_version}" ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "${plist}")" == "${ZED_PRODUCT_URL_SCHEME}" ]]
 
 document_icon_source="${ZED_PRODUCT_ICON_SET}/app-icon.icns"

@@ -1,21 +1,7 @@
 #!/usr/bin/env bash
-
-channel="$1"
-
-query=""
-case $channel in
-  stable)
-    ;;
-  preview)
-    query="&preview=1"
-    ;;
-  nightly)
-    query="&nightly=1"
-    ;;
-  *)
-    echo "this must be run on either of stable|preview|nightly release branches" >&2
+set -euo pipefail
+if [[ $# != 2 ]]; then
+    printf '%s\n' 'Usage: script/get-released-version <catalog-product-id> <stable|preview>' >&2
     exit 1
-    ;;
-esac
-
-curl -s "https://cloud.zed.dev/releases/$channel/latest/asset?asset=zed&os=macos&arch=aarch64" | jq -r .version
+fi
+python3 script/product_release.py latest --product "$1" --channel "$2" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])'

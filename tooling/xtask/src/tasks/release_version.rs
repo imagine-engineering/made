@@ -1,432 +1,282 @@
-use std::{fs, process::Command};
+#![allow(
+    clippy::disallowed_methods,
+    reason = "synchronous release planning CLI"
+)]
 
-use anyhow::{Context as _, Result, bail, ensure};
-use clap::{Parser, ValueEnum};
+use std::process::Command;
+
+use anyhow::{Context as _, Result, ensure};
+use clap::Parser;
 use semver::Version;
 use serde::Serialize;
 
-const TAG_PREFIX: &str = "rust-v";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub enum BumpType {
-    Patch,
-    Minor,
-    Major,
-}
+use crate::product_manifest::{ProductManifest, ProductStatus};
 
 #[derive(Debug, Parser)]
 pub struct ReleaseVersionArgs {
-    /// Commit to tag. It must be a promoted commit on origin/release.
+    /// An existing product release tag. Never creates or moves a tag.
     #[arg(long)]
-    commit: String,
-    /// Permanent initial release-branch SHA; this commit can never be released.
-    #[arg(long)]
-    bootstrap_commit: String,
-    /// Semantic-version component to increment for a new release.
-    #[arg(long, value_enum, default_value_t = BumpType::Patch)]
-    bump: BumpType,
-    /// Exact X.Y.Z version for manual recovery.
-    #[arg(long)]
-    explicit_version: Option<Version>,
-    /// Existing rust-vX.Y.Z tag to validate during recovery.
-    #[arg(long)]
-    existing_tag: Option<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct ReleaseTag {
-    name: String,
-    version: Version,
-    commit_sha: String,
-}
-
-#[derive(Debug, Eq, PartialEq, Serialize)]
-struct ReleaseDecision {
-    commit_sha: String,
-    version: Version,
     tag: String,
-    reuse_existing_tag: bool,
-    previous_tag: Option<String>,
+    /// Print the catalog plan without resolving Git history (non-publishing validation only).
+    #[arg(long)]
+    plan_only: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReleaseDecision {
+    pub commit_sha: String,
+    pub product_id: String,
+    pub display_name: String,
+    pub update_namespace: String,
+    pub version: Version,
+    pub tag: String,
+    pub channel: String,
+    pub prerelease: bool,
+    pub release_gate_variable: String,
+    pub required_ci_workflows: Vec<String>,
+    pub matrix: serde_json::Value,
 }
 
 pub fn run(args: ReleaseVersionArgs) -> Result<()> {
-    let commit_expression = format!("{}^{{commit}}", args.commit);
-    let commit_sha = git_output(["rev-parse", "--verify", &commit_expression])?;
-    ensure_release_commit(&commit_sha, &args.bootstrap_commit)?;
-
-    let tags = load_release_tags()?;
-    if !tags.iter().any(|tag| tag.commit_sha == commit_sha)
-        && let Some(previous_tag) = tags.last()
-    {
-        ensure!(
-            git_is_ancestor(&previous_tag.commit_sha, &commit_sha)?,
-            "release commit {commit_sha} precedes or diverges from latest tag {}",
-            previous_tag.name
-        );
+    let manifest = ProductManifest::load()?;
+    let mut decision = resolve_tag(&manifest, &args.tag)?;
+    if args.plan_only {
+        println!("{}", serde_json::to_string(&decision)?);
+        return Ok(());
     }
-    let initial_version = initial_product_version()?;
-    let decision = resolve_release(
-        &commit_sha,
-        initial_version,
-        &tags,
-        args.bump,
-        args.explicit_version,
-        args.existing_tag.as_deref(),
-    )?;
-
+    let commit_sha = git_output(&[
+        "rev-parse",
+        "--verify",
+        &format!("refs/tags/{}^{{commit}}", args.tag),
+    ])?;
+    let status = Command::new("git")
+        .args(["merge-base", "--is-ancestor", &commit_sha, "origin/main"])
+        .status()
+        .context("checking main ancestry")?;
+    ensure!(status.success(), "tag commit is not on origin/main history");
+    let tagged_manifest = ProductManifest::from_commit(&commit_sha)?;
+    let current_product = manifest.product(&decision.product_id)?;
+    let tagged_product = tagged_manifest.product(&decision.product_id)?;
+    ensure!(
+        tagged_product
+            .targets
+            .iter()
+            .all(|target| current_product.targets.contains(target)),
+        "tagged product requires a platform that is no longer qualified"
+    );
+    let mut tagged_decision = resolve_tag(&tagged_manifest, &args.tag)?;
+    ensure!(
+        tagged_decision.product_id == decision.product_id,
+        "tag product mapping changed"
+    );
+    tagged_decision.release_gate_variable = decision.release_gate_variable;
+    tagged_decision
+        .required_ci_workflows
+        .extend(decision.required_ci_workflows);
+    tagged_decision.required_ci_workflows.sort();
+    tagged_decision.required_ci_workflows.dedup();
+    tagged_decision.commit_sha = commit_sha;
+    decision = tagged_decision;
     println!("{}", serde_json::to_string(&decision)?);
     Ok(())
 }
 
-fn ensure_release_commit(commit_sha: &str, bootstrap_sha: &str) -> Result<()> {
-    ensure!(
-        bootstrap_sha.len() == 40 && bootstrap_sha.bytes().all(|byte| byte.is_ascii_hexdigit()),
-        "bootstrap commit must be a full Git SHA"
-    );
-    let bootstrap_sha = git_output([
-        "rev-parse",
-        "--verify",
-        &format!("{bootstrap_sha}^{{commit}}"),
-    ])?;
-    ensure!(
-        commit_sha != bootstrap_sha && git_is_ancestor(&bootstrap_sha, commit_sha)?,
-        "release commit must strictly descend from the permanent bootstrap commit"
-    );
-    let release_history = git_output(["rev-list", "--first-parent", "origin/release"])?;
-    ensure!(
-        release_history.lines().any(|commit| commit == commit_sha),
-        "release commit {commit_sha} is not on the first-parent history of origin/release"
-    );
-    Ok(())
-}
-
-fn load_release_tags() -> Result<Vec<ReleaseTag>> {
-    let pattern = format!("{TAG_PREFIX}*");
-    let names = git_output(["tag", "--list", &pattern])?;
-    let mut tags = Vec::new();
-    for name in names.lines().filter(|name| !name.is_empty()) {
-        let version = parse_tag(name)?;
-        let commit_expression = format!("{name}^{{commit}}");
-        let commit_sha = git_output(["rev-parse", "--verify", &commit_expression])?;
-        tags.push(ReleaseTag {
-            name: name.to_owned(),
-            version,
-            commit_sha,
-        });
-    }
-    tags.sort_by(|left, right| left.version.cmp(&right.version));
-    Ok(tags)
-}
-
-fn initial_product_version() -> Result<Version> {
-    let manifest = fs::read_to_string("products/flavors.toml")
-        .context("failed to read products/flavors.toml")?;
-    let manifest: toml::Value =
-        toml::from_str(&manifest).context("failed to parse products/flavors.toml")?;
-    let version = manifest
-        .get("products")
-        .and_then(toml::Value::as_array)
-        .and_then(|products| {
-            products
-                .iter()
-                .find(|product| product.get("id").and_then(toml::Value::as_str) == Some("rust"))
-        })
-        .and_then(|product| product.get("initial_version"))
-        .and_then(toml::Value::as_str)
-        .context("Copper has no initial_version in products/flavors.toml")?;
-    parse_version(version)
-}
-
-fn resolve_release(
-    commit_sha: &str,
-    initial_version: Version,
-    tags: &[ReleaseTag],
-    bump: BumpType,
-    explicit_version: Option<Version>,
-    existing_tag: Option<&str>,
-) -> Result<ReleaseDecision> {
-    validate_stable_version(&initial_version)?;
-    if let Some(version) = explicit_version.as_ref() {
-        validate_stable_version(version)?;
-    }
-    let requested_tag = existing_tag.map(parse_tag).transpose()?;
-    let tags_at_commit = tags
+pub fn resolve_tag(manifest: &ProductManifest, tag: &str) -> Result<ReleaseDecision> {
+    let matches = manifest
+        .products
         .iter()
-        .filter(|tag| tag.commit_sha == commit_sha)
+        .filter(|product| tag.starts_with(&product.release_tag_prefix))
         .collect::<Vec<_>>();
     ensure!(
-        tags_at_commit.len() <= 1,
-        "release commit {commit_sha} has multiple rust-v* tags"
+        matches.len() == 1,
+        "unknown or ambiguous product release tag prefix: {tag}"
     );
-
-    let previous_tag = tags.last();
-    if let Some(tag) = tags_at_commit.first() {
-        if let Some(requested_tag) = requested_tag.as_ref() {
-            ensure!(
-                requested_tag == &tag.version,
-                "requested tag does not match the tag already attached to {commit_sha}"
-            );
-        }
-        if let Some(explicit_version) = explicit_version.as_ref() {
-            ensure!(
-                explicit_version == &tag.version,
-                "explicit version does not match the tag already attached to {commit_sha}"
-            );
-        }
-        return Ok(ReleaseDecision {
-            commit_sha: commit_sha.to_owned(),
-            version: tag.version.clone(),
-            tag: tag.name.clone(),
-            reuse_existing_tag: true,
-            previous_tag: previous_tag.map(|tag| tag.name.clone()),
-        });
-    }
-
-    if existing_tag.is_some() {
-        bail!("the tag-push release tag does not point to {commit_sha}");
-    }
-
-    let version = if let Some(version) = explicit_version {
-        version
-    } else if let Some(previous_tag) = previous_tag {
-        bump_version(&previous_tag.version, bump)?
-    } else {
-        initial_version
-    };
-    validate_stable_version(&version)?;
-    if let Some(previous_tag) = previous_tag {
-        ensure!(
-            version > previous_tag.version,
-            "release version {version} must be newer than {}",
-            previous_tag.version
-        );
-    }
-
-    let tag = format!("{TAG_PREFIX}{version}");
+    let product = matches.first().context("missing product")?;
     ensure!(
-        !tags.iter().any(|existing| existing.name == tag),
-        "release tag {tag} already points to another commit"
+        product.status == ProductStatus::Enabled && !product.targets.is_empty(),
+        "product {} is not qualified for release",
+        product.id
     );
-
+    let version = Version::parse(
+        tag.strip_prefix(&product.release_tag_prefix)
+            .context("tag prefix")?,
+    )
+    .context("release tag must contain a valid semantic version")?;
+    ensure!(
+        [version.major, version.minor, version.patch]
+            .into_iter()
+            .all(|part| part <= u16::MAX.into()),
+        "version exceeds platform package numeric limits"
+    );
+    let prerelease = !version.pre.is_empty();
+    let channel = if prerelease { "preview" } else { "stable" };
+    let mut package_product = (*product).clone();
+    package_product.display_name =
+        super::bundle::channel_display_name(&product.display_name, channel);
+    package_product.bundle_identifier =
+        super::bundle::channel_identifier(&product.bundle_identifier, channel, ".");
+    package_product.data_namespace =
+        super::bundle::channel_identifier(&product.data_namespace, channel, "-");
+    package_product.windows_installer_id =
+        super::bundle::channel_windows_installer_id(&product.windows_installer_id, channel)?;
+    let mut rows = super::workflows::release::product_matrix(&package_product);
+    for row in &mut rows {
+        let platform = row["platform"].as_str().context("platform")?.to_owned();
+        let target = row["target"].as_str().context("target")?;
+        let architecture = target.split('-').next().context("architecture")?;
+        let extension = match platform.as_str() {
+            "linux" => "tar.gz",
+            "macos" => "dmg",
+            "windows" => "exe",
+            _ => anyhow::bail!("unsupported platform"),
+        };
+        let name = product.render_name(
+            &product.artifact_name,
+            &version.to_string(),
+            &platform,
+            architecture,
+            extension,
+        )?;
+        row["artifact_name"] = serde_json::json!(name);
+        row["artifact_path"] = serde_json::json!(format!(
+            "target/products/{}/release/{name}{}",
+            product.id,
+            if platform == "linux" { "*" } else { "" }
+        ));
+    }
     Ok(ReleaseDecision {
-        commit_sha: commit_sha.to_owned(),
+        commit_sha: String::new(),
+        product_id: product.id.clone(),
+        display_name: product.display_name.clone(),
+        update_namespace: product.update_namespace.clone(),
         version,
-        tag,
-        reuse_existing_tag: false,
-        previous_tag: previous_tag.map(|tag| tag.name.clone()),
+        tag: tag.to_owned(),
+        channel: channel.into(),
+        prerelease,
+        release_gate_variable: product.release_gate_variable.clone(),
+        required_ci_workflows: product.required_ci_workflows.clone(),
+        matrix: serde_json::json!({"include": rows}),
     })
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "This synchronous git check runs only in the xtask CLI"
-)]
-fn git_is_ancestor(ancestor: &str, descendant: &str) -> Result<bool> {
-    let status = Command::new("git")
-        .args(["merge-base", "--is-ancestor", ancestor, descendant])
-        .status()
-        .context("failed to verify release history")?;
-    match status.code() {
-        Some(0) => Ok(true),
-        Some(1) => Ok(false),
-        _ => bail!("git merge-base failed while verifying release history"),
-    }
-}
-
-fn bump_version(version: &Version, bump: BumpType) -> Result<Version> {
-    let next = match bump {
-        BumpType::Patch => Version::new(
-            version.major,
-            version.minor,
-            version
-                .patch
-                .checked_add(1)
-                .context("patch version overflow")?,
-        ),
-        BumpType::Minor => Version::new(
-            version.major,
-            version
-                .minor
-                .checked_add(1)
-                .context("minor version overflow")?,
-            0,
-        ),
-        BumpType::Major => Version::new(
-            version
-                .major
-                .checked_add(1)
-                .context("major version overflow")?,
-            0,
-            0,
-        ),
-    };
-    Ok(next)
-}
-
-fn parse_tag(tag: &str) -> Result<Version> {
-    let version = tag
-        .strip_prefix(TAG_PREFIX)
-        .with_context(|| format!("release tag must start with {TAG_PREFIX}: {tag}"))?;
-    parse_version(version)
-}
-
-fn parse_version(version: &str) -> Result<Version> {
-    let version = Version::parse(version)
-        .with_context(|| format!("release version must use X.Y.Z syntax: {version}"))?;
-    validate_stable_version(&version)?;
-    Ok(version)
-}
-
-fn validate_stable_version(version: &Version) -> Result<()> {
-    ensure!(
-        version.pre.is_empty() && version.build.is_empty(),
-        "release version must not contain prerelease or build metadata: {version}"
-    );
-    Ok(())
-}
-
-#[allow(
-    clippy::disallowed_methods,
-    reason = "This synchronous git command runs only in the xtask CLI"
-)]
-fn git_output<I, S>(args: I) -> Result<String>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<std::ffi::OsStr>,
-{
-    let output = Command::new("git")
-        .args(args)
-        .output()
-        .context("failed to run git")?;
+fn git_output(arguments: &[&str]) -> Result<String> {
+    let output = Command::new("git").args(arguments).output()?;
     ensure!(
         output.status.success(),
-        "git command failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
+        "existing release tag could not be resolved: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8(output.stdout)
-        .context("git command returned non-UTF-8 output")
-        .map(|output| output.trim().to_owned())
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn version(value: &str) -> Version {
-        Version::parse(value).expect("test version must be valid")
-    }
-
-    fn tag(value: &str, commit_sha: &str) -> ReleaseTag {
-        ReleaseTag {
-            name: format!("{TAG_PREFIX}{value}"),
-            version: version(value),
-            commit_sha: commit_sha.to_owned(),
-        }
-    }
-
     #[test]
-    fn first_release_uses_product_initial_version() -> Result<()> {
-        let decision = resolve_release("new", version("1.16.2"), &[], BumpType::Patch, None, None)?;
-        assert_eq!(decision.version, version("1.16.2"));
-        assert_eq!(decision.tag, "rust-v1.16.2");
-        Ok(())
-    }
-
-    #[test]
-    fn automatic_and_manual_bumps_are_semantic() -> Result<()> {
-        let tags = [tag("1.16.2", "old")];
-        for (bump, expected) in [
-            (BumpType::Patch, "1.16.3"),
-            (BumpType::Minor, "1.17.0"),
-            (BumpType::Major, "2.0.0"),
+    fn tag_controls_product_version_and_channel() -> Result<()> {
+        let manifest = ProductManifest::load()?;
+        for (tag, channel) in [
+            ("rust-v0.1.0", "stable"),
+            ("rust-v2.3.4-rc.2", "preview"),
+            ("rust-v2.3.4-beta.1+build.5", "preview"),
         ] {
-            let decision = resolve_release("new", version("1.16.2"), &tags, bump, None, None)?;
-            assert_eq!(decision.version, version(expected));
+            let decision = resolve_tag(&manifest, tag)?;
+            assert_eq!(decision.product_id, "rust");
+            assert_eq!(decision.update_namespace, "rust");
+            assert_eq!(decision.channel, channel);
+            assert_eq!(
+                decision.version.to_string(),
+                tag.trim_start_matches("rust-v")
+            );
+            assert_eq!(
+                decision.matrix["include"]
+                    .as_array()
+                    .context("matrix")?
+                    .len(),
+                3
+            );
         }
         Ok(())
     }
 
     #[test]
-    fn rerun_reuses_the_existing_commit_tag() -> Result<()> {
-        let tags = [tag("1.16.2", "same")];
-        let decision = resolve_release(
-            "same",
-            version("1.16.2"),
-            &tags,
-            BumpType::Patch,
-            None,
-            Some("rust-v1.16.2"),
-        )?;
-        assert!(decision.reuse_existing_tag);
-        assert_eq!(decision.tag, "rust-v1.16.2");
+    fn artifact_templates_and_preview_identities_come_from_catalog() -> Result<()> {
+        let mut manifest = ProductManifest::load()?;
+        let product = manifest
+            .products
+            .iter_mut()
+            .find(|product| product.id == "rust")
+            .context("Copper")?;
+        product.artifact_name = "{product}-custom-{version}-{platform}-{arch}.{extension}".into();
+        let decision = resolve_tag(&manifest, "rust-v4.5.6-rc.1")?;
+        for row in decision.matrix["include"].as_array().context("matrix")? {
+            assert!(
+                row["artifact_name"]
+                    .as_str()
+                    .context("artifact")?
+                    .starts_with("rust-custom-4.5.6-rc.1-")
+            );
+            assert_eq!(row["bundle_identifier"], "dev.ideflavors.rust.preview");
+            assert_eq!(row["data_namespace"], "ide-rust-preview");
+            assert_eq!(row["display_name"], "Copper Preview");
+        }
+        manifest
+            .products
+            .iter_mut()
+            .find(|product| product.id == "jvm")
+            .context("Groovy")?
+            .release_tag_prefix = "rust-v".into();
+        assert!(
+            manifest
+                .validate(&crate::product_manifest::workspace_root())
+                .is_err()
+        );
         Ok(())
     }
 
     #[test]
-    fn manual_explicit_version_is_used() -> Result<()> {
-        let tags = [tag("1.16.2", "old")];
-        let decision = resolve_release(
-            "new",
-            version("1.16.2"),
-            &tags,
-            BumpType::Patch,
-            Some(version("1.20.0")),
-            None,
-        )?;
-        assert_eq!(decision.version, version("1.20.0"));
-        assert_eq!(decision.tag, "rust-v1.20.0");
+    fn rejects_unknown_ambiguous_invalid_and_unqualified_products() -> Result<()> {
+        let mut manifest = ProductManifest::load()?;
+        for tag in [
+            "v0.1.0",
+            "rust-v01.2.3",
+            "rust-v1.2",
+            "rust-v1.2.3-01",
+            "rust-v1.2.3\n",
+            "rust-v65536.0.0",
+            "jvm-v1.0.0",
+            "game-v1.0.0",
+        ] {
+            assert!(resolve_tag(&manifest, tag).is_err(), "accepted {tag}");
+        }
+        manifest.products.push(manifest.product("rust")?.clone());
+        assert!(resolve_tag(&manifest, "rust-v1.0.0").is_err());
         Ok(())
     }
 
     #[test]
-    fn rejects_tag_push_for_a_different_commit() {
-        let tags = [tag("1.16.2", "old")];
-        let error = resolve_release(
-            "new",
-            version("1.16.2"),
-            &tags,
-            BumpType::Patch,
-            None,
-            Some("rust-v1.16.2"),
-        )
-        .expect_err("tag from a different commit must fail");
-        assert!(error.to_string().contains("does not point"));
-    }
-
-    #[test]
-    fn rejects_conflicting_explicit_version() {
-        let tags = [tag("1.16.2", "same")];
-        let error = resolve_release(
-            "same",
-            version("1.16.2"),
-            &tags,
-            BumpType::Patch,
-            Some(version("1.17.0")),
-            None,
-        )
-        .expect_err("conflicting version must fail");
-        assert!(error.to_string().contains("does not match"));
-    }
-
-    #[test]
-    fn rejects_duplicate_tags_for_one_commit() {
-        let tags = [tag("1.16.2", "same"), tag("1.16.3", "same")];
-        let error = resolve_release(
-            "same",
-            version("1.16.2"),
-            &tags,
-            BumpType::Patch,
-            None,
-            None,
-        )
-        .expect_err("ambiguous tags must fail");
-        assert!(error.to_string().contains("multiple"));
-    }
-
-    #[test]
-    fn rejects_non_stable_versions_and_tags() {
-        assert!(parse_version("1.2.3-alpha.1").is_err());
-        assert!(parse_tag("v1.2.3").is_err());
-        assert!(parse_tag("rust-v1.2").is_err());
+    fn catalog_keeps_products_independent_even_if_future_groovy_is_qualified() -> Result<()> {
+        let mut manifest = ProductManifest::load()?;
+        let rust_targets = manifest.product("rust")?.targets.clone();
+        let groovy = manifest
+            .products
+            .iter_mut()
+            .find(|product| product.id == "jvm")
+            .context("Groovy")?;
+        groovy.status = ProductStatus::Enabled;
+        groovy.targets = rust_targets;
+        let decision = resolve_tag(&manifest, "jvm-v3.2.1-rc.1")?;
+        assert_eq!(decision.product_id, "jvm");
+        assert_eq!(decision.update_namespace, "jvm");
+        assert!(
+            decision.matrix["include"]
+                .as_array()
+                .context("matrix")?
+                .iter()
+                .all(|row| row["product"] == "jvm")
+        );
+        assert_eq!(resolve_tag(&manifest, "rust-v0.1.0")?.product_id, "rust");
+        Ok(())
     }
 }

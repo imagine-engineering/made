@@ -45,6 +45,9 @@ pub struct BundleArgs {
     /// Stable product ID from products/flavors.toml.
     #[arg(long)]
     product: String,
+    /// Resolve a read-only bundle plan from the tagged catalog; execution always uses the checkout.
+    #[arg(long, requires = "dry_run")]
+    catalog_commit: Option<String>,
     /// Packaging platform. Defaults to the current host.
     #[arg(long, value_enum)]
     platform: Option<Platform>,
@@ -87,13 +90,23 @@ struct BundlePlan<'a> {
     sim: bool,
     target_dir: String,
     artifact_name: String,
+    version: String,
     signing: SigningPolicy,
     phase: BundlePhase,
     signing_credentials_available: bool,
 }
 
 pub fn run(args: BundleArgs) -> Result<()> {
-    let manifest = ProductManifest::load()?;
+    let manifest = match args.catalog_commit.as_deref() {
+        Some(commit) => {
+            ensure!(
+                args.dry_run,
+                "tagged catalogs are only supported for read-only bundle plans"
+            );
+            ProductManifest::from_commit(commit)?
+        }
+        None => ProductManifest::load()?,
+    };
     let product = manifest.product(&args.product)?;
     ensure!(
         product.status == ProductStatus::Enabled,
@@ -190,6 +203,7 @@ pub fn run(args: BundleArgs) -> Result<()> {
         sim: args.sim,
         target_dir: target_dir.display().to_string(),
         artifact_name: artifact_name.clone(),
+        version: version.clone(),
         signing: args.signing,
         phase: args.phase,
         signing_credentials_available: credentials_available,
@@ -309,7 +323,7 @@ fn platform_command(platform: Platform, target: &str) -> Result<Command> {
     Ok(command)
 }
 
-fn channel_display_name(display_name: &str, channel: &str) -> String {
+pub(crate) fn channel_display_name(display_name: &str, channel: &str) -> String {
     if channel == "stable" {
         display_name.to_string()
     } else {
@@ -317,7 +331,7 @@ fn channel_display_name(display_name: &str, channel: &str) -> String {
     }
 }
 
-fn channel_identifier(identifier: &str, channel: &str, separator: &str) -> String {
+pub(crate) fn channel_identifier(identifier: &str, channel: &str, separator: &str) -> String {
     if channel == "stable" {
         identifier.to_string()
     } else {
@@ -333,7 +347,7 @@ fn uppercase_first(value: &str) -> String {
     }
 }
 
-fn channel_windows_installer_id(installer_id: &str, channel: &str) -> Result<String> {
+pub(crate) fn channel_windows_installer_id(installer_id: &str, channel: &str) -> Result<String> {
     if channel == "stable" {
         return Ok(installer_id.to_string());
     }

@@ -9,6 +9,12 @@ on:
     paths:
     - .github/workflows/release_signing_check.yml
     - tooling/xtask/src/tasks/workflows/release.rs
+    - tooling/xtask/src/tasks/release_version.rs
+    - products/flavors.toml
+    - script/bundle-*
+    - script/smoke-product-bundle
+    - script/product_release.py
+    - script/test_product_release.py
     - script/check-signing-environment
     - script/test-production-signing
     - script/sign-linux-archive
@@ -41,6 +47,8 @@ jobs:
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: release::release_signing_check
+      run: CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
     - id: resolve-signing-check
       name: release::release_signing_check
       run: |
@@ -50,27 +58,15 @@ jobs:
         if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", os.environ["VERSION"]):
             raise SystemExit("version must be exactly X.Y.Z")
         PYVERSION
-        {
-            echo "commit_sha=$COMMIT_SHA"
-            echo "version=$VERSION"
-            echo "tag="
-        } >> "$GITHUB_OUTPUT"
+        target/debug/xtask release-version --help >/dev/null
+        python3 script/product_release.py contract --version "$VERSION" --commit "$COMMIT_SHA"
       env:
         VERSION: ${{ inputs.version || '0.1.0' }}
         COMMIT_SHA: ${{ github.sha }}
     - name: release::release_signing_check
-      run: CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
-    - name: release::release_signing_check
-      run: python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && cargo test -p xtask --locked
+      run: python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && python3 -m unittest discover -s script -p test_product_release.py && cargo test -p xtask --locked
     - name: release::generate_release_bundle_plans
-      run: |
-        mkdir -p release-bundle-plans
-        target/debug/xtask bundle --product rust --platform linux --target x86_64-unknown-linux-gnu --signing required --dry-run \
-            | jq --arg commit_sha "$COMMIT_SHA" '. + {commit_sha: $commit_sha}' > release-bundle-plans/rust-linux-x86_64.json
-        target/debug/xtask bundle --product rust --platform macos --target aarch64-apple-darwin --signing required --dry-run \
-            | jq --arg commit_sha "$COMMIT_SHA" '. + {commit_sha: $commit_sha}' > release-bundle-plans/rust-macos-aarch64.json
-        target/debug/xtask bundle --product rust --platform windows --target x86_64-pc-windows-msvc --signing required --dry-run \
-            | jq --arg commit_sha "$COMMIT_SHA" '. + {commit_sha: $commit_sha}' > release-bundle-plans/rust-windows-x86_64.json
+      run: python3 script/product_release.py bundle-plans
       env:
         COMMIT_SHA: ${{ steps.resolve-signing-check.outputs.commit_sha }}
         RELEASE_VERSION: ${{ steps.resolve-signing-check.outputs.version }}
@@ -84,6 +80,9 @@ jobs:
       commit_sha: ${{ steps.resolve-signing-check.outputs.commit_sha }}
       version: ${{ steps.resolve-signing-check.outputs.version }}
       tag: ${{ steps.resolve-signing-check.outputs.tag }}
+      product_id: ${{ steps.resolve-signing-check.outputs.product_id }}
+      channel: ${{ steps.resolve-signing-check.outputs.channel }}
+      matrix: ${{ steps.resolve-signing-check.outputs.matrix }}
     timeout-minutes: 20
   signing_preflight:
     needs:
@@ -99,6 +98,7 @@ jobs:
         clean: false
         ref: ${{ needs.prepare_release.outputs.commit_sha }}
     - name: release::signing_preflight
+      if: contains(needs.prepare_release.outputs.matrix, '"platform":"macos"')
       run: python3 script/check-signing-environment --platform macos --policy required
       env:
         MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -108,6 +108,7 @@ jobs:
         APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
         APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
     - name: release::signing_preflight
+      if: contains(needs.prepare_release.outputs.matrix, '"platform":"windows"')
       run: python3 script/check-signing-environment --platform windows --policy required
       env:
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -121,6 +122,7 @@ jobs:
         TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
         TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
     - name: release::signing_preflight
+      if: contains(needs.prepare_release.outputs.matrix, '"platform":"linux"')
       run: python3 script/check-signing-environment --platform linux --policy required
       env:
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
@@ -186,6 +188,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       CARGO_TARGET_DIR: target/products/${{ matrix.product }}
       ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
       ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
       ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
       ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
@@ -196,73 +199,10 @@ jobs:
       ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
-      ZED_RELEASE_CHANNEL: stable
+      RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
-      matrix:
-        include:
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: linux
-          runner: ubuntu-22.04
-          target: x86_64-unknown-linux-gnu
-          remote_target: x86_64-unknown-linux-musl
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-linux-x86_64
-          remote_artifact: rust-remote-server-linux-x86_64
-          plan_file: rust-linux-x86_64.json
-          artifact: rust-linux-x86_64
-          artifact_suffix: linux-x86_64.tar.gz
-          artifact_path: target/products/rust/release/rust-*-linux-x86_64.tar.gz*
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: macos
-          runner: macos-15
-          target: aarch64-apple-darwin
-          remote_target: aarch64-apple-darwin
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-macos-aarch64
-          remote_artifact: rust-remote-server-macos-aarch64
-          plan_file: rust-macos-aarch64.json
-          artifact: rust-macos-aarch64
-          artifact_suffix: macos-aarch64.dmg
-          artifact_path: target/products/rust/release/rust-*-macos-aarch64.dmg
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: windows
-          runner: windows-2022
-          target: x86_64-pc-windows-msvc
-          remote_target: x86_64-pc-windows-msvc
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-windows-x86_64
-          remote_artifact: rust-remote-server-windows-x86_64
-          plan_file: rust-windows-x86_64.json
-          artifact: rust-windows-x86_64
-          artifact_suffix: windows-x86_64.exe
-          artifact_path: target/products/rust/release/rust-*-windows-x86_64.exe
+      matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
       fail-fast: false
     steps:
     - name: steps::checkout_repo
@@ -320,7 +260,6 @@ jobs:
     - name: release::application_builds
       if: matrix.platform == 'linux'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
         export ZED_BUNDLE_PHASE=application
         script/bundle-linux
       env:
@@ -331,7 +270,6 @@ jobs:
     - name: release::application_builds
       if: matrix.platform == 'macos'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
         export ZED_BUNDLE_PHASE=application
         script/bundle-mac "$TARGET"
       env:
@@ -349,7 +287,6 @@ jobs:
     - name: release::application_builds
       if: matrix.platform == 'windows'
       run: |
-        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
         $env:ZED_BUNDLE_PHASE = "application"
         script/bundle-windows.ps1 -Architecture x86_64
       shell: pwsh
@@ -362,11 +299,11 @@ jobs:
         SOURCE="target/products/${PRODUCT_ID}/${TARGET}/release"
         mkdir -p release-application
         cp "$SOURCE/zed" "$SOURCE/cli" release-application/
-        if [[ "$TARGET" == *-apple-darwin ]]; then
+        if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]]; then
             cp "$SOURCE/native-cargo-runtime-observer" release-application/
         fi
         jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$FEATURES" \
-            '{commit_sha: $commit_sha, target: $target, features: $features}' > release-application/metadata.json
+            '{commit_sha: $commit_sha, target: $target, features: $features, version: env.RELEASE_VERSION, product_id: env.ZED_PRODUCT_ID, channel: env.ZED_RELEASE_CHANNEL}' > release-application/metadata.json
       env:
         PRODUCT_ID: ${{ matrix.product }}
         TARGET: ${{ matrix.target }}
@@ -382,6 +319,9 @@ jobs:
             commit_sha = $env:COMMIT_SHA
             target = $env:TARGET
             features = $env:FEATURES
+            version = $env:RELEASE_VERSION
+            product_id = $env:ZED_PRODUCT_ID
+            channel = $env:ZED_RELEASE_CHANNEL
         } | ConvertTo-Json | Set-Content release-application/metadata.json
       shell: pwsh
       env:
@@ -439,6 +379,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       CARGO_TARGET_DIR: target/products/${{ matrix.product }}
       ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
       ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
       ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
       ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
@@ -449,73 +390,10 @@ jobs:
       ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
-      ZED_RELEASE_CHANNEL: stable
+      RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
-      matrix:
-        include:
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: linux
-          runner: ubuntu-22.04
-          target: x86_64-unknown-linux-gnu
-          remote_target: x86_64-unknown-linux-musl
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-linux-x86_64
-          remote_artifact: rust-remote-server-linux-x86_64
-          plan_file: rust-linux-x86_64.json
-          artifact: rust-linux-x86_64
-          artifact_suffix: linux-x86_64.tar.gz
-          artifact_path: target/products/rust/release/rust-*-linux-x86_64.tar.gz*
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: macos
-          runner: macos-15
-          target: aarch64-apple-darwin
-          remote_target: aarch64-apple-darwin
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-macos-aarch64
-          remote_artifact: rust-remote-server-macos-aarch64
-          plan_file: rust-macos-aarch64.json
-          artifact: rust-macos-aarch64
-          artifact_suffix: macos-aarch64.dmg
-          artifact_path: target/products/rust/release/rust-*-macos-aarch64.dmg
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: windows
-          runner: windows-2022
-          target: x86_64-pc-windows-msvc
-          remote_target: x86_64-pc-windows-msvc
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-windows-x86_64
-          remote_artifact: rust-remote-server-windows-x86_64
-          plan_file: rust-windows-x86_64.json
-          artifact: rust-windows-x86_64
-          artifact_suffix: windows-x86_64.exe
-          artifact_path: target/products/rust/release/rust-*-windows-x86_64.exe
+      matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
       fail-fast: false
     steps:
     - name: steps::checkout_repo
@@ -544,7 +422,6 @@ jobs:
     - name: release::remote_server_builds
       if: matrix.platform == 'linux'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
         export ZED_BUNDLE_PHASE=remote-server
         script/bundle-linux
       env:
@@ -554,7 +431,6 @@ jobs:
     - name: release::remote_server_builds
       if: matrix.platform == 'macos'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${ZED_PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
         export ZED_BUNDLE_PHASE=remote-server
         script/bundle-mac "$TARGET"
       env:
@@ -563,7 +439,6 @@ jobs:
     - name: release::remote_server_builds
       if: matrix.platform == 'windows'
       run: |
-        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:ZED_PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
         $env:ZED_BUNDLE_PHASE = "remote-server"
         script/bundle-windows.ps1 -Architecture x86_64
       shell: pwsh
@@ -576,7 +451,7 @@ jobs:
         mkdir -p release-remote-server
         cp "$SOURCE/remote_server" release-remote-server/
         jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$REMOTE_TARGET" --arg features "$FEATURES" \
-            '{commit_sha: $commit_sha, target: $target, features: $features}' > release-remote-server/metadata.json
+            '{commit_sha: $commit_sha, target: $target, features: $features, version: env.RELEASE_VERSION, product_id: env.ZED_PRODUCT_ID, channel: env.ZED_RELEASE_CHANNEL}' > release-remote-server/metadata.json
       env:
         PRODUCT_ID: ${{ matrix.product }}
         REMOTE_TARGET: ${{ matrix.remote_target }}
@@ -592,6 +467,9 @@ jobs:
             commit_sha = $env:COMMIT_SHA
             target = $env:REMOTE_TARGET
             features = $env:FEATURES
+            version = $env:RELEASE_VERSION
+            product_id = $env:ZED_PRODUCT_ID
+            channel = $env:ZED_RELEASE_CHANNEL
         } | ConvertTo-Json | Set-Content release-remote-server/metadata.json
       shell: pwsh
       env:
@@ -649,6 +527,7 @@ jobs:
       ZED_PRODUCT_SIGNING: required
       CARGO_TARGET_DIR: target/products/${{ matrix.product }}
       ZED_PRODUCT_ID: ${{ matrix.product }}
+      ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
       ZED_PRODUCT_DISPLAY_NAME: ${{ matrix.display_name }}
       ZED_PRODUCT_EXECUTABLE: ${{ matrix.executable_name }}
       ZED_PRODUCT_BUNDLE_ID: ${{ matrix.bundle_identifier }}
@@ -659,73 +538,10 @@ jobs:
       ZED_PRODUCT_WINDOWS_INSTALLER_ID: ${{ matrix.windows_installer_id }}
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
-      ZED_RELEASE_CHANNEL: stable
+      RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
-      matrix:
-        include:
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: linux
-          runner: ubuntu-22.04
-          target: x86_64-unknown-linux-gnu
-          remote_target: x86_64-unknown-linux-musl
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-linux-x86_64
-          remote_artifact: rust-remote-server-linux-x86_64
-          plan_file: rust-linux-x86_64.json
-          artifact: rust-linux-x86_64
-          artifact_suffix: linux-x86_64.tar.gz
-          artifact_path: target/products/rust/release/rust-*-linux-x86_64.tar.gz*
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: macos
-          runner: macos-15
-          target: aarch64-apple-darwin
-          remote_target: aarch64-apple-darwin
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-macos-aarch64
-          remote_artifact: rust-remote-server-macos-aarch64
-          plan_file: rust-macos-aarch64.json
-          artifact: rust-macos-aarch64
-          artifact_suffix: macos-aarch64.dmg
-          artifact_path: target/products/rust/release/rust-*-macos-aarch64.dmg
-        - product: rust
-          display_name: Copper
-          executable_name: copper
-          bundle_identifier: dev.ideflavors.rust
-          url_scheme: ide-rust
-          icon_set: assets/product_flavors/rust
-          data_namespace: ide-rust
-          update_namespace: rust
-          windows_installer_id: '{6D7C1287-4A0E-5F5F-BE2C-8066A31F8761}'
-          platform: windows
-          runner: windows-2022
-          target: x86_64-pc-windows-msvc
-          remote_target: x86_64-pc-windows-msvc
-          application_features: agentic-tools,rust-tools
-          remote_features: rust-tools
-          application_artifact: rust-application-windows-x86_64
-          remote_artifact: rust-remote-server-windows-x86_64
-          plan_file: rust-windows-x86_64.json
-          artifact: rust-windows-x86_64
-          artifact_suffix: windows-x86_64.exe
-          artifact_path: target/products/rust/release/rust-*-windows-x86_64.exe
+      matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
       fail-fast: false
     steps:
     - name: steps::checkout_repo
@@ -785,17 +601,17 @@ jobs:
       if: matrix.platform != 'windows'
       run: |
         jq -e --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$APPLICATION_FEATURES" \
-            '.commit_sha == $commit_sha and .target == $target and .features == $features' \
+            '.commit_sha == $commit_sha and .target == $target and .features == $features and .version == env.RELEASE_VERSION and .product_id == env.ZED_PRODUCT_ID and .channel == env.ZED_RELEASE_CHANNEL' \
             release-application/metadata.json >/dev/null
         jq -e --arg commit_sha "$COMMIT_SHA" --arg target "$REMOTE_TARGET" --arg features "$REMOTE_FEATURES" \
-            '.commit_sha == $commit_sha and .target == $target and .features == $features' \
+            '.commit_sha == $commit_sha and .target == $target and .features == $features and .version == env.RELEASE_VERSION and .product_id == env.ZED_PRODUCT_ID and .channel == env.ZED_RELEASE_CHANNEL' \
             release-remote-server/metadata.json >/dev/null
         APPLICATION_DEST="target/products/${PRODUCT_ID}/${TARGET}/release"
         REMOTE_DEST="target/products/${PRODUCT_ID}/${REMOTE_TARGET}/release"
         mkdir -p "$APPLICATION_DEST" "$REMOTE_DEST"
         cp release-application/zed release-application/cli "$APPLICATION_DEST/"
         cp release-remote-server/remote_server "$REMOTE_DEST/"
-        if [[ "$TARGET" == *-apple-darwin ]]; then
+        if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]]; then
             cp release-application/native-cargo-runtime-observer "$APPLICATION_DEST/"
             chmod +x "$APPLICATION_DEST/native-cargo-runtime-observer"
         fi
@@ -812,10 +628,10 @@ jobs:
       run: |
         $applicationMetadata = Get-Content release-application/metadata.json | ConvertFrom-Json
         $remoteMetadata = Get-Content release-remote-server/metadata.json | ConvertFrom-Json
-        if ($applicationMetadata.commit_sha -ne $env:COMMIT_SHA -or $applicationMetadata.target -ne $env:TARGET -or $applicationMetadata.features -ne $env:APPLICATION_FEATURES) {
+        if ($applicationMetadata.commit_sha -ne $env:COMMIT_SHA -or $applicationMetadata.target -ne $env:TARGET -or $applicationMetadata.features -ne $env:APPLICATION_FEATURES -or $applicationMetadata.version -ne $env:RELEASE_VERSION -or $applicationMetadata.product_id -ne $env:ZED_PRODUCT_ID -or $applicationMetadata.channel -ne $env:ZED_RELEASE_CHANNEL) {
             throw "Application artifact metadata does not match the release plan"
         }
-        if ($remoteMetadata.commit_sha -ne $env:COMMIT_SHA -or $remoteMetadata.target -ne $env:REMOTE_TARGET -or $remoteMetadata.features -ne $env:REMOTE_FEATURES) {
+        if ($remoteMetadata.commit_sha -ne $env:COMMIT_SHA -or $remoteMetadata.target -ne $env:REMOTE_TARGET -or $remoteMetadata.features -ne $env:REMOTE_FEATURES -or $remoteMetadata.version -ne $env:RELEASE_VERSION -or $remoteMetadata.product_id -ne $env:ZED_PRODUCT_ID -or $remoteMetadata.channel -ne $env:ZED_RELEASE_CHANNEL) {
             throw "Remote-server artifact metadata does not match the release plan"
         }
         $applicationDest = "target/products/$env:PRODUCT_ID/$env:TARGET/release"
@@ -850,7 +666,7 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'linux'
       run: |
-        cargo xtask bundle --product rust --platform linux --target "$TARGET" --phase package --signing required
+        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform linux --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing required
       env:
         TARGET: ${{ matrix.target }}
         CC: clang
@@ -861,7 +677,7 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'macos'
       run: |
-        cargo xtask bundle --product rust --platform macos --target "$TARGET" --phase package --signing required
+        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform macos --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing required
       env:
         ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
         TARGET: ${{ matrix.target }}
@@ -874,7 +690,7 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'windows'
       run: |
-        cargo xtask bundle --product rust --platform windows --target $env:TARGET --phase package --signing required
+        cargo xtask bundle --product $env:ZED_PRODUCT_ID --platform windows --target $env:TARGET --channel $env:ZED_RELEASE_CHANNEL --phase package --signing required
         if ($LASTEXITCODE -ne 0) { throw "Product-aware Windows bundling failed" }
       shell: pwsh
       env:
@@ -892,7 +708,6 @@ jobs:
     - name: release::product_builds
       if: matrix.platform != 'windows'
       run: |
-        export ZED_PRODUCT_ARTIFACT_NAME="${PRODUCT_ID}-${RELEASE_VERSION}-${ARTIFACT_SUFFIX}"
         python3 script/smoke-product-bundle \
             --product "$PRODUCT_ID" \
             --platform "$PLATFORM" \
@@ -911,7 +726,6 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'windows'
       run: |
-        $env:ZED_PRODUCT_ARTIFACT_NAME = "$env:PRODUCT_ID-$env:RELEASE_VERSION-$env:ARTIFACT_SUFFIX"
         python script/smoke-product-bundle `
             --product $env:PRODUCT_ID `
             --platform windows `
@@ -936,7 +750,9 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
         name: ${{ matrix.artifact }}
-        path: ${{ matrix.artifact_path }}
+        path: |-
+          ${{ matrix.artifact_path }}
+          target/products/${{ matrix.product }}/release/verification-*.json
         if-no-files-found: error
     - name: release::product_builds
       if: always() && matrix.platform != 'windows'

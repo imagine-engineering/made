@@ -179,7 +179,7 @@ function BuildProductBinaries {
     }
     foreach ($binary in @('zed.exe', 'cli.exe', 'auto_update_helper.exe')) {
         $metadata = (Get-Item "$CargoOutDir\$binary").VersionInfo
-        if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $env:RELEASE_VERSION) {
+        if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $env:RELEASE_VERSION -or $metadata.ProductVersion -ne $env:RELEASE_VERSION) {
             throw "Product metadata mismatch in ${binary}: $($metadata.ProductName) $($metadata.FileVersion)"
         }
     }
@@ -323,6 +323,7 @@ function BuildInstaller {
         "AppUserId"      = $appUserId
         "UrlScheme"      = $env:ZED_PRODUCT_URL_SCHEME
         "Version"        = "$env:RELEASE_VERSION"
+        "NumericVersion" = ($env:RELEASE_VERSION -split '[-+]')[0]
         "SourceDir"      = "$env:ZED_WORKSPACE"
     }
     if ($Sim) {

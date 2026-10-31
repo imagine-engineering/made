@@ -11,7 +11,7 @@ import refresh_website as refresh
 
 TAG = "rust-v1.16.6"
 WEBHOOK = "https://webhooks.amplify.eu-west-2.amazonaws.com/prod/webhooks?id=example&token=private-token&operation=startbuild"
-URL = "https://github.com/simtropolis/made/releases/download/rust-v1.16.6/actual-asset.dmg"
+URL = "https://github.com/imagine-engineering/made/releases/download/rust-v1.16.6/actual-asset.dmg"
 RELEASE = {"tag_name": TAG, "draft": False, "published_at": "2026-09-05T12:00:00Z", "assets": [{"state": "uploaded", "browser_download_url": URL}]}
 HTML = '<article id="rust-v1.16.6"><span>Copper 1.16.6</span><time datetime="2026-09-05T12:00:00.000Z"></time><a href="' + URL + '">Download</a></article>'
 API = (200, {}, json.dumps(RELEASE).encode())

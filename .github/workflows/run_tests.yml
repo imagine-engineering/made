@@ -12,7 +12,6 @@ on:
   push:
     branches:
     - main
-    - release
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -312,6 +311,10 @@ jobs:
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
       with:
         clean: false
+    - name: run_tests::setup_inventory_python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
     - name: steps::setup_cargo_config
       run: |
         mkdir -p ./../.cargo
@@ -319,6 +322,8 @@ jobs:
     - name: run_tests::release_automation_validation
       run: |
         python3 -m unittest discover -s script -p 'test_refresh_website.py'
+        python3 -m unittest discover -s script -p 'test_product_release.py'
+        python3 script/test-production-signing
         cargo test -p xtask
         cargo xtask workflows
         git diff --exit-code
@@ -493,11 +498,18 @@ jobs:
       run: |
         $ErrorActionPreference = 'Stop'
         $PSNativeCommandUseErrorActionPreference = $true
-        cargo test --locked -p auto_update_helper -p xtask
-        cargo build --locked -p auto_update_helper
-        $metadata = (Get-Item target/debug/auto_update_helper.exe).VersionInfo
-        if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $env:RELEASE_VERSION) {
-            throw "Updater product metadata does not match the resolved release environment"
+        cargo test --locked -p auto_update_helper -p xtask -p windows_resources
+        foreach ($version in @('1.2.3', '2.3.4-rc.2+build.7')) {
+            $env:RELEASE_VERSION = $version
+            cargo build --locked -p auto_update_helper
+            $metadata = (Get-Item target/debug/auto_update_helper.exe).VersionInfo
+            if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $version -or $metadata.ProductVersion -ne $version) {
+                throw "Updater product metadata does not match the resolved release environment"
+            }
+            $numeric = ($version -split '[-+]')[0] -split '\.'
+            if ($metadata.FileMajorPart -ne [int]$numeric[0] -or $metadata.FileMinorPart -ne [int]$numeric[1] -or $metadata.FileBuildPart -ne [int]$numeric[2]) {
+                throw "Updater numeric version lost a semantic version component"
+            }
         }
 
         $innoSetupPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'

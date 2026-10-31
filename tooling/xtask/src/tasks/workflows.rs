@@ -27,7 +27,7 @@ mod publish_extension_cli;
 mod release_nightly;
 mod run_bundling;
 
-mod release;
+pub(crate) mod release;
 mod run_tests;
 mod runners;
 mod steps;
@@ -223,6 +223,7 @@ fn workflow_files() -> impl IntoIterator<Item = WorkflowFile> {
         WorkflowFile::zed(publish_extension_cli::publish_extension_cli),
         WorkflowFile::zed(release::release),
         WorkflowFile::zed(release::release_promotion),
+        WorkflowFile::zed(release::release_prepare),
         WorkflowFile::zed(release::release_signing_check),
         WorkflowFile::zed(website_refresh::website_refresh),
         WorkflowFile::zed(release_nightly::release_nightly),
@@ -345,6 +346,7 @@ mod tests {
             [
                 "hosted_collab_tests.yml",
                 "release.yml",
+                "release_prepare.yml",
                 "release_promotion.yml",
                 "release_signing_check.yml",
                 "run_tests.yml",

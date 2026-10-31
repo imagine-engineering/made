@@ -2,6 +2,9 @@
 """Refresh Amplify and verify the published Copper release on the public page."""
 
 import argparse
+from pathlib import Path
+import tomllib
+from product_release import semver_key
 import json
 import os
 import re
@@ -81,8 +84,15 @@ def request(request, opener, limit=4_000_000):
 
 
 def published_release(tag, opener, token="", sleep=time.sleep):
-    if not re.fullmatch(r"rust-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", tag):
-        raise RefreshError("Expected an existing Copper release tag: rust-vX.Y.Z.")
+    catalog = tomllib.loads((Path(__file__).resolve().parent.parent / "products/flavors.toml").read_text())
+    product = next(product for product in catalog["products"] if product["id"] == "rust")
+    prefix = product["release_tag_prefix"]
+    try:
+        if not tag.startswith(prefix):
+            raise ValueError("different product")
+        semver_key(tag[len(prefix):])
+    except ValueError:
+        raise RefreshError("Expected an existing Copper release tag from the product catalog.") from None
     if token and (not token.isascii() or any(character.isspace() for character in token)):
         raise RefreshError("Invalid GitHub authentication configuration; no webhook was sent.")
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "made-website-refresh"}
@@ -90,7 +100,7 @@ def published_release(tag, opener, token="", sleep=time.sleep):
         headers["Authorization"] = "Bearer " + token
     waited = 0
     for attempt in range(3):
-        status, response_headers, body = request(Request("https://api.github.com/repos/simtropolis/made/releases/tags/" + quote(tag, safe=""), headers=headers), opener)
+        status, response_headers, body = request(Request("https://api.github.com/repos/imagine-engineering/made/releases/tags/" + quote(tag, safe=""), headers=headers), opener)
         if status == 200:
             break
         diagnostic("publication", status, "Unable to read published GitHub release metadata.")
@@ -109,13 +119,13 @@ def published_release(tag, opener, token="", sleep=time.sleep):
         valid = release["tag_name"] == tag and not release["draft"] and bool(urls) and len(urls) == len(assets)
         for url in urls:
             parts = urlsplit(url)
-            valid = valid and parts.scheme == "https" and parts.netloc == "github.com" and parts.path.startswith("/simtropolis/made/releases/download/" + tag + "/") and not parts.query and not parts.fragment
+            valid = valid and parts.scheme == "https" and parts.netloc == "github.com" and parts.path.startswith("/imagine-engineering/made/releases/download/" + tag + "/") and not parts.query and not parts.fragment
         if not valid:
             raise ValueError()
     except (ValueError, TypeError, KeyError, AttributeError):
         raise RefreshError("Invalid, draft, or incomplete Copper release metadata; no webhook was sent.") from None
     diagnostic("publication", 200, "Published release metadata verified: " + tag + ".")
-    return {"tag": tag, "version": tag[6:], "urls": urls, "published": published.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")}
+    return {"tag": tag, "version": tag[len(prefix):], "urls": urls, "published": published.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")}
 
 
 class ReleasePage(HTMLParser):
@@ -134,7 +144,7 @@ class ReleasePage(HTMLParser):
             self.active = True
             self.found += 1
         if self.active:
-            if name == "a" and attributes.get("href", "").startswith("https://github.com/simtropolis/made/releases/download/"):
+            if name == "a" and attributes.get("href", "").startswith("https://github.com/imagine-engineering/made/releases/download/"):
                 self.urls.add(attributes["href"])
             if name == "time":
                 self.dates.add(attributes.get("datetime"))

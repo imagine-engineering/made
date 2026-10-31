@@ -917,13 +917,8 @@ mod linux {
     impl InstalledApp for App {
         fn zed_version_string(&self) -> String {
             format!(
-                "{} {}{}{} – {}",
-                product_flavor::DISPLAY_NAME,
-                if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_string()
-                } else {
-                    format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
-                },
+                "{} {}{} – {}",
+                release_channel::RELEASE_CHANNEL.display_name(),
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZED_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
@@ -1165,13 +1160,8 @@ mod windows {
     impl InstalledApp for App {
         fn zed_version_string(&self) -> String {
             format!(
-                "{} {}{}{} – {}",
-                product_flavor::DISPLAY_NAME,
-                if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_string()
-                } else {
-                    format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
-                },
+                "{} {}{} – {}",
+                release_channel::RELEASE_CHANNEL.display_name(),
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZED_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
@@ -1289,6 +1279,8 @@ mod mac_os {
     struct InfoPlist {
         #[serde(rename = "CFBundleShortVersionString")]
         bundle_short_version_string: String,
+        #[serde(rename = "ProductReleaseVersion", default)]
+        product_release_version: Option<String>,
     }
 
     enum Bundle {
@@ -1346,7 +1338,7 @@ mod mac_os {
         fn zed_version_string(&self) -> String {
             format!(
                 "{} {} – {}",
-                product_flavor::DISPLAY_NAME,
+                release_channel::RELEASE_CHANNEL.display_name(),
                 self.version(),
                 self.path().display(),
             )
@@ -1453,7 +1445,11 @@ mod mac_os {
     impl Bundle {
         fn version(&self) -> String {
             match self {
-                Self::App { plist, .. } => plist.bundle_short_version_string.clone(),
+                Self::App { plist, .. } => plist
+                    .product_release_version
+                    .as_ref()
+                    .unwrap_or(&plist.bundle_short_version_string)
+                    .clone(),
                 Self::LocalPath { .. } => "<development>".to_string(),
             }
         }
@@ -1490,5 +1486,31 @@ mod mac_os {
         let cli_path = format!("{app_path}/Contents/MacOS/cli");
         Command::new(cli_path).args(leftover_args).spawn()?;
         Ok(())
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn product_bundle_version_preserves_prerelease_and_reads_older_plists() -> Result<()> {
+            for (extra, expected) in [
+                (
+                    "<key>ProductReleaseVersion</key><string>4.5.6-rc.2+build.7</string>",
+                    "4.5.6-rc.2+build.7",
+                ),
+                ("", "4.5.6"),
+            ] {
+                let xml = format!(
+                    "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>4.5.6</string>{extra}</dict></plist>"
+                );
+                let plist: InfoPlist = plist::from_bytes(xml.as_bytes())?;
+                let bundle = Bundle::App {
+                    app_bundle: PathBuf::from("fixture.app"),
+                    plist,
+                };
+                assert_eq!(bundle.version(), expected);
+            }
+            Ok(())
+        }
     }
 }

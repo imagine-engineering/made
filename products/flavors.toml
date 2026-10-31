@@ -2,6 +2,9 @@ schema_version = 1
 
 [[products]]
 id = "rust"
+release_tag_prefix = "rust-v"
+release_gate_variable = "COPPER_RELEASE_ENABLED"
+required_ci_workflows = ["run_tests.yml"]
 status = "enabled"
 display_name = "Copper"
 initial_version = "0.1.0"
@@ -28,6 +31,9 @@ targets = ["linux-x86_64", "macos-aarch64", "windows-x86_64"]
 
 [[products]]
 id = "jvm"
+release_tag_prefix = "jvm-v"
+release_gate_variable = "GROOVY_RELEASE_ENABLED"
+required_ci_workflows = ["run_tests.yml"]
 status = "planned"
 display_name = "Groovy"
 appearance = { theme = "assets/themes/fractal-neutral/fractal-neutral.json", light = "Fractal Neutral Light", dark = "Fractal Neutral Dark", font_family = "Figtree", font_asset = "assets/fonts/figtree/Figtree.ttf" }
@@ -53,6 +59,9 @@ targets = []
 
 [[products]]
 id = "game"
+release_tag_prefix = "game-v"
+release_gate_variable = "FORGE_RELEASE_ENABLED"
+required_ci_workflows = ["run_tests.yml"]
 status = "planned"
 display_name = "Forge"
 executable_name = "forge"

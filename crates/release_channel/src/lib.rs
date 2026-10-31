@@ -98,7 +98,7 @@ impl AppVersion {
         build_id: Option<&str>,
         commit_sha: Option<AppCommitSha>,
     ) -> Version {
-        let mut version: Version = if let Ok(from_env) = env::var("ZED_APP_VERSION") {
+        let version: Version = if let Ok(from_env) = env::var("ZED_APP_VERSION") {
             from_env.parse().expect("invalid ZED_APP_VERSION")
         } else {
             option_env!("RELEASE_VERSION")
@@ -108,7 +108,28 @@ impl AppVersion {
                 .parse()
                 .expect("invalid release version")
         };
-        let mut pre = String::from(RELEASE_CHANNEL.dev_name());
+        Self::with_build_metadata(
+            version,
+            build_id,
+            commit_sha,
+            *RELEASE_CHANNEL,
+            option_env!("RELEASE_VERSION"),
+        )
+    }
+
+    fn with_build_metadata(
+        mut version: Version,
+        build_id: Option<&str>,
+        commit_sha: Option<AppCommitSha>,
+        channel: ReleaseChannel,
+        release_version: Option<&str>,
+    ) -> Version {
+        if release_version.is_some_and(|version| version != "dev")
+            && matches!(channel, ReleaseChannel::Stable | ReleaseChannel::Preview)
+        {
+            return version;
+        }
+        let mut pre = String::from(channel.dev_name());
 
         if let Some(build_id) = build_id {
             pre.push('.');
@@ -308,6 +329,30 @@ mod tests {
             (version.major, version.minor, version.patch),
             (expected.major, expected.minor, expected.patch)
         );
+    }
+
+    #[test]
+    fn product_tag_version_is_preserved_in_release_channels() -> Result<(), semver::Error> {
+        for channel in [ReleaseChannel::Stable, ReleaseChannel::Preview] {
+            let tag_version = "4.5.6-rc.2+build.7";
+            let version = super::AppVersion::with_build_metadata(
+                tag_version.parse()?,
+                Some("123"),
+                Some(super::AppCommitSha::new("fixture-sha".into())),
+                channel,
+                Some(tag_version),
+            );
+            assert_eq!(version.to_string(), tag_version);
+        }
+        let development = super::AppVersion::with_build_metadata(
+            "4.5.6".parse()?,
+            None,
+            None,
+            ReleaseChannel::Dev,
+            None,
+        );
+        assert_eq!(development.to_string(), "4.5.6+dev");
+        Ok(())
     }
 
     #[test]

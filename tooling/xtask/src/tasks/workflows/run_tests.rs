@@ -49,7 +49,7 @@ pub(crate) fn run_tests() -> Workflow {
     named::workflow()
         .with_minimal_permissions()
         .on(Event::default()
-            .push(Push::default().add_branch("main").add_branch("release"))
+            .push(Push::default().add_branch("main"))
             .pull_request(PullRequest::default().add_branch("**"))
             .workflow_dispatch(WorkflowDispatch::default()))
         .concurrency(vars::one_workflow_per_non_main_branch())
@@ -334,9 +334,12 @@ fn release_automation_validation() -> NamedJob {
             .runs_on("ubuntu-22.04")
             .timeout_minutes(30u32)
             .add_step(steps::checkout_repo())
+            .add_step(setup_inventory_python())
             .add_step(steps::setup_cargo_config(Platform::Linux))
             .add_step(named::bash(indoc::indoc! {r#"
                 python3 -m unittest discover -s script -p 'test_refresh_website.py'
+                python3 -m unittest discover -s script -p 'test_product_release.py'
+                python3 script/test-production-signing
                 cargo test -p xtask
                 cargo xtask workflows
                 git diff --exit-code
@@ -374,11 +377,18 @@ fn windows_updater_tests() -> NamedJob {
             .add_step(named::pwsh(indoc::indoc! {r#"
                 $ErrorActionPreference = 'Stop'
                 $PSNativeCommandUseErrorActionPreference = $true
-                cargo test --locked -p auto_update_helper -p xtask
-                cargo build --locked -p auto_update_helper
-                $metadata = (Get-Item target/debug/auto_update_helper.exe).VersionInfo
-                if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $env:RELEASE_VERSION) {
-                    throw "Updater product metadata does not match the resolved release environment"
+                cargo test --locked -p auto_update_helper -p xtask -p windows_resources
+                foreach ($version in @('1.2.3', '2.3.4-rc.2+build.7')) {
+                    $env:RELEASE_VERSION = $version
+                    cargo build --locked -p auto_update_helper
+                    $metadata = (Get-Item target/debug/auto_update_helper.exe).VersionInfo
+                    if ($metadata.ProductName -ne $env:ZED_PRODUCT_DISPLAY_NAME -or $metadata.FileVersion -ne $version -or $metadata.ProductVersion -ne $version) {
+                        throw "Updater product metadata does not match the resolved release environment"
+                    }
+                    $numeric = ($version -split '[-+]')[0] -split '\.'
+                    if ($metadata.FileMajorPart -ne [int]$numeric[0] -or $metadata.FileMinorPart -ne [int]$numeric[1] -or $metadata.FileBuildPart -ne [int]$numeric[2]) {
+                        throw "Updater numeric version lost a semantic version component"
+                    }
                 }
 
                 $innoSetupPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
@@ -1385,6 +1395,7 @@ mod tests {
             .expect("release pipeline validation command");
         for required_command in [
             "python3 -m unittest discover -s script -p 'test_refresh_website.py'",
+            "python3 -m unittest discover -s script -p 'test_product_release.py'",
             "cargo xtask workflows",
             "git diff --exit-code",
             "cargo xtask check-workflows",
