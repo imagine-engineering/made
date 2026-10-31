@@ -1,5 +1,6 @@
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Workflow, WorkflowDispatch,
+    Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Workflow,
+    WorkflowDispatch,
 };
 
 use super::{
@@ -16,18 +17,16 @@ pub(crate) fn refresh_job(tag: String) -> Job {
             Concurrency::new(Expression::new("website-main-release-refresh"))
                 .cancel_in_progress(false),
         )
+        .add_step(super::steps::checkout_repo().with_ref("main"))
         .add_step(
-            named::bash(format!(
-                "python3 - <<'PYTHON'\n{}\nPYTHON",
-                include_str!("../../../../../script/refresh_website.py")
-            ))
-            .shell("bash -euo pipefail {0}")
-            .add_env(("COPPER_RELEASE_TAG", tag))
-            .add_env(("GH_TOKEN", "${{ github.token }}"))
-            .add_env((
-                "AMPLIFY_REBUILD_WEBHOOK",
-                "${{ secrets.AMPLIFY_REBUILD_WEBHOOK }}",
-            )),
+            named::bash("python3 script/refresh_website.py")
+                .shell("bash -euo pipefail {0}")
+                .add_env(("COPPER_RELEASE_TAG", tag))
+                .add_env(("GH_TOKEN", "${{ github.token }}"))
+                .add_env((
+                    "AMPLIFY_REBUILD_WEBHOOK",
+                    "${{ secrets.AMPLIFY_REBUILD_WEBHOOK }}",
+                )),
         )
 }
 
@@ -38,11 +37,12 @@ pub(crate) fn website_refresh() -> Workflow {
     named::workflow()
         .with_minimal_permissions()
         .on(Event::default()
-            .workflow_dispatch(WorkflowDispatch::default().add_input(tag.name, tag.input())))
+            .workflow_dispatch(WorkflowDispatch::default().add_input(tag.name, tag.input()))
+            .release(Release::default().types(vec![ReleaseType::Published])))
         .add_job(
             "refresh_website",
-            refresh_job("${{ inputs.release_tag }}".to_owned())
-                .cond(Expression::new("github.ref == 'refs/heads/main'")),
+            refresh_job("${{ github.event.release.tag_name || inputs.release_tag }}".to_owned())
+                .cond(Expression::new("(github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')")),
         )
 }
 
@@ -56,14 +56,18 @@ mod tests {
         assert_eq!(workflow["jobs"].as_object().expect("jobs").len(), 1);
         let job = &workflow["jobs"]["refresh_website"];
         assert_eq!(job["permissions"]["contents"], "read");
-        assert_eq!(job["if"], "github.ref == 'refs/heads/main'");
+        assert!(job["if"].as_str().expect("condition").contains("published"));
+        assert_eq!(
+            workflow["on"]["release"]["types"],
+            serde_json::json!(["published"])
+        );
         assert!(job.get("needs").is_none());
-        assert_eq!(job["steps"].as_array().expect("steps").len(), 1);
-        let script = job["steps"][0]["run"].as_str().expect("script");
-        assert!(script.contains(include_str!("../../../../../script/refresh_website.py")));
+        assert_eq!(job["steps"].as_array().expect("steps").len(), 2);
+        let script = job["steps"][1]["run"].as_str().expect("script");
+        assert_eq!(script, "python3 script/refresh_website.py");
         assert!(!script.contains("cargo "));
         assert!(!script.contains("gh release"));
-        assert!(job["steps"][0].get("uses").is_none());
+        assert!(job["steps"][1].get("uses").is_none());
         assert_eq!(job["concurrency"]["cancel-in-progress"], false);
         Ok(())
     }

@@ -1,15 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-which gh >/dev/null || brew install gh
-
-if [ "$1" == "nightly" ]; then
-  ./script/bump-nightly
-  exit
-fi
-
-version=$(./script/get-released-version "$1" | sed 's/\.[^\.]*$/.x/')
-echo "Bumping $1 (v$version)"
-
-gh workflow run "bump_patch_version.yml" -f branch="v$version"
-echo "Follow along at: https://github.com/imagine-engineering/made/actions"
+printf '%s\n' 'Retired. Create an existing catalog product tag, then manually run release_prepare.yml from main. Review the draft and click Publish release in GitHub.' >&2
+exit 1

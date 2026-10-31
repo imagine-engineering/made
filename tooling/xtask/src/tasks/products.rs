@@ -73,7 +73,7 @@ fn audit_phase_one_consumers() -> Result<()> {
     }
 
     let ci = fs::read_to_string(root.join(".github/workflows/run_tests.yml"))?;
-    let release = fs::read_to_string(root.join(".github/workflows/release_promotion.yml"))?;
+    let release = fs::read_to_string(root.join(".github/workflows/release_prepare.yml"))?;
     for (name, workflow) in [("CI", &ci), ("release", &release)] {
         for forbidden in [
             "Rustlings",
@@ -94,12 +94,12 @@ fn audit_phase_one_consumers() -> Result<()> {
         "CI workflow is missing the exact Rust product feature row"
     );
     ensure!(
-        release.contains("cargo xtask bundle --product rust --platform")
+        release.contains("cargo xtask bundle --product")
             && release.contains("--phase package --signing required")
-            && !release.contains("cargo xtask bundle --phase")
             && release.contains("needs:\n    - prepare_release\n    - product_builds")
-            && release.contains("workflow_run:")
-            && release.contains("github.event.workflow_run.conclusion == 'success'")
+            && release.contains("workflow_dispatch:")
+            && !release.contains("workflow_run:")
+            && !release.contains("--draft=false")
             && release.matches("contents: write").count() == 1,
         "release workflow is missing product bundling, all-build fan-in, or minimal permissions"
     );

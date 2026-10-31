@@ -119,6 +119,20 @@ pub struct AssetQuery<'a> {
     is_staff: Option<bool>,
 }
 
+fn release_asset_path(
+    namespace: &str,
+    channel: ReleaseChannel,
+    version: Option<&Version>,
+) -> String {
+    let version = version
+        .map(ToString::to_string)
+        .unwrap_or_else(|| "latest".into());
+    format!(
+        "/releases/{namespace}/{}/{version}/asset",
+        channel.dev_name()
+    )
+}
+
 fn build_update_asset_url(base_url: &str, path: &str, query: AssetQuery<'_>) -> Result<url::Url> {
     let mut url = url::Url::parse(&format!("{}{path}", base_url.trim_end_matches('/')))?;
     {
@@ -363,9 +377,7 @@ pub fn release_notes_url(cx: &mut App) -> Option<String> {
     let update_base_url = option_env!("ZED_PRODUCT_UPDATE_BASE_URL")?;
     let auto_updater = AutoUpdater::get(cx)?;
     let auto_updater = auto_updater.read(cx);
-    let mut current_version = auto_updater.current_version.clone();
-    current_version.pre = semver::Prerelease::EMPTY;
-    current_version.build = semver::BuildMetadata::EMPTY;
+    let current_version = &auto_updater.current_version;
     Some(format!(
         "{}/releases/{}/{}/{}",
         update_base_url.trim_end_matches('/'),
@@ -683,20 +695,11 @@ impl AutoUpdater {
             (None, None, None)
         };
 
-        let version = if let Some(mut version) = version {
-            version.pre = semver::Prerelease::EMPTY;
-            version.build = semver::BuildMetadata::EMPTY;
-            version.to_string()
-        } else {
-            "latest".to_string()
-        };
         let http_client = client.http_client();
-
-        let path = format!(
-            "/releases/{}/{}/{}/asset",
+        let path = release_asset_path(
             product_flavor::UPDATE_NAMESPACE,
-            release_channel.dev_name(),
-            version,
+            release_channel,
+            version.as_ref(),
         );
         let update_base_url = option_env!("ZED_PRODUCT_UPDATE_BASE_URL")
             .context("product update endpoint is not configured")?;
@@ -880,6 +883,14 @@ impl AutoUpdater {
         status: AutoUpdateStatus,
     ) -> Result<Option<Version>> {
         let fetched_version = fetched_version.parse::<Version>()?;
+        anyhow::ensure!(
+            release_channel != ReleaseChannel::Stable || fetched_version.pre.is_empty(),
+            "stable update feed returned a prerelease"
+        );
+        anyhow::ensure!(
+            release_channel != ReleaseChannel::Preview || !fetched_version.pre.is_empty(),
+            "preview update feed returned a stable release"
+        );
 
         match release_channel {
             ReleaseChannel::Nightly => {
@@ -965,13 +976,13 @@ impl AutoUpdater {
     }
 
     fn check_if_fetched_version_is_newer_non_nightly(
-        mut installed_version: Version,
+        installed_version: Version,
         fetched_version: Version,
     ) -> Option<Version> {
-        // For non-nightly releases, ignore build and pre-release fields as they're not provided by our endpoints right now.
-        installed_version.pre = semver::Prerelease::EMPTY;
-        installed_version.build = semver::BuildMetadata::EMPTY;
-        (fetched_version > installed_version).then_some(fetched_version)
+        fetched_version
+            .cmp_precedence(&installed_version)
+            .is_gt()
+            .then_some(fetched_version)
     }
 
     pub fn set_should_show_update_notification(
@@ -1403,6 +1414,54 @@ mod tests {
 
     pub(super) struct InstallOverride(pub Rc<dyn Fn(&Path, &AsyncApp) -> Result<Option<PathBuf>>>);
     impl Global for InstallOverride {}
+
+    #[test]
+    fn product_release_paths_preserve_tag_versions_and_channel_isolation() -> Result<()> {
+        let version = Version::parse("2.3.4-rc.2+build.7")?;
+        assert_eq!(
+            release_asset_path("rust", ReleaseChannel::Preview, Some(&version)),
+            "/releases/rust/preview/2.3.4-rc.2+build.7/asset"
+        );
+        assert_eq!(
+            release_asset_path("jvm", ReleaseChannel::Stable, None),
+            "/releases/jvm/stable/latest/asset"
+        );
+        for (channel, installed, fetched, expected) in [
+            (
+                ReleaseChannel::Preview,
+                "2.3.4-rc.1",
+                "2.3.4-rc.2",
+                Some(true),
+            ),
+            (
+                ReleaseChannel::Preview,
+                "2.3.4-rc.2",
+                "2.3.4-rc.1",
+                Some(false),
+            ),
+            (
+                ReleaseChannel::Stable,
+                "2.3.4+old",
+                "2.3.4+new",
+                Some(false),
+            ),
+            (ReleaseChannel::Stable, "2.3.4", "2.3.5-rc.1", None),
+            (ReleaseChannel::Preview, "2.3.4-rc.1", "2.3.4", None),
+        ] {
+            let result = AutoUpdater::check_if_fetched_version_is_newer(
+                channel,
+                Ok(None),
+                Version::parse(installed)?,
+                fetched.into(),
+                AutoUpdateStatus::Idle,
+            );
+            match expected {
+                Some(expected) => assert_eq!(result?.is_some(), expected),
+                None => assert!(result.is_err()),
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn product_update_url_uses_configured_origin_and_namespace() -> Result<()> {

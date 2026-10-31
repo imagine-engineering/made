@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -46,7 +47,8 @@ def main():
             "product_id": arguments.product,
             "platform": arguments.platform,
             "target": arguments.target,
-            "channel": "stable",
+            "channel": os.environ.get("ZED_RELEASE_CHANNEL", "stable"),
+            "version": version,
             "application_features": os.environ["ZED_PRODUCT_APP_FEATURES"].split(","),
             "remote_server_features": os.environ["ZED_PRODUCT_REMOTE_FEATURES"].split(","),
             "artifact_name": os.environ["ZED_PRODUCT_ARTIFACT_NAME"],
@@ -109,8 +111,9 @@ def main():
                 "CFBundleName": plan["display_name"],
                 "CFBundleIdentifier": plan["bundle_identifier"],
                 "CFBundleExecutable": executable,
-                "CFBundleShortVersionString": version,
-                "CFBundleVersion": version,
+                "CFBundleShortVersionString": version.split("-", 1)[0].split("+", 1)[0],
+                "ProductReleaseVersion": version,
+                "CFBundleVersion": version.split("-", 1)[0].split("+", 1)[0],
             }.items():
                 if metadata.get(key) != expected:
                     raise RuntimeError(f"Unexpected {key}: {metadata.get(key)}")
@@ -153,6 +156,23 @@ def main():
                 if uninstaller.is_file():
                     run([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
 
+    if production:
+        with artifact.open("rb") as source:
+            digest = hashlib.file_digest(source, "sha256").hexdigest()
+        receipt = {
+            "product_id": arguments.product, "tag": os.environ.get("RELEASE_TAG", ""),
+            "version": version, "commit_sha": arguments.commit_sha,
+            "channel": plan["channel"], "update_namespace": plan["update_namespace"],
+            "platform": arguments.platform, "artifact_name": artifact.name,
+            "signing": "required", "sha256": digest,
+            "signing_identity": os.environ[{
+                "macos": "MACOS_SIGNING_IDENTITY", "windows": "WINDOWS_SIGNING_PUBLISHER",
+                "linux": "LINUX_SIGNING_KEY_FINGERPRINT",
+            }[arguments.platform]],
+            "verification": "Final package signature, installed metadata and launch checks passed",
+        }
+        receipt_path = artifact.parent / f"verification-{arguments.product}-{arguments.platform}-{arguments.target.split('-')[0]}.json"
+        receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
     print(f"Verified {artifact.name}: packaged metadata, CLI version, and editor help startup", flush=True)
 
 

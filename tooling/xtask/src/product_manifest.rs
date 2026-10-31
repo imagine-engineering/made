@@ -21,6 +21,9 @@ pub struct ProductManifest {
 pub struct Product {
     pub id: String,
     pub status: ProductStatus,
+    pub release_tag_prefix: String,
+    pub release_gate_variable: String,
+    pub required_ci_workflows: Vec<String>,
     pub display_name: String,
     pub initial_version: Option<String>,
     pub appearance: Option<ProductAppearance>,
@@ -110,7 +113,30 @@ impl ProductManifest {
         Ok(manifest)
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "read-only Git metadata in the release CLI"
+    )]
+    pub fn from_commit(commit: &str) -> Result<Self> {
+        ensure!(
+            commit.len() == 40 && commit.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "catalog commit must be a full Git SHA"
+        );
+        let output = std::process::Command::new("git")
+            .args(["show", &format!("{commit}:{PRODUCT_MANIFEST_PATH}")])
+            .output()?;
+        ensure!(output.status.success(), "tagged product catalog is missing");
+        let manifest: Self = toml::from_str(&String::from_utf8(output.stdout)?)
+            .context("tagged catalog does not support the current release contract")?;
+        manifest.validate_catalog(&workspace_root(), false)?;
+        Ok(manifest)
+    }
+
     pub fn validate(&self, root: &Path) -> Result<()> {
+        self.validate_catalog(root, true)
+    }
+
+    fn validate_catalog(&self, root: &Path, check_assets: bool) -> Result<()> {
         ensure!(
             self.schema_version == 1,
             "unsupported product schema version {}",
@@ -121,10 +147,25 @@ impl ProductManifest {
             "product catalog must not be empty"
         );
 
+        for (index, product) in self.products.iter().enumerate() {
+            for other in self.products.iter().skip(index + 1) {
+                ensure!(
+                    !product
+                        .release_tag_prefix
+                        .starts_with(&other.release_tag_prefix)
+                        && !other
+                            .release_tag_prefix
+                            .starts_with(&product.release_tag_prefix),
+                    "ambiguous release tag prefixes for {} and {}",
+                    product.id,
+                    other.id
+                );
+            }
+        }
         let mut identities = BTreeSet::new();
         let mut instance_port_offsets = BTreeSet::new();
         for product in &self.products {
-            product.validate(root)?;
+            product.validate(root, check_assets)?;
             ensure!(
                 instance_port_offsets.insert(product.instance_port_offset),
                 "duplicate product instance port offset `{}`",
@@ -196,8 +237,35 @@ impl ProductManifest {
 }
 
 impl Product {
-    fn validate(&self, root: &Path) -> Result<()> {
+    fn validate(&self, root: &Path, check_assets: bool) -> Result<()> {
         ensure!(is_slug(&self.id), "invalid product ID `{}`", self.id);
+        ensure!(
+            self.release_tag_prefix.ends_with("-v")
+                && is_slug(self.release_tag_prefix.trim_end_matches("-v")),
+            "invalid release tag prefix"
+        );
+        ensure!(
+            !self.release_gate_variable.is_empty()
+                && self
+                    .release_gate_variable
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase() || byte == b'_' || byte.is_ascii_digit()),
+            "invalid release gate variable"
+        );
+        ensure!(
+            !self.required_ci_workflows.is_empty(),
+            "product requires exact-commit CI"
+        );
+        for workflow in &self.required_ci_workflows {
+            ensure!(
+                workflow.ends_with(".yml")
+                    && !workflow.contains('/')
+                    && workflow
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"_-.".contains(&byte)),
+                "invalid required CI workflow"
+            );
+        }
         ensure!(
             !self.display_name.trim().is_empty(),
             "product `{}` has an empty display name",
@@ -278,27 +346,30 @@ impl Product {
                 self.initial_version.is_some(),
                 "enabled product must declare its initial version"
             );
-            self.appearance
+            let appearance = self
+                .appearance
                 .as_ref()
-                .context("enabled product must select its appearance")?
-                .validate(root)?;
-            for icon in [
-                "app-icon.svg",
-                "app-icon.png",
-                "app-icon@2x.png",
-                "app-icon.ico",
-            ] {
+                .context("enabled product must select its appearance")?;
+            if check_assets {
+                appearance.validate(root)?;
+                for icon in [
+                    "app-icon.svg",
+                    "app-icon.png",
+                    "app-icon@2x.png",
+                    "app-icon.ico",
+                ] {
+                    ensure!(
+                        root.join(&self.icon_set).join(icon).is_file(),
+                        "product `{}` icon set is missing {icon}",
+                        self.id
+                    );
+                }
                 ensure!(
-                    root.join(&self.icon_set).join(icon).is_file(),
-                    "product `{}` icon set is missing {icon}",
+                    root.join(&self.agent_instructions).is_file(),
+                    "product `{}` agent instructions are missing",
                     self.id
                 );
             }
-            ensure!(
-                root.join(&self.agent_instructions).is_file(),
-                "product `{}` agent instructions are missing",
-                self.id
-            );
             ensure!(
                 !self.targets.is_empty(),
                 "enabled product `{}` has no targets",
@@ -415,7 +486,7 @@ mod tests {
         assert_eq!(product.initial_version.as_deref(), Some("0.1.0"));
         for version in [None, Some("dev"), Some("0.1.0-rc.1"), Some("0.1.0+build")] {
             product.initial_version = version.map(str::to_owned);
-            assert!(product.validate(&workspace_root()).is_err());
+            assert!(product.validate(&workspace_root(), true).is_err());
         }
         assert!(manifest.product("jvm")?.initial_version.is_none());
         Ok(())
@@ -440,7 +511,7 @@ mod tests {
         assert!(invalid.validate(&workspace_root()).is_err());
         let mut invalid_product = manifest.product("rust")?.clone();
         invalid_product.appearance = None;
-        assert!(invalid_product.validate(&workspace_root()).is_err());
+        assert!(invalid_product.validate(&workspace_root(), true).is_err());
         Ok(())
     }
 
