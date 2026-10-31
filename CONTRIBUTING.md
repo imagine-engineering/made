@@ -32,6 +32,12 @@ If you're looking for concrete ideas:
 
 **Thinking about proposing or building a larger feature? Don't start with a PR**, start with reading the [Zed Feature Process](./docs/src/development/feature-process.md) for how we think about feature design — what context to provide, what integration points to consider, and how to put together a strong proposal. The right place for the proposals is [GitHub discussions](https://github.com/imagine-engineering/made/discussions) (not GitHub issues).
 
+## Commit attribution
+
+Do not add Agent or other AI-assistant `Co-authored-by` trailers to new commits.
+Preserve legitimate human co-author attribution. Do not amend or rewrite existing
+commits to change attribution.
+
 ## Sending changes
 
 The Zed culture values working code and synchronous conversations over long

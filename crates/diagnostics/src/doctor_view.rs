@@ -2849,14 +2849,19 @@ impl DoctorView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        if let Some(view) = workspace.item_of_type::<Self>(cx) {
+        workspace.reveal_center_pane(window, cx);
+        let view = if let Some(view) = workspace.item_of_type::<Self>(cx) {
             workspace.activate_item(&view, true, true, window, cx);
+            view
         } else {
             let project = workspace.project().clone();
             let workspace_handle = cx.entity().downgrade();
             let view = cx.new(|cx| Self::new(project, workspace_handle, window, cx));
-            workspace.add_item_to_active_pane(Box::new(view), None, true, window, cx);
-        }
+            workspace.add_item_to_active_pane(Box::new(view.clone()), None, true, window, cx);
+            view
+        };
+        // The pane may have been hidden behind a zoomed panel in this frame.
+        window.on_next_frame(move |window, cx| view.focus_handle(cx).focus(window, cx));
     }
 
     fn new(

@@ -2939,6 +2939,37 @@ impl Thread {
         Ok(events_rx)
     }
 
+    pub(crate) fn record_local_command(
+        &mut self,
+        id: ClientUserMessageId,
+        command: &str,
+        output: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let repeated = self.messages.last().is_some_and(|message| {
+            matches!(message.as_ref(), Message::Agent(message)
+                if message.content == [AgentMessageContent::Text(output.to_owned())])
+        }) && self
+            .messages
+            .len()
+            .checked_sub(2)
+            .and_then(|index| self.messages.get(index))
+            .is_some_and(|message| {
+                matches!(message.as_ref(), Message::User(message)
+                if message.content.as_ref() == [UserMessageContent::Text(command.to_owned())])
+            });
+        if repeated {
+            return false;
+        }
+        self.messages.push(Arc::new(Message::User(UserMessage {
+            id,
+            content: vec![UserMessageContent::Text(command.to_owned())].into(),
+        })));
+        self.push_acp_agent_block(output.into(), cx);
+        self.updated_at = Utc::now();
+        true
+    }
+
     pub fn push_acp_user_block(
         &mut self,
         id: ClientUserMessageId,

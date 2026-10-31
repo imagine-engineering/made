@@ -15,6 +15,16 @@ Use local models when you run the model on your machine or on infrastructure you
 | Local OpenAI-compatible server    | Yes                  | Separate config | Separate config  | Configure base URL, model, and key if needed       |
 | Local/self-hosted edit prediction | Edit Prediction only | No              | No               | Uses [Edit Prediction](./edit-prediction.md) setup |
 
+## Copper managed local models
+
+In Copper, choose **Local models** during native-agent setup, or open the llama.cpp provider in AI settings. Downloads start only when you choose **Download**. Choose **Load** to check runtime compatibility; choose **Set as default** to load and persist a local native-agent default. Existing provider choices are preserved until you explicitly change them. Inference failures never switch to a cloud provider.
+
+The setup page distinguishes the selected row, the backend selected for the next load, the loaded model, the saved local default, and the native-agent default. **Ready** means the managed server passed health and model-loading checks. **Active** means that loaded model is also the native-agent default. A conversation may retain its own model selection. Native-agent qualification is reported separately: runtime readiness does not establish reliable tool use.
+
+Capacity recommendations include full weights, the displayed context's FP16 KV cache, runtime overhead, and an additional system reserve. **Recommended**, **Limited headroom**, and **Insufficient capacity** are estimates with reasons, not measured compatibility. Downloaded models do not need download space again; a loaded model is already resident and is not charged against remaining RAM twice. Apple unified memory is one shared CPU/GPU pool. Accelerate speeds up CPU math using system memory; it is not a separate zero-capacity GPU. Open **Hardware details** or a model's **Model details** for the underlying device, artifact and qualification information.
+
+The manually managed server path below remains available through **Use my existing server**.
+
 ## llama.cpp {#llama-cpp}
 
 Use [llama.cpp](https://llama.app) and its built-in server for local models with Zed Agent, Inline Assistant, and similar model-backed Zed AI features.

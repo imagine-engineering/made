@@ -4726,6 +4726,24 @@ impl Workspace {
         did_focus_panel
     }
 
+    pub fn reveal_center_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.dismiss_zoomed_items_to_reveal(None, window, cx);
+        #[cfg(feature = "multiplayer-tools")]
+        if self.workspace_presentation() == WorkspacePresentation::Collaborative {
+            self.collaborative_workspace.update(cx, |workspace, cx| {
+                workspace.set_native_editor_active(true, cx);
+            });
+        }
+        if let Some(pane) = self
+            .last_active_center_pane
+            .as_ref()
+            .and_then(|pane| pane.upgrade())
+        {
+            self.set_active_pane(&pane, window, cx);
+        }
+        cx.notify();
+    }
+
     pub fn focus_center_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         #[cfg(feature = "multiplayer-tools")]
         if self.workspace_presentation() == WorkspacePresentation::Collaborative {

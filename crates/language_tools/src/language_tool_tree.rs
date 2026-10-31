@@ -92,11 +92,22 @@ pub struct VisibleLanguageToolRow {
     pub accessibility_label: String,
 }
 
+pub enum LanguageToolTreeScrollHandle {
+    Uniform(UniformListScrollHandle),
+    Wrapped(gpui::ListState),
+}
+
+impl From<UniformListScrollHandle> for LanguageToolTreeScrollHandle {
+    fn from(handle: UniformListScrollHandle) -> Self {
+        Self::Uniform(handle)
+    }
+}
+
 pub fn language_tool_tree(
     rows: Arc<[VisibleLanguageToolRow]>,
     selected: Option<LanguageToolNodeId>,
     status_message: Option<String>,
-    scroll_handle: UniformListScrollHandle,
+    scroll_handle: impl Into<LanguageToolTreeScrollHandle>,
     on_click: impl Fn(LanguageToolNodeId, usize, &mut Window, &mut App) + 'static,
     on_toggle: impl Fn(LanguageToolNodeId, &mut Window, &mut App) + 'static,
     on_context_menu: impl Fn(LanguageToolNodeId, Point<Pixels>, &mut Window, &mut App) + 'static,
@@ -104,9 +115,116 @@ pub fn language_tool_tree(
     let on_click = Arc::new(on_click);
     let on_toggle = Arc::new(on_toggle);
     let on_context_menu = Arc::new(on_context_menu);
-
+    let handle = scroll_handle.into();
+    let wrapped = matches!(handle, LanguageToolTreeScrollHandle::Wrapped(_));
+    let render_row = Arc::new(move |row: &VisibleLanguageToolRow, cx: &mut App| {
+        let click_id = row.id.clone();
+        let toggle_id = row.id.clone();
+        let context_id = row.id.clone();
+        let on_click = on_click.clone();
+        let on_toggle = on_toggle.clone();
+        let on_context_menu = on_context_menu.clone();
+        let is_selected = selected.as_ref() == Some(&row.id);
+        let text = if wrapped {
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .whitespace_normal()
+                .child(row.label.clone())
+                .when_some(row.secondary_label.clone(), |text, secondary| {
+                    text.child(
+                        div()
+                            .text_color(cx.theme().colors().text_muted)
+                            .child(secondary),
+                    )
+                })
+                .into_any_element()
+        } else {
+            h_flex()
+                .gap_1()
+                .child(row.label.clone())
+                .when_some(row.secondary_label.clone(), |text, secondary| {
+                    text.child(
+                        div()
+                            .text_color(cx.theme().colors().text_muted)
+                            .child(secondary),
+                    )
+                })
+                .into_any_element()
+        };
+        div()
+            .id(row.id.0.clone())
+            .role(Role::TreeItem)
+            .aria_label(row.accessibility_label.clone())
+            .aria_level(row.level)
+            .aria_selected(is_selected)
+            .when(row.is_branch, |element| {
+                element.aria_expanded(row.is_expanded)
+            })
+            .pl(px((row.level.saturating_sub(1) * 16) as f32))
+            .flex()
+            .gap_1()
+            .w_full()
+            .min_w_0()
+            .cursor_pointer()
+            .when(wrapped, |row| row.min_h_7().py_2().items_start())
+            .when(!wrapped, |row| row.h_7().items_center())
+            .when(is_selected, |element| {
+                element
+                    .aria_active_descendant()
+                    .bg(cx.theme().colors().element_selected)
+            })
+            .child(if row.is_branch {
+                Disclosure::new(
+                    format!("language-tool-disclosure:{}", row.id.0),
+                    row.is_expanded,
+                )
+                .on_click(move |_, window, cx| {
+                    cx.stop_propagation();
+                    on_toggle(toggle_id.clone(), window, cx);
+                })
+                .into_any_element()
+            } else {
+                div().w_4().flex_shrink_0().into_any_element()
+            })
+            .when_some(row.icon, |element, icon| {
+                element.child(Icon::new(icon).size(IconSize::Small))
+            })
+            .child(text)
+            .on_click(move |event, window, cx| {
+                on_click(click_id.clone(), event.click_count(), window, cx)
+            })
+            .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                on_context_menu(context_id.clone(), event.position, window, cx)
+            })
+            .into_any_element()
+    });
+    let tree = match handle {
+        LanguageToolTreeScrollHandle::Uniform(handle) => uniform_list(
+            "language-tool-tree-rows",
+            rows.len(),
+            move |range, _, cx| {
+                range
+                    .filter_map(|index| rows.get(index))
+                    .map(|row| render_row(row, cx))
+                    .collect::<Vec<AnyElement>>()
+            },
+        )
+        .size_full()
+        .track_scroll(&handle)
+        .into_any_element(),
+        LanguageToolTreeScrollHandle::Wrapped(state) => gpui::list(state, move |index, _, cx| {
+            rows.get(index)
+                .map(|row| render_row(row, cx))
+                .unwrap_or_else(|| div().into_any_element())
+        })
+        .size_full()
+        .into_any_element(),
+    };
     v_flex()
         .flex_1()
+        .min_h_0()
+        .min_w_0()
         .when_some(status_message, |tree, message| {
             tree.child(
                 div()
@@ -125,96 +243,9 @@ pub fn language_tool_tree(
                 .id("language-tool-tree")
                 .role(Role::Tree)
                 .flex_1()
-                .child(
-                    uniform_list(
-                        "language-tool-tree-rows",
-                        rows.len(),
-                        move |range, _, cx| {
-                            range
-                                .filter_map(|index| rows.get(index))
-                                .map(|row| {
-                                    let click_id = row.id.clone();
-                                    let toggle_id = row.id.clone();
-                                    let context_id = row.id.clone();
-                                    let on_click = on_click.clone();
-                                    let on_toggle = on_toggle.clone();
-                                    let on_context_menu = on_context_menu.clone();
-                                    let is_selected = selected.as_ref() == Some(&row.id);
-                                    div()
-                                        .id(row.id.0.clone())
-                                        .role(Role::TreeItem)
-                                        .aria_label(row.accessibility_label.clone())
-                                        .aria_level(row.level)
-                                        .aria_selected(is_selected)
-                                        .when(row.is_branch, |element| {
-                                            element.aria_expanded(row.is_expanded)
-                                        })
-                                        .pl(px((row.level.saturating_sub(1) * 16) as f32))
-                                        .h_7()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .cursor_pointer()
-                                        .when(is_selected, |element| {
-                                            element
-                                                .aria_active_descendant()
-                                                .bg(cx.theme().colors().element_selected)
-                                        })
-                                        .child(if row.is_branch {
-                                            Disclosure::new(
-                                                format!("language-tool-disclosure:{}", row.id.0),
-                                                row.is_expanded,
-                                            )
-                                            .on_click(move |_, window, cx| {
-                                                cx.stop_propagation();
-                                                on_toggle(toggle_id.clone(), window, cx);
-                                            })
-                                            .into_any_element()
-                                        } else {
-                                            div().w_4().into_any_element()
-                                        })
-                                        .when_some(row.icon, |element, icon| {
-                                            element.child(Icon::new(icon).size(IconSize::Small))
-                                        })
-                                        .child(row.label.clone())
-                                        .when_some(
-                                            row.secondary_label.clone(),
-                                            |element, secondary| {
-                                                element.child(
-                                                    div()
-                                                        .text_color(cx.theme().colors().text_muted)
-                                                        .child(secondary),
-                                                )
-                                            },
-                                        )
-                                        .on_click(move |event, window, cx| {
-                                            on_click(
-                                                click_id.clone(),
-                                                event.click_count(),
-                                                window,
-                                                cx,
-                                            );
-                                        })
-                                        .on_mouse_down(
-                                            MouseButton::Right,
-                                            move |event, window, cx| {
-                                                cx.stop_propagation();
-                                                on_context_menu(
-                                                    context_id.clone(),
-                                                    event.position,
-                                                    window,
-                                                    cx,
-                                                );
-                                            },
-                                        )
-                                        .into_any_element()
-                                })
-                                .collect::<Vec<AnyElement>>()
-                        },
-                    )
-                    .size_full()
-                    .track_scroll(&scroll_handle),
-                ),
+                .min_h_0()
+                .min_w_0()
+                .child(tree),
         )
 }
 
@@ -787,6 +818,68 @@ mod tests {
             .last_item_size
             .expect("the projected root row should be measured");
         assert!(item_size.item.height > px(0.));
+    }
+
+    #[gpui::test]
+    fn multiline_diagnostics_expand_without_overlapping_at_narrow_widths(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            settings::init(cx);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+        struct Diagnostics {
+            rows: Arc<[VisibleLanguageToolRow]>,
+            state: gpui::ListState,
+            font_size: Pixels,
+        }
+        impl Render for Diagnostics {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                v_flex()
+                    .size_full()
+                    .text_size(self.font_size)
+                    .child(language_tool_tree(
+                        self.rows.clone(),
+                        None,
+                        None,
+                        LanguageToolTreeScrollHandle::Wrapped(self.state.clone()),
+                        |_, _, _, _| {},
+                        |_, _, _| {},
+                        |_, _, _, _| {},
+                    ))
+            }
+        }
+        for width in [220., 340.] {
+            for font_size in [16., 24.] {
+                let rows: Arc<[VisibleLanguageToolRow]> = (0..3).map(|index| VisibleLanguageToolRow {
+                    id: LanguageToolNodeId(format!("failure-{index}")), parent_id: None, level: 1,
+                    is_branch: false, is_expanded: false, label: "Cargo metadata error".into(),
+                    secondary_label: Some(format!("workspace-{index}/Cargo.toml\nfailed to download missing dependency\nCaused by:\nattempting to make an HTTP request, but --offline was specified\nReview intentional offline configuration, fetch the missing dependency, then Refresh.")),
+                    icon: None, accessibility_label: format!("workspace {index} offline dependency failure; open manifest and Refresh"),
+                }).collect();
+                let state =
+                    gpui::ListState::new(3, gpui::ListAlignment::Top, px(2000.)).measure_all();
+                let observed = state.clone();
+                let window = cx.open_window(size(px(width), px(1600.)), |_, _| Diagnostics {
+                    rows,
+                    state,
+                    font_size: px(font_size),
+                });
+                let visual = VisualTestContext::from_window(*window, cx);
+                visual.run_until_parked();
+                let mut previous_bottom = px(0.);
+                for index in 0..3 {
+                    let bounds = observed
+                        .bounds_for_item(index)
+                        .expect("each multiline row measured");
+                    assert!(
+                        bounds.size.height > px(100.),
+                        "multiline text expands its row: {bounds:?}"
+                    );
+                    assert!(bounds.top() >= previous_bottom, "rows cannot overlap");
+                    assert!(bounds.size.width <= px(width));
+                    previous_bottom = bounds.bottom();
+                }
+            }
+        }
     }
 
     #[gpui::test]

@@ -127,19 +127,48 @@ impl ModelArtifact {
         )
     }
 
-    pub fn estimated_memory_bytes(&self) -> u64 {
+    pub fn kv_cache_bytes(&self) -> u64 {
         // Reserve full-length FP16 keys and values, even for sliding/shared KV layers.
         // This deliberately overestimates those models rather than using active parameters.
-        let cache = self
-            .context_tokens
+        self.context_tokens
             .saturating_mul(self.kv_layers)
             .saturating_mul(self.kv_heads)
             .saturating_mul(self.kv_head_dimension)
-            .saturating_mul(4);
-        self.bytes
-            .saturating_add(cache)
-            .saturating_add((self.bytes / 4).max(GIB))
+            .saturating_mul(4)
     }
+
+    pub fn runtime_overhead_bytes(&self) -> u64 {
+        (self.bytes / 4).max(GIB)
+    }
+
+    pub fn estimated_memory_bytes(&self) -> u64 {
+        self.bytes
+            .saturating_add(self.kv_cache_bytes())
+            .saturating_add(self.runtime_overhead_bytes())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RecommendationLevel {
+    Recommended,
+    LimitedHeadroom,
+    InsufficientCapacity,
+}
+
+impl RecommendationLevel {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Recommended => "Recommended",
+            Self::LimitedHeadroom => "Limited headroom",
+            Self::InsufficientCapacity => "Insufficient capacity",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ModelRecommendation {
+    pub level: RecommendationLevel,
+    pub reason: String,
 }
 
 #[derive(Clone, Debug)]
@@ -186,45 +215,127 @@ impl Hardware {
         })
     }
 
-    pub fn recommendation(&self, model: &ModelArtifact) -> String {
-        if let Some(warning) = &self.runtime_warning {
-            return warning.clone();
-        }
-        let memory = model.estimated_memory_bytes();
-        if model.bytes.saturating_add(GIB) > self.free_disk {
-            return "Not enough disk space: free the model size plus 1 GiB before downloading."
-                .into();
-        }
-        if memory.saturating_add(GIB) > self.available_memory {
-            return format!(
-                "Estimated {:.1} GiB plus 1 GiB system reserve exceeds currently available memory. Close applications or choose a smaller model.",
-                gib(memory)
-            );
-        }
-        let gpu = if self.unified_memory {
-            "GPU memory is shared with system memory.".to_owned()
-        } else if let Some(available) = self.gpu_memory {
-            if memory > available {
-                format!(
-                    "Estimated working memory exceeds {:.1} GiB reported free GPU memory; use CPU fallback or a smaller model.",
-                    gib(available)
-                )
-            } else {
-                format!(
-                    "The runtime reports {:.1} GiB free GPU memory. Driver and model compatibility still require a load test.",
-                    gib(available)
-                )
-            }
-        } else {
-            "GPU memory is unknown; the estimate assumes CPU memory.".to_owned()
+    pub fn summary(&self) -> String {
+        let architecture = match self.architecture.as_str() {
+            "aarch64" if self.unified_memory => "Apple silicon",
+            "aarch64" => "ARM64",
+            "x86_64" => "x86-64",
+            architecture => architecture,
         };
         format!(
-            "Estimated fit at {} tokens: weights, conservative FP16 KV cache and runtime reserve. This is not measured compatibility. {gpu}{}",
-            model.context_tokens,
-            if self.backend.starts_with("CPU") {
-                " CPU inference may take several minutes to process a long first agent prompt. Use acceleration when available."
+            "{} · {:.0} GiB {} · {:.1} GiB available (estimate) · {:.1} GiB free disk",
+            architecture,
+            gib(self.total_memory),
+            if self.unified_memory {
+                "unified memory"
             } else {
-                ""
+                "RAM"
+            },
+            gib(self.available_memory),
+            gib(self.free_disk)
+        )
+    }
+
+    pub fn device_details(&self) -> Vec<String> {
+        self.backend.lines().filter(|line| line.contains(':') && !line.starts_with("Available devices"))
+            .map(|line| {
+                if line.contains("BLAS:") && line.contains("Accelerate") {
+                    "Accelerate optimizes CPU math and uses system memory; it has no separate VRAM pool.".to_owned()
+                } else if self.unified_memory {
+                    line.split_once(" (").map_or(line, |(device, _)| device).to_owned()
+                } else { line.to_owned() }
+            }).collect()
+    }
+
+    pub fn recommendation(
+        &self,
+        model: &ModelArtifact,
+        needs_download: bool,
+        loaded: bool,
+        cpu_only: bool,
+    ) -> ModelRecommendation {
+        let result = |level, reason| ModelRecommendation { level, reason };
+        if let Some(warning) = &self.runtime_warning {
+            return result(RecommendationLevel::InsufficientCapacity, warning.clone());
+        }
+        if needs_download && model.bytes.saturating_add(GIB) > self.free_disk {
+            return result(
+                RecommendationLevel::InsufficientCapacity,
+                format!(
+                    "Downloading needs {:.1} GiB including a 1 GiB disk reserve; {:.1} GiB is free. Free space or choose a smaller model.",
+                    gib(model.bytes.saturating_add(GIB)),
+                    gib(self.free_disk)
+                ),
+            );
+        }
+        // A running model has already allocated its memory; charging its weights again
+        // against the remaining available memory would report a false load failure.
+        let required = if loaded {
+            GIB
+        } else {
+            model.estimated_memory_bytes().saturating_add(GIB)
+        };
+        if required > self.available_memory {
+            return result(
+                if loaded {
+                    RecommendationLevel::LimitedHeadroom
+                } else {
+                    RecommendationLevel::InsufficientCapacity
+                },
+                format!(
+                    "{} needs {:.1} GiB including the system reserve; {:.1} GiB is currently available. Close applications{}.",
+                    if loaded {
+                        "Keeping headroom"
+                    } else {
+                        "Loading"
+                    },
+                    gib(required),
+                    gib(self.available_memory),
+                    if loaded {
+                        ""
+                    } else {
+                        " or choose a smaller model"
+                    }
+                ),
+            );
+        }
+        if !loaded
+            && !cpu_only
+            && !self.unified_memory
+            && let Some(free) = self.gpu_memory
+            && model.estimated_memory_bytes() > free
+        {
+            return result(
+                RecommendationLevel::LimitedHeadroom,
+                format!(
+                    "The estimate exceeds {:.1} GiB free GPU memory. Choose CPU fallback or a smaller model; system RAM and VRAM are separate limits.",
+                    gib(free)
+                ),
+            );
+        }
+        let headroom = self.available_memory.saturating_sub(required);
+        let level = if headroom < GIB.max(model.estimated_memory_bytes() / 5) {
+            RecommendationLevel::LimitedHeadroom
+        } else {
+            RecommendationLevel::Recommended
+        };
+        result(
+            level,
+            if loaded {
+                format!(
+                    "Loaded successfully; {:.1} GiB remains available beyond the system reserve (estimate).",
+                    gib(headroom)
+                )
+            } else {
+                format!(
+                    "Estimated fit with {:.1} GiB headroom after model memory and a 1 GiB system reserve.{}",
+                    gib(headroom),
+                    if cpu_only {
+                        " CPU processing of long prompts can take several minutes."
+                    } else {
+                        " Verify compatibility by loading the model."
+                    }
+                )
             },
         )
     }
@@ -570,6 +681,9 @@ impl ManagedStore {
                     cpu_only,
                 )?;
                 runtime.wait_ready(local_http, &timer).await?;
+                let current_capacity = Hardware::detect(&self.root)?;
+                hardware.available_memory = current_capacity.available_memory;
+                hardware.free_disk = current_capacity.free_disk;
                 Ok::<_, anyhow::Error>((runtime, hardware))
             }
             .await;
@@ -944,6 +1058,7 @@ pub struct ManagedRuntime {
     pub endpoint: String,
     pub api_key: Arc<str>,
     pub model_id: String,
+    pub cpu_only: bool,
     template_sha256: String,
     context_tokens: u64,
 }
@@ -1056,6 +1171,7 @@ impl ManagedRuntime {
             endpoint: format!("http://127.0.0.1:{port}"),
             api_key,
             model_id: model.id.clone(),
+            cpu_only,
             // llama.cpp's Jinja lexer removes surrounding whitespace from its served template.
             template_sha256: model.runtime_template_sha256.clone(),
             context_tokens: model.context_tokens,
@@ -1251,9 +1367,8 @@ mod tests {
             .next()
             .context("Missing model")?;
         assert!(
-            hardware
-                .recommendation(&model)
-                .starts_with("Not enough disk space")
+            hardware.recommendation(&model, true, false, true).level
+                == RecommendationLevel::InsufficientCapacity
         );
         Ok(())
     }
@@ -1465,7 +1580,89 @@ mod tests {
             runtime_warning: None,
         };
         assert!(hardware.ensure_memory(&model).is_err());
-        assert!(hardware.recommendation(&model).contains("disk"));
+        assert!(
+            hardware
+                .recommendation(&model, true, false, true)
+                .reason
+                .contains("disk")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn recommendations_preserve_memory_formula_and_resident_capacity() -> Result<()> {
+        let model = catalog()?
+            .models
+            .into_iter()
+            .next()
+            .context("Catalog model")?;
+        let cache =
+            model.context_tokens * model.kv_layers * model.kv_heads * model.kv_head_dimension * 4;
+        let runtime = (model.bytes / 4).max(GIB);
+        assert_eq!(
+            model.estimated_memory_bytes(),
+            model.bytes + cache + runtime
+        );
+        let required = model.estimated_memory_bytes() + GIB;
+        let mut hardware = Hardware {
+            architecture: "aarch64".into(),
+            total_memory: 32 * GIB,
+            available_memory: required + 4 * GIB,
+            free_disk: 0,
+            backend: "Automatic; MTL0: Apple M5 (24000 MiB, 23000 MiB free)\nBLAS: Accelerate (0 MiB, 0 MiB free)".into(),
+            unified_memory: true,
+            gpu_memory: Some(23 * GIB),
+            runtime_warning: None,
+        };
+        assert_eq!(
+            hardware.recommendation(&model, true, false, false).level,
+            RecommendationLevel::InsufficientCapacity
+        );
+        assert_eq!(
+            hardware.recommendation(&model, false, false, false).level,
+            RecommendationLevel::Recommended,
+            "Downloaded weights do not need duplicate disk allocation"
+        );
+        hardware.available_memory = required + GIB / 2;
+        assert_eq!(
+            hardware.recommendation(&model, false, false, false).level,
+            RecommendationLevel::LimitedHeadroom
+        );
+        hardware.available_memory = required - 1;
+        assert_eq!(
+            hardware.recommendation(&model, false, false, false).level,
+            RecommendationLevel::InsufficientCapacity
+        );
+        hardware.available_memory = 4 * GIB;
+        assert_eq!(
+            hardware.recommendation(&model, false, true, false).level,
+            RecommendationLevel::Recommended,
+            "Resident model memory is not charged twice"
+        );
+        hardware.available_memory = GIB / 2;
+        assert_eq!(
+            hardware.recommendation(&model, false, true, false).level,
+            RecommendationLevel::LimitedHeadroom
+        );
+        assert!(
+            hardware
+                .device_details()
+                .iter()
+                .all(|line| !line.contains("0 MiB"))
+        );
+        assert!(
+            hardware
+                .device_details()
+                .iter()
+                .any(|line| line.contains("Accelerate optimizes CPU math"))
+        );
+        hardware.available_memory = GIB;
+        hardware.gpu_memory = Some(64 * GIB);
+        assert_eq!(
+            hardware.recommendation(&model, false, false, false).level,
+            RecommendationLevel::InsufficientCapacity,
+            "Shared GPU capacity cannot be added to available RAM"
+        );
         Ok(())
     }
 

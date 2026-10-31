@@ -606,11 +606,36 @@ async fn prepare_passive_rust_execution(
     .await
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CargoDependencyNetwork {
+    Configured,
+    Offline,
+}
+
 async fn prepare_passive_rust_execution_in_environment(
     program: Option<&OsStr>,
     include_rustdoc: bool,
     working_directory: &Path,
     parent_environment: PassiveRustEnvironment,
+    executor: &BackgroundExecutor,
+) -> Result<PassiveRustExecution> {
+    prepare_rust_execution_in_environment(
+        program,
+        include_rustdoc,
+        working_directory,
+        parent_environment,
+        CargoDependencyNetwork::Offline,
+        executor,
+    )
+    .await
+}
+
+async fn prepare_rust_execution_in_environment(
+    program: Option<&OsStr>,
+    include_rustdoc: bool,
+    working_directory: &Path,
+    parent_environment: PassiveRustEnvironment,
+    network: CargoDependencyNetwork,
     executor: &BackgroundExecutor,
 ) -> Result<PassiveRustExecution> {
     let preparation = async {
@@ -675,13 +700,16 @@ async fn prepare_passive_rust_execution_in_environment(
                 }
             }
             child_environment.insert("RUSTUP_AUTO_INSTALL", "0".into());
-            child_environment.insert("CARGO_NET_OFFLINE", "true".into());
+            if network == CargoDependencyNetwork::Offline {
+                child_environment.insert("CARGO_NET_OFFLINE", "true".into());
+            }
             // Cargo rereads configuration after admission. Preserve its TOML
             // value types so later merges cannot select an unreviewed child value.
             if program.is_some() {
                 for (name, original) in &configuration.environment {
                     let is_variable = |expected: &str| name == expected || (cfg!(windows) && name.eq_ignore_ascii_case(expected));
-                    let policy_flag = ["RUSTUP_AUTO_INSTALL", "CARGO_NET_OFFLINE"].into_iter().any(is_variable);
+                    let policy_flag = is_variable("RUSTUP_AUTO_INSTALL")
+                        || (network == CargoDependencyNetwork::Offline && is_variable("CARGO_NET_OFFLINE"));
                     if !policy_flag && !PASSIVE_CARGO_PROTECTED_ENVIRONMENT.into_iter().any(is_variable) { continue; }
                     let value = child_environment.value(name)
                         .context("Admitted Cargo child environment is unavailable")?;
@@ -702,6 +730,7 @@ async fn prepare_passive_rust_execution_in_environment(
                     }
                 }
                 for (name, value) in [("RUSTUP_AUTO_INSTALL", "0"), ("CARGO_NET_OFFLINE", "true")] {
+                    if name == "CARGO_NET_OFFLINE" && network == CargoDependencyNetwork::Configured { continue; }
                     if configuration.environment.keys().any(|configured| configured == name
                         || (cfg!(windows) && configured.eq_ignore_ascii_case(name))) { continue; }
                     // These values already exist in the protected parent environment.
@@ -1366,38 +1395,6 @@ async fn rustup_executable_digest(path: &Path) -> Result<sha2::digest::Output<Sh
     }
 }
 
-async fn bounded_passive_cargo_command_output(
-    mut command: util::command::Command,
-    arguments: Vec<OsString>,
-    name: &'static str,
-    stdout_limit: usize,
-    timeout: Duration,
-    working_directory: &Path,
-    environment: Option<&HashMap<String, String>>,
-    executor: &BackgroundExecutor,
-) -> Result<std::process::Output> {
-    let collection = async {
-        if let Some(environment) = environment {
-            command.envs(environment);
-        }
-        let options = prevent_passive_rust_downloads(
-            &mut command,
-            false,
-            working_directory,
-            environment,
-            executor,
-        )
-        .await?;
-        command.args(options).args(arguments);
-        bounded_cargo_command_output(command, name, stdout_limit, timeout, executor).await
-    }
-    .boxed();
-    match futures::future::select(collection, executor.timer(timeout).boxed()).await {
-        Either::Left((output, _)) => output,
-        Either::Right(_) => Err(anyhow!("{name} timed out")),
-    }
-}
-
 #[cfg(all(target_os = "macos", feature = "test-support"))]
 pub async fn compile_native_profile_test_workload(
     source: &Path,
@@ -1512,32 +1509,48 @@ impl CargoMetadataRunner for ProcessCargoMetadataRunner {
         command
             .current_dir(&request.working_directory)
             .kill_on_drop(true);
-        let mut arguments = [
-            "metadata",
-            "--offline",
-            "--format-version",
-            "1",
-            "--manifest-path",
-        ]
-        .into_iter()
-        .map(OsString::from)
-        .collect::<Vec<_>>();
+        let mut arguments = ["metadata", "--format-version", "1", "--manifest-path"]
+            .into_iter()
+            .map(OsString::from)
+            .collect::<Vec<_>>();
         arguments.push(request.manifest_path.into_os_string());
-        let output = bounded_passive_cargo_command_output(
+        let preparation = prepare_rust_execution_in_environment(
+            Some(command.get_program()),
+            false,
+            &request.working_directory,
+            PassiveRustEnvironment::from_request(request.environment.as_ref()),
+            CargoDependencyNetwork::Configured,
+            &self.executor,
+        )
+        .await?;
+        if let Some(environment) = &request.environment {
+            command.envs(environment);
+        }
+        preparation
+            .cargo_parent_environment
+            .apply_to_command(&mut command);
+        command.env("RUSTUP_AUTO_INSTALL", "0");
+        if let Some(toolchain) = preparation.toolchain {
+            command.env("RUSTUP_TOOLCHAIN", toolchain);
+        }
+        command.args(preparation.cargo_options).args(arguments);
+        let output = bounded_cargo_command_output(
             command,
-            arguments,
             "Cargo metadata",
             MAX_CARGO_METADATA_BYTES,
             CARGO_METADATA_TIMEOUT,
-            &request.working_directory,
-            request.environment.as_ref(),
             &self.executor,
         )
         .await?;
         if !output.status.success() {
             let message = bounded_error(&output.stderr);
+            let recovery = if message.contains("--offline") || message.contains("offline mode") {
+                "\nCargo dependency downloads are restricted by the workspace/host Cargo configuration or CARGO_NET_OFFLINE. Review net.offline in .cargo/config.toml and $CARGO_HOME/config.toml, or the host environment. Copper preserves intentional offline settings. Fetch missing dependencies in the intended network environment, then retry Refresh."
+            } else {
+                "\nReview this workspace's dependencies and Cargo configuration, then retry Refresh."
+            };
             return Err(anyhow!(
-                "Cargo metadata exited with {}: {message}",
+                "Cargo metadata exited with {}: {message}{recovery}",
                 output.status
             ));
         }
@@ -10128,8 +10141,17 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn poll_cargo_process<T>(cx: &mut TestAppContext, mut observe: impl FnMut() -> Option<T>) -> T {
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    fn poll_cargo_process<T>(cx: &mut TestAppContext, observe: impl FnMut() -> Option<T>) -> T {
+        poll_cargo_process_with_timeout(cx, Duration::from_secs(5), observe)
+    }
+
+    #[cfg(unix)]
+    fn poll_cargo_process_with_timeout<T>(
+        cx: &mut TestAppContext,
+        timeout: Duration,
+        mut observe: impl FnMut() -> Option<T>,
+    ) -> T {
+        let deadline = std::time::Instant::now() + timeout;
         loop {
             if let Some(result) = observe() {
                 return result;
@@ -10179,9 +10201,10 @@ mod tests {
 
         let manager = directory.join("rustup");
         let script = r#"#!/bin/sh
-[ "$RUSTUP_AUTO_INSTALL" = 0 ] && [ "$CARGO_NET_OFFLINE" = true ] || exit 73
+[ "$RUSTUP_AUTO_INSTALL" = 0 ] || exit 73
 case "${0##*/}" in
     rustup)
+        [ "$CARGO_NET_OFFLINE" = true ] || exit 73
         if [ "$1 $2 $3 $4" = "component list --installed --toolchain" ]; then
             [ "$5" = installed-fixture ] || exit 75
             printf '%s' "$PASSIVE_TEST_INSTALLED_COMPONENTS"
@@ -10228,7 +10251,7 @@ case "${0##*/}" in
         ;;
     cargo)
         [ -z "$PASSIVE_TEST_INSTALLED_ROOT" ] || [ "$RUSTUP_TOOLCHAIN" = "$PASSIVE_TEST_INSTALLED_ROOT" ] || exit 78
-        case " $* " in *" --offline "*) ;; *) exit 76;; esac
+        case " $* " in *" --offline "*) exit 76;; esac
         printf cargo >> "$PASSIVE_TEST_LAUNCH_MARKER"
         printf 'metadata\n'
         ;;
@@ -10979,65 +11002,159 @@ esac
 
     #[cfg(unix)]
     #[gpui::test]
-    fn cargo_workspace_passive_processes_prevent_downloads(cx: &mut TestAppContext) {
+    fn cargo_workspace_metadata_preserves_network_choice_and_probes_stay_offline(
+        cx: &mut TestAppContext,
+    ) {
         use std::os::unix::fs::PermissionsExt;
 
         cx.executor().allow_parking();
-        let directory = tempfile::tempdir().expect("passive command fixture");
-        let check_environment = r#"[ "$RUSTUP_AUTO_INSTALL" = 0 ] &&
-    [ "$CARGO_NET_OFFLINE" = true ] &&
-    [ "$RUST_WORKSPACE_FIXTURE_VALUE" = retained ] || exit 73
-"#;
+        let directory = tempfile::tempdir().expect("command fixture");
         for (name, body) in [
             (
                 "cargo",
-                "case \" $* \" in *\" --offline \"*) ;; *) exit 74;; esac\nprintf 'metadata\\n'\n",
+                r#"case " $* " in *" --offline "*) exit 74;; esac
+[ "$CARGO_NET_OFFLINE" = "$EXPECTED_OFFLINE" ] || exit 75
+printf 'metadata\n'
+"#,
             ),
-            ("rustc", "printf 'compiler\\n'\n"),
+            (
+                "rustc",
+                "[ \"$CARGO_NET_OFFLINE\" = true ] || exit 76\nprintf 'compiler\\n'\n",
+            ),
         ] {
             let path = directory.path().join(name);
-            std::fs::write(&path, format!("#!/bin/sh\n{check_environment}{body}"))
-                .expect("write passive command fixture");
+            std::fs::write(&path, format!("#!/bin/sh\n[ \"$RUSTUP_AUTO_INSTALL\" = 0 ] && [ \"$RUST_WORKSPACE_FIXTURE_VALUE\" = retained ] || exit 73\n{body}"))
+                .expect("write command fixture");
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))
-                .expect("make passive command fixture executable");
+                .expect("make command fixture executable");
         }
-        let environment = HashMap::from_iter([
+        for offline in ["false", "true", ""] {
+            let mut environment = HashMap::from_iter([
+                (
+                    "PATH".into(),
+                    directory.path().to_string_lossy().into_owned(),
+                ),
+                ("RUSTUP_AUTO_INSTALL".into(), "1".into()),
+                ("RUST_WORKSPACE_FIXTURE_VALUE".into(), "retained".into()),
+                ("EXPECTED_OFFLINE".into(), offline.into()),
+            ]);
+            if !offline.is_empty() {
+                environment.insert("CARGO_NET_OFFLINE".into(), offline.into());
+            }
+            let request = CargoMetadataRequest {
+                manifest_path: directory.path().join("Cargo.toml"),
+                working_directory: directory.path().to_path_buf(),
+                environment: Some(environment.clone()),
+            };
+            let runner = ProcessCargoMetadataRunner {
+                executor: cx.background_executor.clone(),
+            };
+            let mut metadata = cx
+                .background_executor
+                .spawn(async move { runner.run(request).await });
+            assert_eq!(
+                poll_cargo_process(cx, || (&mut metadata).now_or_never())
+                    .expect("configured metadata network"),
+                b"metadata\n"
+            );
+            let probe = ProcessCargoConfigurationProbe {
+                executor: cx.background_executor.clone(),
+            };
+            let request = CargoConfigurationProbeRequest {
+                working_directory: directory.path().to_path_buf(),
+                environment: Some(environment),
+            };
+            let mut compiler = cx
+                .background_executor
+                .spawn(async move { probe.run(request).await });
+            assert_eq!(
+                poll_cargo_process(cx, || (&mut compiler).now_or_never())
+                    .expect("compiler stays offline"),
+                b"compiler\n"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "downloads a real crates.io dependency into an isolated Cargo home"]
+    fn cargo_workspace_live_metadata_online_and_explicit_offline(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let directory = tempfile::tempdir().expect("isolated live Cargo fixture");
+        let root = directory.path();
+        std::fs::create_dir_all(root.join("src")).expect("source directory");
+        std::fs::create_dir_all(root.join("cargo-home")).expect("isolated cache");
+        std::fs::write(root.join("src/lib.rs"), "pub fn answer() -> usize { 42 }\n")
+            .expect("source");
+        let manifest = |version: &str| {
+            format!(
+                "[package]\nname='copper_metadata_network_fixture'\nversion='0.1.0'\nedition='2024'\n[dependencies]\nitoa='={version}'\n"
+            )
+        };
+        std::fs::write(root.join("Cargo.toml"), manifest("1.0.15")).expect("manifest");
+        let cargo_bin = Path::new(env!("CARGO"))
+            .parent()
+            .expect("installed Cargo directory");
+        let mut environment = HashMap::from_iter([
+            ("PATH".into(), cargo_bin.to_string_lossy().into_owned()),
             (
-                "PATH".into(),
-                directory.path().to_string_lossy().into_owned(),
+                "CARGO_HOME".into(),
+                root.join("cargo-home").to_string_lossy().into_owned(),
             ),
-            ("RUSTUP_AUTO_INSTALL".into(), "1".into()),
-            ("CARGO_NET_OFFLINE".into(), "false".into()),
-            ("RUST_WORKSPACE_FIXTURE_VALUE".into(), "retained".into()),
+            (
+                "CARGO_TARGET_DIR".into(),
+                root.join("target").to_string_lossy().into_owned(),
+            ),
         ]);
-        let metadata_request = CargoMetadataRequest {
-            manifest_path: directory.path().join("Cargo.toml"),
-            working_directory: directory.path().to_path_buf(),
-            environment: Some(environment.clone()),
-        };
-        let metadata_runner = ProcessCargoMetadataRunner {
-            executor: cx.background_executor.clone(),
-        };
-        let metadata = cx
-            .background_executor
-            .spawn(async move { metadata_runner.run(metadata_request).await });
-        let probe = ProcessCargoConfigurationProbe {
-            executor: cx.background_executor.clone(),
-        };
-        let probe_request = CargoConfigurationProbeRequest {
-            working_directory: directory.path().to_path_buf(),
-            environment: Some(environment),
-        };
-        let compiler = cx
-            .background_executor
-            .spawn(async move { probe.run(probe_request).await });
-        for (expected, mut output) in [
-            (b"metadata\n".as_slice(), metadata),
-            (b"compiler\n".as_slice(), compiler),
+        for (scenario, offline, succeeds) in [
+            ("uncached offline", "true", false),
+            ("uncached online", "false", true),
+            ("cached offline", "true", true),
+            ("configured offline", "", false),
         ] {
-            let actual = poll_cargo_process(cx, || (&mut output).now_or_never())
-                .expect("project environment cannot enable passive downloads");
-            assert_eq!(actual, expected);
+            if offline.is_empty() {
+                environment.remove("CARGO_NET_OFFLINE");
+                std::fs::create_dir(root.join(".cargo")).expect("workspace configuration");
+                std::fs::write(root.join(".cargo/config.toml"), "[net]\noffline=true\n")
+                    .expect("intentional offline configuration");
+                std::fs::write(root.join("Cargo.toml"), manifest("1.0.14"))
+                    .expect("uncached version");
+            } else {
+                environment.insert("CARGO_NET_OFFLINE".into(), offline.into());
+            }
+            let request = CargoMetadataRequest {
+                manifest_path: root.join("Cargo.toml"),
+                working_directory: root.to_path_buf(),
+                environment: Some(environment.clone()),
+            };
+            let runner = ProcessCargoMetadataRunner {
+                executor: cx.background_executor.clone(),
+            };
+            let mut task = cx
+                .background_executor
+                .spawn(async move { runner.run(request).await });
+            let result = poll_cargo_process_with_timeout(cx, Duration::from_secs(90), || {
+                (&mut task).now_or_never()
+            });
+            if succeeds {
+                let metadata = parse_metadata(&result.expect(scenario)).expect("real metadata");
+                assert!(
+                    metadata
+                        .packages
+                        .iter()
+                        .any(|package| package.name == "itoa")
+                );
+                println!("{scenario}: resolved real itoa 1.0.15");
+            } else {
+                let error = format!("{:#}", result.expect_err(scenario));
+                assert!(
+                    error.contains("offline")
+                        && error.contains("Refresh")
+                        && error.contains("itoa"),
+                    "{scenario}: {error}"
+                );
+                println!("{scenario}: {error}");
+            }
         }
     }
 
@@ -11463,10 +11580,12 @@ esac
                 "Actual Cargo did not reach the rejecting sparse registry: {observed:?}"
             );
             let before = observed;
+            let mut offline_environment = fixture.environment.clone();
+            offline_environment.insert("CARGO_NET_OFFLINE".into(), "true".into());
             let request = CargoMetadataRequest {
                 manifest_path: fixture.root.join("Cargo.toml"),
                 working_directory: fixture.root.clone(),
-                environment: Some(fixture.environment.clone()),
+                environment: Some(offline_environment),
             };
             let runner = ProcessCargoMetadataRunner {
                 executor: cx.background_executor.clone(),
