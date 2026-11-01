@@ -1573,7 +1573,13 @@ impl MultiWorkspace {
     }
 
     pub fn serialize(&mut self, cx: &mut Context<Self>) {
-        self._serialize_task = Some(self.serialize_now(cx));
+        // Sidebar actions can request a save while the sidebar is still borrowed.
+        self._serialize_task = Some(cx.spawn(async move |this, cx| {
+            let Some(save) = this.update(cx, |this, cx| this.serialize_now(cx)).log_err() else {
+                return;
+            };
+            save.await;
+        }));
     }
 
     fn serialize_now(&self, cx: &mut Context<Self>) -> Task<()> {

@@ -10717,7 +10717,11 @@ async fn test_paste_content_from_other_app(cx: &mut TestAppContext) {
     ));
 
     let mut cx = EditorTestContext::new(cx).await;
-    cx.update_buffer(|buffer, cx| buffer.set_language(Some(rust_lang()), cx));
+    cx.update_buffer(|buffer, cx| {
+        buffer.set_language(Some(rust_lang()), cx);
+        // Force asynchronous parsing so assertions cannot rely on the fast path.
+        buffer.set_sync_parse_timeout(None);
+    });
     cx.run_until_parked();
 
     cx.set_state(indoc! {"
@@ -10730,6 +10734,11 @@ async fn test_paste_content_from_other_app(cx: &mut TestAppContext) {
     "});
 
     cx.update_editor(|e, window, cx| e.paste(&Paste, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent
+            .await
+            .expect("external paste autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
         fn a() {
             b();
@@ -10750,6 +10759,11 @@ async fn test_paste_content_from_other_app(cx: &mut TestAppContext) {
     "});
 
     cx.update_editor(|e, window, cx| e.paste(&Paste, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent
+            .await
+            .expect("external paste autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
         fn a() {
             b();

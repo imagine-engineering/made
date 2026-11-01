@@ -224,9 +224,9 @@ fn rust_product_nextest_command(measure_foreground: bool) -> String {
         .join(" ");
 
     let selection = if measure_foreground {
-        "-E '(test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget))' --test-threads 1 --success-output immediate"
+        "-E '(test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch))' --test-threads 1 --success-output immediate"
     } else {
-        "-E 'not (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget))'"
+        "-E 'not (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch))'"
     };
     let no_tests = if measure_foreground { "fail" } else { "warn" };
     format!(
@@ -1239,6 +1239,11 @@ mod tests {
             product_nextest_command
                 .contains("test_explorer::tests::structured_execution_foreground_budget")
         );
+        for command in [&measurement, &product_nextest_command] {
+            assert!(command.contains(
+                "test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch)"
+            ));
+        }
         assert!(!measurement.contains("not ("));
         assert!(!measurement.contains("--retries"));
         assert!(
