@@ -3253,6 +3253,61 @@ mod tests {
     }
 
     #[gpui::test]
+    fn test_channel_client_unpolled_stream_cancellation_releases_bookkeeping(
+        cx: &mut TestAppContext,
+    ) {
+        let (_incoming_tx, incoming_rx) = mpsc::unbounded();
+        let (outgoing_tx, _outgoing_rx) = mpsc::unbounded();
+        let client = cx
+            .update(|cx| ChannelClient::new(incoming_rx, outgoing_tx, cx, "stream-cancel", false));
+        let request = client
+            .request_stream_dynamic(proto::Test { id: 17 }.into_envelope(0, None, None), "Test");
+        assert_eq!(client.stream_response_channels.lock().len(), 1);
+        assert_eq!(client.buffer.lock().len(), 1);
+        drop(request);
+        cx.run_until_parked();
+        assert!(
+            client.stream_response_channels.lock().is_empty(),
+            "cancelling before the first poll must remove the registered stream"
+        );
+        assert_eq!(
+            client.buffer.lock().len(),
+            1,
+            "local bookkeeping cleanup does not cancel ordinary remote execution or replay"
+        );
+
+        let stream = client
+            .request_stream_dynamic(proto::Test { id: 18 }.into_envelope(0, None, None), "Test")
+            .now_or_never()
+            .expect("ordinary stream construction completes")
+            .expect("ordinary stream remains supported");
+        assert_eq!(client.stream_response_channels.lock().len(), 1);
+        drop(stream);
+        assert!(client.stream_response_channels.lock().is_empty());
+    }
+
+    #[gpui::test]
+    fn test_channel_client_unpolled_stream_does_not_retain_response_owner(cx: &mut TestAppContext) {
+        let (_incoming_tx, incoming_rx) = mpsc::unbounded();
+        let (outgoing_tx, _outgoing_rx) = mpsc::unbounded();
+        let client =
+            cx.update(|cx| ChannelClient::new(incoming_rx, outgoing_tx, cx, "stream-owner", false));
+        let response_owner = Arc::downgrade(&client.stream_response_channels);
+        let channel_owner = Arc::downgrade(&client);
+        let request = client
+            .request_stream_dynamic(proto::Test { id: 17 }.into_envelope(0, None, None), "Test");
+        assert_eq!(client.stream_response_channels.lock().len(), 1);
+        drop(client);
+        cx.run_until_parked();
+        assert!(channel_owner.upgrade().is_none());
+        assert!(
+            response_owner.upgrade().is_none(),
+            "an unpolled future cannot keep a released channel's response map alive"
+        );
+        drop(request);
+    }
+
+    #[gpui::test]
     async fn test_channel_client_request_stream_terminates_on_error(cx: &mut TestAppContext) {
         let (incoming_tx, incoming_rx) = mpsc::unbounded::<Envelope>();
         let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded::<Envelope>();
@@ -3885,8 +3940,18 @@ impl ChannelClient {
         envelope.id = self.next_message_id.fetch_add(1, SeqCst);
         let message_id = MessageId(envelope.id);
         let (tx, rx) = mpsc::unbounded();
-        let stream_response_channels = self.stream_response_channels.clone();
-        stream_response_channels.lock().insert(message_id, tx);
+        self.stream_response_channels.lock().insert(message_id, tx);
+
+        // Registration happens before the future is returned, so cleanup must also own cancellation
+        // before its first poll, without keeping a released channel's response map alive.
+        let cleanup_stream_response_channel = util::defer({
+            let stream_response_channels = Arc::downgrade(&self.stream_response_channels);
+            move || {
+                if let Some(stream_response_channels) = stream_response_channels.upgrade() {
+                    stream_response_channels.lock().remove(&message_id);
+                }
+            }
+        });
 
         let result = self.send_buffered(envelope);
         async move {
@@ -3894,13 +3959,6 @@ impl ChannelClient {
                 log::error!("failed to send message: {error}");
                 anyhow::bail!("failed to send message: {error}");
             }
-
-            let cleanup_stream_response_channel = util::defer({
-                let stream_response_channels = stream_response_channels.clone();
-                move || {
-                    stream_response_channels.lock().remove(&message_id);
-                }
-            });
 
             Ok(rx
                 .filter_map(move |(response, _barrier)| {

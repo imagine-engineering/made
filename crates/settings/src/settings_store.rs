@@ -142,6 +142,64 @@ pub struct SettingsLocation<'a> {
     pub path: &'a RelPath,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerSettingsOrigin {
+    HostLocal,
+    NonLocal,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerSettingsParseOutcome {
+    Unknown,
+    Succeeded,
+    Failed,
+}
+
+#[derive(Clone)]
+pub struct ServerSettingsSource {
+    identity: Arc<()>,
+    attempted_origin: Option<ServerSettingsOrigin>,
+    parse_outcome: ServerSettingsParseOutcome,
+}
+
+impl ServerSettingsSource {
+    fn new(attempted_origin: Option<ServerSettingsOrigin>) -> Self {
+        Self {
+            identity: Arc::new(()),
+            attempted_origin,
+            parse_outcome: ServerSettingsParseOutcome::Unknown,
+        }
+    }
+
+    pub fn attempted_origin(&self) -> Option<ServerSettingsOrigin> {
+        self.attempted_origin
+    }
+
+    pub fn parse_outcome(&self) -> ServerSettingsParseOutcome {
+        self.parse_outcome
+    }
+}
+
+impl PartialEq for ServerSettingsSource {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.identity, &other.identity)
+            && self.attempted_origin == other.attempted_origin
+            && self.parse_outcome == other.parse_outcome
+    }
+}
+
+impl Eq for ServerSettingsSource {}
+
+impl Debug for ServerSettingsSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ServerSettingsSource")
+            .field("attempted_origin", &self.attempted_origin)
+            .field("parse_outcome", &self.parse_outcome)
+            .finish_non_exhaustive()
+    }
+}
+
 pub struct SettingsStore {
     setting_values: TypeIdHashMap<Box<dyn AnySettingValue>>,
     default_settings: Rc<SettingsContent>,
@@ -151,6 +209,8 @@ pub struct SettingsStore {
     extension_settings: Option<Box<SettingsContent>>,
     server_settings: Option<Box<SettingsContent>>,
     server_settings_are_local: bool,
+    server_settings_source: ServerSettingsSource,
+    server_settings_attempted_content: Option<Arc<str>>,
 
     language_semantic_token_rules: HashMap<SharedString, SemanticTokenRules>,
 
@@ -366,6 +426,8 @@ impl SettingsStore {
             global_settings: None,
             server_settings: None,
             server_settings_are_local: false,
+            server_settings_source: ServerSettingsSource::new(None),
+            server_settings_attempted_content: None,
             user_settings: None,
             extension_settings: None,
             language_semantic_token_rules: HashMap::default(),
@@ -1114,6 +1176,28 @@ impl SettingsStore {
         return parse_result;
     }
 
+    /// Describes the most recent Server-layer setter attempt, not file readiness or permission.
+    pub fn server_settings_source(&self) -> ServerSettingsSource {
+        self.server_settings_source.clone()
+    }
+
+    pub fn server_settings_source_is_current(&self, source: &ServerSettingsSource) -> bool {
+        self.server_settings_source == *source
+    }
+
+    /// A fresh reader may avoid a redundant setter only for this exact successful local attempt.
+    pub fn current_local_server_settings_source(
+        &self,
+        fresh_content: &str,
+    ) -> Option<ServerSettingsSource> {
+        (self.server_settings_source.parse_outcome == ServerSettingsParseOutcome::Succeeded
+            && self.server_settings_source.attempted_origin
+                == Some(ServerSettingsOrigin::HostLocal)
+            && self.server_settings_are_local
+            && self.server_settings_attempted_content.as_deref() == Some(fresh_content))
+        .then(|| self.server_settings_source.clone())
+    }
+
     pub fn set_server_settings(
         &mut self,
         server_settings_content: &str,
@@ -1137,15 +1221,28 @@ impl SettingsStore {
         local: bool,
         cx: &mut App,
     ) -> Result<()> {
-        let settings = if server_settings_content.is_empty() {
-            None
+        self.server_settings_source = ServerSettingsSource::new(Some(if local {
+            ServerSettingsOrigin::HostLocal
         } else {
-            Option::<SettingsContent>::parse_json_with_comments(server_settings_content)?
+            ServerSettingsOrigin::NonLocal
+        }));
+        self.server_settings_attempted_content = Some(Arc::from(server_settings_content));
+        let parsed_settings = if server_settings_content.is_empty() {
+            Ok(None)
+        } else {
+            Option::<SettingsContent>::parse_json_with_comments(server_settings_content)
+        };
+        let settings = match parsed_settings {
+            Ok(settings) => settings,
+            Err(error) => {
+                self.server_settings_source.parse_outcome = ServerSettingsParseOutcome::Failed;
+                return Err(error);
+            }
         };
 
-        // Rewrite the server settings into a content type
         self.server_settings = settings.map(|settings| Box::new(settings));
         self.server_settings_are_local = local;
+        self.server_settings_source.parse_outcome = ServerSettingsParseOutcome::Succeeded;
 
         self.recompute_values(None, cx);
         Ok(())
@@ -3713,6 +3810,7 @@ mod tests {
 #[cfg(test)]
 mod local_settings_origin_tests {
     use super::*;
+    use crate::test_settings;
 
     #[gpui::test]
     fn local_source_excludes_extension_default_and_derived_settings(cx: &mut App) {
@@ -3777,5 +3875,278 @@ mod local_settings_origin_tests {
                 .feature_flags
                 .is_none()
         );
+    }
+
+    #[gpui::test]
+    fn test_server_source_initial_and_store_replacement(cx: &mut App) {
+        let store = SettingsStore::new(cx, test_settings());
+        let source = store.server_settings_source();
+        assert_eq!(source.attempted_origin(), None);
+        assert_eq!(source.parse_outcome(), ServerSettingsParseOutcome::Unknown);
+        assert!(store.server_settings_source_is_current(&source));
+        assert!(store.current_local_server_settings_source("").is_none());
+        let replacement = SettingsStore::new(cx, test_settings());
+        assert_ne!(source, replacement.server_settings_source());
+        assert!(!replacement.server_settings_source_is_current(&source));
+    }
+
+    #[gpui::test]
+    fn test_server_source_success_and_actual_repeat_recompute(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        let initial = store.server_settings_source();
+        let before = store.observed_revision().expect("initial merged revision");
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("local parse");
+        let first = store.server_settings_source();
+        assert_eq!(first.parse_outcome(), ServerSettingsParseOutcome::Succeeded);
+        assert_eq!(
+            first.attempted_origin(),
+            Some(ServerSettingsOrigin::HostLocal)
+        );
+        assert_ne!(first, initial);
+        assert_eq!(store.observed_revision(), before.checked_add(1));
+        assert_eq!(
+            store.current_local_server_settings_source("{}"),
+            Some(first.clone())
+        );
+        assert!(store.current_local_server_settings_source("{ }").is_none());
+        let before_repeat = store.observed_revision().expect("available revision");
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("actual repeat parses");
+        assert_ne!(first, store.server_settings_source());
+        assert!(!store.server_settings_source_is_current(&first));
+        assert_eq!(store.observed_revision(), before_repeat.checked_add(1));
+    }
+
+    #[gpui::test]
+    fn test_server_source_failed_repeated_attempt_and_correction(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        store
+            .set_local_server_settings(r#"{"tab_size":7}"#, cx)
+            .expect("last good");
+        let good = store.server_settings_source();
+        let revision = store.observed_revision();
+        let old_value = store.server_settings.as_deref().map(std::ptr::from_ref);
+        let expected_error = Option::<SettingsContent>::parse_json_with_comments("{")
+            .err()
+            .expect("malformed parser control")
+            .to_string();
+        let first_error = store
+            .set_local_server_settings("{", cx)
+            .expect_err("reject malformed");
+        assert_eq!(first_error.to_string(), expected_error);
+        let first_failure = store.server_settings_source();
+        assert_eq!(
+            first_failure.parse_outcome(),
+            ServerSettingsParseOutcome::Failed
+        );
+        assert_eq!(
+            first_failure.attempted_origin(),
+            Some(ServerSettingsOrigin::HostLocal)
+        );
+        assert!(!store.server_settings_source_is_current(&good));
+        assert!(store.current_local_server_settings_source("{}").is_none());
+        assert!(store.current_local_server_settings_source("{").is_none());
+        assert_eq!(store.observed_revision(), revision);
+        assert_eq!(
+            store.server_settings.as_deref().map(std::ptr::from_ref),
+            old_value
+        );
+        assert!(store.server_settings_are_local);
+        assert_eq!(
+            store
+                .raw_local_settings()
+                .expect("last-good local layer")
+                .project
+                .all_languages
+                .defaults
+                .tab_size
+                .map(|size| size.get()),
+            Some(7)
+        );
+        assert_eq!(
+            store
+                .merged_settings
+                .project
+                .all_languages
+                .defaults
+                .tab_size
+                .map(|size| size.get()),
+            Some(7)
+        );
+        assert!(!store.file_errors.contains_key(&SettingsFile::Server));
+        store
+            .set_local_server_settings("{", cx)
+            .expect_err("repeated invalid attempt");
+        assert_ne!(first_failure, store.server_settings_source());
+        assert_eq!(store.observed_revision(), revision);
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("corrected actual attempt");
+        assert_eq!(
+            store.server_settings_source().parse_outcome(),
+            ServerSettingsParseOutcome::Succeeded
+        );
+        assert!(store.current_local_server_settings_source("{}").is_some());
+        assert_ne!(store.observed_revision(), revision);
+    }
+
+    #[gpui::test]
+    fn test_server_source_equal_text_origin_replacement(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("host-local");
+        let local = store.server_settings_source();
+        store
+            .set_server_settings("{}", cx)
+            .expect("forwarded same bytes");
+        let forwarded = store.server_settings_source();
+        assert_ne!(local, forwarded);
+        assert_eq!(
+            forwarded.attempted_origin(),
+            Some(ServerSettingsOrigin::NonLocal)
+        );
+        assert_eq!(
+            forwarded.parse_outcome(),
+            ServerSettingsParseOutcome::Succeeded
+        );
+        assert!(store.current_local_server_settings_source("{}").is_none());
+        assert!(!store.server_settings_are_local);
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("local correction");
+        let revision = store.observed_revision();
+        store
+            .set_server_settings("{", cx)
+            .expect_err("failed nonlocal replacement");
+        let failed = store.server_settings_source();
+        assert_eq!(
+            failed.attempted_origin(),
+            Some(ServerSettingsOrigin::NonLocal)
+        );
+        assert_eq!(failed.parse_outcome(), ServerSettingsParseOutcome::Failed);
+        assert!(
+            store.server_settings_are_local,
+            "ordinary effective last-good origin retained"
+        );
+        assert_eq!(store.observed_revision(), revision);
+        assert!(store.current_local_server_settings_source("{}").is_none());
+    }
+
+    #[gpui::test]
+    fn test_server_source_independent_from_merged_user_revision(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        store.set_local_server_settings("{}", cx).expect("local");
+        let source = store.server_settings_source();
+        let revision = store.observed_revision();
+        store
+            .set_user_settings(r#"{"tab_size":7}"#, cx)
+            .result()
+            .expect("User layer change");
+        assert!(store.server_settings_source_is_current(&source));
+        assert_ne!(store.observed_revision(), revision);
+        assert_eq!(
+            store.current_local_server_settings_source("{}"),
+            Some(source)
+        );
+    }
+
+    #[gpui::test]
+    fn test_server_source_empty_null_and_unknown_are_distinct(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        let unknown = store.server_settings_source();
+        store
+            .set_local_server_settings("", cx)
+            .expect("existing empty handling");
+        let empty = store.server_settings_source();
+        assert_ne!(unknown, empty);
+        assert_eq!(empty.parse_outcome(), ServerSettingsParseOutcome::Succeeded);
+        assert!(store.server_settings.is_none());
+        assert_eq!(
+            store.current_local_server_settings_source(""),
+            Some(empty.clone())
+        );
+        assert!(store.current_local_server_settings_source("null").is_none());
+        store
+            .set_local_server_settings("null", cx)
+            .expect("existing Option parser");
+        assert_ne!(empty, store.server_settings_source());
+        assert!(store.server_settings.is_none());
+        assert!(store.current_local_server_settings_source("").is_none());
+        assert!(store.current_local_server_settings_source("null").is_some());
+    }
+
+    #[gpui::test]
+    fn test_server_source_witness_allows_caller_to_skip_only_redundant_setter(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("local parse");
+        let source = store.server_settings_source();
+        let revision = store.observed_revision();
+        for _ in 0..2 {
+            if store.current_local_server_settings_source("{}").is_none() {
+                store
+                    .set_local_server_settings("{}", cx)
+                    .expect("needed replacement");
+            }
+        }
+        assert_eq!(store.server_settings_source(), source);
+        assert_eq!(store.observed_revision(), revision);
+        store
+            .set_server_settings("{}", cx)
+            .expect("intervening nonlocal replacement");
+        assert!(store.current_local_server_settings_source("{}").is_none());
+    }
+
+    #[gpui::test]
+    fn test_server_source_does_not_recover_exhausted_merged_revision(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        store.observed_revision = Some(u64::MAX);
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("actual parse still succeeds");
+        let source = store.server_settings_source();
+        assert_eq!(store.observed_revision(), None);
+        assert_eq!(
+            source.parse_outcome(),
+            ServerSettingsParseOutcome::Succeeded
+        );
+        assert!(store.current_local_server_settings_source("{}").is_some());
+        store
+            .set_local_server_settings("{}", cx)
+            .expect("ordinary repeated setter");
+        assert_ne!(source, store.server_settings_source());
+        assert_eq!(
+            store.observed_revision(),
+            None,
+            "source witness is not a merged revision or permission"
+        );
+    }
+
+    #[gpui::test]
+    fn test_server_source_debug_does_not_expose_content_or_identity(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, test_settings());
+        store
+            .set_local_server_settings(
+                r#"{"lsp":{"private-canary-provider":{"binary":{"path":"private-canary-value"}}}}"#,
+                cx,
+            )
+            .expect("source containing private configuration");
+        let successful = format!("{:?}", store.server_settings_source());
+        assert!(!successful.contains("canary"));
+        assert!(!successful.contains("0x"));
+        assert!(successful.contains("HostLocal"));
+        assert!(successful.contains("Succeeded"));
+        store
+            .set_local_server_settings("{private-canary-invalid", cx)
+            .expect_err("invalid private source");
+        let failed = format!("{:?}", store.server_settings_source());
+        assert!(!failed.contains("canary"));
+        assert!(!failed.contains("0x"));
+        assert!(failed.contains("Failed"));
     }
 }

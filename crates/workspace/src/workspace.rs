@@ -143,12 +143,13 @@ use futures::{
 #[cfg(feature = "multiplayer-tools")]
 use gpui::KeyDownEvent;
 use gpui::{
-    Action, AnyEntity, AnyView, AnyWeakView, App, AsyncApp, AsyncWindowContext, Axis, Bounds,
-    Context, CursorStyle, Decorations, DragMoveEvent, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, Global, HitboxBehavior, Hsla, KeyContext, Keystroke, ManagedView, MouseButton,
-    PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, Size, Stateful, Subscription,
-    SystemWindowTabController, Task, TaskExt, Tiling, WeakEntity, WindowBounds, WindowHandle,
-    WindowId, WindowOptions, actions, canvas, point, relative, size, transparent_black,
+    Action, AnyEntity, AnyView, AnyWeakView, App, AppContext, AsyncApp, AsyncWindowContext, Axis,
+    Bounds, Context, CursorStyle, Decorations, DragMoveEvent, Entity, EntityId, EventEmitter,
+    FocusHandle, Focusable, Global, HitboxBehavior, Hsla, KeyContext, Keystroke, ManagedView,
+    MouseButton, PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, Size, Stateful,
+    Subscription, SystemWindowTabController, Task, TaskExt, Tiling, WeakEntity, WindowBounds,
+    WindowHandle, WindowId, WindowOptions, actions, canvas, point, relative, size,
+    transparent_black,
 };
 pub use history_manager::*;
 pub use item::{
@@ -246,7 +247,7 @@ pub use workspace_presentation_actions::SwitchToEditorWorkspace;
 pub use workspace_settings::{
     AccessibleMode, AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, FocusFollowsMouse,
     RestoreOnStartupBehavior, StatusBarSettings, TabBarSettings, WorkspaceSettings,
-    observe_accessible_mode,
+    closing_last_window_quits_app, observe_accessible_mode,
 };
 use zed_actions::{Spawn, feedback::FileBugReport, theme::ToggleMode};
 
@@ -764,7 +765,7 @@ actions!(
     ]
 );
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CloseIntent {
     /// Quit the program entirely.
     Quit,
@@ -973,6 +974,8 @@ pub fn init(app_state: Arc<AppState>, cx: &mut App) {
     theme_preview::init(cx);
     toast_layer::init(cx);
     history_manager::init(app_state.fs.clone(), cx);
+
+    cx.on_app_quit(flush_windows_serialization_on_quit).detach();
 
     cx.on_action(|_: &CloseWindow, cx| Workspace::close_global(cx))
         .on_action(|_: &Reload, cx| reload(cx))
@@ -2202,6 +2205,39 @@ impl Workspace {
         open_mode: OpenMode,
         cx: &mut App,
     ) -> Task<anyhow::Result<OpenResult>> {
+        Self::open_local(
+            LocalWorkspaceSource::Paths(abs_paths),
+            app_state,
+            requesting_window,
+            env,
+            init,
+            open_mode,
+            cx,
+        )
+    }
+
+    fn open_local(
+        source: LocalWorkspaceSource,
+        app_state: Arc<AppState>,
+        requesting_window: Option<WindowHandle<MultiWorkspace>>,
+        env: Option<HashMap<String, String>>,
+        init: Option<Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>>,
+        open_mode: OpenMode,
+        cx: &mut App,
+    ) -> Task<anyhow::Result<OpenResult>> {
+        let (abs_paths, saved_workspace) = match source {
+            LocalWorkspaceSource::Paths(paths) => (paths, None),
+            LocalWorkspaceSource::Saved(workspace) => {
+                let workspace = *workspace;
+                if workspace.location != SerializedWorkspaceLocation::Local {
+                    return Task::ready(Err(anyhow!("Cannot restore a remote workspace locally")));
+                }
+                (
+                    workspace.paths.ordered_paths().cloned().collect(),
+                    Some(workspace),
+                )
+            }
+        };
         let project_handle = Project::local(
             app_state.client.clone(),
             app_state.node_runtime.clone(),
@@ -2225,7 +2261,8 @@ impl Workspace {
                 }
             }
 
-            let serialized_workspace = db.workspace_for_roots(paths_to_open.as_slice());
+            let serialized_workspace =
+                saved_workspace.or_else(|| db.workspace_for_roots(paths_to_open.as_slice()));
 
             if let Some(paths) = serialized_workspace.as_ref().map(|ws| &ws.paths) {
                 paths_to_open = paths.ordered_paths().cloned().collect();
@@ -3611,29 +3648,26 @@ impl Workspace {
                     .count()
             })?;
 
-            #[cfg(target_os = "macos")]
-            let save_last_workspace = false;
-
-            // On Linux and Windows, closing the last window should restore the last workspace.
-            #[cfg(not(target_os = "macos"))]
-            let save_last_workspace = {
-                let remaining_workspaces = cx.update(|_window, cx| {
-                    cx.windows()
-                        .iter()
-                        .filter_map(|window| window.downcast::<MultiWorkspace>())
-                        .filter_map(|multi_workspace| {
-                            multi_workspace
-                                .update(cx, |multi_workspace, _, cx| {
-                                    multi_workspace.workspace().read(cx).removing
-                                })
-                                .ok()
-                        })
-                        .filter(|removing| !removing)
-                        .count()
-                })?;
-
-                close_intent != CloseIntent::ReplaceWindow && remaining_workspaces == 0
-            };
+            let (remaining_workspaces, closing_last_window_quits) = cx.update(|window, cx| {
+                let current_window = window.window_handle();
+                let remaining_workspaces = cx
+                    .windows()
+                    .into_iter()
+                    .filter(|window| *window != current_window)
+                    .filter_map(|window| window.downcast::<MultiWorkspace>())
+                    .filter_map(|multi_workspace| {
+                        multi_workspace
+                            .read(cx)
+                            .ok()
+                            .map(|owner| owner.workspace().read(cx).removing)
+                    })
+                    .filter(|removing| !removing)
+                    .count();
+                (remaining_workspaces, closing_last_window_quits_app(cx))
+            })?;
+            let save_last_workspace = close_intent != CloseIntent::ReplaceWindow
+                && remaining_workspaces == 0
+                && closing_last_window_quits;
 
             if let Some(active_call) = active_call
                 && workspace_count == 1
@@ -3859,11 +3893,11 @@ impl Workspace {
                 let mut serialize_tasks = Vec::new();
                 let mut remaining_dirty_items = Vec::new();
                 if allow_hot_exit_serialization {
-                    workspace.update_in(cx, |workspace, window, cx| {
+                    workspace.update(cx, |workspace, cx| {
                         for (pane, item) in dirty_items {
                             if let Some(task) = item
                                 .to_serializable_item_handle(cx)
-                                .and_then(|handle| handle.serialize(workspace, true, window, cx))
+                                .and_then(|handle| handle.serialize(workspace, true, cx))
                             {
                                 serialize_tasks.push((pane, item, task));
                             } else {
@@ -6101,6 +6135,7 @@ impl Workspace {
             pane::Event::ChangeItemTitle => {
                 if *pane == self.active_pane {
                     self.active_item_path_changed(false, window, cx);
+                    cx.notify();
                 }
                 serialize_workspace = false;
             }
@@ -8114,11 +8149,34 @@ impl Workspace {
         self._serialize_workspace_task.take();
         self.bounds_save_task_queued.take();
 
+        let serializable_items = self
+            .panes
+            .iter()
+            .flat_map(|pane| pane.read(cx).items())
+            .filter_map(|item| item.to_serializable_item_handle(cx))
+            .fold(HashMap::default(), |mut items, item| {
+                items.entry(item.item_id()).or_insert(item);
+                items
+            });
+        let item_tasks = serializable_items
+            .into_values()
+            .filter_map(|item| {
+                let item_id = item.item_id();
+                let task = item.serialize(self, false, cx)?;
+                Some(async move {
+                    task.await
+                        .with_context(|| format!("flushing serialization of item {item_id:?}"))
+                })
+            })
+            .collect::<Vec<_>>();
         let bounds_task = self.save_window_bounds(window, cx);
         let serialize_task = self.serialize_workspace_internal(window, cx);
-        cx.spawn(async move |_| {
+        cx.background_spawn(async move {
             bounds_task.await;
             serialize_task.await;
+            for result in futures::future::join_all(item_tasks).await {
+                result.log_err();
+            }
         })
     }
 
@@ -8310,7 +8368,7 @@ impl Workspace {
                 let db = WorkspaceDb::global(cx);
                 #[cfg(feature = "multiplayer-tools")]
                 let key_value_store = db::kvp::KeyValueStore::global(cx);
-                window.spawn(cx, async move |_| {
+                cx.background_spawn(async move {
                     db.save_workspace(serialized_workspace).await;
                     #[cfg(feature = "multiplayer-tools")]
                     collaborative_layout_persistence::write_collaborative_layout_state(
@@ -8337,7 +8395,7 @@ impl Workspace {
                 let docks = build_serialized_docks(self, window, cx);
                 let db = WorkspaceDb::global(cx);
                 let kvp = db::kvp::KeyValueStore::global(cx);
-                window.spawn(cx, async move |_| {
+                cx.background_spawn(async move {
                     db.set_window_open_status(
                         database_id,
                         window_bounds,
@@ -8371,7 +8429,7 @@ impl Workspace {
                 // Save dock state for empty non-local workspaces
                 let docks = build_serialized_docks(self, window, cx);
                 let kvp = db::kvp::KeyValueStore::global(cx);
-                window.spawn(cx, async move |_| {
+                cx.background_spawn(async move {
                     persistence::write_default_dock_state(&kvp, docks)
                         .await
                         .log_err();
@@ -8451,9 +8509,9 @@ impl Workspace {
             // We use into_iter() here so that the references to the items are moved into
             // the tasks and not kept alive while we're sleeping.
             for (_, item) in unique_items.into_iter() {
-                if let Ok(Some(task)) = this.update_in(cx, |workspace, window, cx| {
-                    item.serialize(workspace, false, window, cx)
-                }) {
+                if let Ok(Some(task)) =
+                    this.update(cx, |workspace, cx| item.serialize(workspace, false, cx))
+                {
                     cx.background_spawn(async move { task.await.log_err() })
                         .detach();
                 }
@@ -8840,6 +8898,9 @@ impl Workspace {
 
     /// Multiworkspace uses this to add workspace action handling to itself
     pub fn actions(&self, div: Div, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let active_item_is_read_only = self
+            .active_item(cx)
+            .is_some_and(|item| !item.capability(cx).editable());
         let div = self
             .add_workspace_actions_listeners(div, window, cx)
             .on_action(cx.listener(
@@ -8898,21 +8959,29 @@ impl Workspace {
                 let pane = workspace.active_pane().clone();
                 workspace.unfollow_in_pane(&pane, window, cx);
             }))
-            .on_action(cx.listener(|workspace, action: &Save, window, cx| {
-                workspace
-                    .save_active_item(action.save_intent.unwrap_or(SaveIntent::Save), window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
-            }))
-            .on_action(cx.listener(|workspace, _: &FormatAndSave, window, cx| {
-                workspace
-                    .save_active_item(SaveIntent::FormatAndSave, window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
-            }))
-            .on_action(cx.listener(|workspace, _: &SaveWithoutFormat, window, cx| {
-                workspace
-                    .save_active_item(SaveIntent::SaveWithoutFormat, window, cx)
-                    .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
-            }))
+            .when(!active_item_is_read_only, |this| {
+                this.on_action(cx.listener(|workspace, action: &Save, window, cx| {
+                    workspace
+                        .save_active_item(
+                            action.save_intent.unwrap_or(SaveIntent::Save),
+                            window,
+                            cx,
+                        )
+                        .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                }))
+                .on_action(cx.listener(|workspace, _: &FormatAndSave, window, cx| {
+                    workspace
+                        .save_active_item(SaveIntent::FormatAndSave, window, cx)
+                        .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                }))
+                .on_action(cx.listener(
+                    |workspace, _: &SaveWithoutFormat, window, cx| {
+                        workspace
+                            .save_active_item(SaveIntent::SaveWithoutFormat, window, cx)
+                            .detach_and_prompt_err("Failed to save", window, cx, |_, _, _| None);
+                    },
+                ))
+            })
             .on_action(cx.listener(|workspace, _: &SaveAs, window, cx| {
                 workspace
                     .save_active_item(SaveIntent::SaveAs, window, cx)
@@ -11157,6 +11226,10 @@ pub async fn restore_multiworkspace(
         active_workspace,
         state,
     } = multi_workspace;
+    anyhow::ensure!(
+        active_workspace.location == SerializedWorkspaceLocation::Local,
+        "Remote sessions require their remote connection restoration"
+    );
 
     let workspace_result = if active_workspace.paths.is_empty() {
         cx.update(|cx| {
@@ -11165,8 +11238,15 @@ pub async fn restore_multiworkspace(
         .await
     } else {
         cx.update(|cx| {
-            Workspace::new_local(
-                active_workspace.paths.paths().to_vec(),
+            let db = WorkspaceDb::global(cx);
+            let Some(saved_workspace) = db.workspace_for_id(active_workspace.workspace_id) else {
+                return Task::ready(Err(anyhow!(
+                    "Workspace {:?} not found",
+                    active_workspace.workspace_id
+                )));
+            };
+            Workspace::open_local(
+                LocalWorkspaceSource::Saved(Box::new(saved_workspace)),
                 app_state.clone(),
                 None,
                 None,
@@ -11187,6 +11267,12 @@ pub async fn restore_multiworkspace(
             let mut fallback_handle = None;
             for key in &state.project_groups {
                 let key: ProjectGroupKey = key.clone().into();
+                if key.host().is_some() {
+                    log::warn!(
+                        "Skipped remote project group during local restoration; use its remote connection"
+                    );
+                    continue;
+                }
                 let paths = key.path_list().paths().to_vec();
                 match cx
                     .update(|cx| {
@@ -11212,7 +11298,9 @@ pub async fn restore_multiworkspace(
                 }
             }
 
-            fallback_handle.ok_or(err)?
+            fallback_handle.ok_or_else(|| {
+                err.context("No eligible local project group could restore this window")
+            })?
         }
     };
 
@@ -11843,6 +11931,11 @@ impl OpenOptions {
     }
 }
 
+enum LocalWorkspaceSource {
+    Paths(Vec<PathBuf>),
+    Saved(Box<SerializedWorkspace>),
+}
+
 /// The result of opening a workspace via [`open_paths`], [`Workspace::new_local`],
 /// or [`Workspace::open_workspace_for_paths`].
 pub struct OpenResult {
@@ -11878,6 +11971,10 @@ pub fn open_workspace_by_id(
         let serialized_workspace = db
             .workspace_for_id(workspace_id)
             .with_context(|| format!("Workspace {workspace_id:?} not found"))?;
+        anyhow::ensure!(
+            serialized_workspace.location == SerializedWorkspaceLocation::Local,
+            "Remote workspace {workspace_id:?} requires its remote connection restoration"
+        );
 
         let centered_layout = serialized_workspace.centered_layout;
         let workspace_presentation = serialized_workspace.workspace_presentation;
@@ -12896,24 +12993,11 @@ pub fn prepare_to_reload(cx: &mut App) -> Task<Result<PreparedReload>> {
             }
         }
 
-        for window in workspace_windows {
-            let workspaces = window.update(cx, |multi_workspace, _, _| {
-                multi_workspace.workspaces().cloned().collect::<Vec<_>>()
-            })?;
-            for workspace in workspaces {
-                let should_close = window.update(cx, |multi_workspace, window, cx| {
-                    multi_workspace.activate(workspace.clone(), None, window, cx);
-                    workspace.update(cx, |workspace, cx| {
-                        workspace.prepare_to_close(CloseIntent::Quit, window, cx)
-                    })
-                })?;
-                if !should_close.await? {
-                    return Ok(PreparedReload {
-                        accepted: false,
-                        _permit: permit,
-                    });
-                }
-            }
+        if !prepare_windows_to_quit(&workspace_windows, cx).await {
+            return Ok(PreparedReload {
+                accepted: false,
+                _permit: permit,
+            });
         }
         Ok(PreparedReload {
             accepted: true,
@@ -12932,6 +13016,125 @@ pub fn reload(cx: &mut App) {
         anyhow::Ok(())
     })
     .detach_and_log_err(cx);
+}
+
+pub async fn prepare_windows_to_quit(
+    workspace_windows: &[WindowHandle<MultiWorkspace>],
+    cx: &mut AsyncApp,
+) -> bool {
+    for window in workspace_windows {
+        match prepare_window_to_close(*window, CloseIntent::Quit, cx).await {
+            Ok(true) => {}
+            Ok(false) => return false,
+            Err(error) => {
+                log::error!(
+                    "failed to prepare window {:?} to quit: {error:#}",
+                    window.window_id()
+                );
+                return false;
+            }
+        }
+    }
+    flush_windows_serialization(workspace_windows, cx).await;
+    true
+}
+
+pub(crate) async fn prepare_window_to_close(
+    window: WindowHandle<MultiWorkspace>,
+    close_intent: CloseIntent,
+    cx: &mut AsyncApp,
+) -> Result<bool> {
+    let active_and_workspaces = window
+        .update(cx, |multi_workspace, window, _cx| {
+            if close_intent == CloseIntent::Quit {
+                window.activate_window();
+            }
+            (
+                multi_workspace.workspace().clone(),
+                multi_workspace.workspaces().cloned().collect::<Vec<_>>(),
+            )
+        })
+        .log_err();
+
+    let Some((originally_active, workspaces)) = active_and_workspaces else {
+        return Ok(true);
+    };
+
+    let mut prepared = anyhow::Ok(true);
+    for workspace in workspaces {
+        prepared = match window.update(cx, |multi_workspace, window, cx| {
+            multi_workspace.activate(workspace.clone(), None, window, cx);
+            workspace.update(cx, |workspace, cx| {
+                workspace.prepare_to_close(close_intent, window, cx)
+            })
+        }) {
+            Ok(task) => task.await,
+            Err(error) => Err(error),
+        }
+        .with_context(|| format!("preparing workspace {:?} to close", workspace.entity_id()));
+        if !matches!(prepared, Ok(true)) {
+            break;
+        }
+    }
+
+    // Re-activate the workspace the user actually had focused so it is the
+    // one serialized (and restored on next launch) as active, rather than
+    // whichever happened to be last.
+    window
+        .update(cx, |multi_workspace, window, cx| {
+            if !matches!(prepared, Ok(true)) {
+                for workspace in multi_workspace.workspaces() {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.removing = false;
+                    });
+                }
+            }
+            multi_workspace.activate(originally_active, None, window, cx);
+        })
+        .log_err();
+
+    prepared
+}
+
+pub async fn flush_windows_serialization(
+    workspace_windows: &[WindowHandle<MultiWorkspace>],
+    cx: &mut AsyncApp,
+) {
+    let flush_tasks = collect_flush_tasks(workspace_windows, cx);
+    futures::future::join_all(flush_tasks).await;
+}
+
+fn flush_windows_serialization_on_quit(cx: &mut App) -> impl Future<Output = ()> + use<> {
+    let workspace_windows = cx
+        .windows()
+        .into_iter()
+        .filter_map(|window| window.downcast::<MultiWorkspace>())
+        .collect::<Vec<_>>();
+    let flush_tasks = collect_flush_tasks(&workspace_windows, cx);
+    async move {
+        futures::future::join_all(flush_tasks).await;
+    }
+}
+
+fn collect_flush_tasks(
+    workspace_windows: &[WindowHandle<MultiWorkspace>],
+    cx: &mut impl AppContext,
+) -> Vec<Task<()>> {
+    let mut flush_tasks = Vec::new();
+    for window in workspace_windows {
+        window
+            .update(cx, |multi_workspace, window, cx| {
+                flush_tasks.extend(multi_workspace.flush_pending_serialization(window, cx));
+            })
+            .with_context(|| {
+                format!(
+                    "flushing pending serialization for window {:?}",
+                    window.window_id()
+                )
+            })
+            .log_err();
+    }
+    flush_tasks
 }
 
 fn parse_pixel_position_env_var(value: &str) -> Option<Point<Pixels>> {
@@ -13488,6 +13691,238 @@ mod tests {
     use settings::SettingsStore;
     use util::path;
     use util::rel_path::rel_path;
+
+    #[gpui::test]
+    async fn test_restore_host_boundary_keeps_remote_fallback_remote(cx: &mut TestAppContext) {
+        init_test(cx);
+        let app_state = cx.update(AppState::test);
+        app_state
+            .fs
+            .as_fake()
+            .insert_tree(
+                path!("/fallback-fixture"),
+                json!({"remote": {"local-canary": "must not scan as remote"}, "local": {}}),
+            )
+            .await;
+        let remote_path = PathBuf::from(path!("/fallback-fixture/remote"));
+        let local_path = PathBuf::from(path!("/fallback-fixture/local"));
+        let remote_key = ProjectGroupKey::new(
+            Some(remote::RemoteConnectionOptions::Ssh(
+                remote::SshConnectionOptions {
+                    host: "qa-remote.invalid".into(),
+                    ..Default::default()
+                },
+            )),
+            PathList::new(&[&remote_path]),
+        );
+        for local_fallback in [false, true] {
+            let mut groups = vec![SerializedProjectGroup::from_group(&remote_key, true)];
+            if local_fallback {
+                groups.push(SerializedProjectGroup::from_group(
+                    &ProjectGroupKey::new(None, PathList::new(&[&local_path])),
+                    true,
+                ));
+            }
+            let result = restore_multiworkspace(
+                SerializedMultiWorkspace {
+                    active_workspace: SessionWorkspace {
+                        workspace_id: WorkspaceId::from_i64(10_980),
+                        location: SerializedWorkspaceLocation::Local,
+                        paths: PathList::new(&[path!("/unavailable-active")]),
+                        window_id: None,
+                    },
+                    state: MultiWorkspaceState {
+                        project_groups: groups,
+                        ..Default::default()
+                    },
+                },
+                app_state.clone(),
+                &mut cx.to_async(),
+            )
+            .await;
+            if !local_fallback {
+                assert!(
+                    result.is_err(),
+                    "a remote-only fallback must never become a local project"
+                );
+                assert_eq!(cx.update(|cx| cx.windows().len()), 0);
+                continue;
+            }
+            let restored = result.expect("eligible local fallback still opens");
+            restored
+                .read_with(cx, |multi_workspace, cx| {
+                    let project = multi_workspace.workspace().read(cx).project().read(cx);
+                    assert!(project.is_local());
+                    let roots: Vec<_> = project
+                        .visible_worktrees(cx)
+                        .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
+                        .collect();
+                    assert_eq!(roots, vec![local_path.clone()]);
+                    assert!(
+                        multi_workspace.project_group_keys().contains(&remote_key),
+                        "preserve remote choice and host identity in the sidebar"
+                    );
+                })
+                .expect("inspect local fallback");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_restore_host_boundary_refuses_remote_empty_record(cx: &mut TestAppContext) {
+        init_test(cx);
+        let app_state = cx.update(AppState::test);
+        let workspace_id = WorkspaceId::from_i64(10_981);
+        let serialized = SerializedWorkspace {
+            id: workspace_id,
+            location: SerializedWorkspaceLocation::Remote(remote::RemoteConnectionOptions::Ssh(
+                remote::SshConnectionOptions {
+                    host: "qa-remote.invalid".into(),
+                    ..Default::default()
+                },
+            )),
+            paths: Default::default(),
+            identity_paths: None,
+            center_group: Default::default(),
+            window_bounds: None,
+            centered_layout: false,
+            workspace_presentation: WorkspacePresentation::Editor,
+            display: None,
+            docks: Default::default(),
+            session_id: None,
+            bookmarks: Default::default(),
+            breakpoints: Default::default(),
+            user_toolchains: Default::default(),
+            window_id: None,
+        };
+        let db = cx.update(|cx| WorkspaceDb::global(cx));
+        db.save_workspace(serialized).await;
+        let before = db
+            .workspace_for_id(workspace_id)
+            .expect("valid remote record");
+        let result = cx
+            .update(|cx| open_workspace_by_id(workspace_id, app_state, None, cx))
+            .await;
+        assert!(
+            result.is_err(),
+            "local empty restore must validate the fresh saved host"
+        );
+        assert_eq!(cx.update(|cx| cx.windows().len()), 0);
+        assert_eq!(
+            db.workspace_for_id(workspace_id),
+            Some(before),
+            "never reset remote state"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_restore_host_boundary_refuses_remote_session_entry(cx: &mut TestAppContext) {
+        init_test(cx);
+        let app_state = cx.update(AppState::test);
+        app_state
+            .fs
+            .as_fake()
+            .insert_tree(path!("/fallback-local"), json!({}))
+            .await;
+        let local_key = ProjectGroupKey::new(None, PathList::new(&[path!("/fallback-local")]));
+        let result = restore_multiworkspace(
+            SerializedMultiWorkspace {
+                active_workspace: SessionWorkspace {
+                    workspace_id: WorkspaceId::from_i64(10_982),
+                    location: SerializedWorkspaceLocation::Remote(
+                        remote::RemoteConnectionOptions::Ssh(remote::SshConnectionOptions {
+                            host: "qa-remote.invalid".into(),
+                            ..Default::default()
+                        }),
+                    ),
+                    paths: PathList::new(&[path!("/remote-project")]),
+                    window_id: None,
+                },
+                state: MultiWorkspaceState {
+                    project_groups: vec![SerializedProjectGroup::from_group(&local_key, true)],
+                    ..Default::default()
+                },
+            },
+            app_state,
+            &mut cx.to_async(),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "remote session entry requires its existing remote restoration owner"
+        );
+        assert_eq!(cx.update(|cx| cx.windows().len()), 0);
+    }
+
+    #[gpui::test]
+    async fn test_restore_multiworkspace_preserves_saved_alias_identity(cx: &mut TestAppContext) {
+        init_test(cx);
+        let app_state = cx.update(AppState::test);
+        cx.update(|cx| register_serializable_item::<TestItem>(cx));
+        let fs = app_state.fs.as_fake();
+        fs.insert_tree(path!("/root"), json!({ "file.rs": "fn main() {}" }))
+            .await;
+        fs.insert_symlink(path!("/alias"), path!("/root").into())
+            .await;
+        let workspace_id = WorkspaceId::from_i64(10_900);
+        let paths = PathList::new(&[path!("/alias")]);
+        let serialized = SerializedWorkspace {
+            id: workspace_id,
+            location: SerializedWorkspaceLocation::Local,
+            paths: paths.clone(),
+            identity_paths: Some(PathList::new(&[path!("/root")])),
+            center_group: SerializedPaneGroup::Pane(SerializedPane::new(
+                vec![SerializedItem::new("TestItem", 1, true, false)],
+                true,
+                0,
+            )),
+            window_bounds: None,
+            centered_layout: true,
+            workspace_presentation: WorkspacePresentation::Editor,
+            display: None,
+            docks: Default::default(),
+            session_id: None,
+            bookmarks: Default::default(),
+            breakpoints: Default::default(),
+            user_toolchains: Default::default(),
+            window_id: None,
+        };
+        let db = cx.update(|cx| WorkspaceDb::global(cx));
+        db.save_workspace(serialized).await;
+        db.set_centered_layout(workspace_id, true)
+            .await
+            .expect("persist centered layout through its owner");
+        assert!(db.workspace_for_id(workspace_id).is_some());
+        assert!(db.workspace_for_roots(&[path!("/root")]).is_none());
+        let restored = restore_multiworkspace(
+            SerializedMultiWorkspace {
+                active_workspace: SessionWorkspace {
+                    workspace_id,
+                    location: SerializedWorkspaceLocation::Local,
+                    paths,
+                    window_id: None,
+                },
+                state: Default::default(),
+            },
+            app_state,
+            &mut cx.to_async(),
+        )
+        .await
+        .expect("restore saved alias-root workspace");
+        restored
+            .read_with(cx, |multi_workspace, cx| {
+                let workspace = multi_workspace.workspace().read(cx);
+                assert_eq!(workspace.database_id(), Some(workspace_id));
+                assert!(workspace.centered_layout);
+                assert_eq!(workspace.active_pane().read(cx).items_len(), 1);
+                let item = workspace.active_item(cx).expect("restore non-file tab");
+                let item = item
+                    .downcast::<TestItem>()
+                    .expect("restore saved item kind");
+                assert_eq!(item.read(cx).workspace_id, Some(workspace_id));
+                assert_eq!(workspace.project().read(cx).worktrees(cx).count(), 1);
+            })
+            .expect("inspect restored window");
+    }
 
     #[cfg(feature = "multiplayer-tools")]
     #[gpui::test]
@@ -21283,5 +21718,77 @@ mod tests {
             workspace.open_url_or_file("nonexistent.txt", None, window, cx);
         });
         assert_eq!(cx.opened_url(), Some("nonexistent.txt".to_string()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[gpui::test]
+    async fn test_cancelled_close_window_resets_removing(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        cx.update(|cx| {
+            register_serializable_item::<TestItem>(cx);
+        });
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, None, cx).await;
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+
+        let item = cx.new(|cx| {
+            TestItem::new(cx)
+                .with_dirty(true)
+                .with_serialize(|| Some(Task::ready(Ok(()))))
+        });
+        workspace.update_in(cx, |w, window, cx| {
+            w.add_item_to_active_pane(Box::new(item.clone()), None, true, window, cx);
+        });
+
+        multi_workspace.update_in(cx, |mw, window, cx| {
+            mw.close_window(&CloseWindow, window, cx);
+        });
+        cx.executor().run_until_parked();
+
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Cancel");
+        cx.executor().run_until_parked();
+
+        assert!(!workspace.read_with(cx, |workspace, _| workspace.removing));
+        let remaining_windows = cx.update(|_window, cx| cx.windows().len());
+        assert_eq!(remaining_windows, 1);
+    }
+
+    #[gpui::test]
+    async fn test_failed_close_window_resets_removing(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, None, cx).await;
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+
+        let item = cx.new(|cx| {
+            TestItem::new(cx)
+                .with_dirty(true)
+                .with_save_error("simulated save failure")
+                .with_project_items(&[TestProjectItem::new(1, "1.txt", cx)])
+        });
+        workspace.update_in(cx, |w, window, cx| {
+            w.add_item_to_active_pane(Box::new(item.clone()), None, true, window, cx);
+        });
+
+        multi_workspace.update_in(cx, |mw, window, cx| {
+            mw.close_window(&CloseWindow, window, cx);
+        });
+        cx.executor().run_until_parked();
+
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Save");
+        cx.executor().run_until_parked();
+
+        assert!(!workspace.read_with(cx, |workspace, _| workspace.removing));
+        let remaining_windows = cx.update(|_window, cx| cx.windows().len());
+        assert_eq!(remaining_windows, 1);
     }
 }

@@ -26,7 +26,7 @@ use gpui::{
 use indoc::indoc;
 use language::{
     BracketPair, BracketPairConfig,
-    Capability::ReadWrite,
+    Capability::{Read, ReadOnly, ReadWrite},
     ContextLocation, ContextProvider, DiagnosticSourceKind, FakeLspAdapter, IndentGuideSettings,
     LanguageConfig, LanguageConfigOverride, LanguageMatcher, LanguageName, LanguageQueries,
     LanguageToolchainStore, Override, PLAIN_TEXT, Point,
@@ -47,6 +47,7 @@ use project::{
     FakeFs, Project, ProjectPath,
     bookmark_store::SerializedBookmark,
     debugger::breakpoint_store::{BreakpointState, SourceBreakpoint},
+    lsp_store::lsp_ext_command::{DocsUrls, LspOpenDocs},
     project_settings::LspSettings,
     trusted_worktrees::{PathTrust, TrustedWorktrees},
 };
@@ -69,7 +70,7 @@ use unindent::Unindent;
 use util::{
     assert_set_eq, path,
     rel_path::rel_path,
-    test::{TextRangeMarker, marked_text_ranges, marked_text_ranges_by, sample_text},
+    test::{TempTree, TextRangeMarker, marked_text_ranges, marked_text_ranges_by, sample_text},
 };
 use workspace::{
     CloseActiveItem, CloseAllItems, CloseOtherItems, MultiWorkspace, NavigationEntry, OpenOptions,
@@ -4537,6 +4538,9 @@ async fn test_newline_yaml(cx: &mut TestAppContext) {
     test:ˇ
     hello: bye"});
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent.await.expect("YAML newline autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
     test:
         ˇ
@@ -4546,6 +4550,9 @@ async fn test_newline_yaml(cx: &mut TestAppContext) {
     cx.set_state(indoc! {"
     test:ˇ"});
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent.await.expect("YAML newline autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
     test:
         ˇ"});
@@ -4555,6 +4562,9 @@ async fn test_newline_yaml(cx: &mut TestAppContext) {
     test:
         - foo: barˇ"});
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent.await.expect("YAML newline autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
     test:
         - foo: bar
@@ -4566,6 +4576,9 @@ async fn test_newline_yaml(cx: &mut TestAppContext) {
         - foo: bar
         - bar: # testˇ"});
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent.await.expect("YAML newline autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
     test:
         - foo: bar
@@ -4578,6 +4591,9 @@ async fn test_newline_yaml(cx: &mut TestAppContext) {
         - foo: bar
         - bar: fooˇ"});
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent.await.expect("YAML newline autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
     test:
         - foo: bar
@@ -4589,6 +4605,9 @@ async fn test_newline_yaml(cx: &mut TestAppContext) {
     test:
         - fooˇ"});
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
+    if let Some(autoindent) = cx.update_buffer(|buffer, _| buffer.wait_for_autoindent_applied()) {
+        autoindent.await.expect("YAML newline autoindent completes");
+    }
     cx.assert_editor_state(indoc! {"
     test:
         - foo
@@ -15428,6 +15447,433 @@ async fn test_snippet_with_multi_word_prefix(cx: &mut TestAppContext) {
             assert_eq!(!completions.is_empty(), should_match_snippet);
         });
     }
+}
+
+#[gpui::test]
+async fn test_read_only_buffer_is_not_formatted_or_saved(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_file(path!("/file.rs"), b"one\ntwo\nthree\n".to_vec())
+        .await;
+
+    let project = Project::test(fs.clone(), [path!("/file.rs").as_ref()], cx).await;
+
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(rust_lang());
+    let format_request_count = Arc::new(AtomicUsize::new(0));
+    let mut fake_servers = language_registry.register_fake_lsp(
+        "Rust",
+        FakeLspAdapter {
+            capabilities: lsp::ServerCapabilities {
+                document_formatting_provider: Some(lsp::OneOf::Left(true)),
+                ..lsp::ServerCapabilities::default()
+            },
+            initializer: Some(Box::new({
+                let format_request_count = format_request_count.clone();
+                move |fake_server| {
+                    let format_request_count = format_request_count.clone();
+                    fake_server.set_request_handler::<lsp::request::Formatting, _, _>(
+                        move |_, _| {
+                            let format_request_count = format_request_count.clone();
+                            async move {
+                                format_request_count.fetch_add(1, atomic::Ordering::Release);
+                                Ok(Some(vec![lsp::TextEdit::new(
+                                    lsp::Range::new(
+                                        lsp::Position::new(0, 3),
+                                        lsp::Position::new(1, 0),
+                                    ),
+                                    ", ".to_string(),
+                                )]))
+                            }
+                        },
+                    );
+                }
+            })),
+            ..FakeLspAdapter::default()
+        },
+    );
+
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/file.rs"), cx)
+        })
+        .await
+        .expect("read-only test fixture succeeds");
+    buffer.update(cx, |buffer, cx| buffer.set_capability(Read, cx));
+
+    let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
+    let (editor, cx) = cx.add_window_view(|window, cx| {
+        build_editor_with_project(project.clone(), buffer, window, cx)
+    });
+
+    fake_servers
+        .next()
+        .await
+        .expect("read-only test fixture succeeds");
+
+    let save = editor.update_in(cx, |editor, window, cx| {
+        editor.save(
+            SaveOptions {
+                format: true,
+                force_format: false,
+                autosave: false,
+            },
+            project.clone(),
+            window,
+            cx,
+        )
+    });
+    save.await.expect("save request completes");
+
+    assert_eq!(format_request_count.load(atomic::Ordering::Acquire), 0);
+    assert_eq!(
+        editor.update(cx, |editor, cx| editor.text(cx)),
+        "one\ntwo\nthree\n"
+    );
+    assert_eq!(
+        fs.load(path!("/file.rs").as_ref())
+            .await
+            .expect("read-only test fixture succeeds"),
+        "one\ntwo\nthree\n"
+    );
+}
+
+#[gpui::test]
+async fn test_read_only_buffer_can_be_saved_as(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/dir"),
+        json!({
+            "file.rs": "one\ntwo\nthree\n",
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    let worktree_id = project.update(cx, |project, cx| {
+        project
+            .worktrees(cx)
+            .next()
+            .expect("read-only test fixture succeeds")
+            .read(cx)
+            .id()
+    });
+
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/dir/file.rs"), cx)
+        })
+        .await
+        .expect("read-only test fixture succeeds");
+    buffer.update(cx, |buffer, cx| buffer.set_capability(Read, cx));
+
+    let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
+    let (editor, cx) = cx.add_window_view(|window, cx| {
+        build_editor_with_project(project.clone(), buffer, window, cx)
+    });
+
+    let save_as = editor.update_in(cx, |editor, window, cx| {
+        editor.save_as(
+            project.clone(),
+            ProjectPath {
+                worktree_id,
+                path: rel_path("copy.rs").into(),
+            },
+            window,
+            cx,
+        )
+    });
+    save_as.await.expect("read-only test fixture succeeds");
+
+    assert_eq!(
+        fs.load(path!("/dir/copy.rs").as_ref())
+            .await
+            .expect("read-only test fixture succeeds"),
+        "one\ntwo\nthree\n"
+    );
+    assert_eq!(
+        fs.load(path!("/dir/file.rs").as_ref())
+            .await
+            .expect("read-only test fixture succeeds"),
+        "one\ntwo\nthree\n"
+    );
+}
+
+#[gpui::test]
+async fn test_format_and_save_skip_read_only_buffers_in_multi_buffer(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/a"),
+        json!({
+            "main.rs": "one\ntwo\nthree\n",
+            "other.rs": "one\ntwo\nthree\n",
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs.clone(), [path!("/a").as_ref()], cx).await;
+
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(rust_lang());
+    let formatted_uris = Arc::new(Mutex::new(Vec::new()));
+    let mut fake_servers = language_registry.register_fake_lsp(
+        "Rust",
+        FakeLspAdapter {
+            capabilities: lsp::ServerCapabilities {
+                document_formatting_provider: Some(lsp::OneOf::Left(true)),
+                ..lsp::ServerCapabilities::default()
+            },
+            initializer: Some(Box::new({
+                let formatted_uris = formatted_uris.clone();
+                move |fake_server| {
+                    let formatted_uris = formatted_uris.clone();
+                    fake_server.set_request_handler::<lsp::request::Formatting, _, _>(
+                        move |params, _| {
+                            let formatted_uris = formatted_uris.clone();
+                            async move {
+                                formatted_uris.lock().push(params.text_document.uri.clone());
+                                Ok(Some(vec![lsp::TextEdit::new(
+                                    lsp::Range::new(
+                                        lsp::Position::new(0, 3),
+                                        lsp::Position::new(1, 0),
+                                    ),
+                                    ", ".to_string(),
+                                )]))
+                            }
+                        },
+                    );
+                }
+            })),
+            ..FakeLspAdapter::default()
+        },
+    );
+
+    let writable_buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/a/main.rs"), cx)
+        })
+        .await
+        .expect("read-only test fixture succeeds");
+    let read_only_buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/a/other.rs"), cx)
+        })
+        .await
+        .expect("read-only test fixture succeeds");
+    read_only_buffer.update(cx, |buffer, cx| buffer.set_capability(Read, cx));
+
+    let multi_buffer = cx.new(|cx| {
+        let mut multi_buffer = MultiBuffer::new(ReadWrite);
+        multi_buffer.set_excerpts_for_path(
+            PathKey::sorted(0),
+            writable_buffer.clone(),
+            [Point::new(0, 0)..Point::new(3, 0)],
+            0,
+            cx,
+        );
+        multi_buffer.set_excerpts_for_path(
+            PathKey::sorted(1),
+            read_only_buffer.clone(),
+            [Point::new(0, 0)..Point::new(3, 0)],
+            0,
+            cx,
+        );
+        multi_buffer
+    });
+    let (editor, cx) = cx.add_window_view(|window, cx| {
+        build_editor_with_project(project.clone(), multi_buffer, window, cx)
+    });
+
+    fake_servers
+        .next()
+        .await
+        .expect("read-only test fixture succeeds");
+
+    let format = editor
+        .update_in(cx, |editor, window, cx| editor.format(&Format, window, cx))
+        .expect("read-only test fixture succeeds");
+    format.await.expect("read-only test fixture succeeds");
+
+    assert_eq!(
+        *formatted_uris.lock(),
+        vec![
+            lsp::Uri::from_file_path(path!("/a/main.rs")).expect("read-only test fixture succeeds")
+        ]
+    );
+    writable_buffer.read_with(cx, |buffer, _| {
+        assert_eq!(buffer.text(), "one, two\nthree\n");
+    });
+    read_only_buffer.read_with(cx, |buffer, _| {
+        assert_eq!(buffer.text(), "one\ntwo\nthree\n");
+    });
+
+    read_only_buffer.update(cx, |buffer, cx| {
+        buffer.edit([(0..0, "dirty ")], None, cx);
+    });
+    assert!(read_only_buffer.read_with(cx, |buffer, _| buffer.is_dirty()));
+
+    let save = editor.update_in(cx, |editor, window, cx| {
+        editor.save(
+            SaveOptions {
+                format: false,
+                force_format: false,
+                autosave: false,
+            },
+            project.clone(),
+            window,
+            cx,
+        )
+    });
+    save.await.expect("save request completes");
+
+    assert_eq!(
+        fs.load(path!("/a/main.rs").as_ref())
+            .await
+            .expect("read-only test fixture succeeds"),
+        "one, two\nthree\n"
+    );
+    assert_eq!(
+        fs.load(path!("/a/other.rs").as_ref())
+            .await
+            .expect("read-only test fixture succeeds"),
+        "one\ntwo\nthree\n"
+    );
+}
+
+#[gpui::test]
+async fn test_read_only_dirty_buffer_cancellation_preserves_changes(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/dir"), json!({"file.txt": "BASE\n"}))
+        .await;
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let cx = &mut VisualTestContext::from_window(*window, cx);
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/dir/file.txt"), cx)
+        })
+        .await
+        .expect("open local source");
+    buffer.update(cx, |buffer, cx| {
+        buffer.edit([(0..0, "UNSAVED ")], None, cx);
+        buffer.set_capability(Read, cx);
+    });
+    let multibuffer = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
+    let editor = cx.new_window_entity(|window, cx| {
+        build_editor_with_project(project.clone(), multibuffer, window, cx)
+    });
+    let workspace = window
+        .update(cx, |multi_workspace, window, cx| {
+            let workspace = multi_workspace.workspace().clone();
+            workspace.update(cx, |workspace, cx| {
+                workspace.add_item_to_active_pane(Box::new(editor.clone()), None, true, window, cx);
+            });
+            workspace
+        })
+        .expect("add source editor");
+    let pane = workspace.read_with(cx, |workspace, _| workspace.active_pane().clone());
+    for (intent, save_copy) in [
+        (workspace::SaveIntent::SaveAll, false),
+        (workspace::SaveIntent::Close, false),
+        (workspace::SaveIntent::Close, true),
+    ] {
+        let pending = if intent == workspace::SaveIntent::Close {
+            pane.update_in(cx, |pane, window, cx| {
+                pane.close_item_by_id(editor.item_id(), intent, window, cx)
+            })
+        } else {
+            workspace.update_in(cx, |workspace, window, cx| {
+                workspace.save_active_item(intent, window, cx)
+            })
+        };
+        cx.run_until_parked();
+        if intent == workspace::SaveIntent::Close {
+            cx.simulate_prompt_answer(if save_copy { "Save" } else { "Cancel" });
+            cx.run_until_parked();
+        }
+        if intent == workspace::SaveIntent::SaveAll || save_copy {
+            cx.simulate_new_path_selection(|_| None);
+        }
+        pending.await.expect("cancelled save or close completes");
+        assert!(pane.read_with(cx, |pane, _| {
+            pane.items().any(|item| item.item_id() == editor.item_id())
+        }));
+        buffer.read_with(cx, |buffer, _| {
+            assert_eq!(buffer.text(), "UNSAVED BASE\n");
+            assert!(buffer.is_dirty());
+            assert_eq!(buffer.capability(), Read);
+        });
+        assert_eq!(
+            fs.load(path!("/dir/file.txt").as_ref())
+                .await
+                .expect("original disk file"),
+            "BASE\n"
+        );
+    }
+}
+
+#[gpui::test]
+async fn test_save_actions_are_hidden_for_read_only_files(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_file(path!("/file.rs"), b"one\ntwo\nthree\n".to_vec())
+        .await;
+    let project = Project::test(fs, [path!("/file.rs").as_ref()], cx).await;
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let cx = &mut VisualTestContext::from_window(*window, cx);
+
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/file.rs"), cx)
+        })
+        .await
+        .expect("read-only test fixture succeeds");
+    let multi_buffer = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
+    let editor = cx.new_window_entity(|window, cx| {
+        Editor::new(
+            EditorMode::full(),
+            multi_buffer,
+            Some(project.clone()),
+            window,
+            cx,
+        )
+    });
+    window
+        .update(cx, |multi_workspace, window, cx| {
+            multi_workspace.workspace().update(cx, |workspace, cx| {
+                workspace.add_item_to_active_pane(Box::new(editor.clone()), None, true, window, cx);
+            })
+        })
+        .expect("read-only test fixture succeeds");
+    cx.run_until_parked();
+
+    fn save_actions_visible(cx: &mut VisualTestContext) -> (bool, bool, bool, bool) {
+        let actions = cx.update(|window, cx| window.available_actions(cx));
+        let visible = |name: &str| actions.iter().any(|action| action.name() == name);
+        (
+            visible("workspace::Save"),
+            visible("workspace::FormatAndSave"),
+            visible("workspace::SaveWithoutFormat"),
+            visible("workspace::SaveAs"),
+        )
+    }
+
+    assert_eq!(save_actions_visible(cx), (true, true, true, true));
+
+    buffer.update(cx, |buffer, cx| buffer.set_capability(ReadOnly, cx));
+    cx.run_until_parked();
+    assert_eq!(save_actions_visible(cx), (false, false, false, true));
+
+    buffer.update(cx, |buffer, cx| buffer.set_capability(ReadWrite, cx));
+    cx.run_until_parked();
+    assert_eq!(save_actions_visible(cx), (true, true, true, true));
 }
 
 #[gpui::test]
@@ -29853,6 +30299,86 @@ async fn test_goto_definition_with_find_all_references_fallback(cx: &mut TestApp
     });
 }
 
+/// End-to-end regression test for ZED-79W ("cannot summarize backward"):
+/// language servers can return a location whose range is reversed (start
+/// after end). `GetReferences::response_from_lsp` used to convert the
+/// endpoints individually, bypassing `range_from_lsp`'s normalization, so
+/// the reversed range reached excerpt construction intact, and when the
+/// reversal exceeded twice the excerpt context line count, the results
+/// multibuffer built an excerpt whose context anchors resolve backward,
+/// panicking the rope layer.
+#[gpui::test]
+async fn test_find_all_references_with_reversed_server_range(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+    let mut cx = EditorLspTestContext::new_rust(
+        lsp::ServerCapabilities {
+            references_provider: Some(lsp::OneOf::Left(true)),
+            ..lsp::ServerCapabilities::default()
+        },
+        cx,
+    )
+    .await;
+
+    cx.set_state(
+        &r#"fn one() {
+            let mut a = ˇtwo();
+        }
+
+        fn two() {}
+
+        fn three() {
+            two();
+            two();
+            two();
+        }"#
+        .unindent(),
+    );
+    cx.lsp
+        .set_request_handler::<lsp::request::References, _, _>(move |params, _| async move {
+            Ok(Some(vec![
+                lsp::Location {
+                    uri: params.text_document_position.text_document.uri.clone(),
+                    range: lsp::Range::new(lsp::Position::new(1, 16), lsp::Position::new(1, 19)),
+                },
+                // A reversed range, as returned by some language servers.
+                lsp::Location {
+                    uri: params.text_document_position.text_document.uri,
+                    range: lsp::Range::new(lsp::Position::new(9, 8), lsp::Position::new(1, 16)),
+                },
+            ]))
+        });
+
+    let navigated = cx
+        .update_editor(|editor, window, cx| {
+            editor.find_all_references(&FindAllReferences::default(), window, cx)
+        })
+        .expect("should have spawned a references request")
+        .await
+        .expect("references request should succeed");
+    assert_eq!(navigated, Navigated::Yes);
+
+    let editors = cx.update_workspace(|workspace, _, cx| {
+        workspace.items_of_type::<Editor>(cx).collect::<Vec<_>>()
+    });
+    cx.update_editor(|_, _, test_editor_cx| {
+        assert_eq!(
+            editors.len(),
+            2,
+            "references should open in a new multibuffer editor"
+        );
+        let references_text = editors
+            .into_iter()
+            .find(|new_editor| *new_editor != test_editor_cx.entity())
+            .expect("should have one non-test editor")
+            .read(test_editor_cx)
+            .text(test_editor_cx);
+        assert!(
+            references_text.contains("fn three()"),
+            "the reversed range's rows should be excerpted, got: {references_text:?}"
+        );
+    });
+}
+
 #[gpui::test]
 async fn test_goto_definition_no_fallback(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
@@ -43708,4 +44234,77 @@ fn character_block_equal_boundaries_keep_visual_order_through_edit_and_append(
             }
         })
         .expect("canonical editor window");
+}
+
+#[gpui::test]
+async fn test_open_docs(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+    let docs_urls = Arc::new(Mutex::new(DocsUrls::default()));
+    let mut cx = EditorLspTestContext::new_with_adapter(
+        Arc::into_inner(rust_lang()).expect("Rust language should have a single owner"),
+        FakeLspAdapter {
+            name: "rust-analyzer",
+            initializer: Some(Box::new({
+                let docs_urls = docs_urls.clone();
+                move |server| {
+                    let docs_urls = docs_urls.clone();
+                    server.set_request_handler::<LspOpenDocs, _, _>(move |_, _| {
+                        let response = std::mem::take(&mut *docs_urls.lock());
+                        async move { Ok(Some(response)) }
+                    });
+                }
+            })),
+            ..FakeLspAdapter::default()
+        },
+        cx,
+    )
+    .await;
+    cx.set_state("fn «mainˇ»() {}");
+
+    let tree = TempTree::new(json!({
+        "index.html": "",
+        "docs é # %20": { "struct.Example.html": "" }
+    }));
+    let root_url = url::Url::from_directory_path(tree.path())
+        .expect("temporary directory should have a file URL");
+    let local_url = format!("{root_url}index.html");
+    let encoded_url = format!("{root_url}docs%20%C3%A9%20%23%20%2520/struct.Example.html");
+
+    cx.dispatch_action(OpenDocs);
+    cx.run_until_parked();
+    assert_eq!(cx.opened_url(), None);
+
+    for (index, (local, prefer_local)) in [
+        (Some(local_url.clone()), true),
+        (Some(encoded_url.clone()), true),
+        (Some(format!("{local_url}#method.example")), true),
+        (
+            Some(format!("{encoded_url}?search=a%20b#method.example")),
+            true,
+        ),
+        (Some(format!("{root_url}missing.html")), false),
+        (None, false),
+        (Some(String::new()), false),
+        (Some("other:é".to_owned()), false),
+        (Some("file://[invalid".to_owned()), false),
+        (Some(local_url.replacen("file:", "other:", 1)), false),
+        (Some(format!("{local_url}%00")), false),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let web = format!("https://docs.rs/example/{index}/example/struct.Example.html");
+        let expected_url = if prefer_local {
+            local.clone().expect("local documentation URL should exist")
+        } else {
+            web.clone()
+        };
+        *docs_urls.lock() = DocsUrls {
+            local,
+            web: Some(web),
+        };
+        cx.dispatch_action(OpenDocs);
+        cx.run_until_parked();
+        assert_eq!(cx.opened_url(), Some(expected_url), "case {index}");
+    }
 }

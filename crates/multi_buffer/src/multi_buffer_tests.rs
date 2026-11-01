@@ -39,6 +39,32 @@ fn test_empty_singleton(cx: &mut App) {
 }
 
 #[gpui::test]
+fn test_singleton_capability_changes_notify_consumers(cx: &mut App) {
+    let buffer = cx.new(|cx| Buffer::local("permission control", cx));
+    let multibuffer = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
+    let events = Arc::new(RwLock::new(Vec::new()));
+    multibuffer.update(cx, |_, cx| {
+        let events = events.clone();
+        cx.subscribe(&multibuffer, move |_, _, event, _| {
+            events.write().push(event.clone())
+        })
+        .detach();
+    });
+    for (index, capability) in [Capability::ReadOnly, Capability::ReadWrite]
+        .into_iter()
+        .enumerate()
+    {
+        buffer.update(cx, |buffer, cx| buffer.set_capability(capability, cx));
+        assert_eq!(multibuffer.read(cx).capability(), capability);
+        assert_eq!(
+            events.read().len(),
+            index + 1,
+            "capability change must reach consumers"
+        );
+    }
+}
+
+#[gpui::test]
 fn test_singleton(cx: &mut App) {
     let buffer = cx.new(|cx| Buffer::local(sample_text(6, 6, 'a'), cx));
     let multibuffer = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));

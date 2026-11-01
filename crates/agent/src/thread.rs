@@ -2552,6 +2552,13 @@ impl Thread {
         })
     }
 
+    pub(crate) fn prepare_for_quit(&mut self, cx: &mut Context<Self>) {
+        // Shutdown cannot dispatch foreground tasks, including normal cancellation's
+        // final flush. Capture the displayed partial before returning its save future.
+        self.cancel(cx).detach();
+        self.flush_pending_message(cx);
+    }
+
     pub fn set_end_turn_at_next_boundary(&mut self, end_at_boundary: bool) {
         self.end_turn_at_next_boundary = end_at_boundary;
     }

@@ -15,7 +15,7 @@ use crate::{
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use collections::HashMap;
-use gpui::{App, AsyncApp, Entity};
+use gpui::{App, AsyncApp, Entity, Task};
 use language::{
     Buffer, point_to_lsp,
     proto::{deserialize_anchor, serialize_anchor},
@@ -136,11 +136,14 @@ impl LspCommand for ExpandMacro {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::LspExtExpandMacroResponse {
-        proto::LspExtExpandMacroResponse {
-            name: response.name,
-            expansion: response.expansion,
-        }
+    ) -> Task<Result<proto::LspExtExpandMacroResponse>> {
+        let response = {
+            proto::LspExtExpandMacroResponse {
+                name: response.name,
+                expansion: response.expansion,
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -270,11 +273,14 @@ impl LspCommand for OpenDocs {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::LspExtOpenDocsResponse {
-        proto::LspExtOpenDocsResponse {
-            web: response.web,
-            local: response.local,
-        }
+    ) -> Task<Result<proto::LspExtOpenDocsResponse>> {
+        let response = {
+            proto::LspExtOpenDocsResponse {
+                web: response.web,
+                local: response.local,
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -389,10 +395,13 @@ impl LspCommand for SwitchSourceHeader {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::LspExtSwitchSourceHeaderResponse {
-        proto::LspExtSwitchSourceHeaderResponse {
-            target_file: response.0,
-        }
+    ) -> Task<Result<proto::LspExtSwitchSourceHeaderResponse>> {
+        let response = {
+            proto::LspExtSwitchSourceHeaderResponse {
+                target_file: response.0,
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -483,10 +492,13 @@ impl LspCommand for GoToParentModule {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::LspExtGoToParentModuleResponse {
-        proto::LspExtGoToParentModuleResponse {
-            links: location_links_to_proto(links, lsp_store, peer_id, cx),
-        }
+    ) -> Task<Result<proto::LspExtGoToParentModuleResponse>> {
+        let response = {
+            proto::LspExtGoToParentModuleResponse {
+                links: location_links_to_proto(links, lsp_store, peer_id, cx),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -815,18 +827,22 @@ impl LspCommand for GetLspRunnables {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::LspExtRunnablesResponse {
-        proto::LspExtRunnablesResponse {
-            runnables: response
-                .runnables
-                .into_iter()
-                .map(|(location, task_template)| proto::LspRunnable {
-                    location: location
-                        .map(|location| location_link_to_proto(location, lsp_store, peer_id, cx)),
-                    task_template: serde_json::to_vec(&task_template).unwrap(),
-                })
-                .collect(),
-        }
+    ) -> Task<Result<proto::LspExtRunnablesResponse>> {
+        let response = {
+            proto::LspExtRunnablesResponse {
+                runnables: response
+                    .runnables
+                    .into_iter()
+                    .map(|(location, task_template)| proto::LspRunnable {
+                        location: location.map(|location| {
+                            location_link_to_proto(location, lsp_store, peer_id, cx)
+                        }),
+                        task_template: serde_json::to_vec(&task_template).unwrap(),
+                    })
+                    .collect(),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(

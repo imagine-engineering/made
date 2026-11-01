@@ -469,7 +469,7 @@ impl HeadlessProject {
         session.add_entity_request_handler(Self::handle_download_file_by_path);
 
         session.add_entity_message_handler(Self::handle_find_search_candidates_cancel);
-        session.add_entity_request_handler(BufferStore::handle_update_buffer);
+        session.add_entity_request_handler(BufferStore::handle_update_buffer_from_owner);
         session.add_entity_message_handler(BufferStore::handle_close_buffer);
 
         session.add_request_handler(

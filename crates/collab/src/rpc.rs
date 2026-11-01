@@ -345,6 +345,7 @@ struct TestUpdateBufferProbe {
     records: Vec<TestUpdateBufferObserved>,
     metadata: Vec<proto::Envelope>,
     gate: Option<TestUpdateBufferAckGate>,
+    accepted_peer_gate: Option<TestUpdateBufferAckGate>,
     metadata_observer: Option<TestBufferMetadataObserver>,
 }
 
@@ -384,6 +385,33 @@ impl Server {
         probe.records.clear();
         probe.metadata.clear();
         probe.gate = Some(TestUpdateBufferAckGate {
+            host_id,
+            project_id,
+            buffer_id,
+            observed,
+            release: wait,
+        });
+        Ok((receiver, release))
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn hold_peer_update_after_acceptance_for_test(
+        &self,
+        host_id: proto::PeerId,
+        project_id: u64,
+        buffer_id: u64,
+    ) -> anyhow::Result<(
+        oneshot::Receiver<TestUpdateBufferObserved>,
+        oneshot::Sender<std::result::Result<(), String>>,
+    )> {
+        let mut probe = self.test_update_buffer_probe.lock();
+        anyhow::ensure!(
+            probe.accepted_peer_gate.is_none(),
+            "peer acceptance gate already armed"
+        );
+        let (observed, receiver) = oneshot::channel();
+        let (release, wait) = oneshot::channel();
+        probe.accepted_peer_gate = Some(TestUpdateBufferAckGate {
             host_id,
             project_id,
             buffer_id,
@@ -2873,30 +2901,76 @@ async fn update_buffer(
         }
     }
 
-    let host = {
-        let guard = session
-            .db()
-            .await
-            .connections_for_buffer_update(project_id, session.connection_id, capability)
-            .await?;
-
-        let (host, guests) = &*guard;
-
+    let publish = |guests: &[ConnectionId]| {
         broadcast(
             Some(session.connection_id),
-            guests.clone(),
+            guests.iter().copied(),
             |connection_id| {
                 session
                     .peer
                     .forward_send(session.connection_id, connection_id, request.clone())
             },
         );
-
+    };
+    let host = {
+        let guard = session
+            .db()
+            .await
+            .connections_for_buffer_update(project_id, session.connection_id, capability)
+            .await?;
+        let (host, guests) = &*guard;
+        if *host == session.connection_id {
+            publish(guests);
+        } else if !guests.contains(&session.connection_id) {
+            return Err(anyhow!(ErrorCode::UnsharedItem)
+                .context("Cannot update a buffer after leaving the project; rejoin and retry")
+                .into());
+        }
         *host
     };
 
     if host != session.connection_id {
         session.forward_request(host, request.clone()).await?;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            let gate = session
+                .test_update_buffer_probe
+                .lock()
+                .accepted_peer_gate
+                .take_if(|gate| {
+                    gate.host_id == host.into()
+                        && gate.project_id == request.project_id
+                        && gate.buffer_id == request.buffer_id
+                });
+            if let Some(gate) = gate {
+                gate.observed
+                    .send(TestUpdateBufferObserved {
+                        sender_id: session.connection_id.into(),
+                        request: request.clone(),
+                    })
+                    .map_err(|_| anyhow!("peer acceptance observer dropped"))?;
+                gate.release
+                    .await
+                    .context("peer acceptance gate dropped")?
+                    .map_err(anyhow::Error::msg)?;
+            }
+        }
+        // Authorization can change while the host decides whether to accept the edit.
+        let guard = session
+            .db()
+            .await
+            .connections_for_buffer_update(project_id, session.connection_id, capability)
+            .await?;
+        let (current_host, current_guests) = &*guard;
+        if *current_host != host {
+            return Err(anyhow!("project host changed before buffer update publication").into());
+        }
+        if !current_guests.contains(&session.connection_id) {
+            return Err(anyhow!(ErrorCode::UnsharedItem)
+                .context("Your project membership changed; rejoin the project and retry")
+                .into());
+        }
+        publish(current_guests);
     }
 
     #[cfg(any(test, feature = "test-support"))]

@@ -14,7 +14,9 @@ use client::proto::{self, PeerId};
 use clock::Global;
 use collections::HashMap;
 use futures::future;
-use gpui::{App, AsyncApp, Entity, SharedString, Task, TaskExt, prelude::FluentBuilder};
+use gpui::{
+    App, AppContext as _, AsyncApp, Entity, SharedString, Task, TaskExt, prelude::FluentBuilder,
+};
 use language::{
     Anchor, Bias, Buffer, BufferSnapshot, CachedLspAdapter, CharKind, CharScopeContext,
     OffsetRangeExt, PointUtf16, ToOffset, ToPointUtf16, Transaction, Unclipped,
@@ -155,7 +157,7 @@ pub trait LspCommand: 'static + Sized + Send + std::fmt::Debug {
         peer_id: PeerId,
         buffer_version: &clock::Global,
         cx: &mut App,
-    ) -> <Self::ProtoRequest as proto::RequestMessage>::Response;
+    ) -> Task<Result<<Self::ProtoRequest as proto::RequestMessage>::Response>>;
 
     async fn response_from_proto(
         self,
@@ -529,30 +531,35 @@ impl LspCommand for PrepareRename {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::PrepareRenameResponse {
-        match response {
-            PrepareRenameResponse::Success(range) => proto::PrepareRenameResponse {
-                can_rename: true,
-                only_unprepared_rename_supported: false,
-                start: Some(language::proto::serialize_anchor(&range.start)),
-                end: Some(language::proto::serialize_anchor(&range.end)),
-                version: serialize_version(buffer_version),
-            },
-            PrepareRenameResponse::OnlyUnpreparedRenameSupported => proto::PrepareRenameResponse {
-                can_rename: false,
-                only_unprepared_rename_supported: true,
-                start: None,
-                end: None,
-                version: vec![],
-            },
-            PrepareRenameResponse::InvalidPosition => proto::PrepareRenameResponse {
-                can_rename: false,
-                only_unprepared_rename_supported: false,
-                start: None,
-                end: None,
-                version: vec![],
-            },
-        }
+    ) -> Task<Result<proto::PrepareRenameResponse>> {
+        let response = {
+            match response {
+                PrepareRenameResponse::Success(range) => proto::PrepareRenameResponse {
+                    can_rename: true,
+                    only_unprepared_rename_supported: false,
+                    start: Some(language::proto::serialize_anchor(&range.start)),
+                    end: Some(language::proto::serialize_anchor(&range.end)),
+                    version: serialize_version(buffer_version),
+                },
+                PrepareRenameResponse::OnlyUnpreparedRenameSupported => {
+                    proto::PrepareRenameResponse {
+                        can_rename: false,
+                        only_unprepared_rename_supported: true,
+                        start: None,
+                        end: None,
+                        version: vec![],
+                    }
+                }
+                PrepareRenameResponse::InvalidPosition => proto::PrepareRenameResponse {
+                    can_rename: false,
+                    only_unprepared_rename_supported: false,
+                    start: None,
+                    end: None,
+                    version: vec![],
+                },
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -688,13 +695,15 @@ impl LspCommand for PerformRename {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::PerformRenameResponse {
+    ) -> Task<Result<proto::PerformRenameResponse>> {
         let transaction = lsp_store.buffer_store().update(cx, |buffer_store, cx| {
             buffer_store.serialize_project_transaction_for_peer(response, peer_id, cx)
         });
-        proto::PerformRenameResponse {
-            transaction: Some(transaction),
-        }
+        cx.background_spawn(async move {
+            Ok(proto::PerformRenameResponse {
+                transaction: Some(transaction.await?),
+            })
+        })
     }
 
     async fn response_from_proto(
@@ -801,9 +810,12 @@ impl LspCommand for GetDefinitions {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetDefinitionResponse {
-        let links = location_links_to_proto(response, lsp_store, peer_id, cx);
-        proto::GetDefinitionResponse { links }
+    ) -> Task<Result<proto::GetDefinitionResponse>> {
+        let response = {
+            let links = location_links_to_proto(response, lsp_store, peer_id, cx);
+            proto::GetDefinitionResponse { links }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -900,10 +912,13 @@ impl LspCommand for GetEditPredictionDefinitions {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::GetEditPredictionDefinitionResponse {
-        proto::GetEditPredictionDefinitionResponse {
-            definitions: edit_prediction_definitions_to_proto(response),
-        }
+    ) -> Task<Result<proto::GetEditPredictionDefinitionResponse>> {
+        let response = {
+            proto::GetEditPredictionDefinitionResponse {
+                definitions: edit_prediction_definitions_to_proto(response),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -1004,9 +1019,12 @@ impl LspCommand for GetDeclarations {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetDeclarationResponse {
-        let links = location_links_to_proto(response, lsp_store, peer_id, cx);
-        proto::GetDeclarationResponse { links }
+    ) -> Task<Result<proto::GetDeclarationResponse>> {
+        let response = {
+            let links = location_links_to_proto(response, lsp_store, peer_id, cx);
+            proto::GetDeclarationResponse { links }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -1106,9 +1124,12 @@ impl LspCommand for GetImplementations {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetImplementationResponse {
-        let links = location_links_to_proto(response, lsp_store, peer_id, cx);
-        proto::GetImplementationResponse { links }
+    ) -> Task<Result<proto::GetImplementationResponse>> {
+        let response = {
+            let links = location_links_to_proto(response, lsp_store, peer_id, cx);
+            proto::GetImplementationResponse { links }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -1205,9 +1226,12 @@ impl LspCommand for GetTypeDefinitions {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetTypeDefinitionResponse {
-        let links = location_links_to_proto(response, lsp_store, peer_id, cx);
-        proto::GetTypeDefinitionResponse { links }
+    ) -> Task<Result<proto::GetTypeDefinitionResponse>> {
+        let response = {
+            let links = location_links_to_proto(response, lsp_store, peer_id, cx);
+            proto::GetTypeDefinitionResponse { links }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -1301,10 +1325,13 @@ impl LspCommand for GetEditPredictionTypeDefinitions {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::GetEditPredictionTypeDefinitionResponse {
-        proto::GetEditPredictionTypeDefinitionResponse {
-            definitions: edit_prediction_definitions_to_proto(response),
-        }
+    ) -> Task<Result<proto::GetEditPredictionTypeDefinitionResponse>> {
+        let response = {
+            proto::GetEditPredictionTypeDefinitionResponse {
+                definitions: edit_prediction_definitions_to_proto(response),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -1433,10 +1460,9 @@ pub async fn location_links_from_lsp(
         cx.update(|cx| {
             let origin_location = origin_range.map(|origin_range| {
                 let origin_buffer = buffer.read(cx);
-                let origin_start =
-                    origin_buffer.clip_point_utf16(point_from_lsp(origin_range.start), Bias::Left);
-                let origin_end =
-                    origin_buffer.clip_point_utf16(point_from_lsp(origin_range.end), Bias::Left);
+                let origin_range = range_from_lsp(origin_range);
+                let origin_start = origin_buffer.clip_point_utf16(origin_range.start, Bias::Left);
+                let origin_end = origin_buffer.clip_point_utf16(origin_range.end, Bias::Left);
                 Location {
                     buffer: buffer.clone(),
                     range: origin_buffer.anchor_after(origin_start)
@@ -1445,10 +1471,9 @@ pub async fn location_links_from_lsp(
             });
 
             let target_buffer = target_buffer_handle.read(cx);
-            let target_start =
-                target_buffer.clip_point_utf16(point_from_lsp(target_range.start), Bias::Left);
-            let target_end =
-                target_buffer.clip_point_utf16(point_from_lsp(target_range.end), Bias::Left);
+            let target_range = range_from_lsp(target_range);
+            let target_start = target_buffer.clip_point_utf16(target_range.start, Bias::Left);
+            let target_end = target_buffer.clip_point_utf16(target_range.end, Bias::Left);
             let target_location = Location {
                 buffer: target_buffer_handle,
                 range: target_buffer.anchor_after(target_start)
@@ -1527,7 +1552,7 @@ fn edit_prediction_definitions_from_lsp(
                     worktree_id: worktree.id(),
                     path: relative_path,
                 },
-                range: point_from_lsp(range.start)..point_from_lsp(range.end),
+                range: range_from_lsp(range),
             });
         }
 
@@ -1576,10 +1601,9 @@ pub async fn location_link_from_lsp(
     Ok(cx.update(|cx| {
         let origin_location = origin_range.map(|origin_range| {
             let origin_buffer = buffer.read(cx);
-            let origin_start =
-                origin_buffer.clip_point_utf16(point_from_lsp(origin_range.start), Bias::Left);
-            let origin_end =
-                origin_buffer.clip_point_utf16(point_from_lsp(origin_range.end), Bias::Left);
+            let origin_range = range_from_lsp(origin_range);
+            let origin_start = origin_buffer.clip_point_utf16(origin_range.start, Bias::Left);
+            let origin_end = origin_buffer.clip_point_utf16(origin_range.end, Bias::Left);
             Location {
                 buffer: buffer.clone(),
                 range: origin_buffer.anchor_after(origin_start)
@@ -1588,10 +1612,9 @@ pub async fn location_link_from_lsp(
         });
 
         let target_buffer = target_buffer_handle.read(cx);
-        let target_start =
-            target_buffer.clip_point_utf16(point_from_lsp(target_range.start), Bias::Left);
-        let target_end =
-            target_buffer.clip_point_utf16(point_from_lsp(target_range.end), Bias::Left);
+        let target_range = range_from_lsp(target_range);
+        let target_start = target_buffer.clip_point_utf16(target_range.start, Bias::Left);
+        let target_end = target_buffer.clip_point_utf16(target_range.end, Bias::Left);
         let target_location = Location {
             buffer: target_buffer_handle,
             range: target_buffer.anchor_after(target_start)
@@ -1767,10 +1790,9 @@ impl LspCommand for GetReferences {
                 target_buffer_handle
                     .clone()
                     .read_with(&cx, |target_buffer, _| {
-                        let target_start = target_buffer
-                            .clip_point_utf16(point_from_lsp(lsp_location.range.start), Bias::Left);
-                        let target_end = target_buffer
-                            .clip_point_utf16(point_from_lsp(lsp_location.range.end), Bias::Left);
+                        let range = range_from_lsp(lsp_location.range);
+                        let target_start = target_buffer.clip_point_utf16(range.start, Bias::Left);
+                        let target_end = target_buffer.clip_point_utf16(range.end, Bias::Left);
                         references.push(Location {
                             buffer: target_buffer_handle,
                             range: target_buffer.anchor_after(target_start)
@@ -1820,25 +1842,28 @@ impl LspCommand for GetReferences {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetReferencesResponse {
-        let locations = response
-            .into_iter()
-            .map(|definition| {
-                lsp_store
-                    .buffer_store()
-                    .update(cx, |buffer_store, cx| {
-                        buffer_store.create_buffer_for_peer(&definition.buffer, peer_id, cx)
-                    })
-                    .detach_and_log_err(cx);
-                let buffer_id = definition.buffer.read(cx).remote_id();
-                proto::Location {
-                    start: Some(serialize_anchor(&definition.range.start)),
-                    end: Some(serialize_anchor(&definition.range.end)),
-                    buffer_id: buffer_id.into(),
-                }
-            })
-            .collect();
-        proto::GetReferencesResponse { locations }
+    ) -> Task<Result<proto::GetReferencesResponse>> {
+        let response = {
+            let locations = response
+                .into_iter()
+                .map(|definition| {
+                    lsp_store
+                        .buffer_store()
+                        .update(cx, |buffer_store, cx| {
+                            buffer_store.create_buffer_for_peer(&definition.buffer, peer_id, cx)
+                        })
+                        .detach_and_log_err(cx);
+                    let buffer_id = definition.buffer.read(cx).remote_id();
+                    proto::Location {
+                        start: Some(serialize_anchor(&definition.range.start)),
+                        end: Some(serialize_anchor(&definition.range.end)),
+                        buffer_id: buffer_id.into(),
+                    }
+                })
+                .collect();
+            proto::GetReferencesResponse { locations }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -2426,27 +2451,32 @@ impl LspCommand for PrepareCallHierarchy {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::PrepareCallHierarchyResponse {
-        let mut malformed_count = response.malformed_count;
-        let items = response
-            .items
-            .into_iter()
-            .filter_map(
-                |item| match call_hierarchy_item_to_proto(item, lsp_store, peer_id, cx) {
-                    Ok(item) => Some(item),
-                    Err(error) => {
-                        malformed_count += 1;
-                        log::warn!("omitting malformed prepared call hierarchy item: {error:#}");
-                        None
+    ) -> Task<Result<proto::PrepareCallHierarchyResponse>> {
+        let response = {
+            let mut malformed_count = response.malformed_count;
+            let items = response
+                .items
+                .into_iter()
+                .filter_map(|item| {
+                    match call_hierarchy_item_to_proto(item, lsp_store, peer_id, cx) {
+                        Ok(item) => Some(item),
+                        Err(error) => {
+                            malformed_count += 1;
+                            log::warn!(
+                                "omitting malformed prepared call hierarchy item: {error:#}"
+                            );
+                            None
+                        }
                     }
-                },
-            )
-            .collect();
-        proto::PrepareCallHierarchyResponse {
-            items,
-            truncated: response.truncated,
-            malformed_count: u32::try_from(malformed_count).unwrap_or(u32::MAX),
-        }
+                })
+                .collect();
+            proto::PrepareCallHierarchyResponse {
+                items,
+                truncated: response.truncated,
+                malformed_count: u32::try_from(malformed_count).unwrap_or(u32::MAX),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -2553,13 +2583,17 @@ impl LspCommand for GetIncomingCalls {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetIncomingCallsResponse {
-        let (calls, truncated, malformed_count) = calls_to_proto(response, lsp_store, peer_id, cx);
-        proto::GetIncomingCallsResponse {
-            calls,
-            truncated,
-            malformed_count,
-        }
+    ) -> Task<Result<proto::GetIncomingCallsResponse>> {
+        let response = {
+            let (calls, truncated, malformed_count) =
+                calls_to_proto(response, lsp_store, peer_id, cx);
+            proto::GetIncomingCallsResponse {
+                calls,
+                truncated,
+                malformed_count,
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -2659,13 +2693,17 @@ impl LspCommand for GetOutgoingCalls {
         peer_id: PeerId,
         _: &clock::Global,
         cx: &mut App,
-    ) -> proto::GetOutgoingCallsResponse {
-        let (calls, truncated, malformed_count) = calls_to_proto(response, lsp_store, peer_id, cx);
-        proto::GetOutgoingCallsResponse {
-            calls,
-            truncated,
-            malformed_count,
-        }
+    ) -> Task<Result<proto::GetOutgoingCallsResponse>> {
+        let response = {
+            let (calls, truncated, malformed_count) =
+                calls_to_proto(response, lsp_store, peer_id, cx);
+            proto::GetOutgoingCallsResponse {
+                calls,
+                truncated,
+                malformed_count,
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -2738,10 +2776,9 @@ impl LspCommand for GetDocumentHighlights {
             lsp_highlights
                 .into_iter()
                 .map(|lsp_highlight| {
-                    let start = buffer
-                        .clip_point_utf16(point_from_lsp(lsp_highlight.range.start), Bias::Left);
-                    let end = buffer
-                        .clip_point_utf16(point_from_lsp(lsp_highlight.range.end), Bias::Left);
+                    let range = range_from_lsp(lsp_highlight.range);
+                    let start = buffer.clip_point_utf16(range.start, Bias::Left);
+                    let end = buffer.clip_point_utf16(range.end, Bias::Left);
                     DocumentHighlight {
                         range: buffer.anchor_after(start)..buffer.anchor_before(end),
                         kind: lsp_highlight
@@ -2790,21 +2827,26 @@ impl LspCommand for GetDocumentHighlights {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::GetDocumentHighlightsResponse {
-        let highlights = response
-            .into_iter()
-            .map(|highlight| proto::DocumentHighlight {
-                start: Some(serialize_anchor(&highlight.range.start)),
-                end: Some(serialize_anchor(&highlight.range.end)),
-                kind: match highlight.kind {
-                    DocumentHighlightKind::TEXT => proto::document_highlight::Kind::Text.into(),
-                    DocumentHighlightKind::WRITE => proto::document_highlight::Kind::Write.into(),
-                    DocumentHighlightKind::READ => proto::document_highlight::Kind::Read.into(),
-                    _ => proto::document_highlight::Kind::Text.into(),
-                },
-            })
-            .collect();
-        proto::GetDocumentHighlightsResponse { highlights }
+    ) -> Task<Result<proto::GetDocumentHighlightsResponse>> {
+        let response = {
+            let highlights = response
+                .into_iter()
+                .map(|highlight| proto::DocumentHighlight {
+                    start: Some(serialize_anchor(&highlight.range.start)),
+                    end: Some(serialize_anchor(&highlight.range.end)),
+                    kind: match highlight.kind {
+                        DocumentHighlightKind::TEXT => proto::document_highlight::Kind::Text.into(),
+                        DocumentHighlightKind::WRITE => {
+                            proto::document_highlight::Kind::Write.into()
+                        }
+                        DocumentHighlightKind::READ => proto::document_highlight::Kind::Read.into(),
+                        _ => proto::document_highlight::Kind::Text.into(),
+                    },
+                })
+                .collect();
+            proto::GetDocumentHighlightsResponse { highlights }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -2952,42 +2994,45 @@ impl LspCommand for GetDocumentSymbols {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::GetDocumentSymbolsResponse {
-        let symbols = response
-            .into_iter()
-            .map(|symbol| {
-                fn convert_symbol_to_proto(symbol: DocumentSymbol) -> proto::DocumentSymbol {
-                    proto::DocumentSymbol {
-                        name: symbol.name.clone(),
-                        kind: symbol.kind.to_proto(),
-                        start: Some(proto::PointUtf16 {
-                            row: symbol.range.start.0.row,
-                            column: symbol.range.start.0.column,
-                        }),
-                        end: Some(proto::PointUtf16 {
-                            row: symbol.range.end.0.row,
-                            column: symbol.range.end.0.column,
-                        }),
-                        selection_start: Some(proto::PointUtf16 {
-                            row: symbol.selection_range.start.0.row,
-                            column: symbol.selection_range.start.0.column,
-                        }),
-                        selection_end: Some(proto::PointUtf16 {
-                            row: symbol.selection_range.end.0.row,
-                            column: symbol.selection_range.end.0.column,
-                        }),
-                        children: symbol
-                            .children
-                            .into_iter()
-                            .map(convert_symbol_to_proto)
-                            .collect(),
+    ) -> Task<Result<proto::GetDocumentSymbolsResponse>> {
+        let response = {
+            let symbols = response
+                .into_iter()
+                .map(|symbol| {
+                    fn convert_symbol_to_proto(symbol: DocumentSymbol) -> proto::DocumentSymbol {
+                        proto::DocumentSymbol {
+                            name: symbol.name.clone(),
+                            kind: symbol.kind.to_proto(),
+                            start: Some(proto::PointUtf16 {
+                                row: symbol.range.start.0.row,
+                                column: symbol.range.start.0.column,
+                            }),
+                            end: Some(proto::PointUtf16 {
+                                row: symbol.range.end.0.row,
+                                column: symbol.range.end.0.column,
+                            }),
+                            selection_start: Some(proto::PointUtf16 {
+                                row: symbol.selection_range.start.0.row,
+                                column: symbol.selection_range.start.0.column,
+                            }),
+                            selection_end: Some(proto::PointUtf16 {
+                                row: symbol.selection_range.end.0.row,
+                                column: symbol.selection_range.end.0.column,
+                            }),
+                            children: symbol
+                                .children
+                                .into_iter()
+                                .map(convert_symbol_to_proto)
+                                .collect(),
+                        }
                     }
-                }
-                convert_symbol_to_proto(symbol)
-            })
-            .collect::<Vec<_>>();
+                    convert_symbol_to_proto(symbol)
+                })
+                .collect::<Vec<_>>();
 
-        proto::GetDocumentSymbolsResponse { symbols }
+            proto::GetDocumentSymbolsResponse { symbols }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -3133,11 +3178,14 @@ impl LspCommand for GetSignatureHelp {
         _: PeerId,
         _: &Global,
         _: &mut App,
-    ) -> proto::GetSignatureHelpResponse {
-        proto::GetSignatureHelpResponse {
-            signature_help: response
-                .map(|signature_help| lsp_to_proto_signature(signature_help.original_data)),
-        }
+    ) -> Task<Result<proto::GetSignatureHelpResponse>> {
+        let response = {
+            proto::GetSignatureHelpResponse {
+                signature_help: response
+                    .map(|signature_help| lsp_to_proto_signature(signature_help.original_data)),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -3214,9 +3262,9 @@ impl LspCommand for GetHover {
             (
                 buffer.language().cloned(),
                 hover.range.map(|range| {
-                    let token_start =
-                        buffer.clip_point_utf16(point_from_lsp(range.start), Bias::Left);
-                    let token_end = buffer.clip_point_utf16(point_from_lsp(range.end), Bias::Left);
+                    let range = range_from_lsp(range);
+                    let token_start = buffer.clip_point_utf16(range.start, Bias::Left);
+                    let token_end = buffer.clip_point_utf16(range.end, Bias::Left);
                     buffer.anchor_after(token_start)..buffer.anchor_before(token_end)
                 }),
             )
@@ -3306,43 +3354,46 @@ impl LspCommand for GetHover {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::GetHoverResponse {
-        if let Some(response) = response {
-            let (start, end) = if let Some(range) = response.range {
-                (
-                    Some(language::proto::serialize_anchor(&range.start)),
-                    Some(language::proto::serialize_anchor(&range.end)),
-                )
+    ) -> Task<Result<proto::GetHoverResponse>> {
+        let response = {
+            if let Some(response) = response {
+                let (start, end) = if let Some(range) = response.range {
+                    (
+                        Some(language::proto::serialize_anchor(&range.start)),
+                        Some(language::proto::serialize_anchor(&range.end)),
+                    )
+                } else {
+                    (None, None)
+                };
+
+                let contents = response
+                    .contents
+                    .into_iter()
+                    .map(|block| proto::HoverBlock {
+                        text: block.text,
+                        is_markdown: block.kind == HoverBlockKind::Markdown,
+                        language: if let HoverBlockKind::Code { language } = block.kind {
+                            Some(language)
+                        } else {
+                            None
+                        },
+                    })
+                    .collect();
+
+                proto::GetHoverResponse {
+                    start,
+                    end,
+                    contents,
+                }
             } else {
-                (None, None)
-            };
-
-            let contents = response
-                .contents
-                .into_iter()
-                .map(|block| proto::HoverBlock {
-                    text: block.text,
-                    is_markdown: block.kind == HoverBlockKind::Markdown,
-                    language: if let HoverBlockKind::Code { language } = block.kind {
-                        Some(language)
-                    } else {
-                        None
-                    },
-                })
-                .collect();
-
-            proto::GetHoverResponse {
-                start,
-                end,
-                contents,
+                proto::GetHoverResponse {
+                    start: None,
+                    end: None,
+                    contents: Vec::new(),
+                }
             }
-        } else {
-            proto::GetHoverResponse {
-                start: None,
-                end: None,
-                contents: Vec::new(),
-            }
-        }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -3678,16 +3729,19 @@ impl LspCommand for GetCompletions {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::GetCompletionsResponse {
-        proto::GetCompletionsResponse {
-            completions: response
-                .completions
-                .iter()
-                .map(LspStore::serialize_completion)
-                .collect(),
-            version: serialize_version(buffer_version),
-            can_reuse: !response.is_incomplete,
-        }
+    ) -> Task<Result<proto::GetCompletionsResponse>> {
+        let response = {
+            proto::GetCompletionsResponse {
+                completions: response
+                    .completions
+                    .iter()
+                    .map(LspStore::serialize_completion)
+                    .collect(),
+                version: serialize_version(buffer_version),
+                can_reuse: !response.is_incomplete,
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -3962,14 +4016,17 @@ impl LspCommand for GetCodeActions {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::GetCodeActionsResponse {
-        proto::GetCodeActionsResponse {
-            actions: code_actions
-                .iter()
-                .map(LspStore::serialize_code_action)
-                .collect(),
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::GetCodeActionsResponse>> {
+        let response = {
+            proto::GetCodeActionsResponse {
+                actions: code_actions
+                    .iter()
+                    .map(LspStore::serialize_code_action)
+                    .collect(),
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -4138,11 +4195,14 @@ impl LspCommand for OnTypeFormatting {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::OnTypeFormattingResponse {
-        proto::OnTypeFormattingResponse {
-            transaction: response
-                .map(|transaction| language::proto::serialize_transaction(&transaction)),
-        }
+    ) -> Task<Result<proto::OnTypeFormattingResponse>> {
+        let response = {
+            proto::OnTypeFormattingResponse {
+                transaction: response
+                    .map(|transaction| language::proto::serialize_transaction(&transaction)),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -4660,14 +4720,17 @@ impl LspCommand for InlayHints {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::InlayHintsResponse {
-        proto::InlayHintsResponse {
-            hints: response
-                .into_iter()
-                .map(InlayHints::project_to_proto_hint)
-                .collect(),
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::InlayHintsResponse>> {
+        let response = {
+            proto::InlayHintsResponse {
+                hints: response
+                    .into_iter()
+                    .map(InlayHints::project_to_proto_hint)
+                    .collect(),
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -4799,28 +4862,33 @@ impl LspCommand for SemanticTokensFull {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::SemanticTokensResponse {
-        match response {
-            SemanticTokensResponse::Full { data, result_id } => proto::SemanticTokensResponse {
-                data,
-                edits: Vec::new(),
-                result_id: result_id.map(|s| s.to_string()),
-                version: serialize_version(buffer_version),
-            },
-            SemanticTokensResponse::Delta { edits, result_id } => proto::SemanticTokensResponse {
-                data: Vec::new(),
-                edits: edits
-                    .into_iter()
-                    .map(|edit| proto::SemanticTokensEdit {
-                        start: edit.start,
-                        delete_count: edit.delete_count,
-                        data: edit.data,
-                    })
-                    .collect(),
-                result_id: result_id.map(|s| s.to_string()),
-                version: serialize_version(buffer_version),
-            },
-        }
+    ) -> Task<Result<proto::SemanticTokensResponse>> {
+        let response = {
+            match response {
+                SemanticTokensResponse::Full { data, result_id } => proto::SemanticTokensResponse {
+                    data,
+                    edits: Vec::new(),
+                    result_id: result_id.map(|s| s.to_string()),
+                    version: serialize_version(buffer_version),
+                },
+                SemanticTokensResponse::Delta { edits, result_id } => {
+                    proto::SemanticTokensResponse {
+                        data: Vec::new(),
+                        edits: edits
+                            .into_iter()
+                            .map(|edit| proto::SemanticTokensEdit {
+                                start: edit.start,
+                                delete_count: edit.delete_count,
+                                data: edit.data,
+                            })
+                            .collect(),
+                        result_id: result_id.map(|s| s.to_string()),
+                        version: serialize_version(buffer_version),
+                    }
+                }
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -4952,28 +5020,33 @@ impl LspCommand for SemanticTokensDelta {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::SemanticTokensResponse {
-        match response {
-            SemanticTokensResponse::Full { data, result_id } => proto::SemanticTokensResponse {
-                data,
-                edits: Vec::new(),
-                result_id: result_id.map(|s| s.to_string()),
-                version: serialize_version(buffer_version),
-            },
-            SemanticTokensResponse::Delta { edits, result_id } => proto::SemanticTokensResponse {
-                data: Vec::new(),
-                edits: edits
-                    .into_iter()
-                    .map(|edit| proto::SemanticTokensEdit {
-                        start: edit.start,
-                        delete_count: edit.delete_count,
-                        data: edit.data,
-                    })
-                    .collect(),
-                result_id: result_id.map(|s| s.to_string()),
-                version: serialize_version(buffer_version),
-            },
-        }
+    ) -> Task<Result<proto::SemanticTokensResponse>> {
+        let response = {
+            match response {
+                SemanticTokensResponse::Full { data, result_id } => proto::SemanticTokensResponse {
+                    data,
+                    edits: Vec::new(),
+                    result_id: result_id.map(|s| s.to_string()),
+                    version: serialize_version(buffer_version),
+                },
+                SemanticTokensResponse::Delta { edits, result_id } => {
+                    proto::SemanticTokensResponse {
+                        data: Vec::new(),
+                        edits: edits
+                            .into_iter()
+                            .map(|edit| proto::SemanticTokensEdit {
+                                start: edit.start,
+                                delete_count: edit.delete_count,
+                                data: edit.data,
+                            })
+                            .collect(),
+                        result_id: result_id.map(|s| s.to_string()),
+                        version: serialize_version(buffer_version),
+                    }
+                }
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -5090,14 +5163,17 @@ impl LspCommand for GetCodeLens {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::GetCodeLensResponse {
-        proto::GetCodeLensResponse {
-            lens_actions: response
-                .iter()
-                .map(LspStore::serialize_code_action)
-                .collect(),
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::GetCodeLensResponse>> {
+        let response = {
+            proto::GetCodeLensResponse {
+                lens_actions: response
+                    .iter()
+                    .map(LspStore::serialize_code_action)
+                    .collect(),
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -5180,9 +5256,9 @@ impl LspCommand for LinkedEditingRange {
                 ranges
                     .into_iter()
                     .map(|range| {
-                        let start =
-                            buffer.clip_point_utf16(point_from_lsp(range.start), Bias::Left);
-                        let end = buffer.clip_point_utf16(point_from_lsp(range.end), Bias::Left);
+                        let range = range_from_lsp(range);
+                        let start = buffer.clip_point_utf16(range.start, Bias::Left);
+                        let end = buffer.clip_point_utf16(range.end, Bias::Left);
                         buffer.anchor_before(start)..buffer.anchor_after(end)
                     })
                     .collect()
@@ -5226,17 +5302,20 @@ impl LspCommand for LinkedEditingRange {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::LinkedEditingRangeResponse {
-        proto::LinkedEditingRangeResponse {
-            items: response
-                .into_iter()
-                .map(|range| proto::AnchorRange {
-                    start: Some(serialize_anchor(&range.start)),
-                    end: Some(serialize_anchor(&range.end)),
-                })
-                .collect(),
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::LinkedEditingRangeResponse>> {
+        let response = {
+            proto::LinkedEditingRangeResponse {
+                items: response
+                    .into_iter()
+                    .map(|range| proto::AnchorRange {
+                        start: Some(serialize_anchor(&range.start)),
+                        end: Some(serialize_anchor(&range.end)),
+                    })
+                    .collect(),
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -5698,48 +5777,53 @@ impl LspCommand for GetDocumentDiagnostics {
         _: PeerId,
         _: &clock::Global,
         _: &mut App,
-    ) -> proto::GetDocumentDiagnosticsResponse {
-        let pulled_diagnostics = response
-            .into_iter()
-            .filter_map(|diagnostics| match diagnostics {
-                LspPullDiagnostics::Default => None,
-                LspPullDiagnostics::Response {
-                    server_id,
-                    uri,
-                    diagnostics,
-                    registration_id,
-                } => {
-                    let mut changed = false;
-                    let (diagnostics, result_id) = match diagnostics {
-                        PulledDiagnostics::Unchanged { result_id } => (Vec::new(), Some(result_id)),
-                        PulledDiagnostics::Changed {
-                            result_id,
-                            diagnostics,
-                        } => {
-                            changed = true;
-                            (diagnostics, result_id)
-                        }
-                    };
-                    Some(proto::PulledDiagnostics {
-                        changed,
-                        result_id: result_id.map(|id| id.to_string()),
-                        uri: uri.to_string(),
-                        server_id: server_id.to_proto(),
-                        diagnostics: diagnostics
-                            .into_iter()
-                            .filter_map(|diagnostic| {
-                                GetDocumentDiagnostics::serialize_lsp_diagnostic(diagnostic)
-                                    .context("serializing diagnostics")
-                                    .log_err()
-                            })
-                            .collect(),
-                        registration_id: registration_id.as_ref().map(ToString::to_string),
-                    })
-                }
-            })
-            .collect();
+    ) -> Task<Result<proto::GetDocumentDiagnosticsResponse>> {
+        let response = {
+            let pulled_diagnostics = response
+                .into_iter()
+                .filter_map(|diagnostics| match diagnostics {
+                    LspPullDiagnostics::Default => None,
+                    LspPullDiagnostics::Response {
+                        server_id,
+                        uri,
+                        diagnostics,
+                        registration_id,
+                    } => {
+                        let mut changed = false;
+                        let (diagnostics, result_id) = match diagnostics {
+                            PulledDiagnostics::Unchanged { result_id } => {
+                                (Vec::new(), Some(result_id))
+                            }
+                            PulledDiagnostics::Changed {
+                                result_id,
+                                diagnostics,
+                            } => {
+                                changed = true;
+                                (diagnostics, result_id)
+                            }
+                        };
+                        Some(proto::PulledDiagnostics {
+                            changed,
+                            result_id: result_id.map(|id| id.to_string()),
+                            uri: uri.to_string(),
+                            server_id: server_id.to_proto(),
+                            diagnostics: diagnostics
+                                .into_iter()
+                                .filter_map(|diagnostic| {
+                                    GetDocumentDiagnostics::serialize_lsp_diagnostic(diagnostic)
+                                        .context("serializing diagnostics")
+                                        .log_err()
+                                })
+                                .collect(),
+                            registration_id: registration_id.as_ref().map(ToString::to_string),
+                        })
+                    }
+                })
+                .collect();
 
-        proto::GetDocumentDiagnosticsResponse { pulled_diagnostics }
+            proto::GetDocumentDiagnosticsResponse { pulled_diagnostics }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -5835,31 +5919,34 @@ impl LspCommand for GetDocumentColor {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::GetDocumentColorResponse {
-        proto::GetDocumentColorResponse {
-            colors: response
-                .into_iter()
-                .map(|color| {
-                    let start = point_from_lsp(color.lsp_range.start).0;
-                    let end = point_from_lsp(color.lsp_range.end).0;
-                    proto::ColorInformation {
-                        red: color.color.red,
-                        green: color.color.green,
-                        blue: color.color.blue,
-                        alpha: color.color.alpha,
-                        lsp_range_start: Some(proto::PointUtf16 {
-                            row: start.row,
-                            column: start.column,
-                        }),
-                        lsp_range_end: Some(proto::PointUtf16 {
-                            row: end.row,
-                            column: end.column,
-                        }),
-                    }
-                })
-                .collect(),
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::GetDocumentColorResponse>> {
+        let response = {
+            proto::GetDocumentColorResponse {
+                colors: response
+                    .into_iter()
+                    .map(|color| {
+                        let start = point_from_lsp(color.lsp_range.start).0;
+                        let end = point_from_lsp(color.lsp_range.end).0;
+                        proto::ColorInformation {
+                            red: color.color.red,
+                            green: color.color.green,
+                            blue: color.color.blue,
+                            alpha: color.color.alpha,
+                            lsp_range_start: Some(proto::PointUtf16 {
+                                row: start.row,
+                                column: start.column,
+                            }),
+                            lsp_range_end: Some(proto::PointUtf16 {
+                                row: end.row,
+                                column: end.column,
+                            }),
+                        }
+                    })
+                    .collect(),
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -5999,23 +6086,26 @@ impl LspCommand for GetFoldingRanges {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::GetFoldingRangesResponse {
-        let mut ranges = Vec::with_capacity(response.len());
-        let mut collapsed_texts = Vec::with_capacity(response.len());
-        for folding_range in response {
-            ranges.push(serialize_anchor_range(folding_range.range));
-            collapsed_texts.push(
-                folding_range
-                    .collapsed_text
-                    .map(|t| t.to_string())
-                    .unwrap_or_default(),
-            );
-        }
-        proto::GetFoldingRangesResponse {
-            ranges,
-            collapsed_texts,
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::GetFoldingRangesResponse>> {
+        let response = {
+            let mut ranges = Vec::with_capacity(response.len());
+            let mut collapsed_texts = Vec::with_capacity(response.len());
+            for folding_range in response {
+                ranges.push(serialize_anchor_range(folding_range.range));
+                collapsed_texts.push(
+                    folding_range
+                        .collapsed_text
+                        .map(|t| t.to_string())
+                        .unwrap_or_default(),
+                );
+            }
+            proto::GetFoldingRangesResponse {
+                ranges,
+                collapsed_texts,
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(
@@ -6148,21 +6238,24 @@ impl LspCommand for GetDocumentLinks {
         _: PeerId,
         buffer_version: &clock::Global,
         _: &mut App,
-    ) -> proto::GetDocumentLinksResponse {
-        proto::GetDocumentLinksResponse {
-            links: response
-                .into_iter()
-                .map(|link| proto::DocumentLinkProto {
-                    range: Some(serialize_anchor_range(link.range)),
-                    target: link.target.map(String::from),
-                    tooltip: link.tooltip.map(String::from),
-                    data: link
-                        .data
-                        .map(|d| serde_json::to_string(&d).unwrap_or_default()),
-                })
-                .collect(),
-            version: serialize_version(buffer_version),
-        }
+    ) -> Task<Result<proto::GetDocumentLinksResponse>> {
+        let response = {
+            proto::GetDocumentLinksResponse {
+                links: response
+                    .into_iter()
+                    .map(|link| proto::DocumentLinkProto {
+                        range: Some(serialize_anchor_range(link.range)),
+                        target: link.target.map(String::from),
+                        tooltip: link.tooltip.map(String::from),
+                        data: link
+                            .data
+                            .map(|d| serde_json::to_string(&d).unwrap_or_default()),
+                    })
+                    .collect(),
+                version: serialize_version(buffer_version),
+            }
+        };
+        Task::ready(Ok(response))
     }
 
     async fn response_from_proto(

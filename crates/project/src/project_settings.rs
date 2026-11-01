@@ -865,6 +865,7 @@ pub struct SettingsObserver {
     project_id: u64,
     task_store: Entity<TaskStore>,
     local_settings_tasks: HashMap<WorktreeId, LocalSettingsReadTask>,
+    settings_recovery_requests: HashMap<(WorktreeId, Arc<RelPath>), Arc<()>>,
     pending_local_settings:
         HashMap<PathTrust, BTreeMap<(WorktreeId, Arc<RelPath>), Option<String>>>,
     _trusted_worktrees_watcher: Option<Subscription>,
@@ -902,6 +903,7 @@ impl SettingsObserver {
                 project_id: REMOTE_SERVER_PROJECT_ID,
                 task_store,
                 local_settings_tasks: HashMap::default(),
+                settings_recovery_requests: HashMap::default(),
                 pending_local_settings: HashMap::default(),
                 _trusted_worktrees_watcher: None,
                 _user_settings_watcher: None,
@@ -1002,6 +1004,7 @@ impl SettingsObserver {
             downstream_client: None,
             _trusted_worktrees_watcher,
             local_settings_tasks: HashMap::default(),
+            settings_recovery_requests: HashMap::default(),
             pending_local_settings: HashMap::default(),
             _user_settings_watcher: None,
             _editorconfig_watcher: Some(_editorconfig_watcher),
@@ -1069,6 +1072,7 @@ impl SettingsObserver {
             project_id: REMOTE_SERVER_PROJECT_ID,
             _trusted_worktrees_watcher: None,
             local_settings_tasks: HashMap::default(),
+            settings_recovery_requests: HashMap::default(),
             pending_local_settings: HashMap::default(),
             _user_settings_watcher: user_settings_watcher,
             _editorconfig_watcher: None,
@@ -1223,20 +1227,193 @@ impl SettingsObserver {
     ) {
         match event {
             WorktreeStoreEvent::WorktreeAdded(worktree) => cx
-                .subscribe(worktree, |this, worktree, event, cx| {
-                    if let worktree::Event::UpdatedEntries(changes) = event {
+                .subscribe(worktree, |this, worktree, event, cx| match event {
+                    worktree::Event::UpdatedEntries(changes) => {
                         this.update_local_worktree_settings(&worktree, changes, cx)
                     }
+                    worktree::Event::LocalSettingsInvalidated(paths) => {
+                        this.recover_known_settings_files(&worktree, paths, cx)
+                    }
+                    _ => {}
                 })
                 .detach(),
             WorktreeStoreEvent::WorktreeRemoved(_, worktree_id) => {
                 self.local_settings_tasks.remove(worktree_id);
+                self.settings_recovery_requests
+                    .retain(|(id, _), _| id != worktree_id);
                 cx.update_global::<SettingsStore, _>(|store, cx| {
                     store.clear_local_settings(*worktree_id, cx).log_err();
                 });
             }
             _ => {}
         }
+    }
+
+    fn settings_recovery_request_is_current(
+        &self,
+        worktree: &Entity<Worktree>,
+        worktree_id: WorktreeId,
+        named_root: &std::path::Path,
+        admission: &Result<fs::ConfinedRoot, Arc<str>>,
+        path: &Arc<RelPath>,
+        request: &Arc<()>,
+        cx: &gpui::App,
+    ) -> bool {
+        let key = (worktree_id, path.clone());
+        if !self
+            .settings_recovery_requests
+            .get(&key)
+            .is_some_and(|current| Arc::ptr_eq(current, request))
+            || self
+                .worktree_store
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .as_ref()
+                != Some(worktree)
+        {
+            return false;
+        }
+        let current = worktree.read(cx);
+        let Some(local) = current.as_local() else {
+            return false;
+        };
+        if current.abs_path().as_ref() != named_root {
+            return false;
+        }
+        let same_admission = match admission {
+            Ok(admission) => local
+                .confined_root()
+                .is_ok_and(|current| current.same_admission(admission)),
+            Err(_) => local.confined_root().is_err(),
+        };
+        same_admission
+            && worktree::WorktreeSettings::get(
+                Some(SettingsLocation {
+                    worktree_id,
+                    path: RelPath::empty(),
+                }),
+                cx,
+            )
+            .can_recover_excluded_settings_path(path)
+    }
+
+    fn recover_known_settings_files(
+        &mut self,
+        worktree: &Entity<Worktree>,
+        paths: &[Arc<RelPath>],
+        cx: &mut Context<Self>,
+    ) {
+        if self.isolated_recipe_test {
+            return;
+        }
+        let SettingsObserverMode::Local(filesystem) = &self.mode else {
+            return;
+        };
+        let filesystem = filesystem.clone();
+        let current = worktree.read(cx);
+        let Some(local) = current.as_local() else {
+            return;
+        };
+        let named_root = current.abs_path();
+        let admission = local
+            .confined_root()
+            .cloned()
+            .map_err(|error| Arc::<str>::from(format!("{error:#}")));
+        let worktree_id = current.id();
+        let mut requests = Vec::new();
+        for path in paths {
+            let settings = worktree::WorktreeSettings::get(
+                Some(SettingsLocation {
+                    worktree_id,
+                    path: RelPath::empty(),
+                }),
+                cx,
+            );
+            if !settings.can_recover_excluded_settings_path(path) {
+                continue;
+            }
+            let Some(directory) = path
+                .ancestors()
+                .nth(local_settings_file_relative_path().components().count())
+                .map(Arc::<RelPath>::from)
+            else {
+                continue;
+            };
+            let request = Arc::new(());
+            self.settings_recovery_requests
+                .insert((worktree_id, path.clone()), request.clone());
+            requests.push((path.clone(), directory, request));
+        }
+        if requests.is_empty() {
+            return;
+        }
+        let previous = self.local_settings_tasks.remove(&worktree_id);
+        let worktree = worktree.clone();
+        let background = cx.background_executor().clone();
+        let task = cx.spawn(async move |this, cx| {
+            // Recovery cannot clear an unrelated ordinary-read failure. The ordinary
+            // rescan after an accepted correction establishes that barrier again.
+            let mut failure = match previous {
+                Some(previous) => previous.await.err(),
+                None => None,
+            };
+            for (path, directory, request) in requests {
+                let current = this.read_with(cx, |this, cx| {
+                    this.settings_recovery_request_is_current(
+                        &worktree, worktree_id, &named_root, &admission, &path, &request, cx,
+                    )
+                }).map_err(|_| Arc::<str>::from("Project settings are unavailable; reopen the current host project and retry"))?;
+                if !current {
+                    continue;
+                }
+                let content = match &admission {
+                    Ok(admission) => background.spawn({
+                        let filesystem = filesystem.clone();
+                        let admission = admission.clone();
+                        let named_root = named_root.clone();
+                        let path = path.clone();
+                        async move {
+                            read_settings_for_exclusion_recovery(
+                                filesystem.as_ref(), &admission, named_root.as_ref(), &path,
+                            ).await
+                        }
+                    }).await,
+                    Err(message) => Err(anyhow::anyhow!(message.to_string())),
+                };
+                let applied = this.update(cx, |this, cx| {
+                    if !this.settings_recovery_request_is_current(
+                        &worktree, worktree_id, &named_root, &admission, &path, &request, cx,
+                    ) {
+                        return Ok(());
+                    }
+                    this.settings_recovery_requests.remove(&(worktree_id, path));
+                    match content {
+                        Ok(content) => {
+                            this.update_settings(worktree.clone(), [(
+                                LocalSettingsPath::InWorktree(directory), LocalSettingsKind::Settings, content,
+                            )], false, cx);
+                            Ok(())
+                        }
+                        Err(error) => {
+                            let message = format!("Cannot reload project settings while file exclusions need repair; existing protection was retained: {error:#}");
+                            log::error!("{message}");
+                            cx.emit(SettingsObserverEvent::LocalSettingsUpdated(Err(InvalidSettingsError::LocalSettings {
+                                path: directory, message: message.clone(),
+                            })));
+                            Err(Arc::<str>::from(message))
+                        }
+                    }
+                }).map_err(|_| Arc::<str>::from("Project settings are unavailable; reopen the current host project and retry"))?;
+                if let Err(error) = applied {
+                    failure = Some(error);
+                }
+            }
+            match failure {
+                Some(message) => Err(message),
+                None => Ok(()),
+            }
+        }).shared();
+        self.local_settings_tasks.insert(worktree_id, task);
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -1736,6 +1913,39 @@ impl SettingsObserver {
     }
 }
 
+async fn read_settings_for_exclusion_recovery(
+    filesystem: &dyn Fs,
+    admission: &fs::ConfinedRoot,
+    named_root: &std::path::Path,
+    path: &RelPath,
+) -> anyhow::Result<Option<String>> {
+    const MAX_RECOVERY_SETTINGS_BYTES: usize = 16 * 1024 * 1024;
+    anyhow::ensure!(
+        admission.metadata().is_dir
+            && path.ends_with(local_settings_file_relative_path())
+            && path
+                .as_std_path()
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_))),
+        "Invalid settings recovery path or admitted root"
+    );
+    if filesystem
+        .is_confined_file_absent(admission, named_root, path.as_std_path())
+        .await?
+    {
+        return Ok(None);
+    }
+    let content = filesystem
+        .read_confined_file(
+            admission,
+            named_root,
+            path.as_std_path(),
+            MAX_RECOVERY_SETTINGS_BYTES,
+        )
+        .await?;
+    Ok(Some(String::from_utf8(content.bytes)?))
+}
+
 fn apply_local_settings(
     worktree_id: WorktreeId,
     path: LocalSettingsPath,
@@ -2084,6 +2294,268 @@ mod recipe_scan_tests {
         });
         fs.unpause_events_and_flush();
         cx.run_until_parked();
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn enter_protective_settings_policy(worktree_id: WorktreeId, cx: &mut TestAppContext) {
+        let oversized = format!("scope/{}?.k?y", "[ab]".repeat(262144));
+        cx.update(|cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.project.worktree.file_scan_exclusions = Some(vec![oversized]);
+                });
+            });
+            assert!(
+                worktree::WorktreeSettings::get(
+                    Some(SettingsLocation {
+                        worktree_id,
+                        path: RelPath::empty(),
+                    }),
+                    cx,
+                )
+                .can_recover_excluded_settings_path(
+                    RelPath::from_unix_str(".zed/settings.json").expect("settings path")
+                )
+            );
+        });
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    #[gpui::test]
+    async fn local_settings_protective_recovery_keeps_jvm_wait_pending(cx: &mut TestAppContext) {
+        let fixture = PendingLocalSettingsFixture::new(cx).await;
+        let worktree = fixture
+            .worktrees
+            .read_with(cx, |store, cx| {
+                store.worktree_for_id(fixture.worktree_id, cx)
+            })
+            .expect("current settings folder");
+        enter_protective_settings_policy(fixture.worktree_id, cx);
+        let path: Arc<RelPath> = RelPath::from_unix_str(".zed/settings.json")
+            .expect("settings path")
+            .into();
+        let recovery = fixture.observer.update(cx, |observer, cx| {
+            observer.recover_known_settings_files(&worktree, std::slice::from_ref(&path), cx);
+            assert!(
+                observer
+                    .settings_recovery_requests
+                    .contains_key(&(fixture.worktree_id, path.clone(),))
+            );
+            let recovery = observer
+                .local_settings_tasks
+                .get(&fixture.worktree_id)
+                .expect("protective recovery read owner")
+                .clone();
+            assert!(!recovery.ptr_eq(&fixture.pending));
+            recovery
+        });
+        let mut waiting = fixture.observer.update(cx, |observer, cx| {
+            observer.wait_for_local_settings(fixture.worktree_id, cx)
+        });
+        cx.run_until_parked();
+        assert!(!fixture.observer.read_with(cx, |observer, _| {
+            observer.local_settings_are_current(fixture.worktree_id)
+        }));
+        assert!(futures::poll!(&mut waiting).is_pending());
+        fixture
+            .release
+            .send(())
+            .expect("release earlier settings read");
+        waiting.await.expect("ordered protective read completes");
+        recovery
+            .await
+            .expect("protective recovery itself completes");
+        assert!(!fixture.observer.read_with(cx, |observer, _| {
+            observer
+                .settings_recovery_requests
+                .contains_key(&(fixture.worktree_id, path.clone()))
+        }));
+        assert!(fixture.observer.read_with(cx, |observer, _| {
+            observer.local_settings_are_current(fixture.worktree_id)
+        }));
+        cx.update(|cx| {
+            assert_eq!(
+                ProjectSettings::get(
+                    Some(SettingsLocation {
+                        worktree_id: fixture.worktree_id,
+                        path: RelPath::empty(),
+                    }),
+                    cx,
+                )
+                .lsp
+                .get(&LanguageServerName::new_static("rust-analyzer"))
+                .and_then(|settings| settings.initialization_options.as_ref())
+                .and_then(|options| options.get("fixture")),
+                Some(&serde_json::json!("ordered"))
+            );
+        });
+        fixture.fs.unpause_events_and_flush();
+        cx.run_until_parked();
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    #[gpui::test]
+    async fn local_settings_protective_recovery_keeps_jvm_failure_until_correction(
+        cx: &mut TestAppContext,
+    ) {
+        let PendingLocalSettingsFixture {
+            observer,
+            worktrees,
+            worktree_id,
+            release,
+            pending,
+            fs,
+        } = PendingLocalSettingsFixture::new(cx).await;
+        release.send(()).expect("release earlier settings read");
+        pending.await.expect("initial ordinary settings read");
+        let worktree = worktrees
+            .read_with(cx, |store, cx| store.worktree_for_id(worktree_id, cx))
+            .expect("current settings folder");
+        enter_protective_settings_policy(worktree_id, cx);
+        cx.run_until_parked();
+        observer
+            .update(cx, |observer, cx| {
+                observer.wait_for_local_settings(worktree_id, cx)
+            })
+            .await
+            .expect("settle initial protective policy change");
+        let path: Arc<RelPath> = RelPath::from_unix_str(".zed/settings.json")
+            .expect("settings path")
+            .into();
+        let absolute =
+            std::path::Path::new(util::path!("/settings-order")).join(".zed/settings.json");
+        fs.insert_file(&absolute, vec![0xff]).await;
+        observer.update(cx, |observer, cx| {
+            observer.recover_known_settings_files(&worktree, std::slice::from_ref(&path), cx)
+        });
+        let error = observer
+            .update(cx, |observer, cx| {
+                observer.wait_for_local_settings(worktree_id, cx)
+            })
+            .await
+            .expect_err("protective read failure blocks JVM settings admission");
+        assert!(
+            error
+                .to_string()
+                .contains("existing protection was retained")
+        );
+        assert!(!observer.read_with(cx, |observer, _| {
+            observer.local_settings_are_current(worktree_id)
+        }));
+        cx.update(|cx| {
+            let settings = ProjectSettings::get(
+                Some(SettingsLocation {
+                    worktree_id,
+                    path: RelPath::empty(),
+                }),
+                cx,
+            );
+            assert_eq!(
+                settings
+                    .lsp
+                    .get(&LanguageServerName::new_static("rust-analyzer"))
+                    .and_then(|settings| settings.initialization_options.as_ref())
+                    .and_then(|options| options.get("fixture")),
+                Some(&serde_json::json!("ordered"))
+            );
+            assert!(
+                worktree::WorktreeSettings::get(
+                    Some(SettingsLocation {
+                        worktree_id,
+                        path: RelPath::empty(),
+                    }),
+                    cx,
+                )
+                .file_scan_exclusions
+                .is_conservative()
+            );
+        });
+        fs.insert_file(
+            &absolute,
+            br#"{"file_scan_exclusions":[],"lsp":{"rust-analyzer":{"initialization_options":{"fixture":"protective-correction"}}}}"#
+                .to_vec(),
+        )
+        .await;
+        let correction = observer.update(cx, |observer, cx| {
+            observer.recover_known_settings_files(&worktree, std::slice::from_ref(&path), cx);
+            observer
+                .local_settings_tasks
+                .get(&worktree_id)
+                .expect("correction read owner")
+                .clone()
+        });
+        let previous_failure = correction
+            .await
+            .expect_err("successful recovery cannot erase the earlier failed read");
+        assert!(previous_failure.contains("existing protection was retained"));
+        cx.update(|cx| {
+            let settings = ProjectSettings::get(
+                Some(SettingsLocation {
+                    worktree_id,
+                    path: RelPath::empty(),
+                }),
+                cx,
+            );
+            assert_eq!(
+                settings
+                    .lsp
+                    .get(&LanguageServerName::new_static("rust-analyzer"))
+                    .and_then(|settings| settings.initialization_options.as_ref())
+                    .and_then(|options| options.get("fixture")),
+                Some(&serde_json::json!("protective-correction")),
+                "protective recovery must apply before ordinary watcher delivery",
+            );
+            assert!(
+                !worktree::WorktreeSettings::get(
+                    Some(SettingsLocation {
+                        worktree_id,
+                        path: RelPath::empty(),
+                    }),
+                    cx,
+                )
+                .file_scan_exclusions
+                .is_conservative()
+            );
+        });
+        fs.unpause_events_and_flush();
+        cx.run_until_parked();
+        observer
+            .update(cx, |observer, cx| {
+                observer.wait_for_local_settings(worktree_id, cx)
+            })
+            .await
+            .expect("accepted correction and ordinary rescan restore current settings");
+        assert!(observer.read_with(cx, |observer, _| {
+            observer.local_settings_are_current(worktree_id)
+        }));
+        cx.update(|cx| {
+            let settings = ProjectSettings::get(
+                Some(SettingsLocation {
+                    worktree_id,
+                    path: RelPath::empty(),
+                }),
+                cx,
+            );
+            assert_eq!(
+                settings
+                    .lsp
+                    .get(&LanguageServerName::new_static("rust-analyzer"))
+                    .and_then(|settings| settings.initialization_options.as_ref())
+                    .and_then(|options| options.get("fixture")),
+                Some(&serde_json::json!("protective-correction"))
+            );
+            assert!(
+                !worktree::WorktreeSettings::get(
+                    Some(SettingsLocation {
+                        worktree_id,
+                        path: RelPath::empty(),
+                    }),
+                    cx,
+                )
+                .file_scan_exclusions
+                .is_conservative()
+            );
+        });
     }
 
     #[gpui::test]

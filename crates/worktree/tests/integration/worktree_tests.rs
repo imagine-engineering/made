@@ -6377,3 +6377,604 @@ fn test_repo_exclude_does_not_match_outside_its_work_directory() {
         "patterns must not apply outside the repository's work directory"
     );
 }
+
+#[gpui::test]
+async fn test_entry_id_is_reused_when_rename_events_are_split(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "one.rs": "const ONE: usize = 1;",
+        }),
+    )
+    .await;
+
+    let tree = Worktree::local(
+        Path::new(path!("/root")),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("worktree fixture");
+    cx.read(|cx| {
+        tree.read(cx)
+            .as_local()
+            .expect("worktree fixture")
+            .scan_complete()
+    })
+    .await;
+
+    let old_entry_id = tree.read_with(cx, |tree, _| {
+        tree.entry_for_path(rel_path("one.rs"))
+            .expect("worktree fixture")
+            .id
+    });
+
+    fs.pause_events();
+    fs.rename(
+        Path::new(path!("/root/one.rs")),
+        Path::new(path!("/root/three.rs")),
+        Default::default(),
+    )
+    .await
+    .expect("worktree fixture");
+    assert_eq!(fs.buffered_event_count(), 2);
+    fs.flush_events(1);
+    cx.executor().run_until_parked();
+    fs.flush_events(1);
+    cx.executor().run_until_parked();
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(tree.entry_for_path(rel_path("one.rs")), None);
+        assert_eq!(
+            tree.entry_for_path(rel_path("three.rs")).expect("worktree fixture").id,
+            old_entry_id,
+            "a rename whose removal and creation events arrive in separate batches must reuse the entry id"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_rescan_requests_processed_before_root_creation_events(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+
+    let tree = Worktree::local(
+        Path::new(path!("/root")),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("worktree fixture");
+    cx.read(|cx| {
+        tree.read(cx)
+            .as_local()
+            .expect("worktree fixture")
+            .scan_complete()
+    })
+    .await;
+
+    fs.pause_events();
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "a": {
+                "b": { "f1": "" },
+                "c": { "f2": "" },
+            }
+        }),
+    )
+    .await;
+
+    let mut refresh = tree.update(cx, |tree, _| {
+        tree.as_local()
+            .expect("worktree fixture")
+            .refresh_entries_for_paths(vec![rel_path("a/b/f1").into()])
+    });
+    refresh.recv().await;
+    let mut refresh = tree.update(cx, |tree, _| {
+        tree.as_local()
+            .expect("worktree fixture")
+            .refresh_entries_for_paths(vec![rel_path("a/c/f2").into()])
+    });
+    refresh.recv().await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![
+                rel_path(""),
+                rel_path("a"),
+                rel_path("a/b"),
+                rel_path("a/b/f1"),
+                rel_path("a/c"),
+                rel_path("a/c/f2"),
+            ]
+        );
+    });
+
+    fs.unpause_events_and_flush();
+    cx.executor().run_until_parked();
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![
+                rel_path(""),
+                rel_path("a"),
+                rel_path("a/b"),
+                rel_path("a/b/f1"),
+                rel_path("a/c"),
+                rel_path("a/c/f2"),
+            ]
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_worktree_root_admission_precedes_initial_metadata(cx: &mut TestAppContext) {
+    use gpui::FutureExt as _;
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/admission-root"), json!({"source":"ORIGINAL"}))
+        .await;
+    let original_inode = filesystem
+        .metadata(Path::new(path!("/admission-root")))
+        .await
+        .expect("original metadata")
+        .expect("original root")
+        .inode;
+    let (captured, resume) = filesystem
+        .pause_root_capture_for_test()
+        .expect("capture checkpoint");
+    let mut asynchronous = cx.to_async();
+    let creation = cx.foreground_executor.spawn({
+        let filesystem = filesystem.clone();
+        async move {
+            Worktree::local(
+                Path::new(path!("/admission-root")),
+                false,
+                filesystem,
+                Default::default(),
+                false,
+                WorktreeId::from_proto(0),
+                &mut asynchronous,
+            )
+            .await
+        }
+    });
+    let captured = captured
+        .with_timeout(std::time::Duration::from_secs(1), &cx.background_executor)
+        .await
+        .expect("bounded successful capture")
+        .expect("original admission captured");
+    assert_eq!(captured.metadata().inode, original_inode);
+    filesystem
+        .rename(
+            Path::new(path!("/admission-root")),
+            Path::new(path!("/admitted-original")),
+            fs::RenameOptions::default(),
+        )
+        .await
+        .expect("retain original root before constructor installs");
+    filesystem
+        .insert_tree(
+            path!("/admission-root"),
+            json!({"source":"REPLACEMENT_CANARY"}),
+        )
+        .await;
+    let replacement_inode = filesystem
+        .metadata(Path::new(path!("/admission-root")))
+        .await
+        .expect("replacement metadata")
+        .expect("replacement root")
+        .inode;
+    assert_ne!(original_inode, replacement_inode);
+    resume.send(()).expect("install original admission");
+    let tree = creation
+        .await
+        .expect("ordinary owner constructs after intervening replacement");
+    let admission = tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.root_entry().expect("initial root entry").inode,
+            original_inode,
+            "initial metadata must come from the captured object"
+        );
+        tree.as_local()
+            .expect("local")
+            .confined_root()
+            .expect("original admission")
+            .clone()
+    });
+    assert!(captured.same_admission(&admission));
+    assert!(
+        filesystem
+            .read_confined_file(
+                &admission,
+                Path::new(path!("/admission-root")),
+                Path::new("source"),
+                64
+            )
+            .await
+            .is_err(),
+        "replacement must not become strict read authority"
+    );
+    assert!(
+        filesystem
+            .is_confined_file_absent(
+                &admission,
+                Path::new(path!("/admission-root")),
+                Path::new("missing")
+            )
+            .await
+            .is_err(),
+        "replacement must not become deletion authority"
+    );
+}
+
+#[gpui::test]
+async fn test_worktree_root_admission_cancelled_capture_releases_handle(cx: &mut TestAppContext) {
+    use gpui::FutureExt as _;
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/cancel-admission"), json!({"source":"ORIGINAL"}))
+        .await;
+    let (captured, resume) = filesystem
+        .pause_root_capture_for_test()
+        .expect("capture checkpoint");
+    let mut asynchronous = cx.to_async();
+    let creation = cx.foreground_executor.spawn({
+        let filesystem = filesystem.clone();
+        async move {
+            Worktree::local(
+                Path::new(path!("/cancel-admission")),
+                false,
+                filesystem,
+                Default::default(),
+                false,
+                WorktreeId::from_proto(0),
+                &mut asynchronous,
+            )
+            .await
+        }
+    });
+    let captured = captured
+        .with_timeout(std::time::Duration::from_secs(1), &cx.background_executor)
+        .await
+        .expect("bounded captured original")
+        .expect("actual capture");
+    let handle = captured.file_handle();
+    let weak = Arc::downgrade(&handle);
+    drop(handle);
+    drop(captured);
+    assert!(
+        weak.upgrade().is_some(),
+        "paused constructor retains actual admission handle"
+    );
+    drop(creation);
+    cx.run_until_parked();
+    assert!(
+        resume.send(()).is_err(),
+        "canceled capture drops its wait receiver"
+    );
+    assert!(
+        weak.upgrade().is_none(),
+        "canceled constructor releases the original handle owner"
+    );
+}
+
+#[gpui::test]
+async fn test_worktree_root_admission_scanner_restart_reuses_same_handle(cx: &mut TestAppContext) {
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/restart-admission"), json!({"source":"ORIGINAL"}))
+        .await;
+    let tree = Worktree::local(
+        Path::new(path!("/restart-admission")),
+        false,
+        filesystem,
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("local root");
+    tree.read_with(cx, |tree, _| {
+        tree.as_local().expect("local").scan_complete()
+    })
+    .await;
+    cx.run_until_parked();
+    let original = tree.read_with(cx, |tree, _| {
+        tree.as_local()
+            .expect("local")
+            .confined_root()
+            .expect("original admission")
+            .clone()
+    });
+    for deferred in [true, false, true, false] {
+        tree.update(cx, |tree, cx| {
+            tree.as_local_mut()
+                .expect("local")
+                .set_defer_watch(deferred, cx)
+        });
+        cx.run_until_parked();
+        tree.read_with(cx, |tree, _| {
+            let current = tree
+                .as_local()
+                .expect("local")
+                .confined_root()
+                .expect("retained original");
+            assert!(original.same_admission(current));
+            assert!(
+                Arc::ptr_eq(&original.file_handle(), &current.file_handle()),
+                "restart must not create a second rename handle"
+            );
+        });
+    }
+}
+
+#[gpui::test]
+async fn test_worktree_root_admission_follows_original_rename(cx: &mut TestAppContext) {
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/rename-admission"), json!({"source":"ORIGINAL"}))
+        .await;
+    let tree = Worktree::local(
+        Path::new(path!("/rename-admission")),
+        false,
+        filesystem.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("local root");
+    tree.read_with(cx, |tree, _| {
+        tree.as_local().expect("local").scan_complete()
+    })
+    .await;
+    cx.run_until_parked();
+    let original = tree.read_with(cx, |tree, _| {
+        tree.as_local()
+            .expect("local")
+            .confined_root()
+            .expect("original admission")
+            .clone()
+    });
+    filesystem
+        .rename(
+            Path::new(path!("/rename-admission")),
+            Path::new(path!("/renamed-admission")),
+            fs::RenameOptions::default(),
+        )
+        .await
+        .expect("same object root rename");
+    cx.run_until_parked();
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.abs_path().as_ref(),
+            Path::new(path!("/renamed-admission"))
+        );
+        assert!(
+            original.same_admission(
+                tree.as_local()
+                    .expect("local")
+                    .confined_root()
+                    .expect("same original")
+            )
+        );
+    });
+    let content = filesystem
+        .read_confined_file(
+            &original,
+            Path::new(path!("/renamed-admission")),
+            Path::new("source"),
+            64,
+        )
+        .await
+        .expect("same original at accepted current name");
+    assert_eq!(content.bytes, b"ORIGINAL");
+    assert!(
+        filesystem
+            .read_confined_file(
+                &original,
+                Path::new(path!("/rename-admission")),
+                Path::new("source"),
+                64
+            )
+            .await
+            .is_err()
+    );
+}
+
+#[gpui::test]
+async fn test_worktree_root_admission_replacement_requires_new_owner(cx: &mut TestAppContext) {
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/replace-admission"), json!({"source":"ORIGINAL"}))
+        .await;
+    let tree = Worktree::local(
+        Path::new(path!("/replace-admission")),
+        false,
+        filesystem.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("original local owner");
+    tree.read_with(cx, |tree, _| {
+        tree.as_local().expect("local").scan_complete()
+    })
+    .await;
+    cx.run_until_parked();
+    let original = tree.read_with(cx, |tree, _| {
+        tree.as_local()
+            .expect("local")
+            .confined_root()
+            .expect("original admission")
+            .clone()
+    });
+    filesystem
+        .remove_dir(
+            Path::new(path!("/replace-admission")),
+            RemoveOptions {
+                recursive: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("remove only fixture root");
+    filesystem
+        .insert_tree(
+            path!("/replace-admission"),
+            json!({"source":"REPLACEMENT_CANARY"}),
+        )
+        .await;
+    tree.update(cx, |tree, cx| {
+        tree.as_local_mut()
+            .expect("local")
+            .set_defer_watch(true, cx)
+    });
+    cx.run_until_parked();
+    assert!(tree.read_with(cx, |tree, _| {
+        original.same_admission(
+            tree.as_local()
+                .expect("local")
+                .confined_root()
+                .expect("retained original"),
+        )
+    }));
+    assert!(
+        filesystem
+            .read_confined_file(
+                &original,
+                Path::new(path!("/replace-admission")),
+                Path::new("source"),
+                64
+            )
+            .await
+            .is_err()
+    );
+    let readmitted = Worktree::local(
+        Path::new(path!("/replace-admission")),
+        false,
+        filesystem.clone(),
+        Default::default(),
+        false,
+        WorktreeId::from_proto(1),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("explicit new worktree owner");
+    let renewed = readmitted.read_with(cx, |tree, _| {
+        tree.as_local()
+            .expect("local")
+            .confined_root()
+            .expect("new admission")
+            .clone()
+    });
+    assert!(!original.same_admission(&renewed));
+    let content = filesystem
+        .read_confined_file(
+            &renewed,
+            Path::new(path!("/replace-admission")),
+            Path::new("source"),
+            64,
+        )
+        .await
+        .expect("new owner admits replacement explicitly");
+    assert_eq!(content.bytes, b"REPLACEMENT_CANARY");
+}
+
+#[gpui::test]
+async fn test_worktree_root_admission_file_root_and_release(cx: &mut TestAppContext) {
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/file-admission"), json!({"source":"ORIGINAL"}))
+        .await;
+    let tree = Worktree::local(
+        Path::new(path!("/file-admission/source")),
+        false,
+        filesystem.clone(),
+        Default::default(),
+        false,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("ordinary single file owner");
+    let admission = tree.read_with(cx, |tree, _| {
+        assert!(tree.is_single_file());
+        tree.as_local()
+            .expect("local")
+            .confined_root()
+            .expect("single file admission")
+            .clone()
+    });
+    assert!(!admission.metadata().is_dir);
+    let content = filesystem
+        .read_confined_file(
+            &admission,
+            Path::new(path!("/file-admission/source")),
+            Path::new(""),
+            64,
+        )
+        .await
+        .expect("empty relative file-root read");
+    assert_eq!(content.bytes, b"ORIGINAL");
+    assert!(
+        filesystem
+            .read_confined_file(
+                &admission,
+                Path::new(path!("/file-admission/source")),
+                Path::new("child"),
+                64
+            )
+            .await
+            .is_err()
+    );
+    let handle = admission.file_handle();
+    let weak = Arc::downgrade(&handle);
+    drop(handle);
+    drop(admission);
+    assert!(
+        weak.upgrade().is_some(),
+        "actual Worktree still owns its admission"
+    );
+    let weak_tree = tree.downgrade();
+    drop(tree);
+    assert!(
+        weak_tree.upgrade().is_none(),
+        "no remaining Worktree entity owner"
+    );
+    // GPUI releases entity payloads when App flushes effects, rather than while dispatching tasks.
+    cx.update(|_| {});
+    cx.run_until_parked();
+    assert!(
+        weak.upgrade().is_none(),
+        "releasing Worktree/scanner snapshots releases the handle owner"
+    );
+}

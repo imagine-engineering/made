@@ -1615,11 +1615,13 @@ impl Render for ConfigurationView {
                 h_flex()
                     .pt_2()
                     .w_full()
+                    .flex_wrap()
                     .justify_between()
                     .gap_2()
                     .child(
                         h_flex()
                             .w_full()
+                            .flex_wrap()
                             .gap_2()
                             .map(|this| {
                                 if is_authenticated {

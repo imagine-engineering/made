@@ -418,13 +418,69 @@ fn case_insensitive_path(_path: &Path) -> bool {
 
 /// Whether `path` is `root` or sits beneath it, folding case on case-insensitive
 /// volumes so a differently-cased spelling still matches.
+fn normalize_watch_path(path: &Path) -> std::borrow::Cow<'_, Path> {
+    #[cfg(target_os = "macos")]
+    {
+        // FSEvents can switch between these spellings even for removed descendants.
+        // Verify only fixed local system aliases once; never resolve event paths by I/O.
+        static SYSTEM_ALIASES: LazyLock<Vec<(&Path, &Path)>> = LazyLock::new(|| {
+            [
+                ("/tmp", "/private/tmp"),
+                ("/var", "/private/var"),
+                ("/etc", "/private/etc"),
+            ]
+            .into_iter()
+            .filter_map(|(alias, canonical)| match fs::read_link(alias) {
+                Ok(target) if Path::new("/").join(&target) == Path::new(canonical) => {
+                    Some((Path::new(alias), Path::new(canonical)))
+                }
+                Ok(_) => None,
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::NotFound | std::io::ErrorKind::InvalidInput
+                    ) =>
+                {
+                    None
+                }
+                Err(error) => {
+                    log::warn!("Could not verify macOS system watch alias {alias}: {error}");
+                    None
+                }
+            })
+            .collect()
+        });
+        for (alias, canonical) in SYSTEM_ALIASES.iter() {
+            if let Ok(suffix) = path.strip_prefix(alias) {
+                return std::borrow::Cow::Owned(canonical.join(suffix));
+            }
+        }
+    }
+    std::borrow::Cow::Borrowed(path)
+}
+
+fn folded_watch_path(path: &Path) -> String {
+    let lossy = path.to_string_lossy();
+    #[cfg(target_os = "macos")]
+    let folded = {
+        use unicode_normalization::UnicodeNormalization as _;
+        lossy.chars().nfc().collect::<String>().to_lowercase()
+    };
+    #[cfg(not(target_os = "macos"))]
+    let folded = lossy.to_lowercase();
+    if let std::borrow::Cow::Owned(normalized) = normalize_watch_path(Path::new(&folded)) {
+        return normalized.to_string_lossy().into_owned();
+    }
+    folded
+}
+
 fn path_is_under(path: &SanitizedPath, root: &SanitizedPath, case_insensitive: bool) -> bool {
     if case_insensitive {
-        let path = path.as_path().to_string_lossy().to_lowercase();
-        let root = root.as_path().to_string_lossy().to_lowercase();
+        let path = folded_watch_path(path.as_path());
+        let root = folded_watch_path(root.as_path());
         Path::new(&path).starts_with(Path::new(&root))
     } else {
-        path.starts_with(root)
+        normalize_watch_path(path.as_path()).starts_with(normalize_watch_path(root.as_path()))
     }
 }
 
@@ -439,10 +495,6 @@ fn path_is_under(path: &SanitizedPath, root: &SanitizedPath, case_insensitive: b
 /// never be hit by a folded lookup (or vice versa); dispatch can therefore probe
 /// both forms of an event path without risking a cross-rule false match.
 ///
-/// NOTE: folding only normalizes case. macOS (APFS/HFS+) is also Unicode
-/// normalization-insensitive (NFC vs NFD); that normalization is intentionally
-/// centralized here so it can be added in one place later without touching the
-/// add/remove/dispatch call sites.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum WatchKey {
     Exact(Arc<Path>),
@@ -451,23 +503,11 @@ enum WatchKey {
 
 impl WatchKey {
     fn exact(path: &SanitizedPath) -> Self {
-        Self::Exact(Arc::from(path.as_path()))
+        Self::Exact(Arc::from(normalize_watch_path(path.as_path()).as_ref()))
     }
 
     fn folded(path: &SanitizedPath) -> Self {
-        let lossy = path.as_path().to_string_lossy();
-        // macOS (APFS/HFS+) compares names normalization-insensitively (NFC vs
-        // NFD), and FSEvents can report NFD while a config/LSP supplies NFC, so
-        // normalize before folding case. Windows (NTFS) and Linux are
-        // normalization-sensitive, so there we only fold case.
-        #[cfg(target_os = "macos")]
-        let folded = {
-            use unicode_normalization::UnicodeNormalization as _;
-            lossy.chars().nfc().collect::<String>().to_lowercase()
-        };
-        #[cfg(not(target_os = "macos"))]
-        let folded = lossy.to_lowercase();
-        Self::Folded(folded.into())
+        Self::Folded(folded_watch_path(path.as_path()).into())
     }
 
     fn for_registration(path: &SanitizedPath, case_insensitive: bool) -> Self {
@@ -585,7 +625,8 @@ fn push_notify_event(
         .paths
         .iter()
         .filter_map(|event_path| {
-            let event_path = SanitizedPath::new(event_path);
+            let normalized = normalize_watch_path(event_path);
+            let event_path = SanitizedPath::new(normalized.as_ref());
             path_is_under(event_path, root_path, case_insensitive).then(|| PathEvent {
                 path: event_path.as_path().to_path_buf(),
                 kind,
@@ -598,9 +639,10 @@ fn push_notify_event(
             log::warn!("filesystem watcher lost sync for {watched_root:?}; scheduling rescan");
         }
 
-        path_events.retain(|path_event| path_event.path != watched_root);
+        let watched_root = normalize_watch_path(watched_root);
+        path_events.retain(|path_event| path_event.path.as_path() != watched_root.as_ref());
         path_events.push(PathEvent {
-            path: watched_root.to_path_buf(),
+            path: watched_root.into_owned(),
             kind: Some(PathEventKind::Rescan),
         });
     }
@@ -825,6 +867,10 @@ impl GlobalWatcher {
         case_insensitive: bool,
         cb: impl Fn(&notify::Event) + Send + Sync + 'static,
     ) -> anyhow::Result<Option<WatcherRegistrationId>> {
+        let path = match normalize_watch_path(path.as_ref()) {
+            std::borrow::Cow::Owned(normalized) => Arc::<Path>::from(normalized),
+            std::borrow::Cow::Borrowed(_) => path,
+        };
         let path = SanitizedPath::from_arc(path);
         let key = WatchKey::for_registration(&path, case_insensitive);
         let mut state = self.state.lock();
@@ -892,7 +938,7 @@ impl GlobalWatcher {
     }
 
     fn dispatch(&self, mode: WatcherMode, event: Result<notify::Event, notify::Error>) {
-        let event = match event {
+        let mut event = match event {
             Ok(event) => event,
             Err(error) => {
                 log::warn!("watcher error for {mode:?}: {error}");
@@ -901,6 +947,12 @@ impl GlobalWatcher {
         };
 
         log::trace!("global handle event for {mode:?}: {event:?}");
+
+        for path in &mut event.paths {
+            if let std::borrow::Cow::Owned(normalized) = normalize_watch_path(path) {
+                *path = normalized;
+            }
+        }
 
         let callbacks = {
             let state = self.state.lock();
@@ -1385,6 +1437,173 @@ mod tests {
         let mut got = fired.lock().clone();
         got.sort();
         assert_eq!(got, vec!["/repo/a".to_owned(), "/repo/a/nested".to_owned()]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_system_alias_watch_keys_match_without_matching_siblings() {
+        for (alias, canonical) in [
+            ("/tmp", "/private/tmp"),
+            ("/var", "/private/var"),
+            ("/etc", "/private/etc"),
+        ] {
+            assert_eq!(
+                Path::new("/").join(fs::read_link(alias).expect("system alias")),
+                Path::new(canonical)
+            );
+            let alias = Path::new(alias).join("copper-native-watch");
+            let canonical = Path::new(canonical).join("copper-native-watch");
+            assert_eq!(
+                WatchKey::exact(SanitizedPath::new(&alias)),
+                WatchKey::exact(SanitizedPath::new(&canonical))
+            );
+            assert_eq!(
+                WatchKey::folded(SanitizedPath::new(&alias)),
+                WatchKey::folded(SanitizedPath::new(&canonical))
+            );
+            assert_eq!(
+                WatchKey::folded(SanitizedPath::new(Path::new(
+                    &alias.to_string_lossy().to_uppercase()
+                ))),
+                WatchKey::folded(SanitizedPath::new(&canonical))
+            );
+        }
+        let alias = SanitizedPath::new(Path::new("/tmp/copper-native-watch"));
+        let canonical = SanitizedPath::new(Path::new("/private/tmp/copper-native-watch"));
+        assert_eq!(WatchKey::exact(alias), WatchKey::exact(canonical));
+        assert_eq!(WatchKey::folded(alias), WatchKey::folded(canonical));
+        assert_ne!(
+            WatchKey::exact(alias),
+            WatchKey::exact(SanitizedPath::new(Path::new(
+                "/private/tmp/copper-native-watch-sibling"
+            )))
+        );
+        assert_ne!(
+            WatchKey::exact(SanitizedPath::new(Path::new("/repo/tmp/file"))),
+            WatchKey::exact(SanitizedPath::new(Path::new("/repo/private/tmp/file")))
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_system_alias_dispatch_reaches_both_root_spellings() {
+        for (root, event_path) in [
+            (
+                "/private/tmp/copper-native-watch",
+                "/tmp/copper-native-watch/missing/settings.json",
+            ),
+            (
+                "/tmp/copper-native-watch",
+                "/private/tmp/copper-native-watch/missing/settings.json",
+            ),
+        ] {
+            for case_insensitive in [false, true] {
+                let (fired, callback) = fired_count();
+                let watcher = test_watcher_with_backends(Some(Default::default()), None);
+                watcher
+                    .add(
+                        Path::new(root).into(),
+                        WatcherMode::Native,
+                        case_insensitive,
+                        callback,
+                    )
+                    .expect("register root")
+                    .expect("registered");
+                watcher.dispatch(
+                    WatcherMode::Native,
+                    Ok(
+                        notify::Event::new(EventKind::Remove(notify::event::RemoveKind::File))
+                            .add_path(PathBuf::from(event_path)),
+                    ),
+                );
+                assert_eq!(
+                    *fired.lock(),
+                    1,
+                    "removed descendant event must reach {root} from {event_path}"
+                );
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_system_alias_callback_keeps_deleted_descendants() {
+        let (sender, _receiver) = smol::channel::unbounded();
+        let pending = Arc::new(Mutex::new(Vec::new()));
+        let root = Path::new("/private/tmp/copper-native-watch");
+        let event = notify::Event::new(EventKind::Remove(notify::event::RemoveKind::File))
+            .add_path(PathBuf::from(
+                "/tmp/copper-native-watch/missing/settings.json",
+            ));
+        push_notify_event(
+            &sender,
+            &pending,
+            SanitizedPath::new(root),
+            false,
+            root,
+            &event,
+        );
+        assert_eq!(
+            *pending.lock(),
+            vec![PathEvent {
+                path: PathBuf::from("/private/tmp/copper-native-watch/missing/settings.json"),
+                kind: Some(PathEventKind::Removed)
+            }]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_system_alias_rescan_keeps_canonical_root() {
+        let (sender, _receiver) = smol::channel::unbounded();
+        let pending = Arc::new(Mutex::new(Vec::new()));
+        let root = Path::new("/tmp/copper-native-watch");
+        let event = notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        push_notify_event(
+            &sender,
+            &pending,
+            SanitizedPath::new(root),
+            false,
+            root,
+            &event,
+        );
+        assert_eq!(
+            *pending.lock(),
+            vec![rescan("/private/tmp/copper-native-watch")]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_system_alias_shared_registration_balances_teardown() {
+        for case_insensitive in [false, true] {
+            let backend = Arc::new(Mutex::new(FakeWatchBackend::default()));
+            let watcher = test_watcher_with_backends(Some(backend.clone()), None);
+            let alias = Path::new("/tmp/copper-native-watch");
+            let canonical = Path::new("/private/tmp/copper-native-watch");
+            let first = watcher
+                .add(alias.into(), WatcherMode::Native, case_insensitive, |_| {})
+                .expect("first spelling")
+                .expect("registered");
+            let second = watcher
+                .add(
+                    canonical.into(),
+                    WatcherMode::Native,
+                    case_insensitive,
+                    |_| {},
+                )
+                .expect("second spelling")
+                .expect("registered");
+            assert_eq!(backend.lock().watch_calls, vec![canonical.to_path_buf()]);
+            watcher.remove(first);
+            assert_eq!(
+                backend.lock().watched_paths,
+                HashSet::from([canonical.to_path_buf()])
+            );
+            watcher.remove(second);
+            assert!(backend.lock().watched_paths.is_empty());
+            assert_eq!(backend.lock().unwatch_calls, vec![canonical.to_path_buf()]);
+        }
     }
 
     fn fired_count() -> (

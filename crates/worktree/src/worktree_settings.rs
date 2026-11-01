@@ -1,9 +1,7 @@
 use std::path::Path;
 
-use anyhow::Context as _;
 use settings::{RegisterSetting, ScanSymlinksSetting, Settings};
 use util::{
-    ResultExt,
     paths::{PathMatcher, PathStyle},
     rel_path::RelPath,
 };
@@ -24,6 +22,14 @@ pub struct WorktreeSettings {
 }
 
 impl WorktreeSettings {
+    pub fn can_recover_excluded_settings_path(&self, path: &RelPath) -> bool {
+        self.file_scan_exclusions.is_conservative()
+            && path.ends_with(paths::local_settings_file_relative_path())
+            && !path
+                .ancestors()
+                .any(|ancestor| self.file_scan_exclusions.is_match_accepted(ancestor))
+    }
+
     pub fn is_path_private(&self, path: &RelPath) -> bool {
         path.ancestors()
             .any(|ancestor| self.private_files.is_match(ancestor))
@@ -65,45 +71,124 @@ impl Settings for WorktreeSettings {
         let hidden_files = worktree.hidden_files.unwrap();
         let read_only_files = worktree.read_only_files.unwrap_or_default();
         let scan_symlinks = worktree.scan_symlinks.unwrap();
-        let parsed_file_scan_inclusions: Vec<String> = file_scan_inclusions
-            .iter()
-            .flat_map(|glob| {
-                Path::new(glob)
-                    .ancestors()
-                    .skip(1)
-                    .map(|a| a.to_string_lossy().into())
-            })
-            .filter(|p: &String| !p.is_empty())
-            .collect();
+        let (file_scan_inclusions, parent_dir_scan_inclusions) =
+            file_scan_inclusion_matchers(file_scan_inclusions);
 
         Self {
             prevent_sharing_in_public_channels: worktree.prevent_sharing_in_public_channels,
-            file_scan_exclusions: path_matchers(file_scan_exclusions, "file_scan_exclusions")
-                .log_err()
-                .unwrap_or_default(),
-            parent_dir_scan_inclusions: path_matchers(
-                parsed_file_scan_inclusions,
-                "file_scan_inclusions",
-            )
-            .unwrap(),
-            file_scan_inclusions: path_matchers(file_scan_inclusions, "file_scan_inclusions")
-                .unwrap(),
-            private_files: path_matchers(private_files, "private_files")
-                .log_err()
-                .unwrap_or_default(),
-            hidden_files: path_matchers(hidden_files, "hidden_files")
-                .log_err()
-                .unwrap_or_default(),
-            read_only_files: path_matchers(read_only_files, "read_only_files")
-                .log_err()
-                .unwrap_or_default(),
+            file_scan_exclusions: valid_path_matchers(
+                file_scan_exclusions,
+                "file_scan_exclusions",
+                true,
+            ),
+            parent_dir_scan_inclusions,
+            file_scan_inclusions,
+            private_files: valid_path_matchers(private_files, "private_files", true),
+            hidden_files: valid_path_matchers(hidden_files, "hidden_files", false),
+            read_only_files: valid_path_matchers(read_only_files, "read_only_files", true),
             scan_symlinks,
         }
     }
 }
 
-fn path_matchers(mut values: Vec<String>, context: &'static str) -> anyhow::Result<PathMatcher> {
+fn valid_path_matchers(
+    mut values: Vec<String>,
+    context: &'static str,
+    protective: bool,
+) -> PathMatcher {
     values.sort();
-    PathMatcher::new(values, PathStyle::local())
-        .with_context(|| format!("Failed to parse globs from {}", context))
+    match PathMatcher::new_lenient(values, PathStyle::local(), |error| {
+        let source = error
+            .glob()
+            .map(|source| source.chars().take(120).collect::<String>());
+        log::error!(
+            "Invalid pattern in `{context}`: {source:?}: {}",
+            error.kind()
+        );
+    }) {
+        Ok(matcher) => matcher,
+        Err(error) => {
+            for failure in &error.failures {
+                let source = failure.source.chars().take(120).collect::<String>();
+                log::error!(
+                    "Uncompiled pattern in `{context}` at parsed index {}: {source:?}: {}",
+                    failure.index,
+                    failure.error.kind()
+                );
+            }
+            if protective {
+                log::error!(
+                    "Protecting all paths because `{context}` contains an uncompiled pattern; correct these settings to restore normal matching"
+                );
+                error.into_conservative_matcher()
+            } else {
+                *error.partial
+            }
+        }
+    }
+}
+
+fn file_scan_inclusion_matchers(values: Vec<String>) -> (PathMatcher, PathMatcher) {
+    let inclusions = valid_path_matchers(values, "file_scan_inclusions", false);
+    let parents = inclusions
+        .accepted_sources()
+        .iter()
+        .flat_map(|pattern| inclusion_parent_patterns(pattern, PathStyle::local()))
+        .collect();
+    let parent_inclusions = valid_path_matchers(parents, "file_scan_inclusions", false);
+    (inclusions, parent_inclusions)
+}
+
+fn inclusion_parent_patterns(pattern: &str, path_style: PathStyle) -> Vec<String> {
+    let mut parents = Vec::new();
+    let mut open_braces = 0_usize;
+    let mut class_start = None;
+    let mut escaped = false;
+    for (index, character) in pattern.char_indices() {
+        let is_separator = path_style.separators_ch().contains(&character);
+        let mut split_index = index;
+        if class_start.is_none() {
+            if escaped {
+                escaped = false;
+                if !is_separator {
+                    continue;
+                }
+                split_index -= 1;
+            } else if character == '\\' && path_style.is_posix() {
+                escaped = true;
+                continue;
+            }
+        }
+        if let Some(start) = class_start {
+            let first_content = start
+                + 1
+                + usize::from(matches!(
+                    pattern.as_bytes().get(start + 1),
+                    Some(b'!' | b'^')
+                ));
+            if character == ']' && index > first_content {
+                class_start = None;
+            }
+        } else {
+            match character {
+                '[' => class_start = Some(index),
+                '{' => open_braces += 1,
+                '}' => open_braces = open_braces.saturating_sub(1),
+                _ => {}
+            }
+        }
+        if is_separator {
+            let closing_braces = "}".repeat(open_braces);
+            if let Some(start) = class_start {
+                parents.push(format!("{}*{closing_braces}", &pattern[..start]));
+            } else if open_braces > 0 {
+                parents.push(format!("{}{closing_braces}", &pattern[..split_index]));
+            } else if split_index > 0 {
+                parents.push(pattern[..split_index].to_string());
+            }
+        }
+    }
+    parents.sort();
+    parents.dedup();
+    parents
 }

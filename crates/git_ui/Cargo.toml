@@ -19,9 +19,15 @@ agentic = [
     "dep:language_model",
     "dep:prompt_store",
     "zed_actions/agentic",
+    "editor/agentic",
 ]
 multiplayer-tools = ["dep:collaboration_domain", "workspace/multiplayer-tools"]
-test-support = ["multi_buffer/test-support", "remote_connection/test-support"]
+test-support = [
+    "multi_buffer/test-support",
+    "remote_connection/test-support",
+    "project/test-support",
+    "workspace/test-support",
+]
 call = ["dep:call"]
 
 [dependencies]

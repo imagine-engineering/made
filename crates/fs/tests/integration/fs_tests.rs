@@ -1770,3 +1770,1913 @@ async fn fake_fs_confined_owned_file_is_unsupported_while_reader_stays_simulated
     reader.read_to_end(&mut bytes).expect("simulated bytes");
     assert_eq!(bytes, b"simulated");
 }
+
+async fn check_retained_root_contract(filesystem: &dyn Fs, root: &Path) {
+    filesystem
+        .create_dir(&root.join("nested"))
+        .await
+        .expect("fixture directories");
+    filesystem
+        .write(&root.join("nested/settings.json"), b"{}\n")
+        .await
+        .expect("fixture settings");
+    let admission = filesystem
+        .capture_confined_root(root)
+        .await
+        .expect("admit original root");
+    let clone = admission.clone();
+    assert!(admission.same_admission(&clone));
+    let readmission = filesystem
+        .capture_confined_root(root)
+        .await
+        .expect("explicit readmission");
+    assert!(!admission.same_admission(&readmission));
+    let handle = admission.file_handle();
+    let handle_owners = Arc::strong_count(&handle);
+    let additional_clone = admission.clone();
+    assert_eq!(Arc::strong_count(&handle), handle_owners);
+    drop(additional_clone);
+    let present = filesystem
+        .read_confined_file(&admission, root, Path::new("nested/settings.json"), 3)
+        .await
+        .expect("bounded original read");
+    assert_eq!(present.bytes, b"{}\n");
+    assert_eq!(present.metadata.len, 3);
+    for limit in [0, 2, usize::MAX] {
+        assert!(
+            filesystem
+                .read_confined_file(&admission, root, Path::new("nested/settings.json"), limit)
+                .await
+                .is_err()
+        );
+    }
+    for missing in ["nested/missing.json", "missing/child/settings.json"] {
+        assert!(
+            filesystem
+                .is_confined_file_absent(&admission, root, Path::new(missing))
+                .await
+                .expect("confirmed absence")
+        );
+        assert!(
+            filesystem
+                .read_confined_file(&admission, root, Path::new(missing), 32)
+                .await
+                .is_err()
+        );
+    }
+    for present in ["nested", "nested/settings.json"] {
+        assert!(
+            !filesystem
+                .is_confined_file_absent(&admission, root, Path::new(present))
+                .await
+                .expect("existing entry")
+        );
+    }
+    filesystem
+        .create_symlink(&root.join("dangling-file"), root.join("uncreated"))
+        .await
+        .expect("dangling final link");
+    assert!(
+        !filesystem
+            .is_confined_file_absent(&admission, root, Path::new("dangling-file"))
+            .await
+            .expect("final alias is present")
+    );
+    assert!(
+        filesystem
+            .read_confined_file(&admission, root, Path::new("dangling-file"), 32)
+            .await
+            .is_err()
+    );
+    for (name, target) in [
+        ("linked-parent", root.join("nested")),
+        ("dangling-parent", root.join("uncreated")),
+    ] {
+        filesystem
+            .create_symlink(&root.join(name), target)
+            .await
+            .expect("parent alias");
+        assert!(
+            filesystem
+                .is_confined_file_absent(&admission, root, &Path::new(name).join("missing.json"))
+                .await
+                .is_err()
+        );
+        assert!(
+            filesystem
+                .read_confined_file(&admission, root, &Path::new(name).join("settings.json"), 32)
+                .await
+                .is_err()
+        );
+    }
+    for invalid in [
+        Path::new("../escape"),
+        root,
+        Path::new(""),
+        Path::new("nested/settings.json/child"),
+    ] {
+        assert!(
+            filesystem
+                .is_confined_file_absent(&admission, root, invalid)
+                .await
+                .is_err()
+        );
+        assert!(
+            filesystem
+                .read_confined_file(&admission, root, invalid, 32)
+                .await
+                .is_err()
+        );
+    }
+    for invalid in ["x".repeat(4097), vec!["x"; 257].join("/")] {
+        assert!(
+            filesystem
+                .is_confined_file_absent(&admission, root, Path::new(&invalid))
+                .await
+                .is_err()
+        );
+        assert!(
+            filesystem
+                .read_confined_file(&admission, root, Path::new(&invalid), 32)
+                .await
+                .is_err()
+        );
+    }
+    let file_path = root.join("nested/settings.json");
+    let file_admission = filesystem
+        .capture_confined_root(&file_path)
+        .await
+        .expect("admit ordinary file");
+    assert!(!file_admission.metadata().is_dir);
+    assert_eq!(
+        filesystem
+            .read_confined_file(&file_admission, &file_path, Path::new(""), 3)
+            .await
+            .expect("file-root bytes")
+            .bytes,
+        b"{}\n"
+    );
+    assert!(
+        filesystem
+            .read_confined_file(&file_admission, &file_path, Path::new("child"), 3)
+            .await
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .is_confined_file_absent(&file_admission, &file_path, Path::new("missing"))
+            .await
+            .is_err()
+    );
+    let retained = root.with_extension("retained");
+    filesystem
+        .rename(root, &retained, RenameOptions::default())
+        .await
+        .expect("move original root");
+    filesystem
+        .create_dir(&root.join("nested"))
+        .await
+        .expect("replacement root");
+    filesystem
+        .write(&root.join("nested/settings.json"), b"replacement canary")
+        .await
+        .expect("replacement canary");
+    assert!(
+        filesystem
+            .read_confined_file(&admission, root, Path::new("nested/settings.json"), 64)
+            .await
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .is_confined_file_absent(&admission, root, Path::new("missing"))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        filesystem
+            .read_confined_file(&admission, &retained, Path::new("nested/settings.json"), 3)
+            .await
+            .expect("same admitted object at accepted new name")
+            .bytes,
+        b"{}\n"
+    );
+    drop(admission);
+    drop(clone);
+    assert_eq!(Arc::strong_count(&handle), 1);
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_contract(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("retained-root fixture");
+    let root = std::fs::canonicalize(fixture.path())
+        .expect("canonical fixture")
+        .join("root");
+    let filesystem = RealFs::new(None, executor);
+    check_retained_root_contract(&filesystem, &root).await;
+}
+
+#[gpui::test]
+async fn test_fake_fs_retained_root_contract(cx: &mut TestAppContext) {
+    let filesystem = FakeFs::new(cx.executor());
+    check_retained_root_contract(filesystem.as_ref(), Path::new(path!("/retained-root"))).await;
+}
+
+#[gpui::test]
+async fn test_fake_fs_retained_root_rejects_another_domain(cx: &mut TestAppContext) {
+    let first = FakeFs::new(cx.executor());
+    let second = FakeFs::new(cx.executor());
+    let root = Path::new(path!("/domain-root"));
+    for filesystem in [&first, &second] {
+        filesystem.create_dir(root).await.expect("domain root");
+        filesystem
+            .write(&root.join("settings.json"), b"domain canary")
+            .await
+            .expect("domain canary");
+    }
+    let first_admission = first
+        .capture_confined_root(root)
+        .await
+        .expect("first domain admission");
+    let second_admission = second
+        .capture_confined_root(root)
+        .await
+        .expect("second domain admission");
+    assert_eq!(
+        first_admission.metadata().inode,
+        second_admission.metadata().inode
+    );
+    assert!(
+        second
+            .read_confined_file(&first_admission, root, Path::new("settings.json"), 64)
+            .await
+            .is_err()
+    );
+    assert!(
+        second
+            .is_confined_file_absent(&first_admission, root, Path::new("missing"))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        second
+            .read_confined_file(&second_admission, root, Path::new("settings.json"), 64)
+            .await
+            .expect("same-domain control")
+            .bytes,
+        b"domain canary"
+    );
+}
+
+fn require_fake_confined_link_limit<T>(result: anyhow::Result<T>) {
+    let error = match result {
+        Ok(_) => panic!("strict named-root resolution must reject link exhaustion"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        error.to_string(),
+        "Fake filesystem symbolic link limit exceeded"
+    );
+}
+
+#[gpui::test]
+async fn test_fake_fs_retained_root_named_root_cycles_are_errors(cx: &mut TestAppContext) {
+    let filesystem = FakeFs::new(cx.executor());
+    let real_root = Path::new(path!("/bounded-link-real/owned"));
+    filesystem
+        .create_dir(real_root)
+        .await
+        .expect("ordinary root");
+    filesystem
+        .write(&real_root.join("settings.json"), b"trusted")
+        .await
+        .expect("ordinary bytes");
+    let admission = filesystem
+        .capture_confined_root(real_root)
+        .await
+        .expect("ordinary admission");
+    let self_link = Path::new(path!("/bounded-link-self"));
+    filesystem
+        .create_symlink(self_link, self_link.to_path_buf())
+        .await
+        .expect("self-link fixture");
+    let first = Path::new(path!("/bounded-link-first"));
+    let second = Path::new(path!("/bounded-link-second"));
+    filesystem
+        .create_symlink(first, second.to_path_buf())
+        .await
+        .expect("first cyclic link");
+    filesystem
+        .create_symlink(second, first.to_path_buf())
+        .await
+        .expect("second cyclic link");
+    for named_root in [self_link.join("owned"), first.join("owned")] {
+        require_fake_confined_link_limit(filesystem.capture_confined_root(&named_root).await);
+        require_fake_confined_link_limit(
+            filesystem
+                .read_confined_file(&admission, &named_root, Path::new("settings.json"), 32)
+                .await,
+        );
+        require_fake_confined_link_limit(
+            filesystem
+                .is_confined_file_absent(&admission, &named_root, Path::new("missing.json"))
+                .await,
+        );
+        assert_eq!(
+            filesystem
+                .read_confined_file(&admission, real_root, Path::new("settings.json"), 32)
+                .await
+                .expect("state and admission lock remain usable after each rejected cycle")
+                .bytes,
+            b"trusted"
+        );
+        assert!(
+            filesystem
+                .is_confined_file_absent(&admission, real_root, Path::new("missing.json"))
+                .await
+                .expect("ordinary absence after rejected cycle")
+        );
+    }
+    let missing_root = Path::new(path!("/bounded-link-missing/owned"));
+    for error in [
+        filesystem
+            .capture_confined_root(missing_root)
+            .await
+            .err()
+            .expect("missing admission"),
+        filesystem
+            .read_confined_file(&admission, missing_root, Path::new("settings.json"), 32)
+            .await
+            .err()
+            .expect("missing named-root read"),
+        filesystem
+            .is_confined_file_absent(&admission, missing_root, Path::new("missing.json"))
+            .await
+            .err()
+            .expect("missing named root cannot authorize absence"),
+    ] {
+        assert_eq!(error.to_string(), "Confined root is missing");
+    }
+}
+
+#[gpui::test]
+async fn test_fake_fs_retained_root_finite_ancestor_alias_is_preserved(cx: &mut TestAppContext) {
+    let filesystem = FakeFs::new(cx.executor());
+    let root_parent = Path::new(path!("/finite-link-real"));
+    let real_root = root_parent.join("owned");
+    filesystem
+        .create_dir(&real_root)
+        .await
+        .expect("ordinary root");
+    filesystem
+        .write(&real_root.join("settings.json"), b"trusted")
+        .await
+        .expect("ordinary bytes");
+    let admission = filesystem
+        .capture_confined_root(&real_root)
+        .await
+        .expect("ordinary admission");
+    let alias_parent = Path::new(path!("/finite-link-alias"));
+    filesystem
+        .create_symlink(alias_parent, root_parent.to_path_buf())
+        .await
+        .expect("finite ancestor alias");
+    let alias_root = alias_parent.join("owned");
+    let alias_admission = filesystem
+        .capture_confined_root(&alias_root)
+        .await
+        .expect("final root is ordinary beneath one ancestor alias");
+    assert_eq!(admission.metadata().inode, alias_admission.metadata().inode);
+    assert!(!admission.same_admission(&alias_admission));
+    for token in [&admission, &alias_admission] {
+        assert_eq!(
+            filesystem
+                .read_confined_file(token, &alias_root, Path::new("settings.json"), 32)
+                .await
+                .expect("finite alias read")
+                .bytes,
+            b"trusted"
+        );
+        assert!(
+            !filesystem
+                .is_confined_file_absent(token, &alias_root, Path::new("settings.json"))
+                .await
+                .expect("existing file through alias")
+        );
+        assert!(
+            filesystem
+                .is_confined_file_absent(token, &alias_root, Path::new("missing.json"))
+                .await
+                .expect("true descendant absence through alias")
+        );
+    }
+    assert_eq!(
+        filesystem
+            .canonicalize(&alias_root)
+            .await
+            .expect("ordinary resolver retains finite aliases"),
+        real_root
+    );
+}
+
+#[gpui::test]
+async fn test_fake_fs_retained_root_link_budget_does_not_change_ordinary_resolution(
+    cx: &mut TestAppContext,
+) {
+    let filesystem = FakeFs::new(cx.executor());
+    let root_parent = Path::new(path!("/link-budget-real"));
+    let real_root = root_parent.join("owned");
+    filesystem
+        .create_dir(&real_root)
+        .await
+        .expect("ordinary root");
+    filesystem
+        .write(&real_root.join("settings.json"), b"trusted")
+        .await
+        .expect("ordinary bytes");
+    let admission = filesystem
+        .capture_confined_root(&real_root)
+        .await
+        .expect("ordinary admission");
+    let links = (0..41)
+        .map(|index| Path::new(path!("/")).join(format!("link-budget-{index}")))
+        .collect::<Vec<_>>();
+    for (index, link) in links.iter().enumerate() {
+        let target = links
+            .get(index + 1)
+            .cloned()
+            .unwrap_or_else(|| root_parent.to_path_buf());
+        filesystem
+            .create_symlink(link, target)
+            .await
+            .expect("finite chain fixture");
+    }
+    let forty = links.get(1).expect("forty-link boundary").join("owned");
+    let boundary = filesystem
+        .capture_confined_root(&forty)
+        .await
+        .expect("exact finite-link budget is allowed");
+    assert_eq!(
+        filesystem
+            .read_confined_file(&boundary, &forty, Path::new("settings.json"), 32)
+            .await
+            .expect("boundary read")
+            .bytes,
+        b"trusted"
+    );
+    assert!(
+        filesystem
+            .is_confined_file_absent(&boundary, &forty, Path::new("missing.json"))
+            .await
+            .expect("boundary absence")
+    );
+    let forty_one = links.first().expect("over-budget head").join("owned");
+    require_fake_confined_link_limit(filesystem.capture_confined_root(&forty_one).await);
+    require_fake_confined_link_limit(
+        filesystem
+            .read_confined_file(&admission, &forty_one, Path::new("settings.json"), 32)
+            .await,
+    );
+    require_fake_confined_link_limit(
+        filesystem
+            .is_confined_file_absent(&admission, &forty_one, Path::new("missing.json"))
+            .await,
+    );
+    assert_eq!(
+        filesystem
+            .canonicalize(&forty_one)
+            .await
+            .expect("ordinary resolver preserves preexisting finite-chain behavior"),
+        real_root
+    );
+}
+
+#[cfg(unix)]
+async fn require_native_checkpoint<T: Unpin + 'static>(
+    reached: futures::channel::oneshot::Receiver<()>,
+    operation: &mut gpui::Task<anyhow::Result<T>>,
+    label: &str,
+) {
+    match futures::future::select(reached, operation).await {
+        futures::future::Either::Left((receipt, _)) => receipt.expect(label),
+        futures::future::Either::Right((result, _)) => match result {
+            Ok(_) => panic!("Native operation completed before {label}"),
+            Err(error) => panic!("Native operation failed before {label}: {error:#}"),
+        },
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_handle_last_owner_drop(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("native lifetime fixture");
+    let root = std::fs::canonicalize(fixture.path())
+        .expect("canonical fixture")
+        .join("root");
+    std::fs::create_dir(&root).expect("root");
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let admission = filesystem
+        .capture_confined_root(&root)
+        .await
+        .expect("admission");
+    let cloned = admission.clone();
+    let handle = admission.file_handle();
+    let weak = Arc::downgrade(&handle);
+    drop(admission);
+    drop(cloned);
+    assert_eq!(
+        handle
+            .current_path(&filesystem)
+            .expect("retained handle path"),
+        root
+    );
+    assert!(weak.upgrade().is_some());
+    drop(handle);
+    assert!(
+        weak.upgrade().is_none(),
+        "last external handle releases native File owner"
+    );
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_file_and_named_root_replacements(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    use std::os::unix::fs::{MetadataExt as _, symlink};
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("native replacement fixture");
+    let base = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+    let root = base.join("root");
+    std::fs::create_dir(&root).expect("root");
+    let original = root.join("settings.json");
+    std::fs::write(&original, b"original").expect("original");
+    let filesystem = RealFs::new(None, executor);
+    let admission = filesystem
+        .capture_confined_root(&root)
+        .await
+        .expect("directory admission");
+    let file_admission = filesystem
+        .capture_confined_root(&original)
+        .await
+        .expect("file admission");
+    std::fs::rename(&original, root.join("retained-file")).expect("retain original file");
+    std::fs::write(&original, b"replacement").expect("same-name different file");
+    assert_ne!(
+        std::fs::metadata(&original)
+            .expect("replacement metadata")
+            .ino(),
+        file_admission.metadata().inode
+    );
+    assert!(
+        filesystem
+            .read_confined_file(&file_admission, &original, Path::new(""), 64)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        filesystem
+            .read_confined_file(
+                &file_admission,
+                &root.join("retained-file"),
+                Path::new(""),
+                64
+            )
+            .await
+            .expect("same file new name")
+            .bytes,
+        b"original"
+    );
+    assert_eq!(
+        filesystem
+            .read_confined_file(&admission, &root, Path::new("settings.json"), 64)
+            .await
+            .expect("directory token admits current ordinary descendant")
+            .bytes,
+        b"replacement"
+    );
+    std::fs::rename(&root, base.join("moved-root")).expect("retain original root");
+    symlink(base.join("moved-root"), &root).expect("final named-root alias");
+    assert!(
+        filesystem
+            .read_confined_file(&admission, &root, Path::new("settings.json"), 64)
+            .await
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .is_confined_file_absent(&admission, &root, Path::new("missing"))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        filesystem
+            .read_confined_file(
+                &admission,
+                &base.join("moved-root"),
+                Path::new("settings.json"),
+                64
+            )
+            .await
+            .expect("ordinary accepted moved name")
+            .bytes,
+        b"replacement"
+    );
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_native_encoding_and_nonregular_controls(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    use std::{
+        ffi::{CString, OsString},
+        os::unix::{
+            ffi::{OsStrExt as _, OsStringExt as _},
+            net::UnixListener,
+        },
+    };
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("native boundary fixture");
+    let root = std::fs::canonicalize(fixture.path())
+        .expect("canonical fixture")
+        .join("root");
+    std::fs::create_dir(&root).expect("root");
+    let filesystem = RealFs::new(None, executor);
+    let admission = filesystem
+        .capture_confined_root(&root)
+        .await
+        .expect("admission");
+    let native_name = PathBuf::from("设置-λ.json");
+    std::fs::write(root.join(&native_name), [0xff, 0x00])
+        .expect("Unicode name with raw non-UTF8 bytes");
+    assert_eq!(
+        filesystem
+            .read_confined_file(&admission, &root, &native_name, 2)
+            .await
+            .expect("native byte semantics")
+            .bytes,
+        [0xff, 0x00]
+    );
+    assert!(
+        filesystem
+            .read_confined_file(&admission, &root, &native_name, 1)
+            .await
+            .is_err()
+    );
+    assert!(
+        !filesystem
+            .is_confined_file_absent(&admission, &root, &native_name)
+            .await
+            .expect("native name exists")
+    );
+    let nul = PathBuf::from(OsString::from_vec(vec![b'f', 0, b'x']));
+    assert!(
+        filesystem
+            .read_confined_file(&admission, &root, &nul, 32)
+            .await
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .is_confined_file_absent(&admission, &root, &nul)
+            .await
+            .is_err()
+    );
+    let socket = UnixListener::bind(root.join("socket")).expect("socket fixture");
+    let fifo = CString::new(root.join("fifo").as_os_str().as_bytes()).expect("fixture has no NUL");
+    // The CString remains alive with a terminating NUL throughout the POSIX call.
+    let status = unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) };
+    assert_eq!(
+        status,
+        0,
+        "fifo fixture: {}",
+        std::io::Error::last_os_error()
+    );
+    for name in ["socket", "fifo"] {
+        assert!(
+            filesystem
+                .capture_confined_root(&root.join(name))
+                .await
+                .is_err()
+        );
+        assert!(
+            filesystem
+                .read_confined_file(&admission, &root, Path::new(name), 32)
+                .await
+                .is_err()
+        );
+        assert!(
+            !filesystem
+                .is_confined_file_absent(&admission, &root, Path::new(name))
+                .await
+                .expect("nonregular object exists")
+        );
+    }
+    std::fs::write(root.join("empty"), []).expect("empty regular file");
+    assert!(
+        filesystem
+            .read_confined_file(&admission, &root, Path::new("empty"), 0)
+            .await
+            .expect("empty within zero bound")
+            .bytes
+            .is_empty()
+    );
+    drop(socket);
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_revalidates_substitution_at_read_checkpoint(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    for mode in ["directory-file", "parent", "root", "file-root"] {
+        let fixture = TempDir::new().expect("read substitution fixture");
+        let root = std::fs::canonicalize(fixture.path())
+            .expect("canonical fixture")
+            .join("root");
+        std::fs::create_dir_all(root.join("nested")).expect("root and parent");
+        let path = root.join("nested/settings.json");
+        std::fs::write(&path, b"original").expect("original");
+        let filesystem = Arc::new(RealFs::new(None, executor.clone()));
+        let named_root = if mode == "file-root" {
+            path.clone()
+        } else {
+            root.clone()
+        };
+        let relative = if mode == "file-root" {
+            Path::new("")
+        } else {
+            Path::new("nested/settings.json")
+        };
+        let admission = filesystem
+            .capture_confined_root(&named_root)
+            .await
+            .expect("admission");
+        let (reached, resume) = admission
+            .pause_native_operation_for_test(NativeConfinedCheckpoint::AfterReadBytes)
+            .expect("install checkpoint");
+        let mut operation = executor.spawn({
+            let filesystem = filesystem.clone();
+            let admission = admission.clone();
+            let named_root = named_root.clone();
+            async move {
+                filesystem
+                    .read_confined_file(&admission, &named_root, relative, 64)
+                    .await
+            }
+        });
+        require_native_checkpoint(reached, &mut operation, "after reading original bytes").await;
+        match mode {
+            "parent" => {
+                std::fs::rename(root.join("nested"), root.join("retained-parent"))
+                    .expect("retain observed parent");
+                std::fs::create_dir(root.join("nested")).expect("replacement parent");
+            }
+            "root" => {
+                std::fs::rename(&root, root.with_extension("retained"))
+                    .expect("retain admitted root");
+                std::fs::create_dir_all(root.join("nested")).expect("replacement root");
+            }
+            _ => std::fs::rename(&path, root.join("nested/retained"))
+                .expect("retain opened original"),
+        }
+        std::fs::write(&path, b"replacement canary").expect("same-name substitute");
+        resume.send(()).expect("release read");
+        assert!(
+            operation.await.is_err(),
+            "no bytes may be returned under a changed binding: {mode}"
+        );
+        let subsequent = filesystem
+            .read_confined_file(&admission, &named_root, relative, 64)
+            .await;
+        if matches!(mode, "root" | "file-root") {
+            assert!(
+                subsequent.is_err(),
+                "root identity remains incompatible: {mode}"
+            );
+        } else {
+            assert_eq!(
+                subsequent
+                    .expect("new operation admits fresh ordinary descendant")
+                    .bytes,
+                b"replacement canary"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_rejects_content_growth_after_pre_read_stat(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("content mutation fixture");
+    let root = std::fs::canonicalize(fixture.path())
+        .expect("canonical fixture")
+        .join("root");
+    std::fs::create_dir(&root).expect("root");
+    let path = root.join("settings.json");
+    std::fs::write(&path, b"old").expect("original");
+    let filesystem = Arc::new(RealFs::new(None, executor.clone()));
+    let admission = filesystem
+        .capture_confined_root(&root)
+        .await
+        .expect("admission");
+    let (reached, resume) = admission
+        .pause_native_operation_for_test(NativeConfinedCheckpoint::BeforeReadBytes)
+        .expect("install checkpoint");
+    let mut operation = executor.spawn({
+        let filesystem = filesystem.clone();
+        let admission = admission.clone();
+        let root = root.clone();
+        async move {
+            filesystem
+                .read_confined_file(&admission, &root, Path::new("settings.json"), 64)
+                .await
+        }
+    });
+    require_native_checkpoint(
+        reached,
+        &mut operation,
+        "initial metadata and byte-limit check",
+    )
+    .await;
+    std::fs::write(&path, b"longer content").expect("change same inode length deterministically");
+    resume.send(()).expect("release read");
+    let error = operation.await.err().expect("changed length must reject");
+    assert_eq!(
+        error.to_string(),
+        "Confined file changed during its bounded read"
+    );
+    assert_eq!(
+        filesystem
+            .read_confined_file(&admission, &root, Path::new("settings.json"), 64)
+            .await
+            .expect("subsequent read and lock usable")
+            .bytes,
+        b"longer content"
+    );
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_absence_revalidates_ancestor_binding(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    for (replace_root, missing_ancestor) in
+        [(false, false), (true, false), (false, true), (true, true)]
+    {
+        let fixture = TempDir::new().expect("absence mutation fixture");
+        let root = std::fs::canonicalize(fixture.path())
+            .expect("canonical fixture")
+            .join("root");
+        std::fs::create_dir_all(root.join("nested")).expect("ordinary ancestors");
+        let filesystem = Arc::new(RealFs::new(None, executor.clone()));
+        let admission = filesystem
+            .capture_confined_root(&root)
+            .await
+            .expect("admission");
+        let (reached, resume) = admission
+            .pause_native_operation_for_test(NativeConfinedCheckpoint::AfterAbsenceLookup)
+            .expect("install checkpoint");
+        let relative = if missing_ancestor {
+            Path::new("nested/uncreated/child.json")
+        } else {
+            Path::new("nested/missing.json")
+        };
+        let mut operation = executor.spawn({
+            let filesystem = filesystem.clone();
+            let admission = admission.clone();
+            let root = root.clone();
+            async move {
+                filesystem
+                    .is_confined_file_absent(&admission, &root, relative)
+                    .await
+            }
+        });
+        require_native_checkpoint(reached, &mut operation, "anchored absence lookup").await;
+        if replace_root {
+            std::fs::rename(&root, root.with_extension("retained")).expect("retain admitted root");
+            std::fs::create_dir_all(root.join("nested")).expect("new root and parent");
+        } else {
+            std::fs::rename(root.join("nested"), root.join("retained-parent"))
+                .expect("retain observed parent");
+            std::fs::create_dir(root.join("nested")).expect("same-name replacement parent");
+        }
+        if missing_ancestor {
+            std::fs::create_dir(root.join("nested/uncreated")).expect("replacement missing parent");
+        }
+        std::fs::write(root.join(relative), b"replacement canary").expect("canary");
+        resume.send(()).expect("release absence check");
+        assert!(
+            operation.await.is_err(),
+            "changed root/ancestor cannot authorize absence"
+        );
+        if !replace_root {
+            assert!(
+                !filesystem
+                    .is_confined_file_absent(&admission, &root, relative)
+                    .await
+                    .expect("current parent presents canary")
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_retained_root_cancel_at_checkpoint_releases_owners_and_lock(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("native cancellation fixture");
+    let root = std::fs::canonicalize(fixture.path())
+        .expect("canonical fixture")
+        .join("root");
+    std::fs::create_dir(&root).expect("root");
+    std::fs::write(root.join("settings.json"), b"stable").expect("original");
+    let filesystem = Arc::new(RealFs::new(None, executor.clone()));
+    let admission = filesystem
+        .capture_confined_root(&root)
+        .await
+        .expect("admission");
+    let weak = Arc::downgrade(&admission.file_handle());
+    let (reached, resume) = admission
+        .pause_native_operation_for_test(NativeConfinedCheckpoint::BeforeReadBytes)
+        .expect("install checkpoint");
+    let mut operation = executor.spawn({
+        let filesystem = filesystem.clone();
+        let admission = admission.clone();
+        let root = root.clone();
+        async move {
+            filesystem
+                .read_confined_file(&admission, &root, Path::new("settings.json"), 64)
+                .await
+        }
+    });
+    require_native_checkpoint(reached, &mut operation, "open file and admission lock").await;
+    drop(operation);
+    cx.executor().run_until_parked();
+    assert!(
+        resume.is_canceled(),
+        "native paused receiver actually dropped"
+    );
+    assert_eq!(
+        filesystem
+            .read_confined_file(&admission, &root, Path::new("settings.json"), 64)
+            .await
+            .expect("next operation acquires released lock")
+            .bytes,
+        b"stable"
+    );
+    drop(admission);
+    assert!(
+        weak.upgrade().is_none(),
+        "cancelled operation retained no admission File owner"
+    );
+}
+
+#[cfg(unix)]
+async fn check_logical_absence_contract(filesystem: &dyn Fs, root: &Path) {
+    filesystem
+        .create_dir(&root.join("nested"))
+        .await
+        .expect("fixture directory");
+    filesystem
+        .atomic_write(root.join("present"), String::new())
+        .await
+        .expect("fixture file");
+    for (name, target) in [
+        ("relative", PathBuf::from("nested")),
+        ("absolute", root.join("nested")),
+        ("chained", PathBuf::from("relative")),
+        ("broken", PathBuf::from("missing-target")),
+        ("broken-parent", PathBuf::from("missing-target/../nested")),
+        ("file-alias", PathBuf::from("present")),
+        ("file-dot", PathBuf::from("present/.")),
+        ("self-cycle", PathBuf::from("self-cycle")),
+        ("first-cycle", PathBuf::from("second-cycle")),
+        ("second-cycle", PathBuf::from("first-cycle")),
+        ("nested/up", PathBuf::from("..")),
+    ] {
+        filesystem
+            .create_symlink(&root.join(name), target)
+            .await
+            .expect("fixture alias");
+    }
+    for suffix in [
+        "missing",
+        "uncreated/child.json",
+        "relative/missing",
+        "absolute/missing",
+        "chained/missing",
+        "nested/up/nested/missing",
+        "nested/../missing",
+        "nested/./missing",
+    ] {
+        let logical = root.join(suffix);
+        let receipt = filesystem
+            .observe_path_absence(&logical)
+            .await
+            .expect("stable original suffix missing")
+            .expect("fresh absence receipt");
+        assert_eq!(receipt.logical_path().as_os_str(), logical.as_os_str());
+        assert_eq!(format!("{receipt:?}"), "AbsentPath { .. }");
+    }
+    for suffix in [
+        "present",
+        "nested",
+        "relative",
+        "absolute",
+        "chained",
+        "file-alias",
+    ] {
+        assert!(
+            filesystem
+                .observe_path_absence(&root.join(suffix))
+                .await
+                .expect("existing target observation")
+                .is_none(),
+            "{suffix}"
+        );
+    }
+    for suffix in [
+        "broken",
+        "broken/settings.json",
+        "broken-parent/settings.json",
+        "present/child",
+        "present/.",
+        "present/",
+        "file-dot",
+        "self-cycle",
+        "first-cycle",
+    ] {
+        assert!(
+            filesystem
+                .observe_path_absence(&root.join(suffix))
+                .await
+                .is_err(),
+            "{suffix}"
+        );
+    }
+    let load_error = filesystem
+        .load(&root.join("broken/settings.json"))
+        .await
+        .expect_err("ordinary read of broken target");
+    assert_eq!(
+        load_error
+            .downcast_ref::<std::io::Error>()
+            .expect("ordinary I/O error")
+            .kind(),
+        std::io::ErrorKind::NotFound
+    );
+    for index in (0..40).rev() {
+        let target = if index == 39 {
+            PathBuf::from("nested")
+        } else {
+            PathBuf::from(format!("link-{}", index + 1))
+        };
+        filesystem
+            .create_symlink(&root.join(format!("link-{index}")), target)
+            .await
+            .expect("finite alias");
+    }
+    assert!(
+        filesystem
+            .observe_path_absence(&root.join("link-0/missing"))
+            .await
+            .expect("forty aliases")
+            .is_some()
+    );
+    filesystem
+        .create_symlink(&root.join("overflow"), PathBuf::from("link-0"))
+        .await
+        .expect("forty-first alias");
+    assert!(
+        filesystem
+            .observe_path_absence(&root.join("overflow/missing"))
+            .await
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .observe_path_absence(Path::new("relative-source"))
+            .await
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .observe_path_absence(Path::new("//unknown/source"))
+            .await
+            .is_err()
+    );
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_fake_fs_logical_absence_contract(cx: &mut TestAppContext) {
+    let filesystem = FakeFs::new(cx.executor());
+    check_logical_absence_contract(filesystem.as_ref(), Path::new("/logical-source")).await;
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_logical_absence_contract(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("logical source fixture");
+    let root = std::fs::canonicalize(fixture.path())
+        .expect("canonical fixture")
+        .join("source");
+    let filesystem = RealFs::new(None, executor);
+    check_logical_absence_contract(&filesystem, &root).await;
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_logical_absence_revalidates_held_route(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    for mutation in [
+        "alias",
+        "same-target-alias",
+        "parent",
+        "target",
+        "missing-parent",
+    ] {
+        let fixture = TempDir::new().expect("route mutation fixture");
+        let root = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+        std::fs::create_dir(root.join("nested")).expect("original parent");
+        std::os::unix::fs::symlink("nested", root.join("alias")).expect("original alias");
+        let filesystem = Arc::new(RealFs::new(None, executor.clone()));
+        let logical = root.join(if mutation == "missing-parent" {
+            "alias/uncreated/child"
+        } else {
+            "alias/missing"
+        });
+        let (reached, resume) = filesystem
+            .pause_path_absence_for_test()
+            .expect("held first missing lookup");
+        let mut operation = executor.spawn({
+            let filesystem = filesystem.clone();
+            let logical = logical.clone();
+            async move { filesystem.observe_path_absence(&logical).await }
+        });
+        require_native_checkpoint(reached, &mut operation, "actual logical absence lookup").await;
+        match mutation {
+            "alias" => {
+                std::fs::create_dir(root.join("replacement")).expect("new target");
+                std::fs::remove_file(root.join("alias")).expect("remove original alias");
+                std::os::unix::fs::symlink("replacement", root.join("alias"))
+                    .expect("replace alias");
+            }
+            "same-target-alias" => {
+                std::fs::remove_file(root.join("alias")).expect("remove original alias");
+                std::os::unix::fs::symlink("nested", root.join("alias"))
+                    .expect("same-byte replacement alias");
+            }
+            "parent" => {
+                std::fs::rename(root.join("nested"), root.join("retained"))
+                    .expect("retain observed parent");
+                std::fs::create_dir(root.join("nested")).expect("same-name new parent");
+            }
+            "target" => std::fs::write(&logical, b"appeared").expect("target appears"),
+            "missing-parent" => {
+                std::fs::create_dir(root.join("nested/uncreated")).expect("missing binding appears")
+            }
+            _ => unreachable!(),
+        }
+        resume.send(()).expect("release observed mutation");
+        assert!(
+            operation.await.is_err(),
+            "{mutation} must not authorize defaults"
+        );
+        let current = filesystem
+            .observe_path_absence(&logical)
+            .await
+            .expect("fresh corrected observation");
+        assert_eq!(current.is_none(), mutation == "target");
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_fake_fs_logical_absence_revalidates_held_route(cx: &mut TestAppContext) {
+    for mutation in ["alias", "same-target-alias", "parent", "target"] {
+        let filesystem = FakeFs::new(cx.executor());
+        filesystem
+            .insert_tree("/source", json!({ "nested": {}, "replacement": {} }))
+            .await;
+        filesystem
+            .insert_symlink("/source/alias", PathBuf::from("nested"))
+            .await;
+        let logical = PathBuf::from("/source/alias/missing");
+        let (reached, resume) = filesystem
+            .pause_path_absence_for_test()
+            .expect("first lookup checkpoint");
+        let mut operation = cx.executor().spawn({
+            let filesystem = filesystem.clone();
+            let logical = logical.clone();
+            async move { filesystem.observe_path_absence(&logical).await }
+        });
+        require_native_checkpoint(reached, &mut operation, "coherent FakeFs missing lookup").await;
+        match mutation {
+            "alias" => {
+                filesystem
+                    .insert_symlink("/source/alias", PathBuf::from("replacement"))
+                    .await
+            }
+            "same-target-alias" => {
+                filesystem
+                    .insert_symlink("/source/alias", PathBuf::from("nested"))
+                    .await
+            }
+            "parent" => {
+                filesystem
+                    .rename(
+                        Path::new("/source/nested"),
+                        Path::new("/source/retained"),
+                        RenameOptions::default(),
+                    )
+                    .await
+                    .expect("retain old parent");
+                filesystem
+                    .create_dir(Path::new("/source/nested"))
+                    .await
+                    .expect("new parent");
+            }
+            "target" => filesystem.insert_file(&logical, b"appeared".to_vec()).await,
+            _ => unreachable!(),
+        }
+        resume
+            .send(())
+            .expect("release after actual mutation without held state lock");
+        assert!(operation.await.is_err(), "{mutation}");
+        assert_eq!(
+            filesystem
+                .observe_path_absence(&logical)
+                .await
+                .expect("current retry")
+                .is_none(),
+            mutation == "target"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_logical_absence_native_names_and_nonregular_objects(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    use std::{
+        ffi::{CString, OsString},
+        os::unix::{
+            ffi::{OsStrExt, OsStringExt},
+            net::UnixListener,
+        },
+    };
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("native logical fixture");
+    let root = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+    let filesystem = RealFs::new(None, executor);
+    #[cfg(target_os = "macos")]
+    let name = OsString::from("设置-λ");
+    #[cfg(not(target_os = "macos"))]
+    let name = OsString::from_vec(vec![b'n', b'a', b'm', b'e', 0xff]);
+    let logical = root.join(&name).join("missing");
+    std::fs::create_dir(root.join(name)).expect("representable native directory");
+    #[cfg(target_os = "macos")]
+    {
+        // APFS rejects creation with EILSEQ even when lookup reports a missing name.
+        let invalid_name = root.join(OsString::from_vec(vec![b'n', b'a', b'm', b'e', 0xff]));
+        let error = filesystem
+            .observe_path_absence(&invalid_name)
+            .await
+            .expect_err("unsupported encoding must not produce an absence receipt");
+        assert_eq!(
+            error
+                .downcast_ref::<std::io::Error>()
+                .expect("explicit unsupported encoding")
+                .kind(),
+            std::io::ErrorKind::Unsupported
+        );
+    }
+    let receipt = filesystem
+        .observe_path_absence(&logical)
+        .await
+        .expect("native lookup")
+        .expect("missing original suffix");
+    assert_eq!(
+        receipt.logical_path().as_os_str().as_bytes(),
+        logical.as_os_str().as_bytes()
+    );
+    assert!(
+        filesystem
+            .observe_path_absence(&root.join(OsString::from_vec(vec![b'n', 0, b'x'])))
+            .await
+            .is_err()
+    );
+    let socket = UnixListener::bind(root.join("socket")).expect("socket fixture");
+    let fifo = CString::new(root.join("fifo").as_os_str().as_bytes()).expect("NUL-free fixture");
+    // The CString keeps its terminating NUL alive for the POSIX fixture call.
+    assert_eq!(
+        unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) },
+        0,
+        "fifo fixture: {}",
+        std::io::Error::last_os_error()
+    );
+    for suffix in ["socket", "fifo"] {
+        assert!(
+            filesystem
+                .observe_path_absence(&root.join(suffix))
+                .await
+                .expect("existing special object")
+                .is_none()
+        );
+        assert!(
+            filesystem
+                .observe_path_absence(&root.join(suffix).join("child"))
+                .await
+                .is_err()
+        );
+    }
+    for unsupported in [
+        "/proc/self/fd/999999/source",
+        "/dev/fd/999999/source",
+        "/sys/unknown-source",
+    ] {
+        assert!(
+            filesystem
+                .observe_path_absence(Path::new(unsupported))
+                .await
+                .is_err()
+        );
+    }
+    assert!(
+        filesystem
+            .observe_path_absence(&root.join("x".repeat(4097)))
+            .await
+            .is_err()
+    );
+    drop(socket);
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_logical_absence_releases_handles_on_cancel_and_completion(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("logical lifetime fixture");
+    let root = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+    std::fs::create_dir(root.join("nested")).expect("target directory");
+    std::os::unix::fs::symlink("nested", root.join("alias")).expect("finite alias");
+    let filesystem = Arc::new(RealFs::new(None, executor.clone()));
+    let logical = root.join("alias/missing");
+    for cancel in [true, false] {
+        let (reached, resume) = filesystem
+            .pause_path_absence_for_test()
+            .expect("hold observation");
+        let mut operation = executor.spawn({
+            let filesystem = filesystem.clone();
+            let logical = logical.clone();
+            async move { filesystem.observe_path_absence(&logical).await }
+        });
+        require_native_checkpoint(reached, &mut operation, "actual retained logical handles").await;
+        let handles = filesystem.path_absence_handles_for_test();
+        assert!(!handles.is_empty());
+        assert!(handles.iter().all(|handle| handle.upgrade().is_some()));
+        if cancel {
+            drop(operation);
+            cx.run_until_parked();
+            assert!(
+                resume.send(()).is_err(),
+                "cancelled observation releases its pause"
+            );
+        } else {
+            resume.send(()).expect("release successful observation");
+            assert!(operation.await.expect("completed observation").is_some());
+        }
+        assert!(
+            handles.iter().all(|handle| handle.upgrade().is_none()),
+            "all captured directory and alias owners must drop"
+        );
+        assert!(
+            filesystem
+                .observe_path_absence(&logical)
+                .await
+                .expect("subsequent observation")
+                .is_some()
+        );
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_real_fs_logical_absence_native_permission_denial(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    use std::os::unix::fs::PermissionsExt;
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("permission fixture");
+    let root = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+    let guarded = root.join("guarded");
+    std::fs::create_dir(&guarded).expect("guarded directory");
+    let filesystem = RealFs::new(None, executor);
+    std::fs::set_permissions(&guarded, std::fs::Permissions::from_mode(0o000))
+        .expect("deny own disposable directory");
+    let native_read = std::fs::read_to_string(guarded.join("missing"));
+    let observation = filesystem
+        .observe_path_absence(&guarded.join("missing"))
+        .await;
+    std::fs::set_permissions(&guarded, std::fs::Permissions::from_mode(0o700))
+        .expect("restore fixture access before assertions");
+    assert_eq!(
+        native_read.expect_err("actual native denial").kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    assert!(
+        observation.is_err(),
+        "permission denial must not become a missing receipt"
+    );
+    assert!(
+        filesystem
+            .observe_path_absence(&guarded.join("missing"))
+            .await
+            .expect("permission correction")
+            .is_some()
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[gpui::test]
+async fn test_real_fs_logical_absence_native_acl_denial(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fixture = TempDir::new().expect("ACL fixture");
+    let root = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+    let guarded = root.join("guarded");
+    std::fs::create_dir(&guarded).expect("guarded directory");
+    let deny = smol::process::Command::new("/bin/chmod")
+        .args(["+a#", "0", "everyone deny read,search"])
+        .arg(&guarded)
+        .output()
+        .await
+        .expect("install fixture ACL");
+    assert!(
+        deny.status.success(),
+        "ACL installation: {}",
+        String::from_utf8_lossy(&deny.stderr)
+    );
+    let filesystem = RealFs::new(None, executor);
+    let native_read = std::fs::read_to_string(guarded.join("missing"));
+    let observation = filesystem
+        .observe_path_absence(&guarded.join("missing"))
+        .await;
+    let restore = smol::process::Command::new("/bin/chmod")
+        .args(["-a#", "0"])
+        .arg(&guarded)
+        .output()
+        .await
+        .expect("remove only inserted fixture ACL");
+    assert!(
+        restore.status.success(),
+        "ACL removal: {}",
+        String::from_utf8_lossy(&restore.stderr)
+    );
+    assert_eq!(
+        native_read.expect_err("actual ACL denial").kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    assert!(observation.is_err(), "native ACL denial is not absence");
+    assert!(
+        filesystem
+            .observe_path_absence(&guarded.join("missing"))
+            .await
+            .expect("ACL correction")
+            .is_some()
+    );
+}
+
+async fn assert_copy_overwrite_semantics(root: &Path, fs: &dyn Fs) {
+    let source = root.join("source.txt");
+    let target = root.join("target.txt");
+    #[cfg(unix)]
+    let original = fs
+        .metadata(&target)
+        .await
+        .expect("target metadata")
+        .expect("target exists");
+    fs.copy_file(
+        &source,
+        &target,
+        CopyOptions {
+            overwrite: true,
+            ignore_if_exists: false,
+        },
+    )
+    .await
+    .expect("overwrite target");
+    assert_eq!(fs.load(&target).await.expect("copied bytes"), "from source");
+    #[cfg(unix)]
+    assert_eq!(
+        fs.metadata(&target)
+            .await
+            .expect("copied metadata")
+            .expect("target remains")
+            .inode,
+        original.inode
+    );
+}
+
+async fn assert_copy_options_semantics(root: &Path, fs: &dyn Fs) {
+    let source = root.join("source.txt");
+    let target = root.join("target.txt");
+    assert!(
+        fs.copy_file(&source, &target, CopyOptions::default())
+            .await
+            .is_err()
+    );
+    fs.copy_file(
+        &source,
+        &target,
+        CopyOptions {
+            overwrite: false,
+            ignore_if_exists: true,
+        },
+    )
+    .await
+    .expect("ignore existing target");
+    assert_eq!(
+        fs.load(&target).await.expect("untouched target"),
+        "from target"
+    );
+    assert!(
+        fs.copy_file(
+            &source,
+            &root.join("dir"),
+            CopyOptions {
+                overwrite: true,
+                ignore_if_exists: false
+            }
+        )
+        .await
+        .is_err()
+    );
+    assert!(fs.is_dir(&root.join("dir")).await);
+    assert_eq!(
+        fs.load(&root.join("dir/inner.txt"))
+            .await
+            .expect("directory contents remain"),
+        "inner"
+    );
+    fs.copy_file(&source, &root.join("new.txt"), CopyOptions::default())
+        .await
+        .expect("new target");
+    assert_eq!(
+        fs.load(&root.join("new.txt")).await.expect("new bytes"),
+        "from source"
+    );
+}
+
+async fn assert_remove_file_unlinks_aliases(root: &Path, fs: &dyn Fs) {
+    for (name, target) in [
+        ("dir-link", "dir"),
+        ("file-link", "source.txt"),
+        ("dangling-link", "missing"),
+    ] {
+        let link = root.join(name);
+        fs.create_symlink(&link, root.join(target))
+            .await
+            .expect("create fixture alias");
+        fs.remove_file(&link, RemoveOptions::default())
+            .await
+            .expect("unlink alias");
+        assert!(
+            fs.read_link(&link).await.is_err(),
+            "alias must be removed, including dangling aliases"
+        );
+        assert!(
+            fs.metadata(&link)
+                .await
+                .expect("removed link metadata")
+                .is_none()
+        );
+    }
+    assert_eq!(
+        fs.load(&root.join("source.txt"))
+            .await
+            .expect("file target remains"),
+        "from source"
+    );
+    assert_eq!(
+        fs.load(&root.join("dir/inner.txt"))
+            .await
+            .expect("directory target remains"),
+        "inner"
+    );
+    assert!(
+        fs.remove_file(&root.join("dir"), RemoveOptions::default())
+            .await
+            .is_err()
+    );
+}
+
+async fn copy_remove_fixture(fs: &FakeFs) {
+    fs.insert_tree(
+        path!("/root"),
+        json!({"source.txt":"from source","target.txt":"from target","dir":{"inner.txt":"inner"}}),
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_fake_fs_copy_overwrite_semantics(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor);
+    copy_remove_fixture(&fs).await;
+    assert_copy_overwrite_semantics(Path::new(path!("/root")), fs.as_ref()).await;
+}
+
+#[gpui::test]
+async fn test_fake_fs_copy_options_semantics(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor);
+    copy_remove_fixture(&fs).await;
+    assert_copy_options_semantics(Path::new(path!("/root")), fs.as_ref()).await;
+}
+
+#[gpui::test]
+async fn test_fake_fs_copy_ignore_emits_no_event(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor);
+    copy_remove_fixture(&fs).await;
+    let root = Path::new(path!("/root"));
+    let (mut events, _watcher) = fs.watch(root, Duration::ZERO).await;
+    fs.copy_file(
+        &root.join("source.txt"),
+        &root.join("target.txt"),
+        CopyOptions {
+            overwrite: false,
+            ignore_if_exists: true,
+        },
+    )
+    .await
+    .expect("ignore existing");
+    fs.create_file(&root.join("sentinel"), CreateOptions::default())
+        .await
+        .expect("create event sentinel");
+    let next = events.next().await.expect("sentinel event");
+    assert_eq!(next.len(), 1);
+    assert_eq!(next.first().expect("one event").path, root.join("sentinel"));
+}
+
+#[gpui::test]
+async fn test_fake_fs_remove_file_unlinks_aliases(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor);
+    copy_remove_fixture(&fs).await;
+    assert_remove_file_unlinks_aliases(Path::new(path!("/root")), fs.as_ref()).await;
+}
+
+#[gpui::test]
+async fn test_realfs_copy_and_remove_semantics(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let directory = TempDir::new().expect("temporary fixture");
+    let root = directory.path();
+    std::fs::write(root.join("source.txt"), "from source").expect("source");
+    std::fs::write(root.join("target.txt"), "from target").expect("target");
+    std::fs::create_dir(root.join("dir")).expect("directory");
+    std::fs::write(root.join("dir/inner.txt"), "inner").expect("directory content");
+    let fs = RealFs::new(None, cx.executor());
+    assert_copy_options_semantics(root, &fs).await;
+    assert_copy_overwrite_semantics(root, &fs).await;
+    #[cfg(unix)]
+    assert_remove_file_unlinks_aliases(root, &fs).await;
+}
+
+async fn assert_copy_follows_destination_aliases(root: &Path, fs: &dyn Fs) {
+    let source = root.join("source.txt");
+    let alias = root.join("alias");
+    fs.create_symlink(&alias, PathBuf::from("target.txt"))
+        .await
+        .expect("relative target alias");
+    assert!(
+        fs.copy_file(&source, &alias, CopyOptions::default())
+            .await
+            .is_err()
+    );
+    fs.copy_file(
+        &source,
+        &alias,
+        CopyOptions {
+            overwrite: false,
+            ignore_if_exists: true,
+        },
+    )
+    .await
+    .expect("ignore existing alias target");
+    assert_eq!(
+        fs.load(&root.join("target.txt"))
+            .await
+            .expect("unchanged target"),
+        "from target"
+    );
+    fs.copy_file(
+        &source,
+        &alias,
+        CopyOptions {
+            overwrite: true,
+            ignore_if_exists: false,
+        },
+    )
+    .await
+    .expect("overwrite alias target");
+    assert_eq!(
+        fs.read_link(&alias).await.expect("alias retained"),
+        PathBuf::from("target.txt")
+    );
+    assert_eq!(
+        fs.load(&root.join("target.txt"))
+            .await
+            .expect("changed target"),
+        "from source"
+    );
+    let dangling = root.join("dangling");
+    fs.create_symlink(&dangling, PathBuf::from("created-via-alias.txt"))
+        .await
+        .expect("dangling alias");
+    fs.copy_file(&source, &dangling, CopyOptions::default())
+        .await
+        .expect("create through dangling alias");
+    assert_eq!(
+        fs.read_link(&dangling)
+            .await
+            .expect("dangling alias retained"),
+        PathBuf::from("created-via-alias.txt")
+    );
+    assert_eq!(
+        fs.load(&root.join("created-via-alias.txt"))
+            .await
+            .expect("created target"),
+        "from source"
+    );
+    fs.create_symlink(&root.join("chain"), PathBuf::from("alias"))
+        .await
+        .expect("alias chain");
+    fs.copy_file(
+        &source,
+        &root.join("chain"),
+        CopyOptions {
+            overwrite: true,
+            ignore_if_exists: false,
+        },
+    )
+    .await
+    .expect("copy through alias chain");
+    assert_eq!(
+        fs.read_link(&root.join("chain"))
+            .await
+            .expect("chain retained"),
+        PathBuf::from("alias")
+    );
+    fs.create_symlink(&root.join("cycle-a"), PathBuf::from("cycle-b"))
+        .await
+        .expect("first cycle alias");
+    fs.create_symlink(&root.join("cycle-b"), PathBuf::from("cycle-a"))
+        .await
+        .expect("second cycle alias");
+    assert!(
+        fs.copy_file(
+            &source,
+            &root.join("cycle-a"),
+            CopyOptions {
+                overwrite: true,
+                ignore_if_exists: false
+            }
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        fs.load(&source).await.expect("source remains"),
+        "from source"
+    );
+}
+
+#[gpui::test]
+async fn test_fake_fs_copy_destination_aliases(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor);
+    copy_remove_fixture(&fs).await;
+    assert_copy_follows_destination_aliases(Path::new(path!("/root")), fs.as_ref()).await;
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_realfs_copy_destination_aliases(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let directory = TempDir::new().expect("temporary fixture");
+    let root = directory.path();
+    std::fs::write(root.join("source.txt"), "from source").expect("source");
+    std::fs::write(root.join("target.txt"), "from target").expect("target");
+    let fs = RealFs::new(None, cx.executor());
+    assert_copy_follows_destination_aliases(root, &fs).await;
+}
+
+#[cfg(target_os = "macos")]
+#[gpui::test]
+async fn test_realfs_macos_system_alias_watch_delivery(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let directory = tempfile::Builder::new()
+        .prefix("copper-system-alias-watch-")
+        .tempdir_in("/tmp")
+        .expect("disposable native alias fixture");
+    let alias_root = directory.path();
+    let canonical_root = std::fs::canonicalize(alias_root).expect("canonical native root");
+    assert!(canonical_root.starts_with("/private/tmp"));
+    for name in ["context-a.rs", "context-b.rs", "deleted-settings.json"] {
+        std::fs::write(alias_root.join(name), b"before").expect("initial fixture file");
+    }
+    let filesystem = RealFs::new(None, executor.clone());
+    let (mut events, _root_watcher) = filesystem
+        .watch(&canonical_root, Duration::from_millis(10))
+        .await;
+    let (_first_events, _first_alias_watcher) = filesystem
+        .watch(&alias_root.join("context-a.rs"), Duration::from_millis(10))
+        .await;
+    let (_second_events, _second_alias_watcher) = filesystem
+        .watch(&alias_root.join("context-b.rs"), Duration::from_millis(10))
+        .await;
+    executor.timer(Duration::from_millis(250)).await;
+    for name in [
+        "written-settings.json",
+        "deleted-settings.json",
+        "atomic-settings.json",
+    ] {
+        match name {
+            "written-settings.json" => {
+                std::fs::write(alias_root.join(name), b"after").expect("write through system alias")
+            }
+            "deleted-settings.json" => std::fs::remove_file(canonical_root.join(name))
+                .expect("remove canonical fixture file"),
+            _ => {
+                let temporary = alias_root.join("atomic-settings.new");
+                std::fs::write(&temporary, b"atomic").expect("atomic fixture content");
+                std::fs::rename(temporary, alias_root.join(name))
+                    .expect("atomic alias replacement");
+            }
+        }
+        let expected = canonical_root.join(name);
+        let timeout = executor.timer(Duration::from_secs(10)).fuse();
+        futures::pin_mut!(timeout);
+        let delivered = loop {
+            futures::select_biased! {
+                batch = events.next().fuse() => {
+                    let Some(batch) = batch else { break false };
+                    // A broad rescan cannot prove delivery of this particular native event.
+                    if batch.iter().any(|event| event.path == expected && event.kind != Some(PathEventKind::Rescan)) {
+                        break true;
+                    }
+                }
+                _ = timeout => break false,
+            }
+        };
+        assert!(delivered, "actual native event missing for {name}");
+    }
+    assert_eq!(
+        std::fs::read(canonical_root.join("written-settings.json")).expect("written bytes"),
+        b"after"
+    );
+    assert_eq!(
+        std::fs::read(canonical_root.join("atomic-settings.json")).expect("atomic bytes"),
+        b"atomic"
+    );
+    assert!(!canonical_root.join("deleted-settings.json").exists());
+}

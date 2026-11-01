@@ -19,7 +19,7 @@ use language::language_settings::{AllLanguageSettings, CopilotSettings};
 use language::{
     Anchor, Bias, Buffer, BufferSnapshot, Language, PointUtf16, ToPointUtf16,
     language_settings::{EditPredictionProvider, all_language_settings},
-    point_from_lsp, point_to_lsp,
+    point_to_lsp, range_from_lsp,
 };
 use lsp::{LanguageServer, LanguageServerBinary, LanguageServerId, LanguageServerName};
 use node_runtime::{NodeRuntime, VersionStrategy};
@@ -1068,14 +1068,9 @@ impl Copilot {
                                 .edits
                                 .into_iter()
                                 .map(|completion| {
-                                    let start = snapshot.clip_point_utf16(
-                                        point_from_lsp(completion.range.start),
-                                        Bias::Left,
-                                    );
-                                    let end = snapshot.clip_point_utf16(
-                                        point_from_lsp(completion.range.end),
-                                        Bias::Left,
-                                    );
+                                    let range = range_from_lsp(completion.range);
+                                    let start = snapshot.clip_point_utf16(range.start, Bias::Left);
+                                    let end = snapshot.clip_point_utf16(range.end, Bias::Left);
                                     CopilotEditPrediction {
                                         buffer: buffer_entity.clone(),
                                         range: snapshot.anchor_before(start)
@@ -1124,14 +1119,9 @@ impl Copilot {
                                 .items
                                 .into_iter()
                                 .map(|item| {
-                                    let start = snapshot.clip_point_utf16(
-                                        point_from_lsp(item.range.start),
-                                        Bias::Left,
-                                    );
-                                    let end = snapshot.clip_point_utf16(
-                                        point_from_lsp(item.range.end),
-                                        Bias::Left,
-                                    );
+                                    let range = range_from_lsp(item.range);
+                                    let start = snapshot.clip_point_utf16(range.start, Bias::Left);
+                                    let end = snapshot.clip_point_utf16(range.end, Bias::Left);
                                     CopilotEditPrediction {
                                         buffer: buffer_entity.clone(),
                                         range: snapshot.anchor_before(start)
@@ -1431,6 +1421,85 @@ mod tests {
         paths::PathStyle,
         rel_path::{RelPath, rel_path},
     };
+
+    #[gpui::test]
+    async fn test_completions_normalize_reversed_server_ranges(cx: &mut TestAppContext) {
+        init_test(cx);
+        cx.update(|cx| {
+            AllLanguageSettings::register(cx);
+            ProjectSettings::register(cx);
+        });
+        let (copilot, server) = Copilot::fake(cx);
+        for next_edit in [true, false] {
+            for (start, end, expected_start, expected_end) in [
+                ((1, 3), (0, 1), (0, 1), (1, 3)),
+                ((0, 1), (1, 3), (0, 1), (1, 3)),
+                ((0, 3), (0, 1), (0, 1), (0, 3)),
+                ((0, 1), (0, 1), (0, 1), (0, 1)),
+                ((9, 20), (0, 1), (0, 1), (1, 6)),
+            ] {
+                let range = lsp::Range::new(
+                    lsp::Position::new(start.0, start.1),
+                    lsp::Position::new(end.0, end.1),
+                );
+                server.set_request_handler::<NextEditSuggestions, _, _>(
+                    move |params, _| async move {
+                        Ok(request::NextEditSuggestionsResult {
+                            edits: if next_edit {
+                                vec![request::NextEditSuggestion {
+                                    text: "replacement".into(),
+                                    text_document: params.text_document,
+                                    range,
+                                    command: None,
+                                }]
+                            } else {
+                                Vec::new()
+                            },
+                        })
+                    },
+                );
+                server.set_request_handler::<InlineCompletions, _, _>(move |_, _| async move {
+                    Ok(request::InlineCompletionsResult {
+                        items: if next_edit {
+                            Vec::new()
+                        } else {
+                            vec![request::InlineCompletionItem {
+                                insert_text: "replacement".into(),
+                                range,
+                                command: None,
+                            }]
+                        },
+                    })
+                });
+                let buffer = cx.new(|cx| Buffer::local("a😀bc\nsecond", cx));
+                let position = buffer.read_with(cx, |buffer, _| buffer.anchor_before(0));
+                let predictions = copilot
+                    .update(cx, |copilot, cx| copilot.completions(&buffer, position, cx))
+                    .await
+                    .expect("completion response");
+                assert_eq!(predictions.len(), 1);
+                let prediction = predictions.first().expect("one prediction");
+                assert_eq!(
+                    prediction.range.start.to_point_utf16(&prediction.snapshot),
+                    PointUtf16::new(expected_start.0, expected_start.1),
+                    "start for next_edit={next_edit}, range={range:?}"
+                );
+                assert_eq!(
+                    prediction.range.end.to_point_utf16(&prediction.snapshot),
+                    PointUtf16::new(expected_end.0, expected_end.1),
+                    "end for next_edit={next_edit}, range={range:?}"
+                );
+                buffer.update(cx, |buffer, cx| {
+                    buffer.edit(
+                        [(prediction.range.clone(), prediction.text.as_str())],
+                        None,
+                        cx,
+                    );
+                });
+                assert!(buffer.read_with(cx, |buffer, _| buffer.text().contains("replacement")));
+            }
+        }
+    }
 
     #[gpui::test]
     async fn test_copilot_does_not_start_when_ai_disabled(cx: &mut TestAppContext) {

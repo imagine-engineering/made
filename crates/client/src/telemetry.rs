@@ -1076,6 +1076,84 @@ mod tests {
     }
 
     #[gpui::test]
+    fn test_production_telemetry_defaults_preserve_explicit_choices(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let store = SettingsStore::new(cx, &settings::default_settings());
+            cx.set_global(store);
+            for (content, metrics, diagnostics) in [
+                ("{}", false, false),
+                (r#"{"tab_size": 2}"#, false, false),
+                (
+                    r#"{"telemetry":{"metrics":true,"diagnostics":true}}"#,
+                    true,
+                    true,
+                ),
+                (
+                    r#"{"telemetry":{"metrics":false,"diagnostics":false}}"#,
+                    false,
+                    false,
+                ),
+                (r#"{"telemetry":{"metrics":true}}"#, true, false),
+                (r#"{"telemetry":{"diagnostics":true}}"#, false, true),
+                ("{}", false, false),
+            ] {
+                SettingsStore::update(cx, |store, cx| {
+                    store
+                        .set_user_settings(content, cx)
+                        .expect("valid explicit settings");
+                });
+                let settings = TelemetrySettings::get_global(cx);
+                assert_eq!(
+                    (settings.metrics, settings.diagnostics),
+                    (metrics, diagnostics),
+                    "{content}"
+                );
+            }
+        });
+    }
+
+    #[gpui::test]
+    async fn test_production_telemetry_default_admission_and_opt_in(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let store = SettingsStore::new(cx, &settings::default_settings());
+            cx.set_global(store);
+        });
+        let (http, request_count) = request_counting_http_client();
+        let telemetry = cx.update(|cx| {
+            let telemetry = Telemetry::new(Arc::new(FakeSystemClock::new()), http, cx);
+            telemetry.start(None, None, "default-policy-test".into(), cx);
+            telemetry.report_event(Event::Flexible(test_event()));
+            telemetry
+        });
+        assert!(is_empty_state(&telemetry));
+        telemetry
+            .flush_events_inner()
+            .await
+            .expect("disabled flush");
+        assert_eq!(request_count.load(Ordering::SeqCst), 0);
+
+        set_metrics_enabled(cx, true);
+        cx.run_until_parked();
+        telemetry.report_event(Event::Flexible(test_event()));
+        assert_eq!(telemetry.state.lock().events_queue.len(), 1);
+        telemetry
+            .flush_events_inner()
+            .await
+            .expect("opted-in flush");
+        assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+        telemetry.report_event(Event::Flexible(test_event()));
+        set_metrics_enabled(cx, false);
+        cx.run_until_parked();
+        assert!(is_empty_state(&telemetry));
+        telemetry
+            .flush_events_inner()
+            .await
+            .expect("disabled pending flush");
+        assert_eq!(request_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[gpui::test]
     fn test_telemetry_disabled_by_default(cx: &mut TestAppContext) {
         init_test(cx);
 

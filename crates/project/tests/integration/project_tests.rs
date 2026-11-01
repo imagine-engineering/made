@@ -82,7 +82,7 @@ use project::{
 };
 use rand::{Rng as _, rngs::StdRng};
 use serde_json::json;
-use settings::{GlobalLspSettingsContent, SettingsStore};
+use settings::{GlobalLspSettingsContent, Settings as _, SettingsStore};
 #[cfg(target_os = "linux")]
 use settings::{LocalSettingsKind, LocalSettingsPath};
 #[cfg(not(windows))]
@@ -112,6 +112,141 @@ use util::{
     uri,
 };
 use worktree::WorktreeModelHandle as _;
+
+#[gpui::test]
+async fn test_git_repository_discovery_after_completed_worktree_scan(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/scanned-project"),
+        json!({".git": {}, "file.txt": "BASE"}),
+    )
+    .await;
+    fs.insert_branches(Path::new(path!("/scanned-project/.git")), &["main"]);
+    let project = Project::test(fs.clone(), [], cx).await;
+    let store = project.read_with(cx, |project, _| project.worktree_store());
+    let worktree_id = store
+        .read_with(cx, |store, _| store.next_worktree_id())
+        .await
+        .expect("local worktree ID");
+    let worktree = worktree::Worktree::local(
+        Path::new(path!("/scanned-project")),
+        true,
+        fs,
+        Default::default(),
+        true,
+        worktree_id,
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("unregistered worktree");
+    worktree
+        .read_with(cx, |worktree, _| {
+            worktree.as_local().expect("local worktree").scan_complete()
+        })
+        .await;
+    assert_eq!(
+        worktree.read_with(cx, |worktree, _| {
+            worktree.as_local().expect("local worktree").repositories()
+        }),
+        vec![Arc::<Path>::from(Path::new(path!("/scanned-project")))]
+    );
+    store.update(cx, |store, cx| store.add(&worktree, cx));
+    cx.run_until_parked();
+    let repository = project
+        .read_with(cx, |project, cx| project.active_repository(cx))
+        .expect("a completed scan must still register its repository");
+    let branches = repository
+        .update(cx, |repository, _| repository.branches())
+        .await
+        .expect("branch request channel")
+        .expect("local repository branches")
+        .branches;
+    assert_eq!(
+        branches
+            .iter()
+            .map(|branch| branch.name())
+            .collect::<Vec<_>>(),
+        vec!["main"]
+    );
+}
+
+#[gpui::test]
+async fn test_add_path_to_git_info_exclude_in_local_linked_worktree(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        "/project",
+        json!({
+            ".git": {
+                "HEAD": "ref: refs/heads/main",
+                "config": "[core]\n\tbare = false\n",
+                "info": {
+                    "exclude": "existing\n",
+                },
+                "worktrees": {
+                    "linked": {
+                        "HEAD": "ref: refs/heads/linked",
+                        "commondir": "../..",
+                        "gitdir": "/worktree/.git",
+                    },
+                },
+            },
+        }),
+    )
+    .await;
+    fs.insert_tree(
+        "/worktree",
+        json!({
+            ".git": "gitdir: ../project/.git/worktrees/linked\n",
+            "logs": {
+                "app.log": "",
+            },
+            "tmp.txt": "",
+        }),
+    )
+    .await;
+    let repository_dir = Path::new("/project/.git/worktrees/linked");
+    fs.set_branch_name(repository_dir, Some("linked"));
+    fs.set_head_for_repo(repository_dir, &[], "head-sha");
+
+    let project = Project::test(fs.clone(), [Path::new("/worktree")], cx).await;
+    cx.run_until_parked();
+
+    let repository = project.read_with(cx, |project, cx| {
+        project
+            .active_repository(cx)
+            .expect("local linked worktree should have an active repository")
+    });
+
+    for (path, is_dir) in [("tmp.txt", false), ("logs", true), ("tmp.txt", false)] {
+        let repo_path = RepoPath::new(path).expect("path should be a valid repo path");
+        cx.update(|cx| {
+            repository.update(cx, |repository, _| {
+                repository.add_path_to_git_info_exclude(&repo_path, is_dir)
+            })
+        })
+        .await
+        .expect("add to info/exclude request should complete")
+        .expect("add to info/exclude should succeed for local linked worktree");
+    }
+
+    cx.run_until_parked();
+
+    assert_eq!(
+        fs.load(Path::new("/project/.git/info/exclude"))
+            .await
+            .expect("shared info/exclude should be readable"),
+        "existing\ntmp.txt\nlogs/\n"
+    );
+    assert!(
+        fs.metadata(&repository_dir.join("info/exclude"))
+            .await
+            .expect("worktree-specific info/exclude metadata should be readable")
+            .is_none(),
+        "the action should not create a worktree-specific info/exclude"
+    );
+}
 
 #[gpui::test]
 async fn bounded_artifact_buffer_checks_cached_content(cx: &mut TestAppContext) {
@@ -13391,9 +13526,9 @@ async fn test_repository_pending_ops_stage_all(
     );
 
     let project = Project::test(fs.clone(), [path!("/root/my-repo").as_ref()], cx).await;
-    let pending_ops_all = Arc::new(Mutex::new(SumTree::default()));
+    let pending_snapshots = Arc::new(Mutex::new(Vec::new()));
     project.update(cx, |project, cx| {
-        let pending_ops_all = pending_ops_all.clone();
+        let pending_snapshots = pending_snapshots.clone();
         cx.subscribe(project.git_store(), move |_, _, e, _| {
             if let GitStoreEvent::RepositoryUpdated(
                 _,
@@ -13401,11 +13536,7 @@ async fn test_repository_pending_ops_stage_all(
                 _,
             ) = e
             {
-                let merged = merge_pending_ops_snapshots(
-                    pending_ops.items(()),
-                    pending_ops_all.lock().items(()),
-                );
-                *pending_ops_all.lock() = SumTree::from_iter(merged.into_iter(), ());
+                pending_snapshots.lock().push(pending_ops.clone());
             }
         })
         .detach();
@@ -13432,44 +13563,28 @@ async fn test_repository_pending_ops_stage_all(
 
     cx.run_until_parked();
 
-    assert_eq!(
-        pending_ops_all
-            .lock()
-            .get(&worktree::PathKey(repo_path("a.txt").as_ref().clone()), ())
-            .unwrap()
-            .ops,
-        vec![
-            pending_op::PendingOp {
-                id: 1u16.into(),
-                git_status: pending_op::GitStatus::Staged,
-                job_status: pending_op::JobStatus::Finished
-            },
-            pending_op::PendingOp {
-                id: 2u16.into(),
-                git_status: pending_op::GitStatus::Unstaged,
-                job_status: pending_op::JobStatus::Finished
-            },
-        ],
-    );
-    assert_eq!(
-        pending_ops_all
-            .lock()
-            .get(&worktree::PathKey(repo_path("b.txt").as_ref().clone()), ())
-            .unwrap()
-            .ops,
-        vec![
-            pending_op::PendingOp {
-                id: 1u16.into(),
-                git_status: pending_op::GitStatus::Staged,
-                job_status: pending_op::JobStatus::Finished
-            },
-            pending_op::PendingOp {
-                id: 2u16.into(),
-                git_status: pending_op::GitStatus::Unstaged,
-                job_status: pending_op::JobStatus::Finished
-            },
-        ],
-    );
+    // A status scan retires finished operations, so their IDs can be reused.
+    // Inspect each emitted snapshot instead of merging IDs across scan epochs.
+    for path in [repo_path("a.txt"), repo_path("b.txt")] {
+        for git_status in [
+            pending_op::GitStatus::Staged,
+            pending_op::GitStatus::Unstaged,
+        ] {
+            assert!(
+                pending_snapshots.lock().iter().any(|snapshot| {
+                    snapshot
+                        .get(&worktree::PathKey(path.as_ref().clone()), ())
+                        .is_some_and(|operations| {
+                            operations.ops.iter().any(|operation| {
+                                operation.git_status == git_status
+                                    && operation.job_status == pending_op::JobStatus::Finished
+                            })
+                        })
+                }),
+                "missing finished {git_status:?} operation for {path:?}"
+            );
+        }
+    }
 
     repo.update(cx, |repo, _cx| {
         let git_statuses = repo.cached_status().collect::<Vec<_>>();
@@ -18239,4 +18354,2237 @@ async fn test_peer_buffer_transport_role_change_does_not_publish_private_content
         .await
         .expect("fresh direct-owner request retains private access");
     assert!(format!("{:?}", direct_owner.sent.lock()).contains("PEER_TRANSFER_CANARY"));
+}
+
+#[gpui::test]
+async fn test_worktree_released_when_creation_caller_is_cancelled(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/project"), serde_json::json!({ "a.rs": "" }))
+        .await;
+    fs.insert_tree(path!("/other"), serde_json::json!({ "b.rs": "" }))
+        .await;
+    let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
+    cx.run_until_parked();
+
+    let task = project.update(cx, |project, cx| {
+        project.find_or_create_worktree(path!("/other"), true, cx)
+    });
+    drop(task);
+    cx.run_until_parked();
+
+    let created = project.read_with(cx, |project, cx| {
+        project
+            .worktrees(cx)
+            .find(|worktree| worktree.read(cx).abs_path().ends_with("other"))
+            .map(|worktree| (worktree.read(cx).id(), worktree.downgrade()))
+    });
+
+    let Some((worktree_id, weak_worktree)) = created else {
+        panic!("worktree creation should complete even when the caller is cancelled");
+    };
+
+    project.update(cx, |project, cx| project.remove_worktree(worktree_id, cx));
+    cx.run_until_parked();
+
+    assert!(
+        weak_worktree.upgrade().is_none(),
+        "removed worktree should be released even when its creation task's caller was cancelled"
+    );
+}
+
+#[gpui::test]
+async fn test_initial_scan_completes_when_creation_caller_is_cancelled(
+    cx: &mut gpui::TestAppContext,
+) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/project"), serde_json::json!({ "a.rs": "" }))
+        .await;
+    fs.insert_tree(path!("/other"), serde_json::json!({ "b.rs": "" }))
+        .await;
+    let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
+    cx.run_until_parked();
+
+    let task = project.update(cx, |project, cx| {
+        project.find_or_create_worktree(path!("/other"), true, cx)
+    });
+    drop(task);
+    cx.run_until_parked();
+
+    let (initial_scan_completed, loading_worktrees) = project.read_with(cx, |project, cx| {
+        let worktree_store = project.worktree_store().read(cx);
+        (
+            worktree_store.initial_scan_completed(),
+            worktree_store.diagnostics(cx).loading_worktrees,
+        )
+    });
+    assert_eq!(
+        loading_worktrees, 0,
+        "no loading entry should remain after creation resolves"
+    );
+    assert!(
+        initial_scan_completed,
+        "initial scan should complete even when the creation task's caller was cancelled"
+    );
+}
+
+#[gpui::test]
+async fn test_worktree_creation_survives_one_cancelled_concurrent_caller(
+    cx: &mut gpui::TestAppContext,
+) {
+    init_test(cx);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(path!("/concurrent-root"), json!({"lib.rs": ""}))
+        .await;
+    let project = Project::test(filesystem, std::iter::empty(), cx).await;
+    let (cancelled, surviving) = project.update(cx, |project, cx| {
+        (
+            project.find_or_create_worktree(path!("/concurrent-root"), true, cx),
+            project.find_or_create_worktree(path!("/concurrent-root"), true, cx),
+        )
+    });
+    assert_eq!(
+        project.read_with(cx, |project, cx| project
+            .worktree_store()
+            .read(cx)
+            .diagnostics(cx)
+            .loading_worktrees),
+        1,
+        "concurrent callers must share one creation owner"
+    );
+    drop(cancelled);
+    let (worktree, _) = surviving.await.expect("remaining creation caller");
+    worktree
+        .read_with(cx, |worktree, _| {
+            worktree.as_local().expect("local fixture").scan_complete()
+        })
+        .await;
+    cx.run_until_parked();
+    assert!(project.read_with(cx, |project, cx| {
+        let store = project.worktree_store().read(cx);
+        store.diagnostics(cx).loading_worktrees == 0 && store.initial_scan_completed()
+    }));
+    let (same, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/concurrent-root"), true, cx)
+        })
+        .await
+        .expect("reuse completed worktree");
+    assert_eq!(same, worktree);
+}
+
+#[gpui::test]
+async fn test_peer_buffer_replacement_client_rejects_inflight_transfer(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, buffer, original) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    let pending = store.update(cx, |store, cx| {
+        store.create_buffer_for_peer(&buffer, peer, cx)
+    });
+    assert!(original.buffer_messages().is_empty());
+    let replacement = PeerBufferRecordingClient::new(true);
+    store.update(cx, |store, cx| {
+        store.shared(47, replacement.clone().into(), cx)
+    });
+    let result = pending.await;
+    assert!(
+        replacement.buffer_messages().is_empty(),
+        "an earlier request must not publish through a replacement client with the same project ID and role"
+    );
+    result.expect_err("replaced initiating client");
+    assert!(original.buffer_messages().is_empty());
+    assert!(!store.read_with(cx, |store, _| store.has_shared_buffers()));
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect("fresh request on replacement client");
+    assert!(format!("{:?}", replacement.sent.lock()).contains("PEER_TRANSFER_CANARY"));
+}
+
+#[gpui::test]
+async fn test_peer_buffer_replacement_client_does_not_inherit_admission(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, buffer, original) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect("original complete transfer");
+    let original_count = original.buffer_messages().len();
+    assert!(original_count > 1);
+    let replacement = PeerBufferRecordingClient::new(true);
+    store.update(cx, |store, cx| {
+        store.shared(47, replacement.clone().into(), cx)
+    });
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect("replacement needs a fresh transfer");
+    let messages = replacement.buffer_messages();
+    assert!(
+        matches!(
+            messages.first().map(|message| &message.variant),
+            Some(Some(rpc::proto::create_buffer_for_peer::Variant::State(_)))
+        ),
+        "a new client must receive State rather than inheriting another client's admission"
+    );
+    assert!(matches!(messages.last().map(|message| &message.variant),
+        Some(Some(rpc::proto::create_buffer_for_peer::Variant::Chunk(chunk))) if chunk.is_last));
+    assert_eq!(original.buffer_messages().len(), original_count);
+}
+
+#[gpui::test]
+async fn test_peer_buffer_same_client_clone_preserves_admission(cx: &mut gpui::TestAppContext) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let client: rpc::AnyProtoClient = recording.clone().into();
+    store.update(cx, |store, cx| store.shared(47, client.clone(), cx));
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect("first complete transfer");
+    let original_count = recording.buffer_messages().len();
+    assert!(original_count > 1);
+    store.update(cx, |store, cx| store.shared(47, client.clone(), cx));
+    assert!(store.read_with(cx, |store, _| store.has_shared_buffers()));
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect("same client clone keeps complete admission");
+    assert_eq!(recording.buffer_messages().len(), original_count);
+}
+
+fn peer_publication_fixture_transaction(
+    buffer: &Entity<Buffer>,
+    cx: &mut gpui::TestAppContext,
+) -> project::ProjectTransaction {
+    let transaction = buffer.update(cx, |buffer, cx| {
+        buffer
+            .edit([(0..0, "TRANSACTION_CANARY\n")], None, cx)
+            .expect("real edit");
+        buffer
+            .finalize_last_transaction()
+            .expect("real finalized transaction")
+            .clone()
+    });
+    project::ProjectTransaction(HashMap::from_iter([(buffer.clone(), transaction)]))
+}
+
+async fn publish_peer_transaction_fixture(
+    store: &Entity<project::buffer_store::BufferStore>,
+    transaction: project::ProjectTransaction,
+    peer: rpc::proto::PeerId,
+    cx: &mut gpui::TestAppContext,
+) -> Result<rpc::proto::ProjectTransaction> {
+    store
+        .update(cx, |store, cx| {
+            store.serialize_project_transaction_for_peer(transaction, peer, cx)
+        })
+        .await
+}
+
+fn peer_transaction_fixture_transfer_messages(
+    client: &PeerBufferRecordingClient,
+) -> Vec<rpc::proto::CreateBufferForPeer> {
+    client
+        .sent
+        .lock()
+        .iter()
+        .filter_map(|envelope| match envelope.payload.as_ref() {
+            Some(rpc::proto::envelope::Payload::CreateBufferForPeer(_)) => Some(
+                <rpc::proto::CreateBufferForPeer as rpc::proto::EnvelopedMessage>::from_envelope(
+                    envelope.clone(),
+                )
+                .expect("known transfer envelope"),
+            ),
+            _ => None,
+        })
+        .collect()
+}
+
+fn peer_transaction_fixture_make_private(
+    project: &Entity<Project>,
+    buffer: &Entity<Buffer>,
+    cx: &mut gpui::TestAppContext,
+) {
+    cx.update(|cx| {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_exclusions = Some(vec!["**".into()]);
+                settings.project.worktree.private_files = Some(vec!["**/secret.txt".into()].into());
+            });
+        });
+    });
+    cx.run_until_parked();
+    project.read_with(cx, |project, cx| {
+        let tree = project
+            .worktrees(cx)
+            .next()
+            .expect("local fixture worktree");
+        assert!(
+            tree.read(cx)
+                .as_local()
+                .expect("local fixture")
+                .is_path_private(rel_path("secret.txt"))
+        );
+    });
+    buffer.read_with(cx, |buffer, _| {
+        assert!(
+            !buffer.file().expect("retained fixture file").is_private(),
+            "blocked scan retains the old public File flag; current policy must decide"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_denied_member_returns_error(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    peer_transaction_fixture_make_private(&project, &buffer, cx);
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect_err("current central creator denies this member");
+    let before = recording.sent.lock().len();
+    let result = publish_peer_transaction_fixture(&store, transaction, peer, cx).await;
+    cx.run_until_parked();
+    if let Ok(payload) = &result {
+        let buffer_id: u64 = buffer.read_with(cx, |buffer, _| buffer.remote_id()).into();
+        assert_eq!(payload.buffer_ids, vec![buffer_id]);
+        assert_eq!(payload.transactions.len(), 1);
+    }
+    assert!(
+        result.is_err(),
+        "a denied transaction member must not be returned as successful IDs: {:?}",
+        result.as_ref().map(|payload| &payload.buffer_ids)
+    );
+    assert_eq!(recording.sent.lock().len(), before);
+    assert!(!store.read_with(cx, |store, _| store.has_shared_buffers()));
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_mixed_denial_preflights_all_members(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, private, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let public = project
+        .update(cx, |project, cx| project.create_buffer(None, false, cx))
+        .await
+        .expect("public untitled fixture");
+    let mut transaction = peer_publication_fixture_transaction(&private, cx);
+    transaction
+        .0
+        .extend(peer_publication_fixture_transaction(&public, cx).0);
+    peer_transaction_fixture_make_private(&project, &private, cx);
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    let before = peer_transaction_fixture_transfer_messages(&recording).len();
+    let result = publish_peer_transaction_fixture(&store, transaction, peer, cx).await;
+    cx.run_until_parked();
+    if let Ok(payload) = &result {
+        let private_id: u64 = private.read_with(cx, |buffer, _| buffer.remote_id()).into();
+        assert!(payload.buffer_ids.contains(&private_id));
+        assert_eq!(payload.buffer_ids.len(), 2);
+        assert_eq!(payload.transactions.len(), 2);
+    }
+    let after = peer_transaction_fixture_transfer_messages(&recording).len();
+    eprintln!(
+        "mixed transaction initial_transfer_messages={before} final_transfer_messages={after}"
+    );
+    assert!(
+        result.is_err(),
+        "whole-list denial must not return a partial or successful transaction"
+    );
+    assert_eq!(
+        after, before,
+        "preflight must precede any new member transfer regardless of map order"
+    );
+    assert!(!store.read_with(cx, |store, _| store.has_shared_buffers()));
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_state_failure_is_not_success(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    recording.fail_sends.store(true, atomic::Ordering::SeqCst);
+    let result = publish_peer_transaction_fixture(&store, transaction.clone(), peer, cx).await;
+    cx.run_until_parked();
+    assert!(
+        result.is_err(),
+        "failed State send must reach the transaction requester"
+    );
+    assert!(!store.read_with(cx, |store, _| store.has_shared_buffers()));
+    recording.fail_sends.store(false, atomic::Ordering::SeqCst);
+    let payload = publish_peer_transaction_fixture(&store, transaction, peer, cx)
+        .await
+        .expect("explicit retry");
+    cx.run_until_parked();
+    assert_eq!(payload.buffer_ids.len(), 1);
+    assert_eq!(payload.transactions.len(), 1);
+    assert!(
+        matches!(peer_transaction_fixture_transfer_messages(&recording).last().map(|message| &message.variant),
+        Some(Some(rpc::proto::create_buffer_for_peer::Variant::Chunk(chunk))) if chunk.is_last)
+    );
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_chunk_failure_preserves_unrelated_admission(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let unrelated = project
+        .update(cx, |project, cx| project.create_buffer(None, false, cx))
+        .await
+        .expect("unrelated public fixture");
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&unrelated, peer, cx)
+        })
+        .await
+        .expect("unrelated completed admission");
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    recording.fail_on_attempt.store(
+        recording.send_attempts.load(atomic::Ordering::SeqCst) + 2,
+        atomic::Ordering::SeqCst,
+    );
+    let result = publish_peer_transaction_fixture(&store, transaction.clone(), peer, cx).await;
+    cx.run_until_parked();
+    assert!(
+        result.is_err(),
+        "failed Chunk send must reach the transaction requester"
+    );
+    assert!(store.read_with(cx, |store, _| store.has_shared_buffers()));
+    let after_failure = recording.sent.lock().len();
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&unrelated, peer, cx)
+        })
+        .await
+        .expect("unrelated admission remains reusable");
+    assert_eq!(recording.sent.lock().len(), after_failure);
+    recording.fail_on_attempt.store(0, atomic::Ordering::SeqCst);
+    let payload = publish_peer_transaction_fixture(&store, transaction, peer, cx)
+        .await
+        .expect("retry failed member");
+    cx.run_until_parked();
+    assert_eq!(payload.buffer_ids.len(), 1);
+    assert_eq!(payload.transactions.len(), 1);
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_public_and_empty_controls(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    store.update(cx, |store, cx| store.unshared(cx));
+    let empty =
+        publish_peer_transaction_fixture(&store, project::ProjectTransaction::default(), peer, cx)
+            .await
+            .expect("empty transaction has no publication");
+    assert!(empty.buffer_ids.is_empty() && empty.transactions.is_empty());
+    store.update(cx, |store, cx| {
+        store.shared(47, recording.clone().into(), cx)
+    });
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    let payload = publish_peer_transaction_fixture(&store, transaction, peer, cx)
+        .await
+        .expect("public complete transaction");
+    cx.run_until_parked();
+    let buffer_id: u64 = buffer.read_with(cx, |buffer, _| buffer.remote_id()).into();
+    assert_eq!(payload.buffer_ids, vec![buffer_id]);
+    assert_eq!(payload.transactions.len(), 1);
+    let messages = peer_transaction_fixture_transfer_messages(&recording);
+    assert!(matches!(
+        messages.first().map(|message| &message.variant),
+        Some(Some(rpc::proto::create_buffer_for_peer::Variant::State(_)))
+    ));
+    assert!(matches!(messages.last().map(|message| &message.variant),
+        Some(Some(rpc::proto::create_buffer_for_peer::Variant::Chunk(chunk))) if chunk.is_last));
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_existing_admission_uses_current_policy(
+    cx: &mut TestAppContext,
+) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    store
+        .update(cx, |store, cx| {
+            store.create_buffer_for_peer(&buffer, peer, cx)
+        })
+        .await
+        .expect("public admission");
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    peer_transaction_fixture_make_private(&project, &buffer, cx);
+    let before = recording.sent.lock().len();
+    publish_peer_transaction_fixture(&store, transaction, peer, cx)
+        .await
+        .expect_err("current denial overrides cached admission");
+    assert_eq!(recording.sent.lock().len(), before);
+    assert!(
+        store.read_with(cx, |store, _| store.has_shared_buffers()),
+        "prior admission is not a revocable remote copy"
+    );
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_nonempty_requires_transport(cx: &mut TestAppContext) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    store.update(cx, |store, cx| store.unshared(cx));
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    publish_peer_transaction_fixture(
+        &store,
+        transaction,
+        rpc::proto::PeerId { owner_id: 1, id: 2 },
+        cx,
+    )
+    .await
+    .expect_err("cache-only create is not publication");
+    assert!(recording.sent.lock().is_empty());
+    assert!(!store.read_with(cx, |store, _| store.has_shared_buffers()));
+}
+
+async fn check_peer_transaction_pending_scope(cx: &mut TestAppContext, mode: u8) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    let pending = store.update(cx, |store, cx| {
+        store.serialize_project_transaction_for_peer(transaction.clone(), peer, cx)
+    });
+    assert!(
+        recording.sent.lock().is_empty(),
+        "captured task has not run or sent any State"
+    );
+    let replacement = PeerBufferRecordingClient::new(mode != 3);
+    match mode {
+        0 => store.update(cx, |store, cx| store.unshared(cx)),
+        1 => store.update(cx, |store, cx| {
+            store.shared(48, recording.clone().into(), cx)
+        }),
+        2 | 3 => store.update(cx, |store, cx| {
+            store.shared(47, replacement.clone().into(), cx)
+        }),
+        _ => panic!("invalid fixture mode"),
+    }
+    pending
+        .await
+        .expect_err("captured publication scope cannot use a replacement");
+    assert!(recording.sent.lock().is_empty());
+    assert!(replacement.sent.lock().is_empty());
+    assert!(!store.read_with(cx, |store, _| store.has_shared_buffers()));
+    if mode != 0 {
+        publish_peer_transaction_fixture(&store, transaction, peer, cx)
+            .await
+            .expect("fresh request uses current scope");
+    }
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_pending_unshare(cx: &mut TestAppContext) {
+    check_peer_transaction_pending_scope(cx, 0).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_pending_project_replacement(cx: &mut TestAppContext) {
+    check_peer_transaction_pending_scope(cx, 1).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_pending_client_replacement(cx: &mut TestAppContext) {
+    check_peer_transaction_pending_scope(cx, 2).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_pending_role_replacement(cx: &mut TestAppContext) {
+    check_peer_transaction_pending_scope(cx, 3).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_private_direct_and_explicit_opt_in(
+    cx: &mut TestAppContext,
+) {
+    let (project, buffer, collaboration) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    let transaction = peer_publication_fixture_transaction(&buffer, cx);
+    peer_transaction_fixture_make_private(&project, &buffer, cx);
+    publish_peer_transaction_fixture(&store, transaction.clone(), peer, cx)
+        .await
+        .expect_err("private collaboration denied");
+    assert!(collaboration.sent.lock().is_empty());
+    let direct = PeerBufferRecordingClient::new(false);
+    store.update(cx, |store, cx| store.shared(47, direct.clone().into(), cx));
+    let payload = publish_peer_transaction_fixture(&store, transaction.clone(), peer, cx)
+        .await
+        .expect("fresh direct owner can publish private file");
+    assert_eq!(payload.buffer_ids.len(), 1);
+    assert!(!direct.buffer_messages().is_empty());
+    store.update(cx, |store, cx| {
+        store.shared(47, collaboration.clone().into(), cx)
+    });
+    project.update(cx, |project, cx| {
+        let tree = project.worktrees(cx).next().expect("local root");
+        tree.update(cx, |tree, cx| {
+            tree.as_local_mut()
+                .expect("local root")
+                .share_private_files(cx)
+        });
+    });
+    let payload = publish_peer_transaction_fixture(&store, transaction, peer, cx)
+        .await
+        .expect("explicit local sharing choice");
+    assert_eq!(payload.buffer_ids.len(), 1);
+    assert!(!collaboration.buffer_messages().is_empty());
+}
+
+async fn check_peer_transaction_receiver_order(cx: &mut TestAppContext, response_first: bool) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let second = project
+        .update(cx, |project, cx| project.create_buffer(None, false, cx))
+        .await
+        .expect("untitled second member");
+    let originals = [&buffer, &second]
+        .into_iter()
+        .map(|buffer| buffer.read_with(cx, |buffer, _| (buffer.remote_id(), buffer.text())))
+        .collect::<HashMap<_, _>>();
+    let mut transaction = peer_publication_fixture_transaction(&buffer, cx);
+    transaction
+        .0
+        .extend(peer_publication_fixture_transaction(&second, cx).0);
+    let expected = transaction
+        .0
+        .iter()
+        .map(|(buffer, transaction)| {
+            (
+                buffer.read_with(cx, |buffer, _| u64::from(buffer.remote_id())),
+                language::proto::serialize_transaction(transaction),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    let payload = publish_peer_transaction_fixture(&store, transaction, peer, cx)
+        .await
+        .expect("whole two-member transaction");
+    assert_eq!(payload.buffer_ids.len(), 2);
+    assert_eq!(payload.transactions.len(), 2);
+    for (id, transaction) in payload.buffer_ids.iter().zip(&payload.transactions) {
+        assert_eq!(
+            Some(transaction),
+            expected.get(id),
+            "exact ID/transaction pairing"
+        );
+    }
+    let metadata = project.read_with(cx, |project, cx| {
+        project
+            .worktrees(cx)
+            .next()
+            .expect("root")
+            .read(cx)
+            .metadata_proto()
+    });
+    let upstream: rpc::AnyProtoClient = PeerBufferRecordingClient::new(true).into();
+    let worktrees = cx.new(|_| {
+        project::worktree_store::WorktreeStore::remote(
+            true,
+            upstream.clone(),
+            47,
+            PathStyle::local(),
+            Default::default(),
+        )
+    });
+    let remote_tree = cx.update(|cx| {
+        Worktree::remote(
+            47,
+            ReplicaId::REMOTE_SERVER,
+            metadata,
+            upstream.clone(),
+            PathStyle::local(),
+            cx,
+        )
+    });
+    worktrees.update(cx, |store, cx| store.add(&remote_tree, cx));
+    let remote =
+        cx.new(|cx| project::buffer_store::BufferStore::remote(worktrees, upstream, 47, cx));
+    let mut messages = recording.buffer_messages();
+    assert!(messages.len() >= 4);
+    let final_chunk = messages.pop().expect("completion chunk");
+    assert!(
+        matches!(&final_chunk.variant, Some(rpc::proto::create_buffer_for_peer::Variant::Chunk(chunk)) if chunk.is_last)
+    );
+    let receive = |message, cx: &mut TestAppContext| {
+        remote
+            .update(cx, |store, cx| {
+                store.handle_create_buffer_for_peer(
+                    rpc::TypedEnvelope {
+                        sender_id: peer,
+                        original_sender_id: None,
+                        message_id: 0,
+                        payload: message,
+                        received_at: std::time::Instant::now(),
+                    },
+                    ReplicaId::REMOTE_SERVER,
+                    language::Capability::ReadWrite,
+                    cx,
+                )
+            })
+            .expect("real remote buffer receive");
+    };
+    let mut pending = if response_first {
+        let mut pending = remote.update(cx, |store, cx| {
+            store.deserialize_project_transaction(payload.clone(), true, cx)
+        });
+        assert!(
+            (&mut pending).now_or_never().is_none(),
+            "response must wait for missing buffers"
+        );
+        Some(pending)
+    } else {
+        None
+    };
+    for message in messages {
+        receive(message, cx);
+    }
+    cx.run_until_parked();
+    if let Some(pending) = &mut pending {
+        assert!(
+            pending.now_or_never().is_none(),
+            "response must wait for final chunk before transaction/history completion"
+        );
+    }
+    receive(final_chunk, cx);
+    let received = match pending {
+        Some(pending) => pending,
+        None => remote.update(cx, |store, cx| {
+            store.deserialize_project_transaction(payload, true, cx)
+        }),
+    }
+    .with_timeout(Duration::from_secs(1), &cx.background_executor)
+    .await
+    .expect("bounded real receiver completion")
+    .expect("transaction and edit-ID waits complete");
+    assert_eq!(received.0.len(), 2);
+    for (buffer, transaction) in received.0 {
+        let id = buffer.read_with(cx, |buffer, _| buffer.remote_id());
+        assert_eq!(
+            Some(&language::proto::serialize_transaction(&transaction)),
+            expected.get(&u64::from(id))
+        );
+        assert!(
+            buffer
+                .read_with(cx, |buffer, _| buffer.text())
+                .starts_with("TRANSACTION_CANARY\n")
+        );
+        buffer
+            .update(cx, |buffer, cx| buffer.undo(cx))
+            .expect("received transaction added to history");
+        assert_eq!(
+            Some(&buffer.read_with(cx, |buffer, _| buffer.text())),
+            originals.get(&id),
+            "undo restores the corresponding original buffer"
+        );
+    }
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_real_receiver_buffers_first(cx: &mut TestAppContext) {
+    check_peer_transaction_receiver_order(cx, false).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_real_receiver_response_first(cx: &mut TestAppContext) {
+    check_peer_transaction_receiver_order(cx, true).await;
+}
+
+async fn dispatch_peer_transaction_fixture_request<M: rpc::proto::RequestMessage>(
+    message: M,
+    client: &rpc::AnyProtoClient,
+    recording: &Arc<PeerBufferRecordingClient>,
+    cx: &mut TestAppContext,
+) -> Result<M::Response> {
+    let request_id = 314;
+    let future = rpc::ProtoMessageHandlerSet::handle_message(
+        rpc::ProtoClient::message_handler_set(recording.as_ref()),
+        Box::new(rpc::TypedEnvelope {
+            sender_id: rpc::proto::PeerId { owner_id: 1, id: 1 },
+            original_sender_id: Some(rpc::proto::PeerId { owner_id: 1, id: 2 }),
+            message_id: request_id,
+            payload: message,
+            received_at: std::time::Instant::now(),
+        }),
+        client.clone(),
+        cx.to_async(),
+    )
+    .expect("request is registered against its actual owning entity");
+    let result = future
+        .with_timeout(Duration::from_secs(2), &cx.background_executor)
+        .await
+        .expect("bounded actual handler completion");
+    let responses = recording
+        .sent
+        .lock()
+        .iter()
+        .filter(|envelope| envelope.responding_to == Some(request_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(
+        responses.len(),
+        1,
+        "handler must emit one actual protocol response"
+    );
+    let response = responses.into_iter().next().expect("one actual response");
+    match result {
+        Ok(()) => Ok(
+            <M::Response as rpc::proto::EnvelopedMessage>::from_envelope(response)
+                .expect("expected successful response type"),
+        ),
+        Err(error) => {
+            assert!(
+                matches!(
+                    response.payload,
+                    Some(rpc::proto::envelope::Payload::Error(_))
+                ),
+                "failure must be an actual protocol error, not a successful empty transaction"
+            );
+            Err(error)
+        }
+    }
+}
+
+async fn check_peer_transaction_rpc_handler(cx: &mut TestAppContext, mode: u8, denied: bool) {
+    init_test(cx);
+    TaskStore::init(None);
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.all_languages.defaults.formatter = Some(FormatterList::Single(
+                    Formatter::LanguageServer(settings::LanguageServerFormatterSpecifier::Current),
+                ));
+            })
+        })
+    });
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(
+            path!("/transaction-rpc"),
+            json!({"secret.rs":"fn original() {}\n"}),
+        )
+        .await;
+    let project = Project::test(filesystem, [path!("/transaction-rpc").as_ref()], cx).await;
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.add(rust_lang());
+    let mut servers = languages.register_fake_lsp(
+        "Rust",
+        FakeLspAdapter {
+            capabilities: lsp::ServerCapabilities {
+                rename_provider: Some(lsp::OneOf::Left(true)),
+                document_formatting_provider: Some(lsp::OneOf::Left(true)),
+                code_action_provider: Some(lsp::CodeActionProviderCapability::Options(
+                    lsp::CodeActionOptions {
+                        resolve_provider: Some(false),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    let (buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/transaction-rpc/secret.rs"), cx)
+        })
+        .await
+        .expect("actual Rust buffer and fake language server");
+    let server = servers
+        .next()
+        .await
+        .expect("actual fake language server connection");
+    cx.run_until_parked();
+    let canary = format!("// TRANSACTION_RPC_{mode}\n");
+    let edit = lsp::TextEdit::new(
+        lsp::Range::new(lsp::Position::new(0, 0), lsp::Position::new(0, 0)),
+        canary.clone(),
+    );
+    let uri = lsp::Uri::from_file_path(path!("/transaction-rpc/secret.rs")).expect("fixture URI");
+    let workspace_edit = lsp::WorkspaceEdit {
+        changes: Some(std::collections::HashMap::from_iter([(
+            uri,
+            vec![edit.clone()],
+        )])),
+        ..Default::default()
+    };
+    let action = lsp::CodeAction {
+        title: "Transaction fixture action".into(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        edit: Some(workspace_edit.clone()),
+        ..Default::default()
+    };
+    let _format_responses = server.set_request_handler::<lsp::request::Formatting, _, _>({
+        let edit = edit.clone();
+        move |_, _| {
+            let edit = edit.clone();
+            async move { Ok(Some(vec![edit])) }
+        }
+    });
+    let _rename_responses = server.set_request_handler::<lsp::request::Rename, _, _>({
+        let workspace_edit = workspace_edit.clone();
+        move |_, _| {
+            let workspace_edit = workspace_edit.clone();
+            async move { Ok(Some(workspace_edit)) }
+        }
+    });
+    let _action_responses = server.set_request_handler::<lsp::request::CodeActionRequest, _, _>({
+        let action = action.clone();
+        move |_, _| {
+            let action = action.clone();
+            async move { Ok(Some(vec![lsp::CodeActionOrCommand::CodeAction(action)])) }
+        }
+    });
+    let (buffer_store, lsp_store) = project.read_with(cx, |project, _| {
+        (project.buffer_store().clone(), project.lsp_store())
+    });
+    let recording = PeerBufferRecordingClient::new(true);
+    let client: rpc::AnyProtoClient = recording.clone().into();
+    project::buffer_store::BufferStore::init(&client);
+    project::lsp_store::LspStore::init(&client);
+    client.subscribe_to_entity(47, &buffer_store);
+    client.subscribe_to_entity(47, &lsp_store);
+    buffer_store.update(cx, |store, cx| store.shared(47, client.clone(), cx));
+    lsp_store.update(cx, |store, cx| store.shared(47, client.clone(), cx));
+    if mode == 0 {
+        buffer
+            .update(cx, |buffer, cx| {
+                buffer.edit([(0..0, canary.as_str())], None, cx)
+            })
+            .expect("dirty actual reload buffer");
+    }
+    if denied {
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.project.worktree.file_scan_exclusions = Some(vec!["**".into()]);
+                    settings.project.worktree.private_files =
+                        Some(vec!["**/secret.rs".into()].into());
+                })
+            })
+        });
+        cx.run_until_parked();
+        assert!(project.read_with(cx, |project, cx| {
+            let worktree = project.worktrees(cx).next().expect("local root");
+            worktree
+                .read(cx)
+                .as_local()
+                .expect("local root")
+                .is_path_private(rel_path("secret.rs"))
+        }));
+        assert!(
+            !buffer.read_with(cx, |buffer, _| buffer
+                .file()
+                .expect("retained file")
+                .is_private()),
+            "stale public file metadata cannot authorize egress"
+        );
+    }
+    let (buffer_id, position, version) = buffer.read_with(cx, |buffer, _| {
+        (
+            u64::from(buffer.remote_id()),
+            language::proto::serialize_anchor(&buffer.anchor_before(0)),
+            language::proto::serialize_version(&buffer.version()),
+        )
+    });
+    let result = match mode {
+        0 => dispatch_peer_transaction_fixture_request(
+            rpc::proto::ReloadBuffers {
+                project_id: 47,
+                buffer_ids: vec![buffer_id],
+            },
+            &client,
+            &recording,
+            cx,
+        )
+        .await
+        .map(|response| response.transaction.expect("reload transaction")),
+        1 => dispatch_peer_transaction_fixture_request(
+            rpc::proto::FormatBuffers {
+                project_id: 47,
+                trigger: rpc::proto::FormatTrigger::Manual as i32,
+                buffer_ids: vec![buffer_id],
+                buffer_ranges: Vec::new(),
+            },
+            &client,
+            &recording,
+            cx,
+        )
+        .await
+        .map(|response| response.transaction.expect("format transaction")),
+        2 => dispatch_peer_transaction_fixture_request(
+            rpc::proto::ApplyCodeAction {
+                project_id: 47,
+                buffer_id,
+                action: Some(rpc::proto::CodeAction {
+                    server_id: server.server.server_id().to_proto(),
+                    start: Some(position.clone()),
+                    end: Some(position.clone()),
+                    lsp_action: serde_json::to_vec(&action).expect("fixture action"),
+                    kind: rpc::proto::code_action::Kind::Action as i32,
+                    resolved: true,
+                }),
+            },
+            &client,
+            &recording,
+            cx,
+        )
+        .await
+        .map(|response| response.transaction.expect("code action transaction")),
+        3 => dispatch_peer_transaction_fixture_request(
+            rpc::proto::ApplyCodeActionKind {
+                project_id: 47,
+                kind: "quickfix".into(),
+                buffer_ids: vec![buffer_id],
+            },
+            &client,
+            &recording,
+            cx,
+        )
+        .await
+        .map(|response| response.transaction.expect("kind transaction")),
+        4 => dispatch_peer_transaction_fixture_request(
+            rpc::proto::PerformRename {
+                project_id: 47,
+                buffer_id,
+                position: Some(position),
+                new_name: "renamed".into(),
+                version,
+            },
+            &client,
+            &recording,
+            cx,
+        )
+        .await
+        .map(|response| response.transaction.expect("rename transaction")),
+        _ => panic!("invalid fixture mode"),
+    };
+    let actual_text = buffer.read_with(cx, |buffer, _| buffer.text());
+    if mode == 0 {
+        assert_eq!(
+            actual_text, "fn original() {}\n",
+            "real reload changed the host before publication"
+        );
+    } else {
+        assert!(
+            actual_text.starts_with(&canary),
+            "real owner edits precede publication, including on egress denial: {actual_text:?}"
+        );
+    }
+    if denied {
+        let error = result.expect_err("denied publication returns an actual request error");
+        assert!(
+            format!("{error:#}").contains("UnsharedItem"),
+            "must fail at current sharing policy: {error:#}"
+        );
+        assert!(
+            peer_transaction_fixture_transfer_messages(&recording).is_empty(),
+            "denied response has no new member transfer"
+        );
+    } else {
+        let payload = result.expect("normal actual caller response");
+        assert_eq!(payload.buffer_ids, vec![buffer_id]);
+        assert_eq!(payload.transactions.len(), 1);
+        assert!(
+            matches!(peer_transaction_fixture_transfer_messages(&recording).last().map(|message| &message.variant), Some(Some(rpc::proto::create_buffer_for_peer::Variant::Chunk(chunk))) if chunk.is_last)
+        );
+    }
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_reload_public(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 0, false).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_reload_denied(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 0, true).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_format_public(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 1, false).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_format_denied(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 1, true).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_code_action_public(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 2, false).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_code_action_denied(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 2, true).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_code_action_kind_public(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 3, false).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_code_action_kind_denied(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 3, true).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_rename_public(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 4, false).await;
+}
+
+#[gpui::test]
+async fn test_peer_transaction_rpc_rename_denied(cx: &mut TestAppContext) {
+    check_peer_transaction_rpc_handler(cx, 4, true).await;
+}
+
+struct PeerQueryFixture {
+    _project: Entity<Project>,
+    buffer: Entity<Buffer>,
+    store: Entity<project::lsp_store::LspStore>,
+    servers: Vec<lsp::FakeLanguageServer>,
+    _handle: project::lsp_store::OpenLspBufferHandle,
+    client: rpc::AnyProtoClient,
+    recording: Arc<PeerBufferRecordingClient>,
+}
+
+impl PeerQueryFixture {
+    async fn new(cx: &mut TestAppContext, server_count: usize) -> Self {
+        init_test(cx);
+        let filesystem = FakeFs::new(cx.executor());
+        filesystem
+            .insert_tree(
+                path!("/query-rpc"),
+                json!({"source.rs":"fn original() {}\n"}),
+            )
+            .await;
+        let project = Project::test(filesystem, [path!("/query-rpc").as_ref()], cx).await;
+        let languages = project.read_with(cx, |project, _| project.languages().clone());
+        languages.add(rust_lang());
+        let mut registrations = ["query-one", "query-two"]
+            .into_iter()
+            .take(server_count)
+            .map(|name| {
+                languages.register_fake_lsp(
+                    "Rust",
+                    FakeLspAdapter {
+                        name,
+                        capabilities: lsp::ServerCapabilities {
+                            hover_provider: Some(lsp::HoverProviderCapability::Simple(true)),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let (buffer, handle) = project
+            .update(cx, |project, cx| {
+                project.open_local_buffer_with_lsp(path!("/query-rpc/source.rs"), cx)
+            })
+            .await
+            .expect("actual query source");
+        let mut servers = Vec::new();
+        for registration in &mut registrations {
+            servers.push(
+                registration
+                    .next()
+                    .await
+                    .expect("actual fake query server connection"),
+            );
+        }
+        cx.run_until_parked();
+        let store = project.read_with(cx, |project, _| project.lsp_store());
+        let recording = PeerBufferRecordingClient::new(true);
+        let client: rpc::AnyProtoClient = recording.clone().into();
+        project::lsp_store::LspStore::init(&client);
+        client.subscribe_to_entity(47, &store);
+        store.update(cx, |store, cx| store.shared(47, client.clone(), cx));
+        Self {
+            _project: project,
+            buffer,
+            store,
+            servers,
+            _handle: handle,
+            client,
+            recording,
+        }
+    }
+
+    fn begin(
+        &self,
+        request_id: u32,
+        query_id: u64,
+        server: Option<u64>,
+        cx: &mut TestAppContext,
+    ) -> Task<Result<()>> {
+        let request = self.buffer.read_with(cx, |buffer, _| rpc::proto::GetHover {
+            project_id: 47,
+            buffer_id: buffer.remote_id().into(),
+            position: Some(language::proto::serialize_anchor(&buffer.anchor_before(3))),
+            version: language::proto::serialize_version(&buffer.version()),
+        });
+        let handler = rpc::ProtoMessageHandlerSet::handle_message(
+            rpc::ProtoClient::message_handler_set(self.recording.as_ref()),
+            Box::new(rpc::TypedEnvelope {
+                sender_id: rpc::proto::PeerId { owner_id: 1, id: 1 },
+                original_sender_id: Some(rpc::proto::PeerId { owner_id: 1, id: 2 }),
+                message_id: request_id,
+                payload: rpc::proto::LspQuery {
+                    project_id: 47,
+                    lsp_request_id: query_id,
+                    server_id: server,
+                    request: Some(rpc::proto::lsp_query::Request::GetHover(request)),
+                },
+                received_at: std::time::Instant::now(),
+            }),
+            self.client.clone(),
+            cx.to_async(),
+        )
+        .expect("actual registered query handler");
+        cx.foreground_executor.spawn(handler)
+    }
+
+    fn responses(&self, query_id: u64) -> Vec<rpc::proto::LspQueryResponse> {
+        self.recording
+            .sent
+            .lock()
+            .iter()
+            .filter_map(|envelope| match &envelope.payload {
+                Some(rpc::proto::envelope::Payload::LspQueryResponse(response))
+                    if response.lsp_request_id == query_id =>
+                {
+                    Some(response.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn assert_request_reply(&self, request_id: u32, failed: bool) {
+        let replies = self
+            .recording
+            .sent
+            .lock()
+            .iter()
+            .filter(|envelope| envelope.responding_to == Some(request_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(replies.len(), 1);
+        if failed {
+            assert!(matches!(
+                replies[0].payload,
+                Some(rpc::proto::envelope::Payload::Error(_))
+            ));
+        } else {
+            assert!(matches!(
+                replies[0].payload,
+                Some(rpc::proto::envelope::Payload::Ack(_))
+            ));
+        }
+    }
+}
+
+fn peer_query_hover(text: &str) -> Option<lsp::Hover> {
+    Some(lsp::Hover {
+        contents: lsp::HoverContents::Scalar(lsp::MarkedString::String(text.into())),
+        range: None,
+    })
+}
+
+#[gpui::test]
+async fn test_peer_query_conversion_preserves_per_server_responses(cx: &mut TestAppContext) {
+    let fixture = PeerQueryFixture::new(cx, 2).await;
+    let mut watchers = Vec::new();
+    for (index, server) in fixture.servers.iter().enumerate() {
+        watchers.push(
+            server.set_request_handler::<lsp::request::HoverRequest, _, _>(
+                move |_, _| async move { Ok(peer_query_hover(&format!("QUERY_SERVER_{index}"))) },
+            ),
+        );
+    }
+    fixture
+        .begin(100, 200, None, cx)
+        .with_timeout(Duration::from_secs(1), &cx.background_executor)
+        .await
+        .expect("bounded query")
+        .expect("normal query result");
+    fixture.assert_request_reply(100, false);
+    let mut responses = fixture.responses(200);
+    assert_eq!(responses.len(), 1);
+    let mut responses = responses.pop().expect("query response").responses;
+    responses.sort_by_key(|response| response.server_id);
+    assert_eq!(responses.len(), 2);
+    for server in &fixture.servers {
+        assert!(
+            responses
+                .iter()
+                .any(|response| response.server_id == server.server.server_id().to_proto()),
+            "server identity preserved"
+        );
+    }
+    for (index, server) in fixture.servers.iter().enumerate() {
+        let response = responses
+            .iter()
+            .find(|response| response.server_id == server.server.server_id().to_proto())
+            .expect("matching server response");
+        assert!(
+            format!("{response:?}").contains(&format!("QUERY_SERVER_{index}")),
+            "normal converted payload retained"
+        );
+    }
+}
+
+async fn check_peer_query_pending_conversion(cx: &mut TestAppContext, mode: u8) {
+    let fixture = PeerQueryFixture::new(cx, 1).await;
+    let server = fixture.servers.first().expect("one server");
+    let server_id = server.server.server_id().to_proto();
+    let (started, did_start) = futures::channel::oneshot::channel();
+    let (release, released) = futures::channel::oneshot::channel();
+    let mut gate = Some((started, released));
+    let _watcher = server.set_request_handler::<lsp::request::HoverRequest, _, _>(move |_, _| {
+        let gate = gate.take();
+        async move {
+            if let Some((started, released)) = gate {
+                started
+                    .send(())
+                    .expect("fixture observes actual request start");
+                released.await.expect("fixture releases real LSP response");
+                Ok(peer_query_hover("ORIGINAL_QUERY"))
+            } else {
+                Ok(peer_query_hover("REPLACEMENT_QUERY"))
+            }
+        }
+    });
+    let mut first = fixture.begin(101, 201, Some(server_id), cx);
+    did_start
+        .with_timeout(Duration::from_secs(1), &cx.background_executor)
+        .await
+        .expect("bounded actual LSP start")
+        .expect("actual first query started");
+    assert!(
+        (&mut first).now_or_never().is_none(),
+        "Ack waits for conversion while actual server is gated"
+    );
+    assert!(fixture.responses(201).is_empty());
+    assert!(
+        !fixture
+            .recording
+            .sent
+            .lock()
+            .iter()
+            .any(|envelope| envelope.responding_to == Some(101))
+    );
+    let failed = match mode {
+        0 => {
+            release.send(()).expect("release actual response");
+            false
+        }
+        1 => {
+            fixture
+                .begin(102, 202, Some(server_id), cx)
+                .with_timeout(Duration::from_secs(1), &cx.background_executor)
+                .await
+                .expect("bounded superseding query")
+                .expect("replacement query succeeds");
+            fixture.assert_request_reply(102, false);
+            assert_eq!(fixture.responses(202).len(), 1);
+            // The fake server may still process a canceled request; retain and release its server-side gate.
+            if release.send(()).is_err() {
+                assert!(fixture.responses(201).is_empty());
+            }
+            false
+        }
+        2 => {
+            let replacement = PeerBufferRecordingClient::new(true);
+            fixture.store.update(cx, |store, cx| {
+                store.shared(47, replacement.clone().into(), cx)
+            });
+            release.send(()).expect("release stale response");
+            true
+        }
+        3 => {
+            fixture.recording.fail_on_attempt.store(
+                fixture
+                    .recording
+                    .send_attempts
+                    .load(atomic::Ordering::SeqCst)
+                    + 1,
+                atomic::Ordering::SeqCst,
+            );
+            release.send(()).expect("release send-failure response");
+            true
+        }
+        _ => panic!("invalid query mode"),
+    };
+    let result = first
+        .with_timeout(Duration::from_secs(1), &cx.background_executor)
+        .await
+        .expect("bounded original query completion");
+    if failed {
+        let error = result.expect_err("stale scope or response failure reaches original requester");
+        assert!(format!("{error:#}").contains(if mode == 2 {
+            "sharing changed"
+        } else {
+            "peer recording send failed"
+        }));
+    } else {
+        result.expect("normal or explicit superseded cancellation");
+    }
+    fixture.assert_request_reply(101, failed);
+    if mode == 0 {
+        let responses = fixture.responses(201);
+        assert_eq!(responses.len(), 1);
+        assert!(
+            format!("{:?}", responses.first().expect("one response")).contains("ORIGINAL_QUERY")
+        );
+    } else {
+        assert!(
+            fixture.responses(201).is_empty(),
+            "no stale/failed/superseded successful query payload"
+        );
+    }
+}
+
+#[gpui::test]
+async fn test_peer_query_conversion_waits_for_actual_response(cx: &mut TestAppContext) {
+    check_peer_query_pending_conversion(cx, 0).await;
+}
+#[gpui::test]
+async fn test_peer_query_conversion_supersedes_pending_request(cx: &mut TestAppContext) {
+    check_peer_query_pending_conversion(cx, 1).await;
+}
+#[gpui::test]
+async fn test_peer_query_conversion_rejects_replaced_client(cx: &mut TestAppContext) {
+    check_peer_query_pending_conversion(cx, 2).await;
+}
+#[gpui::test]
+async fn test_peer_query_conversion_send_failure_is_request_error(cx: &mut TestAppContext) {
+    check_peer_query_pending_conversion(cx, 3).await;
+}
+
+async fn check_peer_transaction_after_first_transfer(cx: &mut TestAppContext, mode: u8) {
+    let (project, buffer, recording) = public_peer_buffer_fixture(cx).await;
+    let store = project.read_with(cx, |project, _| project.buffer_store().clone());
+    let other = project
+        .update(cx, |project, cx| project.create_buffer(None, false, cx))
+        .await
+        .expect("second member");
+    let peer = rpc::proto::PeerId { owner_id: 1, id: 2 };
+    let mut transaction = peer_publication_fixture_transaction(&buffer, cx);
+    transaction
+        .0
+        .extend(peer_publication_fixture_transaction(&other, cx).0);
+    let mut pending = store.update(cx, |store, cx| {
+        store.serialize_project_transaction_for_peer(transaction.clone(), peer, cx)
+    });
+    let mut observed_completion = false;
+    for _ in 0..10_000 {
+        if peer_transaction_fixture_transfer_messages(&recording).iter().any(|message| {
+            matches!(&message.variant, Some(rpc::proto::create_buffer_for_peer::Variant::Chunk(chunk)) if chunk.is_last)
+        }) { observed_completion = true; break; }
+        assert!(
+            cx.dispatcher.tick(false),
+            "publication parked before first transfer completion"
+        );
+    }
+    assert!(
+        observed_completion,
+        "bounded deterministic first-transfer cut point"
+    );
+    let messages = peer_transaction_fixture_transfer_messages(&recording);
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| matches!(
+                &message.variant,
+                Some(rpc::proto::create_buffer_for_peer::Variant::State(_))
+            ))
+            .count(),
+        1,
+        "exactly one member transferred before caller regains control"
+    );
+    assert!(
+        (&mut pending).now_or_never().is_none(),
+        "whole transaction not yet completed"
+    );
+    let before = recording.sent.lock().len();
+    let replacement = PeerBufferRecordingClient::new(true);
+    match mode {
+        0 => peer_transaction_fixture_make_private(&project, &buffer, cx),
+        1 => store.update(cx, |store, cx| store.unshared(cx)),
+        2 => store.update(cx, |store, cx| {
+            store.shared(48, replacement.clone().into(), cx)
+        }),
+        3 => store.update(cx, |store, cx| {
+            store.shared(47, replacement.clone().into(), cx)
+        }),
+        4 => {
+            drop(pending);
+            cx.run_until_parked();
+            assert_eq!(
+                recording.sent.lock().len(),
+                before,
+                "cancellation must not continue transferring later members"
+            );
+            let payload = publish_peer_transaction_fixture(&store, transaction, peer, cx)
+                .await
+                .expect("explicit retry after cancellation");
+            assert_eq!(payload.buffer_ids.len(), 2);
+            assert_eq!(payload.transactions.len(), 2);
+            return;
+        }
+        _ => panic!("invalid post-transfer fixture mode"),
+    }
+    pending
+        .await
+        .expect_err("every member and original scope must still be valid after first transfer");
+    assert_eq!(
+        recording.sent.lock().len(),
+        before,
+        "no new transfers after whole-list or scope refusal"
+    );
+    assert!(
+        replacement.sent.lock().is_empty(),
+        "stale publication cannot reach replacement client"
+    );
+    if mode == 0 {
+        assert!(
+            store.read_with(cx, |store, _| store.has_shared_buffers()),
+            "already sent allowed member is not wire rollback"
+        );
+    }
+}
+
+#[gpui::test]
+async fn test_peer_transaction_publication_policy_after_first_transfer(cx: &mut TestAppContext) {
+    check_peer_transaction_after_first_transfer(cx, 0).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_unshare_after_first_transfer(cx: &mut TestAppContext) {
+    check_peer_transaction_after_first_transfer(cx, 1).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_project_after_first_transfer(cx: &mut TestAppContext) {
+    check_peer_transaction_after_first_transfer(cx, 2).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_client_after_first_transfer(cx: &mut TestAppContext) {
+    check_peer_transaction_after_first_transfer(cx, 3).await;
+}
+#[gpui::test]
+async fn test_peer_transaction_publication_cancel_after_first_transfer(cx: &mut TestAppContext) {
+    check_peer_transaction_after_first_transfer(cx, 4).await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_file_recovers(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    TaskStore::init(None);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/dir"), json!({".zed": {"settings.json": "{\"tab_size\":4}"}, "main.rs":"fn main() {}", "private.txt":"PRIVATE_CANARY"})).await;
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    let worktree = project.update(cx, |project, cx| {
+        project.worktrees(cx).next().expect("local worktree")
+    });
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_buffer((worktree.read(cx).id(), rel_path("main.rs")), cx)
+        })
+        .await
+        .expect("initial public buffer");
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .tab_size
+                .get(),
+            4
+        )
+    });
+    let oversized = format!("scope/{}?.k?y", "[ab]".repeat(262144));
+    fs.atomic_write(
+        Path::new(path!("/dir/.zed/settings.json")).to_owned(),
+        json!({"tab_size":8,"file_scan_exclusions":[oversized]}).to_string(),
+    )
+    .await
+    .expect("write resource failure settings");
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let worktree_id = worktree.read(cx).id();
+        let settings = cx
+            .global::<SettingsStore>()
+            .get::<worktree::WorktreeSettings>(Some(settings::SettingsLocation {
+                worktree_id,
+                path: RelPath::empty(),
+            }));
+        assert!(settings.file_scan_exclusions.is_conservative());
+        assert!(settings.is_path_excluded(rel_path("private.txt")));
+        assert_eq!(
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .tab_size
+                .get(),
+            8
+        );
+    });
+    fs.atomic_write(
+        Path::new(path!("/dir/.zed/settings.json")).to_owned(),
+        "{\"tab_size\":6,\"file_scan_exclusions\":[]}".into(),
+    )
+    .await
+    .expect("correct project settings on disk");
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .tab_size
+                .get(),
+            6,
+            "actual SettingsObserver must observe the correction through filesystem events"
+        );
+        let worktree_id = worktree.read(cx).id();
+        let settings = cx
+            .global::<SettingsStore>()
+            .get::<worktree::WorktreeSettings>(Some(settings::SettingsLocation {
+                worktree_id,
+                path: RelPath::empty(),
+            }));
+        assert!(!settings.file_scan_exclusions.is_conservative());
+        assert!(!settings.is_path_excluded(rel_path("private.txt")));
+    });
+}
+
+async fn check_project_glob_exclusion_settings_recovery(cx: &mut gpui::TestAppContext, mode: &str) {
+    init_test(cx);
+    TaskStore::init(None);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/dir"), json!({".zed": {"settings.json": "{\"tab_size\":4}"}, "main.rs":"fn main() {}", "private.txt":"PRIVATE_CANARY"})).await;
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    let worktree = project.update(cx, |project, cx| {
+        project.worktrees(cx).next().expect("local worktree")
+    });
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_buffer((worktree.read(cx).id(), rel_path("main.rs")), cx)
+        })
+        .await
+        .expect("initial public buffer");
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .tab_size
+                .get(),
+            4
+        )
+    });
+    let oversized = format!("scope/{}?.k?y", "[ab]".repeat(262144));
+    fs.atomic_write(
+        Path::new(path!("/dir/.zed/settings.json")).to_owned(),
+        json!({"tab_size":8,"file_scan_exclusions":[oversized]}).to_string(),
+    )
+    .await
+    .expect("write resource failure settings");
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let worktree_id = worktree.read(cx).id();
+        let settings = cx
+            .global::<SettingsStore>()
+            .get::<worktree::WorktreeSettings>(Some(settings::SettingsLocation {
+                worktree_id,
+                path: RelPath::empty(),
+            }));
+        assert!(settings.file_scan_exclusions.is_conservative());
+        assert!(settings.is_path_excluded(rel_path("private.txt")));
+        assert_eq!(
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .tab_size
+                .get(),
+            8
+        );
+    });
+    let settings_path = Path::new(path!("/dir/.zed/settings.json"));
+    let fixed = "{\"tab_size\":6,\"file_scan_exclusions\":[]}";
+    if mode == "restart" {
+        for deferred in [true, false] {
+            worktree.update(cx, |tree, cx| {
+                tree.as_local_mut()
+                    .expect("local tree")
+                    .set_defer_watch(deferred, cx)
+            });
+            cx.run_until_parked();
+        }
+    }
+    fs.pause_events();
+    match mode {
+        "delete-file" => fs
+            .remove_file(settings_path, fs::RemoveOptions::default())
+            .await
+            .expect("delete known settings"),
+        "delete-parent" => fs
+            .remove_dir(
+                Path::new(path!("/dir/.zed")),
+                fs::RemoveOptions {
+                    recursive: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("delete known settings directory"),
+        "replace-parent" => {
+            fs.rename(
+                Path::new(path!("/dir/.zed")),
+                Path::new(path!("/dir/old-settings")),
+                fs::RenameOptions::default(),
+            )
+            .await
+            .expect("replace old settings directory");
+            fs.atomic_write(settings_path.to_owned(), fixed.into())
+                .await
+                .expect("replacement settings directory");
+        }
+        _ => fs
+            .atomic_write(settings_path.to_owned(), fixed.into())
+            .await
+            .expect("correct known settings"),
+    }
+    fs.clear_buffered_events();
+    if mode == "startup" {
+        worktree.update(cx, |tree, cx| {
+            tree.as_local_mut()
+                .expect("local tree")
+                .set_defer_watch(true, cx)
+        });
+    }
+    if mode != "rescan" && mode != "startup" {
+        fs.emit_fs_event(path!("/dir/.zed"), Some(fs::PathEventKind::Changed));
+    }
+    fs.unpause_events_and_flush();
+    if mode == "rescan" {
+        fs.simulate_watcher_overflow(path!("/dir"));
+    }
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .tab_size
+                .get(),
+            if mode.starts_with("delete-") { 4 } else { 6 },
+            "actual SettingsObserver must observe the correction through filesystem events"
+        );
+        let worktree_id = worktree.read(cx).id();
+        let settings = cx
+            .global::<SettingsStore>()
+            .get::<worktree::WorktreeSettings>(Some(settings::SettingsLocation {
+                worktree_id,
+                path: RelPath::empty(),
+            }));
+        assert!(!settings.file_scan_exclusions.is_conservative());
+        assert!(!settings.is_path_excluded(rel_path("private.txt")));
+    });
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_ancestor(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "ancestor").await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_rescan(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "rescan").await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_replace_parent(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "replace-parent").await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_delete_file(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "delete-file").await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_delete_parent(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "delete-parent").await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_restart(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "restart").await;
+}
+
+#[gpui::test]
+async fn test_project_glob_exclusion_settings_startup(cx: &mut gpui::TestAppContext) {
+    check_project_glob_exclusion_settings_recovery(cx, "startup").await;
+}
+
+struct ProtectiveSettingsFixture {
+    filesystem: Arc<FakeFs>,
+    project: Entity<Project>,
+    worktree: Entity<Worktree>,
+    buffer: Entity<Buffer>,
+    toasts: Arc<Mutex<Vec<String>>>,
+    entry_updates: Arc<atomic::AtomicUsize>,
+}
+
+impl ProtectiveSettingsFixture {
+    async fn new(cx: &mut TestAppContext, accepted_exclusion: bool) -> Self {
+        init_test(cx);
+        TaskStore::init(None);
+        let filesystem = FakeFs::new(cx.executor());
+        filesystem
+            .insert_tree(
+                path!("/protected-settings"),
+                json!({
+                    ".zed":{"settings.json":"{\"tab_size\":4}"},"main.rs":"fn main() {}"
+                }),
+            )
+            .await;
+        filesystem
+            .insert_tree(
+                path!("/outside-settings"),
+                json!({"settings.json":"{\"tab_size\":99,\"file_scan_exclusions\":[]}"}),
+            )
+            .await;
+        let project = Project::test(
+            filesystem.clone(),
+            [path!("/protected-settings").as_ref()],
+            cx,
+        )
+        .await;
+        let worktree = project.read_with(cx, |project, cx| {
+            project.worktrees(cx).next().expect("local root")
+        });
+        let buffer = project
+            .update(cx, |project, cx| {
+                project.open_buffer((worktree.read(cx).id(), rel_path("main.rs")), cx)
+            })
+            .await
+            .expect("initial public source");
+        cx.run_until_parked();
+        let oversized = format!("scope/{}?.k?y", "[ab]".repeat(262144));
+        let exclusions = if accepted_exclusion {
+            vec![oversized, ".zed".into()]
+        } else {
+            vec![oversized]
+        };
+        filesystem
+            .atomic_write(
+                Path::new(path!("/protected-settings/.zed/settings.json")).to_owned(),
+                json!({"tab_size":8,"file_scan_exclusions":exclusions}).to_string(),
+            )
+            .await
+            .expect("actual protective configuration");
+        cx.run_until_parked();
+        assert_eq!(
+            buffer.read_with(cx, |buffer, cx| LanguageSettings::for_buffer(buffer, cx)
+                .tab_size
+                .get()),
+            8
+        );
+        assert!(worktree.read_with(cx, |tree, _| {
+            tree.as_local().expect("local").confined_root().is_ok()
+        }));
+        let toasts = Arc::new(Mutex::new(Vec::new()));
+        project.update(cx, |_, cx| {
+            let toasts = toasts.clone();
+            cx.subscribe(&project, move |_, _, event: &Event, _| {
+                if let Event::Toast {
+                    notification_id,
+                    message,
+                    ..
+                } = event
+                    && notification_id.starts_with("local-settings-")
+                {
+                    toasts.lock().push(message.clone());
+                }
+            })
+            .detach();
+        });
+        let entry_updates = Arc::new(atomic::AtomicUsize::new(0));
+        worktree.update(cx, |_, cx| {
+            let entry_updates = entry_updates.clone();
+            cx.subscribe(&worktree, move |_, _, event: &worktree::Event, _| {
+                if matches!(event, worktree::Event::UpdatedEntries(_)) {
+                    entry_updates.fetch_add(1, atomic::Ordering::SeqCst);
+                }
+            })
+            .detach();
+        });
+        Self {
+            filesystem,
+            project,
+            worktree,
+            buffer,
+            toasts,
+            entry_updates,
+        }
+    }
+
+    fn assert_retained(&self, cx: &mut TestAppContext) {
+        assert_eq!(
+            self.buffer
+                .read_with(cx, |buffer, cx| LanguageSettings::for_buffer(buffer, cx)
+                    .tab_size
+                    .get()),
+            8
+        );
+        self.worktree.read_with(cx, |tree, cx| {
+            let settings = worktree::WorktreeSettings::get(
+                Some(settings::SettingsLocation {
+                    worktree_id: tree.id(),
+                    path: RelPath::empty(),
+                }),
+                cx,
+            );
+            assert!(settings.file_scan_exclusions.is_conservative());
+            assert!(settings.is_path_excluded(rel_path("private-canary.txt")));
+        });
+        assert_eq!(
+            self.entry_updates.load(atomic::Ordering::SeqCst),
+            0,
+            "metadata-only recovery must not synthesize entry updates while exclusions remain protective"
+        );
+    }
+}
+
+async fn check_protective_settings_refusal(cx: &mut TestAppContext, mode: u8) {
+    let fixture = ProtectiveSettingsFixture::new(cx, false).await;
+    let path = Path::new(path!("/protected-settings/.zed/settings.json"));
+    match mode {
+        0 => {
+            fixture
+                .filesystem
+                .insert_symlink(
+                    path,
+                    PathBuf::from(path!("/outside-settings/settings.json")),
+                )
+                .await
+        }
+        1 => {
+            fixture
+                .filesystem
+                .insert_symlink(
+                    path!("/protected-settings/.zed"),
+                    PathBuf::from(path!("/outside-settings")),
+                )
+                .await
+        }
+        2 => {
+            fixture
+                .filesystem
+                .insert_symlink(path, PathBuf::from(path!("/outside-settings/missing.json")))
+                .await
+        }
+        3 => fixture.filesystem.insert_file(path, vec![0xff]).await,
+        4 => {
+            fixture
+                .filesystem
+                .insert_file(path, vec![b' '; 16 * 1024 * 1024 + 1])
+                .await
+        }
+        5 => {
+            fixture
+                .filesystem
+                .remove_file(path, fs::RemoveOptions::default())
+                .await
+                .expect("replace only fixture settings file");
+            fixture
+                .filesystem
+                .create_dir(path)
+                .await
+                .expect("ordinary directory in place of settings");
+        }
+        _ => panic!("invalid refusal fixture mode"),
+    }
+    cx.run_until_parked();
+    fixture.assert_retained(cx);
+    let messages = fixture.toasts.lock().clone();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("existing protection was retained")),
+        "actual Project error feedback must explain retained protection: {messages:?}"
+    );
+    match mode {
+        1 => fixture
+            .filesystem
+            .remove_file(
+                Path::new(path!("/protected-settings/.zed")),
+                fs::RemoveOptions::default(),
+            )
+            .await
+            .expect("unlink only fixture parent alias"),
+        5 => fixture
+            .filesystem
+            .remove_dir(path, fs::RemoveOptions::default())
+            .await
+            .expect("remove fixture settings directory"),
+        _ => fixture
+            .filesystem
+            .remove_file(path, fs::RemoveOptions::default())
+            .await
+            .expect("remove fixture rejected file"),
+    }
+    fixture
+        .filesystem
+        .atomic_write(
+            path.to_owned(),
+            "{\"tab_size\":6,\"file_scan_exclusions\":[]}".into(),
+        )
+        .await
+        .expect("explicit valid correction");
+    cx.run_until_parked();
+    assert_eq!(
+        fixture
+            .buffer
+            .read_with(cx, |buffer, cx| LanguageSettings::for_buffer(buffer, cx)
+                .tab_size
+                .get()),
+        6,
+        "valid correction restores normal settings after refusal"
+    );
+    fixture.project.read_with(cx, |project, cx| {
+        assert!(project.worktrees(cx).any(|tree| tree == fixture.worktree))
+    });
+}
+
+#[gpui::test]
+async fn test_project_glob_recovery_refuses_file_alias(cx: &mut TestAppContext) {
+    check_protective_settings_refusal(cx, 0).await;
+}
+#[gpui::test]
+async fn test_project_glob_recovery_refuses_parent_alias(cx: &mut TestAppContext) {
+    check_protective_settings_refusal(cx, 1).await;
+}
+#[gpui::test]
+async fn test_project_glob_recovery_refuses_dangling_alias(cx: &mut TestAppContext) {
+    check_protective_settings_refusal(cx, 2).await;
+}
+#[gpui::test]
+async fn test_project_glob_recovery_refuses_invalid_utf8(cx: &mut TestAppContext) {
+    check_protective_settings_refusal(cx, 3).await;
+}
+#[gpui::test]
+async fn test_project_glob_recovery_refuses_oversized_file(cx: &mut TestAppContext) {
+    check_protective_settings_refusal(cx, 4).await;
+}
+#[gpui::test]
+async fn test_project_glob_recovery_refuses_directory(cx: &mut TestAppContext) {
+    check_protective_settings_refusal(cx, 5).await;
+}
+
+#[gpui::test]
+async fn test_project_glob_recovery_respects_accepted_exclusion(cx: &mut TestAppContext) {
+    let fixture = ProtectiveSettingsFixture::new(cx, true).await;
+    fixture
+        .filesystem
+        .atomic_write(
+            Path::new(path!("/protected-settings/.zed/settings.json")).to_owned(),
+            "{\"tab_size\":6,\"file_scan_exclusions\":[]}".into(),
+        )
+        .await
+        .expect("correction at explicitly excluded path");
+    cx.run_until_parked();
+    fixture.assert_retained(cx);
+    assert!(
+        fixture.toasts.lock().is_empty(),
+        "accepted exclusion does not grant a control read"
+    );
+}
+
+#[gpui::test]
+async fn test_project_glob_recovery_does_not_discover_unknown_settings(cx: &mut TestAppContext) {
+    init_test(cx);
+    TaskStore::init(None);
+    let oversized = format!("scope/{}?.k?y", "[ab]".repeat(262144));
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_exclusions = Some(vec![oversized]);
+            })
+        })
+    });
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(
+            path!("/unknown-settings"),
+            json!({".zed":{"settings.json":"{\"tab_size\":99,\"file_scan_exclusions\":[]}"}}),
+        )
+        .await;
+    let project = Project::test(
+        filesystem.clone(),
+        [path!("/unknown-settings").as_ref()],
+        cx,
+    )
+    .await;
+    cx.run_until_parked();
+    let tree = project.read_with(cx, |project, cx| {
+        project.worktrees(cx).next().expect("local root")
+    });
+    let before = tree.read_with(cx, |tree, _| tree.snapshot().entries(true, 0).count());
+    assert!(tree.read_with(cx, |tree, _| {
+        tree.snapshot()
+            .entry_for_path(rel_path(".zed/settings.json"))
+            .is_none()
+    }));
+    filesystem
+        .atomic_write(
+            Path::new(path!("/unknown-settings/.zed/settings.json")).to_owned(),
+            "{\"tab_size\":6,\"file_scan_exclusions\":[]}".into(),
+        )
+        .await
+        .expect("unknown control correction");
+    cx.run_until_parked();
+    tree.read_with(cx, |tree, cx| {
+        assert_eq!(tree.snapshot().entries(true, 0).count(), before);
+        let location = Some(settings::SettingsLocation {
+            worktree_id: tree.id(),
+            path: RelPath::empty(),
+        });
+        assert!(
+            worktree::WorktreeSettings::get(location, cx)
+                .file_scan_exclusions
+                .is_conservative()
+        );
+        assert_eq!(
+            language::language_settings::AllLanguageSettings::get(location, cx)
+                .defaults
+                .tab_size
+                .get(),
+            4
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_project_glob_recovery_reports_unavailable_original_admission(
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+    TaskStore::init(None);
+    let filesystem = FakeFs::new(cx.executor());
+    filesystem
+        .insert_tree(
+            path!("/unavailable-actual"),
+            json!({".zed":{"settings.json":"{\"tab_size\":4}"},"main.rs":"fn main() {}"}),
+        )
+        .await;
+    let root = PathBuf::from(path!("/admitted-root-alias"));
+    filesystem
+        .insert_symlink(&root, PathBuf::from(path!("/unavailable-actual")))
+        .await;
+    let project = Project::test(filesystem.clone(), [root.as_path()], cx).await;
+    let tree = project.read_with(cx, |project, cx| {
+        project
+            .worktrees(cx)
+            .next()
+            .expect("ordinary alias root remains usable")
+    });
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_buffer((tree.read(cx).id(), rel_path("main.rs")), cx)
+        })
+        .await
+        .expect("ordinary manual access survives unavailable strict authority");
+    cx.run_until_parked();
+    tree.read_with(cx, |tree, _| {
+        let error = tree
+            .as_local()
+            .expect("local root")
+            .confined_root()
+            .expect_err("strict capture rejects final root alias");
+        assert!(
+            format!("{error:#}").contains("Confined object is an alias"),
+            "unexpected strict capture failure: {error:#}"
+        );
+    });
+    let toasts = Arc::new(Mutex::new(Vec::new()));
+    project.update(cx, |_, cx| {
+        let toasts = toasts.clone();
+        cx.subscribe(&project, move |_, _, event: &Event, _| {
+            if let Event::Toast {
+                message,
+                notification_id,
+                ..
+            } = event
+                && notification_id.starts_with("local-settings-")
+            {
+                toasts.lock().push(message.clone());
+            }
+        })
+        .detach();
+    });
+    let oversized = format!("scope/{}?.k?y", "[ab]".repeat(262144));
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_exclusions = Some(vec![oversized]);
+            })
+        })
+    });
+    cx.run_until_parked();
+    filesystem
+        .atomic_write(
+            Path::new(path!("/unavailable-actual/.zed/settings.json")).to_owned(),
+            "{\"tab_size\":6,\"file_scan_exclusions\":[]}".into(),
+        )
+        .await
+        .expect("known file correction under unchanged unavailable admission");
+    cx.run_until_parked();
+    assert_eq!(
+        buffer.read_with(cx, |buffer, cx| LanguageSettings::for_buffer(buffer, cx)
+            .tab_size
+            .get()),
+        4,
+        "unavailable strict authority must not apply settings through an ordinary read/deletion fallback"
+    );
+    let messages = toasts.lock().clone();
+    assert!(
+        messages.iter().any(
+            |message| message.contains("existing protection was retained")
+                && message.contains("Strict worktree access is unavailable")
+        ),
+        "actual existing error feedback must expose unavailable capture: {messages:?}"
+    );
 }

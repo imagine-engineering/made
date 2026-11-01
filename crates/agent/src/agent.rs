@@ -2656,70 +2656,24 @@ impl NativeAgent {
     ) -> impl Future<Output = ()> + use<> {
         let database_future = ThreadsDatabase::connect(cx);
 
-        let mut saves = Vec::new();
-        let mut active_saves = Vec::new();
-        let active_session_ids = self
-            .sessions
-            .iter()
-            .filter_map(|(session_id, session)| {
-                session.active_grind.as_ref().map(|_| session_id.clone())
-            })
-            .collect::<Vec<_>>();
-
-        for session_id in &active_session_ids {
-            let Some(session) = self.sessions.get(session_id) else {
-                continue;
-            };
-            let Some(state) = self.projects.get(&session.project_id) else {
-                continue;
-            };
-            let folder_paths = PathList::new(
-                &state
-                    .project
-                    .read(cx)
-                    .visible_worktrees(cx)
-                    .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
-                    .collect::<Vec<_>>(),
-            );
-            let thread = session.thread.clone();
-            let draft_prompt = session.acp_thread.read(cx).draft_prompt().map(Vec::from);
-
-            let Some(session) = self.sessions.get_mut(session_id) else {
-                continue;
-            };
+        for session in self.sessions.values_mut() {
             if let Some(grind) = session.active_grind.as_mut() {
                 grind.stop_requested = Some(GrindStopReason::SessionClosed);
             }
-            let cancellation = thread.update(cx, |thread, cx| thread.cancel(cx));
-            let session_id = session_id.clone();
-            active_saves.push(cx.spawn(async move |_, cx| {
-                cancellation.await;
-                let db_thread = thread.update(cx, |thread, cx| {
-                    thread.set_draft_prompt(draft_prompt);
-                    thread.to_db(cx)
-                });
-                anyhow::Ok((session_id, folder_paths, db_thread.await))
-            }));
+            session
+                .thread
+                .update(cx, |thread, cx| thread.prepare_for_quit(cx));
         }
-
-        for (session_id, session) in &self.sessions {
-            if !active_session_ids.contains(session_id) {
-                saves.extend(self.thread_save_payload(session, cx));
-            }
-        }
+        let saves = self
+            .sessions
+            .values()
+            .filter_map(|session| self.thread_save_payload(session, cx))
+            .collect::<Vec<_>>();
 
         async move {
             let Some(database) = database_future.await.map_err(|err| anyhow!(err)).log_err() else {
                 return;
             };
-            for active_save in future::join_all(active_saves).await {
-                if let Some((id, folder_paths, db_thread)) = active_save.log_err() {
-                    database
-                        .save_thread(id, db_thread, folder_paths)
-                        .await
-                        .log_err();
-                }
-            }
             // All quit observers share `gpui::SHUTDOWN_TIMEOUT`, so run the
             // saves concurrently instead of one at a time.
             future::join_all(saves.into_iter().map(|(id, folder_paths, db_thread)| {
@@ -10823,6 +10777,60 @@ mod internal_tests {
     }
 
     #[gpui::test]
+    async fn test_flush_threads_on_quit_preserves_normal_stream_partial(cx: &mut TestAppContext) {
+        let result: Result<()> = async {
+            init_test(cx);
+            let (_connection, agent, _project, acp_thread) = setup_native_agent_session(cx).await;
+            let session_id = acp_thread.read_with(cx, |thread, _| thread.session_id().clone());
+            let model = Arc::new(FakeLanguageModel::default());
+            let thread = cx.update(|cx| native_thread_for_session(&agent, &session_id, cx));
+            thread.update(cx, |thread, cx| thread.set_model(model.clone(), cx));
+            let send = acp_thread.update(cx, |thread, cx| {
+                thread.send(vec!["ordinary streaming response".into()], cx)
+            });
+            let send = cx.foreground_executor().spawn(send);
+            cx.run_until_parked();
+            let request = model
+                .pending_completions()
+                .pop()
+                .context("normal turn must request a completion")?;
+            model.send_completion_stream_text_chunk(&request, "partial response before quit");
+            cx.run_until_parked();
+            assert!(agent.read_with(cx, |agent, _| {
+                agent
+                    .sessions
+                    .get(&session_id)
+                    .is_some_and(|session| session.active_grind.is_none())
+            }));
+            let pending = thread.read_with(cx, |thread, _| thread.last_received_or_pending_message());
+            assert!(serde_json::to_string(&pending)?.contains("partial response before quit"));
+
+            cx.update(|cx| cx.shutdown());
+            let database = cx
+                .update(|cx| ThreadsDatabase::connect(cx))
+                .await
+                .map_err(|error| anyhow!("{error:#}"))?;
+            let stored = database
+                .load_thread(session_id)
+                .await?
+                .context("quit flush must persist the normal session")?;
+            model.end_completion_stream(&request);
+            let response = send.await?.context("normal prompt must return a response")?;
+            assert!(
+                serde_json::to_string(&stored.messages)?.contains("partial response before quit"),
+                "quit must flush the displayed normal-turn partial before taking the database snapshot"
+            );
+            assert_eq!(response.stop_reason, acp::StopReason::Cancelled);
+            Ok(())
+        }
+        .await;
+        assert!(
+            result.is_ok(),
+            "normal stream quit fixture failed: {result:?}"
+        );
+    }
+
+    #[gpui::test]
     async fn test_flush_threads_on_quit_cancels_grind_and_saves_final_snapshot(
         cx: &mut TestAppContext,
     ) {
@@ -10845,8 +10853,7 @@ mod internal_tests {
         model.send_completion_stream_text_chunk(&request, "final partial output");
         cx.run_until_parked();
 
-        let flush = agent.update(cx, |agent, cx| agent.flush_threads_on_quit(cx));
-        flush.await;
+        cx.update(|cx| cx.shutdown());
         model.end_completion_stream(&request);
         assert_eq!(grind.await.unwrap().stop_reason, acp::StopReason::Cancelled);
 

@@ -8,8 +8,7 @@ use client::{Client, Status as ClientStatus};
 use collections::{HashMap, HashSet, hash_map};
 use futures::{Future, FutureExt as _, channel::oneshot, future::Shared};
 use gpui::{
-    App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, Subscription, Task, TaskExt,
-    WeakEntity,
+    App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, Subscription, Task, WeakEntity,
 };
 use language::{
     Buffer, BufferEvent, Capability, DiskState, File as _, Language, LineEnding, Operation,
@@ -45,6 +44,8 @@ pub struct BufferStore {
     test_synchronization_preparation: Option<TestSynchronizationPreparationGate>,
     #[cfg(any(test, feature = "test-support"))]
     test_synchronization_commit_observer: Option<TestSynchronizationCommitObserver>,
+    #[cfg(any(test, feature = "test-support"))]
+    test_peer_save_wait: Option<TestPeerSaveWait>,
     non_searchable_buffers: HashSet<BufferId>,
     project_search: RemoteProjectSearchState,
 }
@@ -104,6 +105,13 @@ struct TestSynchronizationCommitObserver {
     project_id: u64,
     peer_id: proto::PeerId,
     observed: oneshot::Sender<proto::SynchronizeBuffersResponse>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+struct TestPeerSaveWait {
+    project_id: u64,
+    buffer_id: BufferId,
+    observed: oneshot::Sender<()>,
 }
 
 pub(crate) struct PreparedSynchronization {
@@ -861,6 +869,8 @@ impl BufferStore {
             test_synchronization_preparation: None,
             #[cfg(any(test, feature = "test-support"))]
             test_synchronization_commit_observer: None,
+            #[cfg(any(test, feature = "test-support"))]
+            test_peer_save_wait: None,
             loading_buffers: Default::default(),
             non_searchable_buffers: Default::default(),
             worktree_store,
@@ -893,6 +903,8 @@ impl BufferStore {
             test_synchronization_preparation: None,
             #[cfg(any(test, feature = "test-support"))]
             test_synchronization_commit_observer: None,
+            #[cfg(any(test, feature = "test-support"))]
+            test_peer_save_wait: None,
             non_searchable_buffers: Default::default(),
             worktree_store,
             project_search: Default::default(),
@@ -1322,7 +1334,17 @@ impl BufferStore {
     }
 
     pub fn shared(&mut self, remote_id: u64, downstream_client: AnyProtoClient, _cx: &mut App) {
-        self.pending_synchronizations.clear();
+        if self
+            .downstream_client
+            .as_ref()
+            .is_none_or(|(current, current_id)| {
+                *current_id != remote_id || !current.is_same_instance(&downstream_client)
+            })
+        {
+            self.forget_shared_buffers();
+        } else {
+            self.pending_synchronizations.clear();
+        }
         self.downstream_client = Some((downstream_client, remote_id));
     }
 
@@ -1395,30 +1417,53 @@ impl BufferStore {
         }
     }
 
-    pub async fn handle_update_buffer(
+    pub async fn handle_update_buffer_from_owner(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::UpdateBuffer>,
+        cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        Self::apply_update_buffer(this, envelope, None, cx).await
+    }
+
+    pub(crate) async fn handle_update_buffer_from_peer(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::UpdateBuffer>,
+        cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        let project_id = envelope.payload.project_id;
+        Self::apply_update_buffer(this, envelope, Some(project_id), cx).await
+    }
+
+    async fn apply_update_buffer(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::UpdateBuffer>,
+        peer_project_id: Option<u64>,
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let payload = envelope.payload;
         let buffer_id = BufferId::new(payload.buffer_id)?;
-        let ops = payload
+        let operations = payload
             .operations
             .into_iter()
             .map(language::proto::deserialize_operation)
             .collect::<Result<Vec<_>, _>>()?;
         this.update(&mut cx, |this, cx| {
-            match this.opened_buffers.entry(buffer_id) {
-                hash_map::Entry::Occupied(mut e) => match e.get_mut() {
-                    OpenBuffer::Operations(operations) => operations.extend_from_slice(&ops),
-                    OpenBuffer::Complete { buffer, .. } => {
-                        if let Some(buffer) = buffer.upgrade() {
-                            buffer.update(cx, |buffer, cx| buffer.apply_ops(ops, cx));
+            if let Some(project_id) = peer_project_id {
+                let buffer = this.ensure_peer_buffer_mutation(buffer_id, project_id, cx)?;
+                buffer.update(cx, |buffer, cx| buffer.apply_ops(operations, cx));
+            } else {
+                match this.opened_buffers.entry(buffer_id) {
+                    hash_map::Entry::Occupied(mut entry) => match entry.get_mut() {
+                        OpenBuffer::Operations(queued) => queued.extend_from_slice(&operations),
+                        OpenBuffer::Complete { buffer, .. } => {
+                            if let Some(buffer) = buffer.upgrade() {
+                                buffer.update(cx, |buffer, cx| buffer.apply_ops(operations, cx));
+                            }
                         }
+                    },
+                    hash_map::Entry::Vacant(entry) => {
+                        entry.insert(OpenBuffer::Operations(operations));
                     }
-                },
-                hash_map::Entry::Vacant(e) => {
-                    e.insert(OpenBuffer::Operations(ops));
                 }
             }
             Ok(proto::Ack {})
@@ -1857,34 +1902,65 @@ impl BufferStore {
         mut cx: AsyncApp,
     ) -> Result<proto::BufferSaved> {
         let buffer_id = BufferId::new(envelope.payload.buffer_id)?;
-        let (buffer, project_id) = this.read_with(&cx, |this, _| {
-            anyhow::Ok((
-                this.get_existing(buffer_id)?,
-                this.downstream_client
-                    .as_ref()
-                    .map(|(_, project_id)| *project_id)
-                    .context("project is not shared")?,
-            ))
+        let new_path = envelope
+            .payload
+            .new_path
+            .map(|path| ProjectPath::from_proto(path).context("invalid save destination"))
+            .transpose()?;
+        let (buffer, project_id, from_peer) = this.read_with(&cx, |this, cx| {
+            let (client, project_id) = this
+                .downstream_client
+                .as_ref()
+                .context("project is not shared")?;
+            anyhow::ensure!(
+                *project_id == envelope.payload.project_id,
+                ErrorCode::UnsharedItem
+            );
+            let from_peer = client.is_via_collab();
+            let buffer = if from_peer {
+                let buffer = this.ensure_peer_buffer_mutation(buffer_id, *project_id, cx)?;
+                if let Some(path) = &new_path {
+                    this.ensure_peer_save_destination(path, cx)?;
+                }
+                buffer
+            } else {
+                this.get_existing(buffer_id)?
+            };
+            anyhow::Ok((buffer, *project_id, from_peer))
         })?;
-        buffer
-            .update(&mut cx, |buffer, _| {
-                buffer.wait_for_version(deserialize_version(&envelope.payload.version))
-            })
-            .await?;
-        let buffer_id = buffer.read_with(&cx, |buffer, _| buffer.remote_id());
-
-        if let Some(new_path) = envelope.payload.new_path
-            && let Some(new_path) = ProjectPath::from_proto(new_path)
-        {
-            this.update(&mut cx, |this, cx| {
-                this.save_buffer_as(buffer.clone(), new_path, cx)
-            })
-            .await?;
-        } else {
-            this.update(&mut cx, |this, cx| this.save_buffer(buffer.clone(), cx))
-                .await?;
+        let wait_for_version = buffer.update(&mut cx, |buffer, _| {
+            buffer.wait_for_version(deserialize_version(&envelope.payload.version))
+        });
+        #[cfg(any(test, feature = "test-support"))]
+        if from_peer {
+            this.update(&mut cx, |this, _| {
+                if let Some(observer) = this.test_peer_save_wait.take_if(|observer| {
+                    observer.project_id == project_id && observer.buffer_id == buffer_id
+                }) {
+                    observer
+                        .observed
+                        .send(())
+                        .map_err(|_| anyhow!("peer save observer dropped"))?;
+                }
+                anyhow::Ok(())
+            })?;
         }
-
+        wait_for_version.await?;
+        this.update(&mut cx, |this, cx| {
+            if from_peer {
+                let current = this.ensure_peer_buffer_mutation(buffer_id, project_id, cx)?;
+                anyhow::ensure!(current == buffer, ErrorCode::UnsharedItem);
+                if let Some(path) = &new_path {
+                    this.ensure_peer_save_destination(path, cx)?;
+                }
+            }
+            anyhow::Ok(if let Some(path) = new_path {
+                this.save_buffer_as(buffer.clone(), path, cx)
+            } else {
+                this.save_buffer(buffer.clone(), cx)
+            })
+        })?
+        .await?;
         Ok(buffer.read_with(&cx, |buffer, _| proto::BufferSaved {
             project_id,
             buffer_id: buffer_id.into(),
@@ -2013,9 +2089,11 @@ impl BufferStore {
         })?;
 
         let project_transaction = reload.await?;
-        let project_transaction = this.update(&mut cx, |this, cx| {
-            this.serialize_project_transaction_for_peer(project_transaction, sender_id, cx)
-        });
+        let project_transaction = this
+            .update(&mut cx, |this, cx| {
+                this.serialize_project_transaction_for_peer(project_transaction, sender_id, cx)
+            })
+            .await?;
         Ok(proto::ReloadBuffersResponse {
             transaction: Some(project_transaction),
         })
@@ -2028,14 +2106,15 @@ impl BufferStore {
         let Some(file) = File::from_dyn(Some(file)) else {
             return file.is_private();
         };
-        let worktree = file.worktree.read(cx);
-        let path = if file.path.is_empty() && worktree.is_single_file() {
+        Self::is_worktree_path_private(file.worktree.read(cx), file.path.as_ref(), cx)
+    }
+
+    fn is_worktree_path_private(worktree: &Worktree, path: &RelPath, cx: &App) -> bool {
+        let path = if path.is_empty() && worktree.is_single_file() {
             worktree.root_name()
         } else {
-            file.path.as_ref()
+            path
         };
-        // Excluded scans can retain an old File privacy flag. Publication must
-        // consult its current owner, including a single-file root's filename.
         if let Some(local) = worktree.as_local() {
             local.is_path_private(path)
         } else {
@@ -2048,6 +2127,43 @@ impl BufferStore {
             )
             .is_path_private(path)
         }
+    }
+
+    pub(crate) fn ensure_peer_buffer_mutation(
+        &self,
+        buffer_id: BufferId,
+        project_id: u64,
+        cx: &App,
+    ) -> Result<Entity<Buffer>> {
+        anyhow::ensure!(
+            self.downstream_client
+                .as_ref()
+                .is_some_and(|(client, current)| {
+                    client.is_via_collab() && *current == project_id
+                }),
+            ErrorCode::UnsharedItem
+        );
+        let buffer = self
+            .get_existing(buffer_id)
+            .map_err(|error| anyhow::Error::from(ErrorCode::UnsharedItem).context(error))?;
+        anyhow::ensure!(
+            !Self::is_buffer_private_for_collaboration(buffer.read(cx), cx),
+            ErrorCode::UnsharedItem
+        );
+        Ok(buffer)
+    }
+
+    fn ensure_peer_save_destination(&self, path: &ProjectPath, cx: &App) -> Result<()> {
+        let worktree = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(path.worktree_id, cx)
+            .ok_or_else(|| anyhow::Error::from(ErrorCode::UnsharedItem))?;
+        anyhow::ensure!(
+            !Self::is_worktree_path_private(worktree.read(cx), &path.path, cx),
+            ErrorCode::UnsharedItem
+        );
+        Ok(())
     }
 
     pub(crate) fn ensure_buffer_shareable_with_peer(
@@ -2094,6 +2210,7 @@ impl BufferStore {
             return Task::ready(Ok(()));
         };
         let publishing_to_collaboration = client.is_via_collab();
+        let originating_client = client.clone();
         let project_id = *project_id;
         let buffer = buffer.clone();
         let operations = buffer.update(cx, |buffer, cx| buffer.serialize_ops(None, cx));
@@ -2113,6 +2230,10 @@ impl BufferStore {
                 anyhow::ensure!(
                     current_project_id == project_id,
                     "Peer buffer project changed during serialization"
+                );
+                anyhow::ensure!(
+                    client.is_same_instance(&originating_client),
+                    "Peer buffer client changed during serialization"
                 );
                 anyhow::ensure!(
                     client.is_via_collab() == publishing_to_collaboration,
@@ -2321,6 +2442,33 @@ impl BufferStore {
         self.opened_buffers.contains_key(&buffer_id)
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn queued_operation_count_for_test(&self, buffer_id: BufferId) -> Option<usize> {
+        match self.opened_buffers.get(&buffer_id) {
+            Some(OpenBuffer::Operations(operations)) => Some(operations.len()),
+            _ => None,
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn observe_peer_save_wait_for_test(
+        &mut self,
+        project_id: u64,
+        buffer_id: BufferId,
+    ) -> Result<oneshot::Receiver<()>> {
+        anyhow::ensure!(
+            self.test_peer_save_wait.is_none(),
+            "peer save observer already armed"
+        );
+        let (observed, receiver) = oneshot::channel();
+        self.test_peer_save_wait = Some(TestPeerSaveWait {
+            project_id,
+            buffer_id,
+            observed,
+        });
+        Ok(receiver)
+    }
+
     pub fn has_shared_buffers(&self) -> bool {
         !self.shared_buffers.is_empty()
     }
@@ -2391,27 +2539,89 @@ impl BufferStore {
         }
     }
 
+    fn ensure_peer_transaction_scope(
+        &self,
+        project_transaction: &ProjectTransaction,
+        originating_client: &AnyProtoClient,
+        project_id: u64,
+        cx: &App,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            self.downstream_client
+                .as_ref()
+                .is_some_and(|(client, current_id)| {
+                    *current_id == project_id && client.is_same_instance(originating_client)
+                }),
+            "Project sharing changed during transaction publication"
+        );
+        for buffer in project_transaction.0.keys() {
+            self.ensure_buffer_shareable_with_peer(buffer.read(cx), cx)?;
+        }
+        Ok(())
+    }
+
     pub fn serialize_project_transaction_for_peer(
         &mut self,
         project_transaction: ProjectTransaction,
         peer_id: proto::PeerId,
         cx: &mut Context<Self>,
-    ) -> proto::ProjectTransaction {
-        let mut serialized_transaction = proto::ProjectTransaction {
-            buffer_ids: Default::default(),
-            transactions: Default::default(),
-        };
-        for (buffer, transaction) in project_transaction.0 {
-            self.create_buffer_for_peer(&buffer, peer_id, cx)
-                .detach_and_log_err(cx);
-            serialized_transaction
-                .buffer_ids
-                .push(buffer.read(cx).remote_id().into());
-            serialized_transaction
-                .transactions
-                .push(language::proto::serialize_transaction(&transaction));
+    ) -> Task<Result<proto::ProjectTransaction>> {
+        if project_transaction.0.is_empty() {
+            return Task::ready(Ok(proto::ProjectTransaction::default()));
         }
-        serialized_transaction
+        let Some((originating_client, project_id)) = self.downstream_client.clone() else {
+            return Task::ready(Err(anyhow!(
+                "Peer transaction transport is no longer available"
+            )));
+        };
+        if let Err(error) = self.ensure_peer_transaction_scope(
+            &project_transaction,
+            &originating_client,
+            project_id,
+            cx,
+        ) {
+            return Task::ready(Err(error));
+        }
+        cx.spawn(async move |this, cx| {
+            for buffer in project_transaction.0.keys() {
+                let transfer = this.update(cx, |this, cx| {
+                    this.ensure_peer_transaction_scope(
+                        &project_transaction,
+                        &originating_client,
+                        project_id,
+                        cx,
+                    )?;
+                    anyhow::Ok(this.create_buffer_for_peer(buffer, peer_id, cx))
+                })??;
+                transfer.await?;
+                this.read_with(cx, |this, cx| {
+                    this.ensure_peer_transaction_scope(
+                        &project_transaction,
+                        &originating_client,
+                        project_id,
+                        cx,
+                    )
+                })??;
+            }
+            this.update(cx, |this, cx| {
+                this.ensure_peer_transaction_scope(
+                    &project_transaction,
+                    &originating_client,
+                    project_id,
+                    cx,
+                )?;
+                let mut serialized_transaction = proto::ProjectTransaction::default();
+                for (buffer, transaction) in project_transaction.0 {
+                    serialized_transaction
+                        .buffer_ids
+                        .push(buffer.read(cx).remote_id().into());
+                    serialized_transaction
+                        .transactions
+                        .push(language::proto::serialize_transaction(&transaction));
+                }
+                Ok(serialized_transaction)
+            })?
+        })
     }
 
     pub(crate) fn register_project_search_result_handle(

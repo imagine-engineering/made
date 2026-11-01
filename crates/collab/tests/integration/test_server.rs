@@ -151,6 +151,19 @@ impl TestServer {
             .hold_update_buffer_ack_for_test(host_id, project_id, buffer_id)
     }
 
+    pub fn hold_peer_update_after_acceptance(
+        &self,
+        host_id: proto::PeerId,
+        project_id: u64,
+        buffer_id: u64,
+    ) -> anyhow::Result<(
+        oneshot::Receiver<collab::rpc::TestUpdateBufferObserved>,
+        oneshot::Sender<std::result::Result<(), String>>,
+    )> {
+        self.server
+            .hold_peer_update_after_acceptance_for_test(host_id, project_id, buffer_id)
+    }
+
     pub fn observe_buffer_metadata_pair(
         &self,
         host_id: proto::PeerId,

@@ -146,6 +146,51 @@ pub trait Fs: Send + Sync {
         root_inode: u64,
         file_inode: u64,
     ) -> Result<Box<dyn io::Read + Send + Sync>>;
+    async fn observe_path_absence(&self, _logical_path: &Path) -> Result<Option<AbsentPath>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Logical path absence is unsupported by this filesystem",
+        )
+        .into())
+    }
+
+    async fn capture_confined_root(&self, _named_root: &Path) -> Result<ConfinedRoot> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Retained roots are unsupported by this filesystem",
+        )
+        .into())
+    }
+
+    async fn read_confined_file(
+        &self,
+        _root: &ConfinedRoot,
+        _named_root: &Path,
+        _path: &Path,
+        _max_bytes: usize,
+    ) -> Result<ConfinedFileBytes> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Retained-root reads are unsupported by this filesystem",
+        )
+        .into())
+    }
+
+    /// A true result confirms a missing entry under a verified root without
+    /// following aliases. Existing final entries, including symlinks, return false.
+    async fn is_confined_file_absent(
+        &self,
+        _root: &ConfinedRoot,
+        _named_root: &Path,
+        _path: &Path,
+    ) -> Result<bool> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Confined absence checks are unsupported by this filesystem",
+        )
+        .into())
+    }
+
     async fn open_sync_confined_file_handle(
         &self,
         _root: &Path,
@@ -445,6 +490,937 @@ impl TrashId {
     }
 }
 
+#[derive(Clone)]
+pub struct ConfinedRoot {
+    inner: Arc<ConfinedRootInner>,
+}
+
+struct ConfinedRootInner {
+    #[cfg(any(unix, feature = "test-support"))]
+    backing: ConfinedRootBacking,
+    handle: Arc<dyn FileHandle>,
+    metadata: Metadata,
+    #[cfg(any(unix, feature = "test-support"))]
+    operation: futures::lock::Mutex<()>,
+    #[cfg(all(unix, feature = "test-support"))]
+    native_test_pause: Mutex<Option<NativeConfinedPause>>,
+}
+
+#[cfg(any(unix, feature = "test-support"))]
+enum ConfinedRootBacking {
+    #[cfg(unix)]
+    Native {
+        file: Arc<std::fs::File>,
+        device: u64,
+        inode: u64,
+    },
+    #[cfg(feature = "test-support")]
+    Fake {
+        state: Arc<Mutex<FakeFsState>>,
+        inode: u64,
+    },
+}
+
+impl std::fmt::Debug for ConfinedRoot {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ConfinedRoot")
+            .field("metadata", &self.inner.metadata)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NativeConfinedCheckpoint {
+    BeforeReadBytes,
+    AfterReadBytes,
+    AfterAbsenceLookup,
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+struct NativeConfinedPause {
+    checkpoint: NativeConfinedCheckpoint,
+    reached: futures::channel::oneshot::Sender<()>,
+    resume: futures::channel::oneshot::Receiver<()>,
+}
+
+impl ConfinedRoot {
+    #[cfg(all(unix, feature = "test-support"))]
+    pub fn pause_native_operation_for_test(
+        &self,
+        checkpoint: NativeConfinedCheckpoint,
+    ) -> Result<(
+        futures::channel::oneshot::Receiver<()>,
+        futures::channel::oneshot::Sender<()>,
+    )> {
+        anyhow::ensure!(
+            matches!(&self.inner.backing, ConfinedRootBacking::Native { .. }),
+            "Native checkpoint requires a native admission"
+        );
+        let mut pause = self.inner.native_test_pause.lock();
+        anyhow::ensure!(pause.is_none(), "A native checkpoint is already installed");
+        let (reached, receiver) = futures::channel::oneshot::channel();
+        let (sender, resume) = futures::channel::oneshot::channel();
+        *pause = Some(NativeConfinedPause {
+            checkpoint,
+            reached,
+            resume,
+        });
+        Ok((receiver, sender))
+    }
+
+    #[cfg(all(unix, feature = "test-support"))]
+    async fn native_checkpoint_for_test(&self, checkpoint: NativeConfinedCheckpoint) -> Result<()> {
+        let pause = {
+            let mut pause = self.inner.native_test_pause.lock();
+            if pause
+                .as_ref()
+                .is_some_and(|pause| pause.checkpoint == checkpoint)
+            {
+                pause.take()
+            } else {
+                None
+            }
+        };
+        if let Some(pause) = pause {
+            pause
+                .reached
+                .send(())
+                .map_err(|()| anyhow::anyhow!("Checkpoint observer dropped"))?;
+            pause.resume.await.context("Checkpoint release dropped")?;
+        }
+        Ok(())
+    }
+
+    pub fn metadata(&self) -> Metadata {
+        self.inner.metadata
+    }
+
+    pub fn same_admission(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
+    pub fn file_handle(&self) -> Arc<dyn FileHandle> {
+        self.inner.handle.clone()
+    }
+}
+
+pub struct AbsentPath {
+    logical_path: PathBuf,
+}
+
+impl AbsentPath {
+    pub fn logical_path(&self) -> &Path {
+        &self.logical_path
+    }
+}
+
+impl std::fmt::Debug for AbsentPath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("AbsentPath").finish_non_exhaustive()
+    }
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy)]
+enum LogicalPathOrigin {
+    Original,
+    AliasTarget,
+}
+
+#[cfg(unix)]
+enum LogicalPathStep {
+    Root,
+    Parent,
+    Directory,
+    Name(OsString, LogicalPathOrigin),
+}
+
+#[cfg(unix)]
+enum LogicalPathEntry {
+    Directory,
+    Alias(PathBuf),
+    Other,
+}
+
+#[cfg(unix)]
+trait LogicalPathObservation {
+    fn root(&mut self);
+    fn parent(&mut self);
+    fn lookup(&mut self, name: &std::ffi::OsStr) -> Result<Option<LogicalPathEntry>>;
+}
+
+#[cfg(unix)]
+fn logical_path_steps(path: &Path, origin: LogicalPathOrigin) -> Result<Vec<LogicalPathStep>> {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    #[cfg(target_os = "macos")]
+    if path.to_str().is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Non-UTF8 logical path observation is unsupported on macOS",
+        )
+        .into());
+    }
+    let bytes = path.as_os_str().as_bytes();
+    anyhow::ensure!(
+        !bytes.is_empty() && bytes.len() <= 4096 && !bytes.contains(&0),
+        "Logical path must be nonempty, bounded and NUL-free"
+    );
+    anyhow::ensure!(
+        !bytes.starts_with(b"//"),
+        "Double-root namespaces are unsupported"
+    );
+    let mut steps = Vec::new();
+    if bytes.starts_with(b"/") {
+        steps.push(LogicalPathStep::Root);
+    }
+    let mut components = bytes.split(|byte| *byte == b'/').peekable();
+    while let Some(component) = components.next() {
+        match component {
+            b"" if components.peek().is_none() => steps.push(LogicalPathStep::Directory),
+            b"" => {}
+            b"." => steps.push(LogicalPathStep::Directory),
+            b".." => steps.push(LogicalPathStep::Parent),
+            name => steps.push(LogicalPathStep::Name(
+                OsString::from_vec(name.to_vec()),
+                origin,
+            )),
+        }
+    }
+    anyhow::ensure!(steps.len() <= 256, "Logical path component limit exceeded");
+    Ok(steps)
+}
+
+#[cfg(unix)]
+fn walk_logical_absence(
+    path: &Path,
+    observation: &mut impl LogicalPathObservation,
+) -> Result<bool> {
+    anyhow::ensure!(path.is_absolute(), "Logical source must be absolute");
+    let mut pending: std::collections::VecDeque<_> =
+        logical_path_steps(path, LogicalPathOrigin::Original)?.into();
+    let mut followed_aliases = 0;
+    let mut observed_components = 0;
+    while let Some(step) = pending.pop_front() {
+        observed_components += 1;
+        anyhow::ensure!(
+            observed_components <= 256,
+            "Logical path observation limit exceeded"
+        );
+        match step {
+            LogicalPathStep::Root => observation.root(),
+            LogicalPathStep::Parent => observation.parent(),
+            LogicalPathStep::Directory => {}
+            LogicalPathStep::Name(name, origin) => match observation.lookup(&name)? {
+                None => {
+                    // A broken alias target cannot authorize defaults for the original source.
+                    anyhow::ensure!(
+                        matches!(origin, LogicalPathOrigin::Original),
+                        "Logical source alias target is missing"
+                    );
+                    return Ok(true);
+                }
+                Some(LogicalPathEntry::Directory) => {}
+                Some(LogicalPathEntry::Other) => {
+                    anyhow::ensure!(
+                        pending.is_empty(),
+                        "Logical source parent is not a directory"
+                    );
+                    return Ok(false);
+                }
+                Some(LogicalPathEntry::Alias(target)) => {
+                    followed_aliases += 1;
+                    anyhow::ensure!(
+                        followed_aliases <= 40,
+                        "Logical source alias limit exceeded"
+                    );
+                    for step in logical_path_steps(&target, LogicalPathOrigin::AliasTarget)?
+                        .into_iter()
+                        .rev()
+                    {
+                        pending.push_front(step);
+                    }
+                }
+            },
+        }
+    }
+    Ok(false)
+}
+
+#[cfg(unix)]
+struct NativeLogicalBinding {
+    parent: Arc<std::fs::File>,
+    name: OsString,
+    identity: (u64, u64, u32),
+    handle: Option<Arc<std::fs::File>>,
+    alias_target: Option<OsString>,
+}
+
+#[cfg(unix)]
+struct NativeLogicalObservation {
+    root: ConfinedRoot,
+    directories: Vec<Arc<std::fs::File>>,
+    physical_path: PathBuf,
+    bindings: Vec<NativeLogicalBinding>,
+    missing: Option<(Arc<std::fs::File>, OsString)>,
+}
+
+#[cfg(unix)]
+fn logical_alias_open_flags() -> Result<rustix::fs::OFlags> {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    use rustix::fs::OFlags;
+    #[cfg(target_os = "linux")]
+    return Ok(OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC);
+    #[cfg(target_os = "macos")]
+    // O_SYMLINK opens the alias itself; combining O_NOFOLLOW rejects it on macOS.
+    return Ok(OFlags::from_bits_retain(libc::O_SYMLINK as _) | OFlags::CLOEXEC);
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Retained aliases are unsupported on this Unix backend",
+    )
+    .into())
+}
+
+#[cfg(unix)]
+fn logical_native_identity(stat: &rustix::fs::Stat) -> (u64, u64, u32) {
+    #[cfg(target_os = "macos")]
+    return (stat.st_dev as u64, stat.st_ino, u32::from(stat.st_mode));
+    #[cfg(target_os = "linux")]
+    return (stat.st_dev, stat.st_ino, stat.st_mode);
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        #[allow(
+            clippy::unnecessary_cast,
+            reason = "Native stat widths vary on other Unix targets"
+        )]
+        (stat.st_dev as u64, stat.st_ino as u64, stat.st_mode as u32)
+    }
+}
+
+#[cfg(unix)]
+fn validate_logical_directory_namespace(file: &std::fs::File) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    anyhow::ensure!(
+        rustix::fs::fstatfs(file)?.f_type != rustix::fs::PROC_SUPER_MAGIC,
+        "Kernel descriptor namespaces cannot establish logical absence"
+    );
+    #[cfg(target_os = "macos")]
+    anyhow::ensure!(
+        !rustix::fs::fstatfs(file)?
+            .f_fstypename
+            .iter()
+            .map(|byte| *byte as u8)
+            .take_while(|byte| *byte != 0)
+            .eq(b"fdesc".iter().copied()),
+        "Kernel descriptor namespaces cannot establish logical absence"
+    );
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _file = file;
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Logical absence is unsupported on this Unix backend",
+        )
+        .into());
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    Ok(())
+}
+
+#[cfg(unix)]
+impl NativeLogicalObservation {
+    fn new() -> Result<Self> {
+        let root = capture_native_confined_root(Path::new("/"))?;
+        let file = match &root.inner.backing {
+            ConfinedRootBacking::Native { file, .. } => file.clone(),
+            #[cfg(feature = "test-support")]
+            ConfinedRootBacking::Fake { .. } => {
+                anyhow::bail!("Native observation requires native root")
+            }
+        };
+        validate_logical_directory_namespace(&file)?;
+        Ok(Self {
+            root,
+            directories: vec![file],
+            physical_path: PathBuf::from("/"),
+            bindings: Vec::new(),
+            missing: None,
+        })
+    }
+
+    fn validate(&self) -> Result<()> {
+        use rustix::fs::{AtFlags, readlinkat, statat};
+        use std::os::unix::ffi::OsStringExt;
+        confined_native_named_root(&self.root, Path::new("/"))?;
+        for binding in &self.bindings {
+            let current = statat(
+                &*binding.parent,
+                binding.name.as_os_str(),
+                AtFlags::SYMLINK_NOFOLLOW,
+            )?;
+            anyhow::ensure!(
+                logical_native_identity(&current) == binding.identity,
+                "Logical source route changed; retry the read"
+            );
+            if let Some(directory) = &binding.handle {
+                anyhow::ensure!(
+                    logical_native_identity(&rustix::fs::fstat(&**directory)?) == binding.identity,
+                    "Logical source directory changed; retry the read"
+                );
+                if rustix::fs::FileType::from_raw_mode(current.st_mode)
+                    == rustix::fs::FileType::Directory
+                {
+                    validate_logical_directory_namespace(directory)?;
+                }
+            }
+            if let Some(target) = &binding.alias_target {
+                let current_target = OsString::from_vec(
+                    readlinkat(&*binding.parent, binding.name.as_os_str(), Vec::new())?
+                        .into_bytes(),
+                );
+                anyhow::ensure!(
+                    &current_target == target,
+                    "Logical source alias changed; retry the read"
+                );
+                let current = statat(
+                    &*binding.parent,
+                    binding.name.as_os_str(),
+                    AtFlags::SYMLINK_NOFOLLOW,
+                )?;
+                anyhow::ensure!(
+                    logical_native_identity(&current) == binding.identity,
+                    "Logical source alias binding changed; retry the read"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_missing(&self) -> Result<()> {
+        use rustix::fs::{AtFlags, statat};
+        let (parent, name) = self
+            .missing
+            .as_ref()
+            .context("Missing original binding was not observed")?;
+        match statat(&**parent, name.as_os_str(), AtFlags::SYMLINK_NOFOLLOW) {
+            Err(error) if error == rustix::io::Errno::NOENT => Ok(()),
+            Err(error) => Err(error.into()),
+            Ok(_) => anyhow::bail!("Logical source appeared; retry the read"),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl LogicalPathObservation for NativeLogicalObservation {
+    fn root(&mut self) {
+        self.directories.truncate(1);
+        self.physical_path = PathBuf::from("/");
+    }
+
+    fn parent(&mut self) {
+        self.directories
+            .truncate(self.directories.len().saturating_sub(1).max(1));
+        self.physical_path = self
+            .physical_path
+            .parent()
+            .unwrap_or(Path::new("/"))
+            .to_path_buf();
+    }
+
+    fn lookup(&mut self, name: &std::ffi::OsStr) -> Result<Option<LogicalPathEntry>> {
+        use rustix::fs::{AtFlags, FileType, Mode, openat, readlinkat, statat};
+        use std::os::unix::ffi::OsStringExt;
+        let parent = self
+            .directories
+            .last()
+            .context("Logical source directory is unavailable")?
+            .clone();
+        validate_logical_directory_namespace(&parent)?;
+        let path = self.physical_path.join(name);
+        anyhow::ensure!(
+            !["/dev/fd", "/proc", "/sys"]
+                .iter()
+                .any(|prefix| path.starts_with(prefix)),
+            "Kernel namespaces cannot establish logical absence"
+        );
+        let stat = match statat(&*parent, name, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(stat) => stat,
+            Err(error) if error == rustix::io::Errno::NOENT => {
+                self.missing = Some((parent, name.to_os_string()));
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let identity = logical_native_identity(&stat);
+        let mut binding = NativeLogicalBinding {
+            parent: parent.clone(),
+            name: name.to_os_string(),
+            identity,
+            handle: None,
+            alias_target: None,
+        };
+        let entry = match FileType::from_raw_mode(stat.st_mode) {
+            FileType::Directory => {
+                let file = Arc::new(std::fs::File::from(openat(
+                    &*parent,
+                    name,
+                    confined_native_flags(true),
+                    Mode::empty(),
+                )?));
+                anyhow::ensure!(
+                    logical_native_identity(&rustix::fs::fstat(&*file)?) == identity,
+                    "Logical source directory binding changed; retry the read"
+                );
+                validate_logical_directory_namespace(&file)?;
+                binding.handle = Some(file.clone());
+                self.directories.push(file);
+                self.physical_path = path;
+                LogicalPathEntry::Directory
+            }
+            FileType::Symlink => {
+                // Keeping the alias itself open prevents its inode being reused during observation.
+                let alias = Arc::new(std::fs::File::from(openat(
+                    &*parent,
+                    name,
+                    logical_alias_open_flags()?,
+                    Mode::empty(),
+                )?));
+                anyhow::ensure!(
+                    logical_native_identity(&rustix::fs::fstat(&*alias)?) == identity,
+                    "Logical source alias binding changed; retry the read"
+                );
+                binding.handle = Some(alias);
+                let target =
+                    OsString::from_vec(readlinkat(&*parent, name, Vec::new())?.into_bytes());
+                binding.alias_target = Some(target.clone());
+                LogicalPathEntry::Alias(target.into())
+            }
+            _ => LogicalPathEntry::Other,
+        };
+        self.bindings.push(binding);
+        Ok(Some(entry))
+    }
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+struct LogicalAbsencePause {
+    reached: futures::channel::oneshot::Sender<()>,
+    resume: futures::channel::oneshot::Receiver<()>,
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+fn install_logical_absence_pause(
+    slot: &Mutex<Option<LogicalAbsencePause>>,
+) -> Result<(
+    futures::channel::oneshot::Receiver<()>,
+    futures::channel::oneshot::Sender<()>,
+)> {
+    let mut slot = slot.lock();
+    anyhow::ensure!(
+        slot.is_none(),
+        "A logical absence checkpoint is already installed"
+    );
+    let (reached, receiver) = futures::channel::oneshot::channel();
+    let (sender, resume) = futures::channel::oneshot::channel();
+    *slot = Some(LogicalAbsencePause { reached, resume });
+    Ok((receiver, sender))
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+async fn logical_absence_checkpoint(slot: &Mutex<Option<LogicalAbsencePause>>) -> Result<()> {
+    let pause = slot.lock().take();
+    if let Some(pause) = pause {
+        pause
+            .reached
+            .send(())
+            .map_err(|()| anyhow::anyhow!("Absence checkpoint observer dropped"))?;
+        pause
+            .resume
+            .await
+            .context("Absence checkpoint release dropped")?;
+    }
+    Ok(())
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+#[derive(PartialEq, Eq)]
+struct FakeLogicalBinding {
+    path: PathBuf,
+    inode: u64,
+    alias_target: Option<PathBuf>,
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+struct FakeLogicalObservation<'a> {
+    state: &'a mut FakeFsState,
+    path: PathBuf,
+    bindings: Vec<FakeLogicalBinding>,
+    missing: Option<PathBuf>,
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+impl LogicalPathObservation for FakeLogicalObservation<'_> {
+    fn root(&mut self) {
+        self.path = PathBuf::from("/");
+    }
+    fn parent(&mut self) {
+        self.path = self.path.parent().unwrap_or(Path::new("/")).to_path_buf();
+    }
+    fn lookup(&mut self, name: &std::ffi::OsStr) -> Result<Option<LogicalPathEntry>> {
+        let path = self.path.join(name);
+        let Some((entry, _)) = self.state.try_entry(&path, false)? else {
+            self.missing = Some(path);
+            return Ok(None);
+        };
+        let (inode, alias_target, entry) = match entry {
+            FakeFsEntry::Dir { inode, .. } => {
+                self.path = path.clone();
+                (*inode, None, LogicalPathEntry::Directory)
+            }
+            FakeFsEntry::Symlink { inode, target } => (
+                *inode,
+                Some(target.clone()),
+                LogicalPathEntry::Alias(target.clone()),
+            ),
+            FakeFsEntry::File { inode, .. } => (*inode, None, LogicalPathEntry::Other),
+        };
+        self.bindings.push(FakeLogicalBinding {
+            path,
+            inode,
+            alias_target,
+        });
+        Ok(Some(entry))
+    }
+}
+
+pub struct ConfinedFileBytes {
+    pub bytes: Vec<u8>,
+    pub metadata: Metadata,
+}
+
+#[cfg(any(unix, feature = "test-support"))]
+fn confined_components(path: &Path, allow_empty: bool) -> Result<Vec<OsString>> {
+    let components = path.components().collect::<Vec<_>>();
+    anyhow::ensure!(
+        path.as_os_str().len() <= 4096
+            && components.len() <= 256
+            && (allow_empty || !components.is_empty())
+            && components
+                .iter()
+                .all(|component| matches!(component, std::path::Component::Normal(_))),
+        "Confined paths must be bounded relative paths without aliases or traversal"
+    );
+    Ok(components
+        .into_iter()
+        .map(|component| component.as_os_str().to_owned())
+        .collect())
+}
+
+#[cfg(unix)]
+fn confined_native_metadata(metadata: &std::fs::Metadata) -> Result<Metadata> {
+    Ok(Metadata {
+        inode: metadata.ino(),
+        mtime: MTime(metadata.modified()?),
+        is_symlink: false,
+        is_dir: metadata.is_dir(),
+        len: metadata.len(),
+        is_fifo: metadata.file_type().is_fifo(),
+        is_executable: metadata.mode() & 0o111 != 0,
+        is_writable: !metadata.permissions().readonly(),
+    })
+}
+
+#[cfg(unix)]
+fn confined_native_flags(directory: bool) -> rustix::fs::OFlags {
+    use rustix::fs::OFlags;
+    let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK;
+    if directory {
+        flags | OFlags::DIRECTORY
+    } else {
+        flags
+    }
+}
+
+#[cfg(unix)]
+fn confined_native_named_root(root: &ConfinedRoot, named_root: &Path) -> Result<std::fs::File> {
+    use rustix::fs::{Mode, open};
+    let (file, device, inode) = match &root.inner.backing {
+        ConfinedRootBacking::Native {
+            file,
+            device,
+            inode,
+        } => (file, device, inode),
+        #[cfg(feature = "test-support")]
+        ConfinedRootBacking::Fake { .. } => {
+            anyhow::bail!("Confined root belongs to a different filesystem backend")
+        }
+    };
+    anyhow::ensure!(
+        named_root.is_absolute() && named_root.as_os_str().len() <= 4096,
+        "Confined root name must be bounded and absolute"
+    );
+    let named = std::fs::File::from(open(
+        named_root,
+        confined_native_flags(root.inner.metadata.is_dir),
+        Mode::empty(),
+    )?);
+    for metadata in [file.metadata()?, named.metadata()?] {
+        anyhow::ensure!(
+            metadata.dev() == *device
+                && metadata.ino() == *inode
+                && metadata.is_dir() == root.inner.metadata.is_dir
+                && (metadata.is_dir() || metadata.is_file()),
+            "Confined root no longer names the admitted filesystem object"
+        );
+    }
+    Ok(named)
+}
+
+#[cfg(unix)]
+struct ConfinedNativeParent {
+    directories: Vec<std::fs::File>,
+    directory_names: Vec<OsString>,
+    target: OsString,
+    missing_parent: bool,
+}
+
+#[cfg(unix)]
+impl ConfinedNativeParent {
+    fn walk(root: &ConfinedRoot, named_root: &Path, path: &Path) -> Result<Self> {
+        use rustix::fs::{Mode, openat};
+        anyhow::ensure!(
+            root.inner.metadata.is_dir,
+            "Confined root is not a directory"
+        );
+        let components = confined_components(path, false)?;
+        let (target, parents) = components.split_last().context("Confined path is empty")?;
+        let named = confined_native_named_root(root, named_root)?;
+        let file = match &root.inner.backing {
+            ConfinedRootBacking::Native { file, .. } => file,
+            #[cfg(feature = "test-support")]
+            ConfinedRootBacking::Fake { .. } => {
+                anyhow::bail!("Confined root belongs to a different filesystem backend")
+            }
+        };
+        // Start from the retained admission handle, never from a freshly resolved root.
+        let directory = std::fs::File::from(openat(
+            file.as_ref(),
+            ".",
+            confined_native_flags(true),
+            Mode::empty(),
+        )?);
+        drop(named);
+        let mut result = Self {
+            directories: vec![directory],
+            directory_names: Vec::new(),
+            target: target.clone(),
+            missing_parent: false,
+        };
+        for name in parents {
+            let parent = result
+                .directories
+                .last()
+                .context("Confined parent is missing")?;
+            match openat(parent, name, confined_native_flags(true), Mode::empty()) {
+                Ok(next) => {
+                    result.directories.push(std::fs::File::from(next));
+                    result.directory_names.push(name.clone());
+                }
+                Err(error) if error == rustix::io::Errno::NOENT => {
+                    result.target = name.clone();
+                    result.missing_parent = true;
+                    break;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        result.validate(root, named_root)?;
+        Ok(result)
+    }
+
+    fn parent(&self) -> Result<&std::fs::File> {
+        self.directories
+            .last()
+            .context("Confined parent is missing")
+    }
+
+    fn validate(&self, root: &ConfinedRoot, named_root: &Path) -> Result<()> {
+        use rustix::fs::{AtFlags, statat};
+        let named = confined_native_named_root(root, named_root)?;
+        drop(named);
+        for ((parent, child), name) in self
+            .directories
+            .iter()
+            .zip(self.directories.iter().skip(1))
+            .zip(&self.directory_names)
+        {
+            let bound = statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
+            let actual = child.metadata()?;
+            anyhow::ensure!(
+                bound.st_dev as u64 == actual.dev()
+                    && bound.st_ino as u64 == actual.ino()
+                    && rustix::fs::FileType::from_raw_mode(bound.st_mode)
+                        == rustix::fs::FileType::Directory,
+                "Confined parent binding changed"
+            );
+        }
+        Ok(())
+    }
+
+    fn target_is_absent(&self) -> Result<bool> {
+        use rustix::fs::{AtFlags, statat};
+        match statat(self.parent()?, &self.target, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(_) => Ok(false),
+            Err(error) if error == rustix::io::Errno::NOENT => Ok(true),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn validate_file(&self, file: &std::fs::File) -> Result<()> {
+        use rustix::fs::{AtFlags, statat};
+        let bound = statat(self.parent()?, &self.target, AtFlags::SYMLINK_NOFOLLOW)?;
+        let actual = file.metadata()?;
+        anyhow::ensure!(
+            bound.st_dev as u64 == actual.dev()
+                && bound.st_ino as u64 == actual.ino()
+                && rustix::fs::FileType::from_raw_mode(bound.st_mode)
+                    == rustix::fs::FileType::RegularFile,
+            "Confined file binding changed"
+        );
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn capture_native_confined_root(named_root: &Path) -> Result<ConfinedRoot> {
+    use rustix::fs::{Mode, open};
+    anyhow::ensure!(
+        named_root.is_absolute() && named_root.as_os_str().len() <= 4096,
+        "Confined root name must be bounded and absolute"
+    );
+    let file = Arc::new(std::fs::File::from(open(
+        named_root,
+        confined_native_flags(false),
+        Mode::empty(),
+    )?));
+    let metadata = file.metadata()?;
+    anyhow::ensure!(
+        metadata.is_file() || metadata.is_dir(),
+        "Confined root must be an ordinary file or directory"
+    );
+    let initial_metadata = confined_native_metadata(&metadata)?;
+    Ok(ConfinedRoot {
+        inner: Arc::new(ConfinedRootInner {
+            handle: file.clone(),
+            backing: ConfinedRootBacking::Native {
+                file,
+                device: metadata.dev(),
+                inode: metadata.ino(),
+            },
+            metadata: initial_metadata,
+            operation: futures::lock::Mutex::new(()),
+            #[cfg(all(unix, feature = "test-support"))]
+            native_test_pause: Mutex::new(None),
+        }),
+    })
+}
+
+#[cfg(unix)]
+async fn native_confined_file_absent(
+    root: &ConfinedRoot,
+    named_root: &Path,
+    path: &Path,
+) -> Result<bool> {
+    let _operation = root.inner.operation.lock().await;
+    let parent = ConfinedNativeParent::walk(root, named_root, path)?;
+    let absent = parent.target_is_absent()?;
+    #[cfg(feature = "test-support")]
+    root.native_checkpoint_for_test(NativeConfinedCheckpoint::AfterAbsenceLookup)
+        .await?;
+    parent.validate(root, named_root)?;
+    Ok(absent)
+}
+
+#[cfg(unix)]
+async fn read_native_confined_file(
+    root: &ConfinedRoot,
+    named_root: &Path,
+    path: &Path,
+    max_bytes: usize,
+) -> Result<ConfinedFileBytes> {
+    use rustix::fs::{Mode, openat};
+    use std::io::Read as _;
+    let read_limit = max_bytes
+        .checked_add(1)
+        .context("Confined byte limit overflow")?;
+    let read_limit = u64::try_from(read_limit).context("Confined byte limit is too large")?;
+    let _operation = root.inner.operation.lock().await;
+    let (mut file, parent) = if root.inner.metadata.is_dir {
+        let parent = ConfinedNativeParent::walk(root, named_root, path)?;
+        anyhow::ensure!(
+            !parent.missing_parent,
+            "Confined file parent does not exist"
+        );
+        let file = std::fs::File::from(openat(
+            parent.parent()?,
+            &parent.target,
+            confined_native_flags(false),
+            Mode::empty(),
+        )?);
+        parent.validate_file(&file)?;
+        parent.validate(root, named_root)?;
+        (file, Some(parent))
+    } else {
+        confined_components(path, true)?;
+        anyhow::ensure!(
+            path.as_os_str().is_empty(),
+            "File roots have no relative children"
+        );
+        (confined_native_named_root(root, named_root)?, None)
+    };
+    let before = file.metadata()?;
+    anyhow::ensure!(
+        before.is_file() && before.len() <= max_bytes as u64,
+        "Confined read requires an ordinary file within its byte limit"
+    );
+    #[cfg(feature = "test-support")]
+    root.native_checkpoint_for_test(NativeConfinedCheckpoint::BeforeReadBytes)
+        .await?;
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(read_limit)
+        .read_to_end(&mut bytes)?;
+    #[cfg(feature = "test-support")]
+    root.native_checkpoint_for_test(NativeConfinedCheckpoint::AfterReadBytes)
+        .await?;
+    let after = file.metadata()?;
+    anyhow::ensure!(
+        bytes.len() <= max_bytes
+            && bytes.len() as u64 == before.len()
+            && before.dev() == after.dev()
+            && before.ino() == after.ino()
+            && before.len() == after.len()
+            && before.modified()? == after.modified()?
+            && before.ctime() == after.ctime()
+            && before.ctime_nsec() == after.ctime_nsec()
+            && after.is_file(),
+        "Confined file changed during its bounded read"
+    );
+    if let Some(parent) = parent {
+        parent.validate_file(&file)?;
+        parent.validate(root, named_root)?;
+    } else {
+        let named = confined_native_named_root(root, named_root)?;
+        drop(named);
+    }
+    Ok(ConfinedFileBytes {
+        bytes,
+        metadata: confined_native_metadata(&after)?,
+    })
+}
+
 pub struct RealFs {
     bundled_git_binary_path: Option<PathBuf>,
     executor: BackgroundExecutor,
@@ -452,6 +1428,10 @@ pub struct RealFs {
     job_event_subscribers: Arc<Mutex<Vec<JobEventSender>>>,
     trash: Arc<Mutex<SlotMap<TrashId, TrashedEntry>>>,
     is_case_sensitive: AtomicU8,
+    #[cfg(all(unix, feature = "test-support"))]
+    logical_absence_pause: Arc<Mutex<Option<LogicalAbsencePause>>>,
+    #[cfg(all(unix, feature = "test-support"))]
+    logical_absence_handles: Arc<Mutex<Vec<std::sync::Weak<std::fs::File>>>>,
 }
 
 pub trait FileHandle: Send + Sync + std::fmt::Debug {
@@ -553,6 +1533,21 @@ impl FileHandle for std::fs::File {
 pub struct RealWatcher {}
 
 impl RealFs {
+    #[cfg(all(unix, feature = "test-support"))]
+    pub fn path_absence_handles_for_test(&self) -> Vec<std::sync::Weak<std::fs::File>> {
+        self.logical_absence_handles.lock().clone()
+    }
+
+    #[cfg(all(unix, feature = "test-support"))]
+    pub fn pause_path_absence_for_test(
+        &self,
+    ) -> Result<(
+        futures::channel::oneshot::Receiver<()>,
+        futures::channel::oneshot::Sender<()>,
+    )> {
+        install_logical_absence_pause(&self.logical_absence_pause)
+    }
+
     pub fn new(git_binary_path: Option<PathBuf>, executor: BackgroundExecutor) -> Self {
         Self {
             bundled_git_binary_path: git_binary_path,
@@ -561,6 +1556,10 @@ impl RealFs {
             job_event_subscribers: Arc::new(Mutex::new(Vec::new())),
             trash: Arc::new(Mutex::new(SlotMap::with_key())),
             is_case_sensitive: Default::default(),
+            #[cfg(all(unix, feature = "test-support"))]
+            logical_absence_pause: Arc::default(),
+            #[cfg(all(unix, feature = "test-support"))]
+            logical_absence_handles: Arc::default(),
         }
     }
 
@@ -988,6 +1987,43 @@ impl Fs for RealFs {
     }
 
     #[cfg(unix)]
+    async fn capture_confined_root(&self, named_root: &Path) -> Result<ConfinedRoot> {
+        let named_root = named_root.to_path_buf();
+        self.executor
+            .spawn(async move { capture_native_confined_root(&named_root) })
+            .await
+    }
+
+    #[cfg(unix)]
+    async fn is_confined_file_absent(
+        &self,
+        root: &ConfinedRoot,
+        named_root: &Path,
+        path: &Path,
+    ) -> Result<bool> {
+        let root = root.clone();
+        let named_root = named_root.to_path_buf();
+        let path = path.to_path_buf();
+        self.executor
+            .spawn(async move { native_confined_file_absent(&root, &named_root, &path).await })
+            .await
+    }
+
+    #[cfg(unix)]
+    async fn read_confined_file(
+        &self,
+        root: &ConfinedRoot,
+        named_root: &Path,
+        path: &Path,
+        max_bytes: usize,
+    ) -> Result<ConfinedFileBytes> {
+        let root = root.clone();
+        let named_root = named_root.to_path_buf();
+        let path = path.to_path_buf();
+        self.executor.spawn(async move { read_native_confined_file(&root, &named_root, &path, max_bytes).await }).await
+    }
+
+    #[cfg(unix)]
     async fn open_sync_confined_file_handle(
         &self,
         root: &Path,
@@ -1160,6 +2196,41 @@ impl Fs for RealFs {
             options.custom_flags(windows::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS.0);
         }
         Ok(Arc::new(options.open(path)?))
+    }
+
+    #[cfg(unix)]
+    async fn observe_path_absence(&self, logical_path: &Path) -> Result<Option<AbsentPath>> {
+        let logical_path = logical_path.to_path_buf();
+        #[cfg(feature = "test-support")]
+        let pause = self.logical_absence_pause.clone();
+        #[cfg(feature = "test-support")]
+        let handles = self.logical_absence_handles.clone();
+        self.executor
+            .spawn(async move {
+                let mut observation = NativeLogicalObservation::new()?;
+                if !walk_logical_absence(&logical_path, &mut observation)? {
+                    observation.validate()?;
+                    return Ok(None);
+                }
+                #[cfg(feature = "test-support")]
+                {
+                    *handles.lock() = observation
+                        .bindings
+                        .iter()
+                        .flat_map(|binding| {
+                            std::iter::once(&binding.parent).chain(binding.handle.as_ref())
+                        })
+                        .chain(observation.directories.iter())
+                        .map(Arc::downgrade)
+                        .collect();
+                    logical_absence_checkpoint(&pause).await?;
+                }
+                observation.validate()?;
+                observation.validate_missing()?;
+                observation.validate()?;
+                Ok(Some(AbsentPath { logical_path }))
+            })
+            .await
     }
 
     async fn load(&self, path: &Path) -> Result<String> {
@@ -1653,11 +2724,20 @@ impl Watcher for RealWatcher {
 }
 
 #[cfg(feature = "test-support")]
+struct ConfinedRootCapturePause {
+    reached: futures::channel::oneshot::Sender<ConfinedRoot>,
+    resume: futures::channel::oneshot::Receiver<()>,
+}
+
+#[cfg(feature = "test-support")]
 pub struct FakeFs {
     this: std::sync::Weak<Self>,
     // Use an unfair lock to ensure tests are deterministic.
     state: Arc<Mutex<FakeFsState>>,
     executor: gpui::BackgroundExecutor,
+    root_capture_pause: Mutex<Option<ConfinedRootCapturePause>>,
+    #[cfg(unix)]
+    logical_absence_pause: Mutex<Option<LogicalAbsencePause>>,
 }
 
 #[cfg(feature = "test-support")]
@@ -1730,6 +2810,7 @@ enum FakeFsEntry {
         git_repo_state: Option<Arc<Mutex<FakeGitRepositoryState>>>,
     },
     Symlink {
+        inode: u64,
         target: PathBuf,
     },
 }
@@ -1787,9 +2868,16 @@ impl PartialEq for FakeFsEntry {
                     && l_entries == r_entries
                     && same_repo_state
             }
-            (Self::Symlink { target: l_target }, Self::Symlink { target: r_target }) => {
-                l_target == r_target
-            }
+            (
+                Self::Symlink {
+                    inode: left_inode,
+                    target: left_target,
+                },
+                Self::Symlink {
+                    inode: right_inode,
+                    target: right_target,
+                },
+            ) => left_inode == right_inode && left_target == right_target,
             _ => false,
         }
     }
@@ -1810,6 +2898,15 @@ impl FakeFsState {
     }
 
     fn canonicalize(&self, target: &Path, follow_symlink: bool) -> Result<Option<PathBuf>> {
+        self.canonicalize_with_link_check(target, follow_symlink, None)
+    }
+
+    fn canonicalize_with_link_check(
+        &self,
+        target: &Path,
+        follow_symlink: bool,
+        mut before_follow: Option<&mut dyn FnMut() -> Result<()>>,
+    ) -> Result<Option<PathBuf>> {
         enum PendingComponent {
             Path(PathBuf),
             TargetComplete(PathBuf),
@@ -1873,13 +2970,18 @@ impl FakeFsState {
                     if (!pending_components.is_empty() || follow_symlink)
                         && let FakeFsEntry::Symlink {
                             target: alias_target,
+                            ..
                         } = entry
                     {
                         let alias_path = canonical_path.join(name);
-                        anyhow::ensure!(
-                            active_symlinks.insert(alias_path.clone()),
-                            "symlink cycle while resolving {target:?}: {alias_path:?}"
-                        );
+                        if let Some(before_follow) = before_follow.as_mut() {
+                            before_follow()?;
+                        } else {
+                            anyhow::ensure!(
+                                active_symlinks.insert(alias_path.clone()),
+                                "symlink cycle while resolving {target:?}: {alias_path:?}"
+                            );
+                        }
                         // A completed target may be used again by the original suffix.
                         pending_components.push_front(PendingComponent::TargetComplete(alias_path));
                         for component in alias_target.components().rev() {
@@ -1895,6 +2997,26 @@ impl FakeFsState {
             }
         }
         Ok((!entry_stack.is_empty()).then_some(canonical_path))
+    }
+
+    fn try_confined_root_entry(&mut self, target: &Path) -> Result<Option<&mut FakeFsEntry>> {
+        let mut remaining_links = 40_usize;
+        let mut before_follow = || {
+            anyhow::ensure!(
+                remaining_links > 0,
+                "Fake filesystem symbolic link limit exceeded"
+            );
+            remaining_links -= 1;
+            Ok(())
+        };
+        let canonical_path =
+            self.canonicalize_with_link_check(target, false, Some(&mut before_follow))?;
+        let Some(canonical_path) = canonical_path else {
+            return Ok(None);
+        };
+        Ok(self
+            .try_entry(&canonical_path, false)?
+            .map(|(entry, _)| entry))
     }
 
     fn try_entry(
@@ -1994,6 +3116,85 @@ pub static FS_DOT_GIT: std::sync::LazyLock<&'static OsStr> =
 
 #[cfg(feature = "test-support")]
 impl FakeFs {
+    pub fn pause_root_capture_for_test(
+        &self,
+    ) -> Result<(
+        futures::channel::oneshot::Receiver<ConfinedRoot>,
+        futures::channel::oneshot::Sender<()>,
+    )> {
+        let mut pause = self.root_capture_pause.lock();
+        anyhow::ensure!(
+            pause.is_none(),
+            "A root capture checkpoint is already installed"
+        );
+        let (reached, receiver) = futures::channel::oneshot::channel();
+        let (sender, resume) = futures::channel::oneshot::channel();
+        *pause = Some(ConfinedRootCapturePause { reached, resume });
+        Ok((receiver, sender))
+    }
+
+    #[cfg(unix)]
+    pub fn pause_path_absence_for_test(
+        &self,
+    ) -> Result<(
+        futures::channel::oneshot::Receiver<()>,
+        futures::channel::oneshot::Sender<()>,
+    )> {
+        install_logical_absence_pause(&self.logical_absence_pause)
+    }
+
+    fn confined_root_entry<'a>(
+        &self,
+        state: &'a mut FakeFsState,
+        root: &ConfinedRoot,
+        named_root: &Path,
+    ) -> Result<&'a FakeFsEntry> {
+        let (admitted_state, inode) = match &root.inner.backing {
+            ConfinedRootBacking::Fake { state, inode } => (state, inode),
+            #[cfg(unix)]
+            ConfinedRootBacking::Native { .. } => {
+                anyhow::bail!("Confined root belongs to a different filesystem backend")
+            }
+        };
+        anyhow::ensure!(
+            Arc::ptr_eq(admitted_state, &self.state),
+            "Confined root belongs to a different filesystem domain"
+        );
+        anyhow::ensure!(
+            named_root.is_absolute() && named_root.as_os_str().len() <= 4096,
+            "Confined root name must be bounded and absolute"
+        );
+        let entry = state
+            .try_confined_root_entry(named_root)?
+            .context("Confined root is missing")?;
+        let metadata = entry.confined_metadata()?;
+        anyhow::ensure!(
+            metadata.inode == *inode && metadata.is_dir == root.inner.metadata.is_dir,
+            "Confined root no longer names the admitted filesystem object"
+        );
+        Ok(entry)
+    }
+
+    fn confined_entry<'a>(
+        mut entry: &'a FakeFsEntry,
+        components: &[OsString],
+    ) -> Result<Option<&'a FakeFsEntry>> {
+        for component in components {
+            let FakeFsEntry::Dir { entries, .. } = entry else {
+                anyhow::bail!("Confined parent is not an ordinary directory");
+            };
+            let Some(next) = entries.get(
+                component
+                    .to_str()
+                    .context("Invalid confined path encoding")?,
+            ) else {
+                return Ok(None);
+            };
+            entry = next;
+        }
+        Ok(Some(entry))
+    }
+
     /// We need to use something large enough for Windows and Unix to consider this a new file.
     /// https://doc.rust-lang.org/nightly/std/time/struct.SystemTime.html#platform-specific-behavior
     const SYSTEMTIME_INTERVAL: Duration = Duration::from_nanos(100);
@@ -2004,6 +3205,9 @@ impl FakeFs {
         let this = Arc::new_cyclic(|this| Self {
             this: this.clone(),
             executor: executor.clone(),
+            root_capture_pause: Mutex::new(None),
+            #[cfg(unix)]
+            logical_absence_pause: Mutex::new(None),
             state: Arc::new(Mutex::new(FakeFsState {
                 root: FakeFsEntry::Dir {
                     inode: 0,
@@ -2091,7 +3295,10 @@ impl FakeFs {
     pub async fn insert_symlink(&self, path: impl AsRef<Path>, target: PathBuf) {
         let mut state = self.state.lock();
         let path = path.as_ref();
-        let file = FakeFsEntry::Symlink { target };
+        let file = FakeFsEntry::Symlink {
+            inode: state.get_and_increment_inode(),
+            target,
+        };
         state
             .write_path(path.as_ref(), move |e| match e {
                 btree_map::Entry::Vacant(e) => {
@@ -2997,8 +4204,11 @@ impl FakeFs {
 
                 None
             }
-            btree_map::Entry::Occupied(mut entry) => {
-                entry.get_mut().file_content(&path)?;
+            btree_map::Entry::Occupied(entry) => {
+                // Unlink removes the alias itself, including a dangling alias.
+                if !entry.get().is_symlink() {
+                    entry.get().file_content(&path)?;
+                }
                 Some(entry.remove())
             }
         };
@@ -3024,6 +4234,28 @@ impl FakeFs {
 
 #[cfg(feature = "test-support")]
 impl FakeFsEntry {
+    fn confined_metadata(&self) -> Result<Metadata> {
+        let (inode, mtime, len, is_dir) = match self {
+            Self::File {
+                inode, mtime, len, ..
+            } => (*inode, *mtime, *len, false),
+            Self::Dir {
+                inode, mtime, len, ..
+            } => (*inode, *mtime, *len, true),
+            Self::Symlink { .. } => anyhow::bail!("Confined object is an alias"),
+        };
+        Ok(Metadata {
+            inode,
+            mtime,
+            len,
+            is_dir,
+            is_symlink: false,
+            is_fifo: false,
+            is_executable: false,
+            is_writable: true,
+        })
+    }
+
     fn is_file(&self) -> bool {
         matches!(self, Self::File { .. })
     }
@@ -3185,7 +4417,10 @@ impl Fs for FakeFs {
 
     async fn create_symlink(&self, path: &Path, target: PathBuf) -> Result<()> {
         let mut state = self.state.lock();
-        let file = FakeFsEntry::Symlink { target };
+        let file = FakeFsEntry::Symlink {
+            inode: state.get_and_increment_inode(),
+            target,
+        };
         state
             .write_path(path.as_ref(), move |e| match e {
                 btree_map::Entry::Vacant(e) => {
@@ -3299,36 +4534,69 @@ impl Fs for FakeFs {
         self.simulate_random_delay().await;
 
         let source = normalize_path(source);
-        let target = normalize_path(target);
+        let mut target = normalize_path(target);
         let mut state = self.state.lock();
+        let mut followed_aliases = collections::HashSet::default();
+        while let Some(canonical_path) = state.canonicalize(&target, false)? {
+            let alias_target = match state.try_entry(&canonical_path, false)? {
+                Some((FakeFsEntry::Symlink { target, .. }, _)) => Some(target.clone()),
+                _ => None,
+            };
+            target = canonical_path;
+            let Some(alias_target) = alias_target else {
+                break;
+            };
+            anyhow::ensure!(
+                followed_aliases.insert(target.clone()),
+                "symlink cycle while resolving copy destination: {target:?}"
+            );
+            // Copy follows the final alias, including one whose target needs creating.
+            target = normalize_path(
+                &target
+                    .parent()
+                    .context("copy destination alias has no parent")?
+                    .join(alias_target),
+            );
+        }
         let mtime = state.get_and_increment_mtime();
-        let inode = state.get_and_increment_inode();
+        let new_inode = state.get_and_increment_inode();
         let source_entry = state.entry(&source)?;
         let content = source_entry.file_content(&source)?.clone();
-        let mut kind = Some(PathEventKind::Created);
-        state.write_path(&target, |e| match e {
-            btree_map::Entry::Occupied(e) => {
-                if options.overwrite {
-                    kind = Some(PathEventKind::Changed);
-                    Ok(Some(e.get().clone()))
-                } else if !options.ignore_if_exists {
+        let new_entry = move |inode| FakeFsEntry::File {
+            inode,
+            mtime,
+            len: content.len() as u64,
+            content,
+            git_dir_path: None,
+        };
+
+        let kind = state.write_path(&target, |e| match e {
+            btree_map::Entry::Occupied(mut e) => {
+                if !options.overwrite {
+                    if options.ignore_if_exists {
+                        return Ok(None);
+                    }
                     anyhow::bail!("{target:?} already exists");
-                } else {
-                    Ok(None)
                 }
+                let inode = match e.get() {
+                    FakeFsEntry::File { inode, .. } => *inode,
+                    FakeFsEntry::Dir { .. } => anyhow::bail!("{target:?} is a directory"),
+                    FakeFsEntry::Symlink { .. } => {
+                        anyhow::bail!("copy destination alias did not resolve: {target:?}")
+                    }
+                };
+                e.insert(new_entry(inode));
+                Ok(Some(PathEventKind::Changed))
             }
-            btree_map::Entry::Vacant(e) => Ok(Some(
-                e.insert(FakeFsEntry::File {
-                    inode,
-                    mtime,
-                    len: content.len() as u64,
-                    content,
-                    git_dir_path: None,
-                })
-                .clone(),
-            )),
+            btree_map::Entry::Vacant(e) => {
+                e.insert(new_entry(new_inode));
+                Ok(Some(PathEventKind::Created))
+            }
         })?;
-        state.emit_event([(target, kind)]);
+
+        if let Some(kind) = kind {
+            state.emit_event([(target, Some(kind))]);
+        }
         Ok(())
     }
 
@@ -3374,6 +4642,101 @@ impl Fs for FakeFs {
     async fn open_sync(&self, path: &Path) -> Result<Box<dyn io::Read + Send + Sync>> {
         let bytes = self.load_internal(path).await?;
         Ok(Box::new(io::Cursor::new(bytes)))
+    }
+
+    async fn capture_confined_root(&self, named_root: &Path) -> Result<ConfinedRoot> {
+        anyhow::ensure!(
+            named_root.is_absolute() && named_root.as_os_str().len() <= 4096,
+            "Confined root name must be bounded and absolute"
+        );
+        self.simulate_random_delay().await;
+        let root = {
+            let mut state = self.state.lock();
+            let entry = state
+                .try_confined_root_entry(named_root)?
+                .context("Confined root is missing")?;
+            let metadata = entry.confined_metadata()?;
+            ConfinedRoot {
+                inner: Arc::new(ConfinedRootInner {
+                    backing: ConfinedRootBacking::Fake {
+                        state: self.state.clone(),
+                        inode: metadata.inode,
+                    },
+                    handle: Arc::new(FakeHandle {
+                        inode: metadata.inode,
+                    }),
+                    metadata,
+                    operation: futures::lock::Mutex::new(()),
+                    #[cfg(all(unix, feature = "test-support"))]
+                    native_test_pause: Mutex::new(None),
+                }),
+            }
+        };
+        let pause = self.root_capture_pause.lock().take();
+        if let Some(pause) = pause {
+            pause
+                .reached
+                .send(root.clone())
+                .map_err(|_| anyhow::anyhow!("Root capture observer dropped"))?;
+            pause
+                .resume
+                .await
+                .context("Root capture checkpoint release dropped")?;
+        }
+        Ok(root)
+    }
+
+    async fn is_confined_file_absent(
+        &self,
+        root: &ConfinedRoot,
+        named_root: &Path,
+        path: &Path,
+    ) -> Result<bool> {
+        let components = confined_components(path, false)?;
+        anyhow::ensure!(
+            root.inner.metadata.is_dir,
+            "Confined root is not a directory"
+        );
+        let _operation = root.inner.operation.lock().await;
+        self.simulate_random_delay().await;
+        let mut state = self.state.lock();
+        let entry = self.confined_root_entry(&mut state, root, named_root)?;
+        Ok(Self::confined_entry(entry, &components)?.is_none())
+    }
+
+    async fn read_confined_file(
+        &self,
+        root: &ConfinedRoot,
+        named_root: &Path,
+        path: &Path,
+        max_bytes: usize,
+    ) -> Result<ConfinedFileBytes> {
+        max_bytes
+            .checked_add(1)
+            .context("Confined byte limit overflow")?;
+        let components = confined_components(path, !root.inner.metadata.is_dir)?;
+        anyhow::ensure!(
+            root.inner.metadata.is_dir || components.is_empty(),
+            "File roots have no relative children"
+        );
+        let _operation = root.inner.operation.lock().await;
+        self.simulate_random_delay().await;
+        let mut state = self.state.lock();
+        let entry = self.confined_root_entry(&mut state, root, named_root)?;
+        let entry =
+            Self::confined_entry(entry, &components)?.context("Confined file is missing")?;
+        let metadata = entry.confined_metadata()?;
+        let FakeFsEntry::File { content, .. } = entry else {
+            anyhow::bail!("Confined read requires an ordinary file");
+        };
+        anyhow::ensure!(
+            content.len() <= max_bytes && content.len() as u64 == metadata.len,
+            "Confined file exceeds its byte limit"
+        );
+        Ok(ConfinedFileBytes {
+            bytes: content.clone(),
+            metadata,
+        })
     }
 
     async fn open_sync_confined_file(
@@ -3434,6 +4797,24 @@ impl Fs for FakeFs {
             _ => unreachable!(),
         };
         Ok(Arc::new(FakeHandle { inode }))
+    }
+
+    #[cfg(unix)]
+    async fn observe_path_absence(&self, logical_path: &Path) -> Result<Option<AbsentPath>> {
+        self.simulate_random_delay().await;
+        let first = observe_fake_logical_absence(&mut self.state.lock(), logical_path)?;
+        if !first.absent {
+            return Ok(None);
+        }
+        logical_absence_checkpoint(&self.logical_absence_pause).await?;
+        let second = observe_fake_logical_absence(&mut self.state.lock(), logical_path)?;
+        anyhow::ensure!(
+            first == second,
+            "Logical source route or missing binding changed; retry the read"
+        );
+        Ok(Some(AbsentPath {
+            logical_path: logical_path.to_path_buf(),
+        }))
     }
 
     async fn load(&self, path: &Path) -> Result<String> {
@@ -3564,7 +4945,7 @@ impl Fs for FakeFs {
         let (entry, _) = state
             .try_entry(&path, false)?
             .with_context(|| format!("path does not exist: {path:?}"))?;
-        if let FakeFsEntry::Symlink { target } = entry {
+        if let FakeFsEntry::Symlink { target, .. } = entry {
             Ok(target.clone())
         } else {
             anyhow::bail!("not a symlink: {path:?}")
@@ -3864,4 +5245,39 @@ fn atomic_replace<P: AsRef<Path>>(
             None,
         )
     }
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+#[derive(PartialEq, Eq)]
+struct FakeLogicalAbsence {
+    absent: bool,
+    bindings: Vec<FakeLogicalBinding>,
+    missing: Option<PathBuf>,
+}
+
+#[cfg(all(unix, feature = "test-support"))]
+fn observe_fake_logical_absence(
+    state: &mut FakeFsState,
+    path: &Path,
+) -> Result<FakeLogicalAbsence> {
+    let FakeFsEntry::Dir { inode, .. } = &state.root else {
+        anyhow::bail!("Logical source root is not a directory");
+    };
+    let root_binding = FakeLogicalBinding {
+        path: PathBuf::from("/"),
+        inode: *inode,
+        alias_target: None,
+    };
+    let mut observation = FakeLogicalObservation {
+        state,
+        path: PathBuf::from("/"),
+        bindings: vec![root_binding],
+        missing: None,
+    };
+    let absent = walk_logical_absence(path, &mut observation)?;
+    Ok(FakeLogicalAbsence {
+        absent,
+        bindings: observation.bindings,
+        missing: observation.missing,
+    })
 }

@@ -260,6 +260,7 @@ pub struct LocalSnapshot {
     /// The file handle of the worktree root
     /// (so we can find it after it's been moved)
     root_file_handle: Option<Arc<dyn fs::FileHandle>>,
+    confined_root: Result<fs::ConfinedRoot, Arc<str>>,
     /// Maps canonical absolute paths of externally watched symlinked directories
     /// to their relative paths within the worktree, used to translate FSEvents
     /// canonical-path events back to worktree-relative paths.
@@ -279,9 +280,9 @@ struct BackgroundScannerState {
     scanning_enabled: bool,
 }
 
-/// The entries that were removed from the snapshot as part of the current
-/// update. Their entry ids may be re-used if the same inode is discovered
-/// at a new path, or if the given path is re-created after being deleted.
+/// Retain removals for two updates because a rename can arrive as separate
+/// removal and creation event batches. Entry ids may be re-used if the same
+/// inode is discovered at a new path, or a path is re-created after deletion.
 ///
 /// Symlink aliases inside the worktree share their inode (and usually mtime)
 /// with the symlink target, so an inode may correspond to several entries.
@@ -289,11 +290,43 @@ struct BackgroundScannerState {
 /// inode-based rename heuristics in that case.
 #[derive(Default)]
 struct RemovedEntries {
+    current: RemovedEntriesGeneration,
+    previous: RemovedEntriesGeneration,
+}
+
+#[derive(Default)]
+struct RemovedEntriesGeneration {
     by_inode: HashMap<u64, Entry>,
     by_path: HashMap<Arc<RelPath>, Entry>,
 }
 
 impl RemovedEntries {
+    fn insert(&mut self, entry: &Entry) {
+        self.current.insert(entry);
+    }
+
+    fn take_by_path(&mut self, path: &RelPath, inode: u64) -> Option<Entry> {
+        self.current
+            .take_by_path(path, inode)
+            .or_else(|| self.previous.take_by_path(path, inode))
+    }
+
+    fn take_by_inode(&mut self, inode: u64) -> Option<Entry> {
+        self.current
+            .take_by_inode(inode)
+            .or_else(|| self.previous.take_by_inode(inode))
+    }
+
+    fn rotate(&mut self) -> impl Iterator<Item = Entry> {
+        let dropped = mem::replace(&mut self.previous, mem::take(&mut self.current));
+        dropped
+            .by_inode
+            .into_values()
+            .chain(dropped.by_path.into_values())
+    }
+}
+
+impl RemovedEntriesGeneration {
     fn insert(&mut self, entry: &Entry) {
         self.by_path.insert(entry.path.clone(), entry.clone());
         match self.by_inode.entry(entry.inode) {
@@ -407,6 +440,11 @@ impl DerefMut for LocalSnapshot {
 }
 
 enum ScanState {
+    LocalSettingsInvalidated {
+        root: Arc<SanitizedPath>,
+        admission: Result<fs::ConfinedRoot, Arc<str>>,
+        paths: Vec<Arc<RelPath>>,
+    },
     Started,
     Updated {
         snapshot: LocalSnapshot,
@@ -428,6 +466,7 @@ struct UpdateObservationState {
 
 #[derive(Debug, Clone)]
 pub enum Event {
+    LocalSettingsInvalidated(Vec<Arc<RelPath>>),
     UpdatedEntries(UpdatedEntriesSet),
     UpdatedGitRepositories(UpdatedGitRepositoriesSet),
     UpdatedRootRepoCommonDir {
@@ -451,14 +490,22 @@ impl Worktree {
         cx: &mut AsyncApp,
     ) -> Result<Entity<Self>> {
         let abs_path = path.into();
-        let metadata = fs
-            .metadata(&abs_path)
-            .await
-            .context("failed to stat worktree path")?;
+        let confined_root = fs.capture_confined_root(&abs_path).await.map_err(|error| {
+            Arc::<str>::from(format!("Strict worktree access is unavailable: {error:#}"))
+        });
+        let metadata = match &confined_root {
+            Ok(root) => Some(root.metadata()),
+            Err(_) => fs
+                .metadata(&abs_path)
+                .await
+                .context("failed to stat worktree path")?,
+        };
 
         let fs_case_sensitive = fs.is_case_sensitive().await;
 
-        let root_file_handle = if metadata.as_ref().is_some() {
+        let root_file_handle = if let Ok(root) = &confined_root {
+            Some(root.file_handle())
+        } else if metadata.as_ref().is_some() {
             fs.open_handle(&abs_path)
                 .await
                 .with_context(|| {
@@ -504,6 +551,7 @@ impl Worktree {
                     PathStyle::local(),
                 ),
                 root_file_handle,
+                confined_root,
             };
             snapshot.root_repo_common_dir = root_repo_common_dir;
             snapshot.root_repo_is_linked_worktree = root_repo_is_linked_worktree;
@@ -1284,6 +1332,13 @@ impl Worktree {
 }
 
 impl LocalWorktree {
+    pub fn confined_root(&self) -> Result<&fs::ConfinedRoot> {
+        self.snapshot
+            .confined_root
+            .as_ref()
+            .map_err(|message| anyhow::anyhow!(message.to_string()))
+    }
+
     pub fn fs(&self) -> &Arc<dyn Fs> {
         &self.fs
     }
@@ -1349,7 +1404,25 @@ impl LocalWorktree {
                 let fs_case_sensitive = fs.is_case_sensitive().await;
 
                 let is_single_file = snapshot.snapshot.root_dir().is_none();
+                let recovery_settings_paths = if scanning_enabled && !is_single_file {
+                    snapshot
+                        .entries(true, 0)
+                        .filter(|entry| {
+                            entry.is_file()
+                                && !entry.is_external
+                                && entry.canonical_path.is_none()
+                                && settings.can_recover_excluded_settings_path(&entry.path)
+                        })
+                        .map(|entry| entry.path.clone())
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                let recovery_root = (!is_single_file)
+                    .then(|| (snapshot.abs_path.clone(), snapshot.confined_root.clone()));
                 let mut scanner = BackgroundScanner {
+                    recovery_settings_paths,
+                    recovery_root,
                     fs,
                     fs_case_sensitive,
                     status_updates_tx: scan_states_tx,
@@ -1386,6 +1459,31 @@ impl LocalWorktree {
                 this.update(cx, |this, cx| {
                     let this = this.as_local_mut().unwrap();
                     match state {
+                        ScanState::LocalSettingsInvalidated {
+                            root,
+                            admission,
+                            paths,
+                        } => {
+                            let same_admission = match (&this.snapshot.confined_root, &admission) {
+                                (Ok(current), Ok(admission)) => current.same_admission(admission),
+                                (Err(current), Err(admission)) => Arc::ptr_eq(current, admission),
+                                _ => false,
+                            };
+                            if this.scanning_enabled
+                                && this.snapshot.abs_path == root
+                                && same_admission
+                            {
+                                let paths = paths
+                                    .into_iter()
+                                    .filter(|path| {
+                                        this.settings.can_recover_excluded_settings_path(path)
+                                    })
+                                    .collect::<Vec<_>>();
+                                if !paths.is_empty() {
+                                    cx.emit(Event::LocalSettingsInvalidated(paths));
+                                }
+                            }
+                        }
                         ScanState::Started => {
                             *this.is_scanning.0.borrow_mut() = true;
                         }
@@ -1423,7 +1521,7 @@ impl LocalWorktree {
         entry_changes: UpdatedEntriesSet,
         cx: &mut Context<Worktree>,
     ) {
-        let repo_changes = self.changed_repos(&self.snapshot, &mut new_snapshot);
+        let repo_changes = self.changed_repos(&self.snapshot, &new_snapshot);
 
         if let Some((common_dir, is_linked_worktree)) = new_snapshot
             .local_repo_for_work_directory_path(RelPath::empty())
@@ -1479,7 +1577,7 @@ impl LocalWorktree {
     fn changed_repos(
         &self,
         old_snapshot: &LocalSnapshot,
-        new_snapshot: &mut LocalSnapshot,
+        new_snapshot: &LocalSnapshot,
     ) -> UpdatedGitRepositoriesSet {
         let mut changes = Vec::new();
         let mut old_repos = old_snapshot.git_repositories.iter().peekable();
@@ -1586,6 +1684,14 @@ impl LocalWorktree {
         }
 
         changes.into()
+    }
+
+    pub fn initial_git_repository_updates(&self) -> UpdatedGitRepositoriesSet {
+        let empty = LocalSnapshot {
+            git_repositories: Default::default(),
+            ..self.snapshot.clone()
+        };
+        self.changed_repos(&empty, &self.snapshot)
     }
 
     pub fn scan_complete(&self) -> impl Future<Output = ()> + use<> {
@@ -4972,6 +5078,8 @@ impl<'a> sum_tree::Dimension<'a, EntrySummary> for PathKey {
 }
 
 struct BackgroundScanner {
+    recovery_settings_paths: Vec<Arc<RelPath>>,
+    recovery_root: Option<(Arc<SanitizedPath>, Result<fs::ConfinedRoot, Arc<str>>)>,
     state: async_lock::Mutex<BackgroundScannerState>,
     fs: Arc<dyn Fs>,
     fs_case_sensitive: bool,
@@ -4999,6 +5107,60 @@ enum BackgroundScannerPhase {
 }
 
 impl BackgroundScanner {
+    fn invalidate_recovery_settings(&self, paths: Vec<Arc<RelPath>>) {
+        if paths.is_empty() {
+            return;
+        }
+        if let Some((root, admission)) = &self.recovery_root {
+            self.status_updates_tx
+                .unbounded_send(ScanState::LocalSettingsInvalidated {
+                    root: root.clone(),
+                    admission: admission.clone(),
+                    paths,
+                })
+                .log_err();
+        }
+    }
+
+    async fn refresh_recovery_settings_watches(&self) {
+        let Some((root, _)) = &self.recovery_root else {
+            return;
+        };
+        if self.recovery_settings_paths.is_empty() {
+            return;
+        }
+        let Some(canonical_root) = self.fs.canonicalize(root.as_path()).await.log_err() else {
+            return;
+        };
+        for path in &self.recovery_settings_paths {
+            for parent in path.ancestors().skip(1).filter(|parent| !parent.is_empty()) {
+                let absolute = canonical_root.join(parent.as_std_path());
+                match self.fs.metadata(&absolute).await {
+                    Ok(Some(metadata)) if metadata.is_dir && !metadata.is_symlink => {
+                        match self.fs.canonicalize(&absolute).await {
+                            Ok(canonical) if canonical == absolute => {
+                                self.watcher.add(&absolute).log_err();
+                            }
+                            Ok(_) => {
+                                log::error!("Settings recovery directory is aliased: {absolute:?}")
+                            }
+                            Err(error) => log::error!(
+                                "Cannot verify settings recovery directory {absolute:?}: {error:#}"
+                            ),
+                        }
+                    }
+                    Ok(None) => {}
+                    Ok(Some(_)) => log::error!(
+                        "Settings recovery directory is not an ordinary directory: {absolute:?}"
+                    ),
+                    Err(error) => log::error!(
+                        "Cannot watch settings recovery directory {absolute:?}: {error:#}"
+                    ),
+                }
+            }
+        }
+    }
+
     async fn run(&mut self, mut fs_events_rx: Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>) {
         let root_abs_path;
         let scanning_enabled;
@@ -5161,6 +5323,9 @@ impl BackgroundScanner {
             drop(state);
         }
 
+        self.refresh_recovery_settings_watches().await;
+        self.invalidate_recovery_settings(self.recovery_settings_paths.clone());
+
         // Process any any FS events that occurred while performing the initial scan.
         // For these events, update events cannot be as precise, because we didn't
         // have the previous state loaded yet.
@@ -5249,7 +5414,28 @@ impl BackgroundScanner {
     async fn process_scan_request(&self, mut request: ScanRequest, scanning: bool) -> bool {
         log::debug!("rescanning paths {:?}", request.relative_paths);
 
+        {
+            let state = self.state.lock().await;
+            let mut missing_ancestors = Vec::new();
+            for path in &request.relative_paths {
+                let mut candidates = Vec::new();
+                let mut covered_by_existing_ancestor = false;
+                for ancestor in path.ancestors().skip(1) {
+                    if let Some(entry) = state.snapshot.entry_for_path(ancestor) {
+                        covered_by_existing_ancestor =
+                            entry.kind == EntryKind::UnloadedDir || entry.kind == EntryKind::File;
+                        break;
+                    }
+                    candidates.push(ancestor.into_arc());
+                }
+                if !covered_by_existing_ancestor {
+                    missing_ancestors.extend(candidates);
+                }
+            }
+            request.relative_paths.extend(missing_ancestors);
+        }
         request.relative_paths.sort_unstable();
+        request.relative_paths.dedup();
         self.forcibly_load_paths(&request.relative_paths).await;
 
         let root_path = self.state.lock().await.snapshot.abs_path.clone();
@@ -5405,6 +5591,28 @@ impl BackgroundScanner {
                 return;
             }
         };
+
+        if !self.recovery_settings_paths.is_empty() {
+            let paths = self
+                .recovery_settings_paths
+                .iter()
+                .filter(|path| {
+                    let lexical = root_path.as_path().join(path.as_std_path());
+                    let canonical = root_canonical_path.as_path().join(path.as_std_path());
+                    events.iter().any(|event| {
+                        (event.path.starts_with(root_path.as_path())
+                            || event.path.starts_with(root_canonical_path.as_path()))
+                            && (lexical.starts_with(&event.path)
+                                || canonical.starts_with(&event.path))
+                    })
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if !paths.is_empty() {
+                self.refresh_recovery_settings_watches().await;
+                self.invalidate_recovery_settings(paths);
+            }
+        }
 
         {
             let state = self.state.lock().await;
@@ -5771,8 +5979,8 @@ impl BackgroundScanner {
         {
             let mut state = self.state.lock().await;
             state.snapshot.completed_scan_id = state.snapshot.scan_id;
-            let RemovedEntries { by_inode, by_path } = mem::take(&mut state.removed_entries);
-            for entry in by_inode.into_values().chain(by_path.into_values()) {
+            let dropped_entries = state.removed_entries.rotate().collect::<Vec<_>>();
+            for entry in dropped_entries {
                 state.scanned_dirs.remove(&entry.id);
             }
         }
