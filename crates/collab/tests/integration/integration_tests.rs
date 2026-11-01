@@ -9313,6 +9313,17 @@ async fn check_resync_gate(
         store.update(cx_a, |store, cx| {
             store.shared(project_id, client.into(), cx)
         });
+        assert!(
+            !store.read_with(cx_a, |store, _| store
+                .is_buffer_shared_with_peer(guest_peer, prior_id)),
+            "a new transport invalidates previous peer admissions"
+        );
+        store
+            .update(cx_a, |store, cx| {
+                store.create_buffer_for_peer(&prior, guest_peer, cx)
+            })
+            .await
+            .expect("re-admit the public sibling in the new transport scope");
     }
     release_prepared
         .send(())
@@ -9364,6 +9375,17 @@ async fn check_resync_gate(
             store.update(cx_a, |store, cx| {
                 store.shared(project_id, client.into(), cx)
             });
+            assert!(
+                !store.read_with(cx_a, |store, _| store
+                    .is_buffer_shared_with_peer(guest_peer, prior_id)),
+                "a new transport invalidates previous peer admissions"
+            );
+            store
+                .update(cx_a, |store, cx| {
+                    store.create_buffer_for_peer(&prior, guest_peer, cx)
+                })
+                .await
+                .expect("re-admit the public sibling in the new transport scope");
         }
         if matches!(case, ResyncGateCase::ConcurrentPublic) {
             target.update(cx_a, |buffer, cx| {
@@ -9422,7 +9444,7 @@ async fn check_resync_gate(
     assert!(
         store.read_with(cx_a, |store, _| store
             .is_buffer_shared_with_peer(guest_peer, prior_id)),
-        "unrequested complete sibling bookkeeping survives"
+        "unrequested current-scope sibling bookkeeping survives the stale resync"
     );
     assert_eq!(
         guest_prior.read_with(cx_b, |buffer, _| buffer.text()),

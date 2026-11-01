@@ -2431,13 +2431,13 @@ mod tests {
             let bottom = measured.item.height - measured.contents.height;
             assert!((scroll.base_handle.offset().y - bottom).abs() <= px(1.0));
         });
-        assert!(
-            elapsed <= std::time::Duration::from_millis(250),
-            "100,000-node deep selection and paint took {elapsed:?}"
-        );
         eprintln!(
             "native-profile-deep-selection nodes={MAX_PROFILE_NODES} foreground_us={}",
             elapsed.as_micros()
+        );
+        assert!(
+            elapsed <= std::time::Duration::from_millis(250),
+            "100,000-node deep selection and paint took {elapsed:?}"
         );
         cx.deactivate_window();
         container.update_in(cx, |_, window, _| window.remove_window());
