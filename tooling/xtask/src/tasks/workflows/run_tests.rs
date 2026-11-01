@@ -185,6 +185,7 @@ const RUST_PRODUCT_TEST_PACKAGES: &[&str] = &[
     "git_ui",
     "language_model",
     "language_models",
+    "language_tools",
     "languages",
     "project",
     "remote_server",
@@ -223,9 +224,9 @@ fn rust_product_nextest_command(measure_foreground: bool) -> String {
         .join(" ");
 
     let selection = if measure_foreground {
-        "-E '(test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget))' --test-threads 1 --success-output immediate"
+        "-E '(test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget))' --test-threads 1 --success-output immediate"
     } else {
-        "-E 'not (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget))'"
+        "-E 'not (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget))'"
     };
     let no_tests = if measure_foreground { "fail" } else { "warn" };
     format!(
@@ -265,7 +266,7 @@ fn copper_tests() -> NamedJob {
             .add_step(steps::cargo_install_nextest())
             .add_step(named::bash(rust_product_nextest_command(false)))
             .add_step(
-                Step::new("Measure Cargo dashboard foreground budgets")
+                Step::new("Measure Copper foreground budgets")
                     .run(rust_product_nextest_command(true)),
             )
             .add_step(
@@ -1231,6 +1232,13 @@ mod tests {
         assert!(measurement.contains("--no-tests=fail"));
         assert!(measurement.contains("cargo_dashboard_foreground_budget"));
         assert!(measurement.contains("cargo_dashboard_production_foreground_budget"));
+        assert!(
+            measurement.contains("test_explorer::tests::structured_execution_foreground_budget")
+        );
+        assert!(
+            product_nextest_command
+                .contains("test_explorer::tests::structured_execution_foreground_budget")
+        );
         assert!(!measurement.contains("not ("));
         assert!(!measurement.contains("--retries"));
         assert!(

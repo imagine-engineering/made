@@ -7133,9 +7133,27 @@ async fn test_remote_telemetry_event_forwarding(
     server_session
         .send(proto::TelemetryEvent {
             project_id: proto::REMOTE_SERVER_PROJECT_ID,
-            event_json,
+            event_json: event_json.clone(),
         })
-        .unwrap();
+        .expect("forward event before opt-in");
+    cx.executor().run_until_parked();
+    assert!(project.read_with(cx, |project, _| {
+        project.client().telemetry().queued_events().is_empty()
+    }));
+
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.telemetry.get_or_insert_default().metrics = Some(true);
+            });
+        });
+    });
+    server_session
+        .send(proto::TelemetryEvent {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            event_json: event_json.clone(),
+        })
+        .expect("forward event after explicit opt-in");
     cx.executor().run_until_parked();
 
     let events = project.read_with(cx, |project, _| {
@@ -7171,6 +7189,24 @@ async fn test_remote_telemetry_event_forwarding(
         event.event_properties.get("remote_architecture"),
         Some(&serde_json::Value::String("x86_64".to_string()))
     );
+
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.telemetry.get_or_insert_default().metrics = Some(false);
+            });
+        });
+    });
+    server_session
+        .send(proto::TelemetryEvent {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            event_json,
+        })
+        .expect("forward event after opt-out");
+    cx.executor().run_until_parked();
+    assert!(project.read_with(cx, |project, _| {
+        project.client().telemetry().queued_events().is_empty()
+    }));
 }
 
 async fn do_search_and_assert(
@@ -9975,6 +10011,92 @@ async fn test_add_path_to_git_info_exclude_in_remote_repository(
 }
 
 #[gpui::test]
+async fn test_add_path_to_git_info_exclude_in_remote_linked_worktree(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(
+        "/project",
+        json!({
+            ".git": {
+                "HEAD": "ref: refs/heads/main",
+                "config": "[core]\n\tbare = false\n",
+                "info": {
+                    "exclude": "existing\n",
+                },
+                "worktrees": {
+                    "linked": {
+                        "HEAD": "ref: refs/heads/linked",
+                        "commondir": "../..",
+                        "gitdir": "/worktree/.git",
+                    },
+                },
+            },
+        }),
+    )
+    .await;
+    fs.insert_tree(
+        "/worktree",
+        json!({
+            ".git": "gitdir: ../project/.git/worktrees/linked\n",
+            "logs": {
+                "app.log": "",
+            },
+            "tmp.txt": "",
+        }),
+    )
+    .await;
+    let repository_dir = Path::new("/project/.git/worktrees/linked");
+    fs.set_branch_name(repository_dir, Some("linked"));
+    fs.set_head_for_repo(repository_dir, &[], "head-sha");
+
+    let (project, _headless) = init_test(&fs, cx, server_cx).await;
+    project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(Path::new("/worktree"), true, cx)
+        })
+        .await
+        .expect("should open remote linked worktree");
+    cx.run_until_parked();
+
+    let repository = project.read_with(cx, |project, cx| {
+        project
+            .active_repository(cx)
+            .expect("remote linked worktree should have an active repository")
+    });
+
+    for (path, is_dir) in [("tmp.txt", false), ("logs", true), ("tmp.txt", false)] {
+        let repo_path = RepoPath::new(path).expect("path should be a valid repo path");
+        cx.update(|cx| {
+            repository.update(cx, |repository, _| {
+                repository.add_path_to_git_info_exclude(&repo_path, is_dir)
+            })
+        })
+        .await
+        .expect("add to info/exclude request should complete")
+        .expect("add to info/exclude should succeed for remote linked worktree");
+    }
+
+    server_cx.run_until_parked();
+    cx.run_until_parked();
+
+    assert_eq!(
+        fs.load(Path::new("/project/.git/info/exclude"))
+            .await
+            .expect("shared info/exclude should be readable"),
+        "existing\ntmp.txt\nlogs/\n"
+    );
+    assert!(
+        fs.metadata(&repository_dir.join("info/exclude"))
+            .await
+            .expect("worktree-specific info/exclude metadata should be readable")
+            .is_none(),
+        "the action should not create a worktree-specific info/exclude"
+    );
+}
+
+#[gpui::test]
 async fn test_remote_git_diffs(cx: &mut TestAppContext, server_cx: &mut TestAppContext) {
     let text_2 = "
         fn one() -> usize {
@@ -10261,10 +10383,43 @@ async fn test_remote_git_branches(cx: &mut TestAppContext, server_cx: &mut TestA
         })
         .await
         .unwrap();
-    // Give the worktree a bit of time to index the file system
-    cx.run_until_parked();
-
-    let repository = project.update(cx, |project, cx| project.active_repository(cx).unwrap());
+    let git_store = project.read_with(cx, |project, _| project.git_store().clone());
+    {
+        let ready = git_store.condition::<project::git_store::GitStoreEvent>(cx, |store, _| {
+            store.active_repository().is_some()
+        });
+        let deadline = cx
+            .background_executor
+            .timer(std::time::Duration::from_secs(3));
+        futures::pin_mut!(ready);
+        assert!(
+            matches!(
+                futures::future::select(ready, deadline).await,
+                futures::future::Either::Left(_)
+            ),
+            "remote repository discovery deadline; host repositories: {}, client repositories: {}, scanned host repositories: {:?}",
+            headless_project.read_with(server_cx, |headless, cx| {
+                headless.git_store.read(cx).repositories().len()
+            }),
+            git_store.read_with(cx, |store, _| store.repositories().len()),
+            headless_project.read_with(server_cx, |headless, cx| {
+                headless
+                    .worktree_store
+                    .read(cx)
+                    .worktrees()
+                    .filter_map(|worktree| {
+                        worktree
+                            .read(cx)
+                            .as_local()
+                            .map(|local| local.repositories())
+                    })
+                    .collect::<Vec<_>>()
+            })
+        );
+    }
+    let repository = project
+        .read_with(cx, |project, cx| project.active_repository(cx))
+        .expect("indexed remote repository");
 
     let remote_branches = repository
         .update(cx, |repository, _| repository.branches())
@@ -20032,6 +20187,146 @@ pub async fn init_test<F: Fs + 'static>(
 ) -> (Entity<Project>, Entity<HeadlessProject>) {
     let (project, headless, _) = init_test_with_restart_activity(server_fs, cx, server_cx).await;
     (project, headless)
+}
+
+#[gpui::test]
+async fn test_remote_open_docs_rejects_client_file_url_collision(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    use project::lsp_store::lsp_ext_command::{DocsUrls, LspOpenDocs};
+
+    cx.update(|cx| {
+        let store = SettingsStore::test(cx);
+        cx.set_global(store);
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+        editor::init(cx);
+    });
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(path!("/open-docs"), json!({"main.rs": "fn main() {}"}))
+        .await;
+    let (project, headless) = init_test(&fs, cx, server_cx).await;
+    assert!(project.read_with(cx, |project, _| project.is_via_remote_server()));
+    assert!(!project.read_with(cx, |project, _| project.is_local()));
+    let client_docs = util::test::TempTree::new(json!({"index.html": "client-owned document"}));
+    let local_url = http_client::Url::from_file_path(client_docs.path().join("index.html"))
+        .expect("client file URI")
+        .to_string();
+    assert!(std::fs::metadata(client_docs.path().join("index.html")).is_ok());
+    let web_url = "https://docs.rs/remote-open-docs-collision/0/".to_owned();
+    let response = Arc::new(parking_lot::Mutex::new(DocsUrls {
+        local: Some(local_url.clone()),
+        web: Some(web_url.clone()),
+    }));
+    let completed = Arc::new(AtomicUsize::new(0));
+    project.update(cx, |project, _| {
+        project.languages().add(rust_lang());
+        project.languages().register_fake_lsp_adapter(
+            "Rust",
+            FakeLspAdapter {
+                name: "rust-analyzer",
+                ..Default::default()
+            },
+        );
+    });
+    server_cx.update(|cx| {
+        headless.read(cx).languages.register_fake_lsp_server(
+            LanguageServerName("rust-analyzer".into()),
+            lsp::ServerCapabilities::default(),
+            Some(Box::new({
+                let response = response.clone();
+                let completed = completed.clone();
+                move |server| {
+                    server.set_request_handler::<LspOpenDocs, _, _>({
+                        let response = response.clone();
+                        let completed = completed.clone();
+                        move |_, _| {
+                            let response = std::mem::take(&mut *response.lock());
+                            completed.fetch_add(1, Ordering::SeqCst);
+                            async move { Ok(Some(response)) }
+                        }
+                    });
+                }
+            })),
+        );
+    });
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/open-docs"), true, cx)
+        })
+        .await
+        .expect("host worktree");
+    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+    let (buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp((worktree_id, rel_path("main.rs")), cx)
+        })
+        .await
+        .expect("host Rust buffer");
+    cx.run_until_parked();
+    let window =
+        cx.add_window(|window, cx| workspace::Workspace::test_new(project.clone(), window, cx));
+    let workspace = window.root(cx).expect("client workspace");
+    let mut visual = gpui::VisualTestContext::from_window(*window, cx);
+    let editor = visual.new_window_entity(|window, cx| {
+        Editor::for_buffer(buffer, Some(project.clone()), window, cx)
+    });
+    workspace.update_in(&mut visual, |workspace, window, cx| {
+        workspace.add_item_to_active_pane(Box::new(editor), None, true, window, cx);
+    });
+    visual.run_until_parked();
+    visual.refresh().expect("paint client editor");
+    visual.update(|window, cx| window.dispatch_action(Box::new(editor::actions::OpenDocs), cx));
+    visual.run_until_parked();
+    assert_eq!(
+        completed.load(Ordering::SeqCst),
+        1,
+        "actual host LSP request completed"
+    );
+    assert_eq!(
+        visual.opened_url(),
+        Some(web_url.clone()),
+        "host file URL must not select a coincident client file"
+    );
+
+    *response.lock() = DocsUrls {
+        local: Some(local_url.clone()),
+        web: None,
+    };
+    visual.update(|window, cx| window.dispatch_action(Box::new(editor::actions::OpenDocs), cx));
+    visual.run_until_parked();
+    assert_eq!(
+        completed.load(Ordering::SeqCst),
+        2,
+        "second host request completed"
+    );
+    assert_eq!(
+        visual.opened_url(),
+        Some(web_url.clone()),
+        "local-only host response must not open a new client URL"
+    );
+
+    for (index, rejected_url) in [local_url.as_str(), "javascript:alert(1)", "not a URL"]
+        .into_iter()
+        .enumerate()
+    {
+        *response.lock() = DocsUrls {
+            local: None,
+            web: Some(rejected_url.to_owned()),
+        };
+        visual.update(|window, cx| window.dispatch_action(Box::new(editor::actions::OpenDocs), cx));
+        visual.run_until_parked();
+        assert_eq!(
+            completed.load(Ordering::SeqCst),
+            index + 3,
+            "host request with an unsafe web fallback completed"
+        );
+        assert_eq!(
+            visual.opened_url(),
+            Some(web_url.clone()),
+            "a host cannot bypass local-file ownership through the web field"
+        );
+    }
 }
 
 async fn init_test_with_restart_activity<F: Fs + 'static>(

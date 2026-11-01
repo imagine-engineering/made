@@ -325,7 +325,6 @@ impl<'a> Statement<'a> {
             this: &mut Statement,
             callback: impl FnOnce(&mut Statement) -> Result<R>,
         ) -> Result<R> {
-            println!("{:?}", std::any::type_name::<R>());
             anyhow::ensure!(
                 this.step()? == StepResult::Row,
                 "single called with query that returns no rows."
@@ -399,6 +398,40 @@ mod test {
         connection::Connection,
         statement::{Statement, StepResult},
     };
+
+    #[test]
+    fn single_checks_cardinality_and_resets_after_failure() -> anyhow::Result<()> {
+        let connection =
+            Connection::open_memory(Some("single_checks_cardinality_and_resets_after_failure"));
+        let mut statement = Statement::prepare(
+            &connection,
+            "SELECT value FROM (SELECT 1 AS value UNION ALL SELECT 2) WHERE value <= ?",
+        )?;
+
+        statement.bind_int(1, 0)?;
+        let error = statement
+            .single(|row| row.column::<i32>())
+            .expect_err("no rows");
+        assert!(error.to_string().contains("returns no rows"));
+
+        statement.bind_int(1, 1)?;
+        assert_eq!(statement.single(|row| row.column::<i32>())?, 1);
+        assert_eq!(statement.single(|row| row.column::<i32>())?, 1);
+
+        statement.bind_int(1, 2)?;
+        let error = statement
+            .single(|row| row.column::<i32>())
+            .expect_err("multiple rows");
+        assert!(error.to_string().contains("more than one row"));
+
+        statement.bind_int(1, 1)?;
+        let error = statement
+            .single::<i32>(|_| anyhow::bail!("intentional single callback failure"))
+            .expect_err("callback failure");
+        assert_eq!(error.to_string(), "intentional single callback failure");
+        assert_eq!(statement.single(|row| row.column::<i32>())?, 1);
+        Ok(())
+    }
 
     #[test]
     fn binding_multiple_statements_with_parameter_gaps() {

@@ -222,6 +222,12 @@ impl AnyProtoClient {
         }))
     }
 
+    /// Clones retain this local instance identity; a new wrapper does not.
+    /// Reconnects within the underlying transport require their own authority.
+    pub fn is_same_instance(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     pub fn is_via_collab(&self) -> bool {
         self.0.client.is_via_collab()
     }
@@ -313,43 +319,44 @@ impl AnyProtoClient {
             request: Some(request.to_proto_query()),
         };
         let request = self.request(query);
-        let request_ids = self.0.request_ids.clone();
-        async move {
-            match request.await {
-                Ok(_request_enqueued) => {}
-                Err(e) => {
+        // Registration precedes polling; cancellation must also clean up an unpolled request.
+        let registration = util::defer({
+            let request_ids = Arc::downgrade(&self.0.request_ids);
+            move || {
+                if let Some(request_ids) = request_ids.upgrade() {
                     request_ids.lock().remove(&new_id);
-                    return Err(e).context("sending LSP proto request");
                 }
             }
-
-            let response = rx.with_timeout(timeout, &executor).await;
-            {
-                request_ids.lock().remove(&new_id);
+        });
+        async move {
+            let _registration = registration;
+            let response = async {
+                request.await.context("sending LSP proto request")?;
+                match rx.await {
+                    Ok(response) => response,
+                    Err(_channel_dropped) => Ok(None),
+                }
             }
+            .with_timeout(timeout, &executor)
+            .await;
             match response {
-                Ok(Ok(response)) => {
-                    let response = response
-                        .context("waiting for LSP proto response")?
-                        .map(|response| {
-                            anyhow::Ok(TypedEnvelope {
-                                payload: response
-                                    .payload
-                                    .into_iter()
-                                    .map(|lsp_response| lsp_response.into_response::<T>())
-                                    .collect::<Result<Vec<_>>>()?,
-                                sender_id: response.sender_id,
-                                original_sender_id: response.original_sender_id,
-                                message_id: response.message_id,
-                                received_at: response.received_at,
-                            })
+                Ok(response) => response?
+                    .map(|response| {
+                        anyhow::Ok(TypedEnvelope {
+                            payload: response
+                                .payload
+                                .into_iter()
+                                .map(|lsp_response| lsp_response.into_response::<T>())
+                                .collect::<Result<Vec<_>>>()?,
+                            sender_id: response.sender_id,
+                            original_sender_id: response.original_sender_id,
+                            message_id: response.message_id,
+                            received_at: response.received_at,
                         })
-                        .transpose()
-                        .context("converting LSP proto response")?;
-                    Ok(response)
-                }
+                    })
+                    .transpose()
+                    .context("converting LSP proto response"),
                 Err(_cancelled_due_timeout) => Ok(None),
-                Ok(Err(_channel_dropped)) => Ok(None),
             }
         }
     }
@@ -715,5 +722,174 @@ impl ProtoClient for NoopProtoClient {
     }
     fn has_wsl_interop(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    enum QueryReply {
+        Pending,
+        Ack,
+        Failed,
+    }
+
+    struct QueryClient {
+        reply: QueryReply,
+        handlers: Mutex<ProtoMessageHandlerSet>,
+    }
+
+    impl ProtoClient for QueryClient {
+        fn request(&self, _: Envelope, _: &'static str) -> BoxFuture<'static, Result<Envelope>> {
+            match self.reply {
+                QueryReply::Pending => futures::future::pending().boxed(),
+                QueryReply::Ack => {
+                    async { Ok(proto::Ack {}.into_envelope(0, Some(0), None)) }.boxed()
+                }
+                QueryReply::Failed => async { anyhow::bail!("conversion failure canary") }.boxed(),
+            }
+        }
+        fn send(&self, _: Envelope, _: &'static str) -> Result<()> {
+            Ok(())
+        }
+        fn send_response(&self, _: Envelope, _: &'static str) -> Result<()> {
+            Ok(())
+        }
+        fn message_handler_set(&self) -> &Mutex<ProtoMessageHandlerSet> {
+            &self.handlers
+        }
+        fn is_via_collab(&self) -> bool {
+            true
+        }
+        fn has_wsl_interop(&self) -> bool {
+            false
+        }
+    }
+
+    fn query_fixture(reply: QueryReply) -> AnyProtoClient {
+        AnyProtoClient(Arc::new(State {
+            client: Arc::new(QueryClient {
+                reply,
+                handlers: Mutex::default(),
+            }),
+            next_lsp_request_id: Arc::new(AtomicU64::new(0)),
+            request_ids: RequestIds::default(),
+        }))
+    }
+
+    #[gpui::test]
+    async fn test_lsp_query_unpolled_cancellation_cleans_registration(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let client = query_fixture(QueryReply::Pending);
+        let request = client.request_lsp(
+            47,
+            None,
+            Duration::from_secs(1),
+            cx.background_executor.clone(),
+            proto::GetHover::default(),
+        );
+        assert_eq!(client.0.request_ids.lock().len(), 1);
+        drop(request);
+        assert!(
+            client.0.request_ids.lock().is_empty(),
+            "unpolled cancellation must remove its registration"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_lsp_query_polled_cancellation_cleans_registration(cx: &mut gpui::TestAppContext) {
+        let client = query_fixture(QueryReply::Pending);
+        let request = client.request_lsp(
+            47,
+            None,
+            Duration::from_secs(1),
+            cx.background_executor.clone(),
+            proto::GetHover::default(),
+        );
+        assert!(request.now_or_never().is_none());
+        assert!(
+            client.0.request_ids.lock().is_empty(),
+            "polled cancellation must remove its registration"
+        );
+    }
+
+    #[gpui::test]
+    async fn test_lsp_query_unpolled_request_does_not_retain_registry_owner(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let client = query_fixture(QueryReply::Pending);
+        let registry = Arc::downgrade(&client.0.request_ids);
+        let request = client.request_lsp(
+            47,
+            None,
+            Duration::from_secs(1),
+            cx.background_executor.clone(),
+            proto::GetHover::default(),
+        );
+        drop(client);
+        assert!(
+            registry.upgrade().is_none(),
+            "an unpolled request must not retain a dropped registry owner"
+        );
+        drop(request);
+    }
+
+    #[gpui::test]
+    async fn test_lsp_query_timeout_includes_pending_ack(cx: &mut gpui::TestAppContext) {
+        let client = query_fixture(QueryReply::Pending);
+        let request = client.request_lsp(
+            47,
+            None,
+            Duration::from_millis(10),
+            cx.background_executor.clone(),
+            proto::GetHover::default(),
+        );
+        let result = request
+            .with_timeout(Duration::from_millis(100), &cx.background_executor)
+            .await
+            .expect("request timeout must bound the pending Ack as well as the response")
+            .expect("timeout is absence, not a transport failure");
+        assert!(result.is_none());
+        assert!(client.0.request_ids.lock().is_empty());
+    }
+
+    #[gpui::test]
+    async fn test_lsp_query_acknowledged_response_timeout_cleans_registration(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let client = query_fixture(QueryReply::Ack);
+        let result = client
+            .request_lsp(
+                47,
+                None,
+                Duration::from_millis(10),
+                cx.background_executor.clone(),
+                proto::GetHover::default(),
+            )
+            .await
+            .expect("acknowledged query");
+        assert!(result.is_none());
+        assert!(client.0.request_ids.lock().is_empty());
+    }
+
+    #[gpui::test]
+    async fn test_lsp_query_request_error_reaches_caller(cx: &mut gpui::TestAppContext) {
+        let client = query_fixture(QueryReply::Failed);
+        let result = client
+            .request_lsp(
+                47,
+                None,
+                Duration::from_secs(1),
+                cx.background_executor.clone(),
+                proto::GetHover::default(),
+            )
+            .await
+            .err()
+            .expect("existing request error must propagate");
+        assert!(format!("{result:#}").contains("conversion failure canary"));
+        assert!(client.0.request_ids.lock().is_empty());
     }
 }

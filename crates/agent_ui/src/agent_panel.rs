@@ -7783,6 +7783,10 @@ impl AgentPanel {
 
         Some(
             div()
+                .id("agent-onboarding-scroll")
+                .max_h(relative(0.6))
+                .flex_shrink_0()
+                .overflow_y_scroll()
                 .bg(cx.theme().colors().editor_background)
                 .child(self.new_user_onboarding.clone()),
         )

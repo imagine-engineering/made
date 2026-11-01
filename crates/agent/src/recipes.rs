@@ -394,17 +394,7 @@ impl RecipeStore {
         });
         cx.set_global(GlobalRecipeStore(store.clone()));
         store.update(cx, |store, cx| {
-            cx.on_app_quit(|store, cx| {
-                store.timer.take();
-                store.cancel_run(cx);
-                store.cancel_scan(cx);
-                let schedule = store.task.take().unwrap_or_else(|| Task::ready(()));
-                let scan = store.scan_task.take().unwrap_or_else(|| Task::ready(()));
-                cx.spawn(async move |_, _| {
-                    futures::join!(schedule, scan);
-                })
-            })
-            .detach();
+            cx.on_app_quit(Self::app_will_quit).detach();
             let database = crate::ThreadsDatabase::connect(cx);
             store.timer = Some(cx.spawn(async move |this, cx| {
                 let initialized = async {
@@ -488,6 +478,20 @@ impl RecipeStore {
                 }
             }));
         });
+    }
+
+    fn app_will_quit(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl std::future::Future<Output = ()> + use<> {
+        self.timer.take();
+        self.cancel_run(cx);
+        self.cancel_scan(cx);
+        let schedule = self.task.take().unwrap_or_else(|| Task::ready(()));
+        let scan = self.scan_task.take().unwrap_or_else(|| Task::ready(()));
+        async move {
+            futures::join!(schedule, scan);
+        }
     }
 
     pub fn try_global(cx: &App) -> Option<Entity<Self>> {
@@ -2113,6 +2117,88 @@ pub(crate) fn render_template(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui::test]
+    async fn recipe_idle_shutdown_completes_without_foreground_dispatch(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            RecipeStore::init_global(cx);
+        });
+        cx.run_until_parked();
+        let store = cx.update(|cx| RecipeStore::try_global(cx).expect("recipe store"));
+        assert!(!store.read_with(cx, |store, _| store.busy));
+        let shutdown = store.update(cx, |store, cx| store.app_will_quit(cx));
+        let result = cx
+            .foreground_executor()
+            .block_with_timeout(gpui::SHUTDOWN_TIMEOUT, shutdown);
+        assert!(
+            result.is_ok(),
+            "idle recipe shutdown must not require another foreground dispatch"
+        );
+    }
+
+    #[gpui::test]
+    async fn recipe_shutdown_waits_for_work_and_sends_cancellation(cx: &mut gpui::TestAppContext) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            RecipeStore::init_global(cx);
+        });
+        cx.run_until_parked();
+        let store = cx.update(|cx| RecipeStore::try_global(cx).expect("recipe store"));
+        let (release_schedule, schedule_released) = futures::channel::oneshot::channel();
+        let (cancel_scan, scan_cancelled) = futures::channel::oneshot::channel();
+        let (release_scan, scan_released) = futures::channel::oneshot::channel();
+        let schedule_finished = Arc::new(AtomicBool::new(false));
+        let scan_finished = Arc::new(AtomicBool::new(false));
+        let cancellation_observed = Arc::new(AtomicBool::new(false));
+        store.update(cx, |store, cx| {
+            let schedule_finished = schedule_finished.clone();
+            store.task = Some(cx.background_spawn(async move {
+                schedule_released.await.expect("release schedule cleanup");
+                schedule_finished.store(true, Ordering::SeqCst);
+            }));
+            let scan_finished = scan_finished.clone();
+            let cancellation_observed = cancellation_observed.clone();
+            store.scan_task = Some(cx.background_spawn(async move {
+                scan_cancelled.await.expect("actual cancellation signal");
+                cancellation_observed.store(true, Ordering::SeqCst);
+                scan_released.await.expect("release scan cleanup");
+                scan_finished.store(true, Ordering::SeqCst);
+            }));
+            store.scan_cancellation = Some(cancel_scan);
+        });
+
+        let mut shutdown = Box::pin(store.update(cx, |store, cx| store.app_will_quit(cx)));
+        assert!(futures::poll!(shutdown.as_mut()).is_pending());
+        cx.run_until_parked();
+        assert!(cancellation_observed.load(Ordering::SeqCst));
+        assert!(!scan_finished.load(Ordering::SeqCst));
+        assert!(!schedule_finished.load(Ordering::SeqCst));
+        store.read_with(cx, |store, _| {
+            assert_eq!(store.cancellation, Some(RecipeRunStatus::Cancelled));
+            assert!(store.timer.is_none());
+            assert!(store.task.is_none());
+            assert!(store.scan_task.is_none());
+            assert!(store.scan_cancellation.is_none());
+        });
+
+        release_scan.send(()).expect("scan cleanup still awaited");
+        cx.run_until_parked();
+        assert!(scan_finished.load(Ordering::SeqCst));
+        assert!(futures::poll!(shutdown.as_mut()).is_pending());
+        release_schedule
+            .send(())
+            .expect("schedule cleanup still awaited");
+        cx.run_until_parked();
+        assert!(schedule_finished.load(Ordering::SeqCst));
+        assert!(futures::poll!(shutdown.as_mut()).is_ready());
+    }
 
     const RECIPE: &str = "version: 1\ntitle: Review\ndescription: Review a change\nprompt: 'Review {{ change }}'\nparameters:\n  - name: change\n    description: Change to review\n    required: true\n";
 

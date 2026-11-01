@@ -47,7 +47,8 @@ pub use settings_file::*;
 pub use settings_json::*;
 pub use settings_store::{
     DefaultSemanticTokenRules, InvalidSettingsError, LSP_SETTINGS_SCHEMA_URL_PREFIX,
-    LocalSettingsKind, LocalSettingsPath, MigrationStatus, Settings, SettingsFile,
+    LocalSettingsKind, LocalSettingsPath, MigrationStatus, ServerSettingsOrigin,
+    ServerSettingsParseOutcome, ServerSettingsSource, Settings, SettingsFile,
     SettingsJsonSchemaParams, SettingsKey, SettingsLocation, SettingsParseResult, SettingsStore,
 };
 

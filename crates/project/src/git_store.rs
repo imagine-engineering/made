@@ -2138,6 +2138,28 @@ impl GitStore {
         };
 
         match event {
+            WorktreeStoreEvent::WorktreeAdded(worktree) => {
+                let (worktree_id, changed_repos) = {
+                    let worktree = worktree.read(cx);
+                    let Some(local) = worktree.as_local() else {
+                        return;
+                    };
+                    (worktree.id(), local.initial_git_repository_updates())
+                };
+                // The initial scan can finish before WorktreeStore subscribes to its events.
+                self.update_repositories_from_worktree(
+                    worktree_id,
+                    project_environment.clone(),
+                    next_repository_id.clone(),
+                    downstream
+                        .as_ref()
+                        .map(|downstream| downstream.updates_tx.clone()),
+                    changed_repos.clone(),
+                    fs.clone(),
+                    cx,
+                );
+                self.local_worktree_git_repos_changed(worktree.clone(), &changed_repos, cx);
+            }
             WorktreeStoreEvent::WorktreeUpdatedEntries(worktree_id, updated_entries) => {
                 if let Some(worktree) = self
                     .worktree_store
@@ -7658,7 +7680,7 @@ impl Repository {
         is_dir: bool,
     ) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
-        let repository_dir = self.snapshot.repository_dir_abs_path.clone();
+        let repository_dir = self.snapshot.common_dir_abs_path.clone();
         let path_display = repo_path.as_ref().display(PathStyle::Unix);
         let path = repo_path.as_unix_str().to_owned();
         let file_path_str = if is_dir {

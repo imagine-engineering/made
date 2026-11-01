@@ -3342,7 +3342,6 @@ impl SerializableItem for GraphWorkspaceItem {
         workspace: &mut Workspace,
         item_id: ItemId,
         _closing: bool,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Task<anyhow::Result<()>>> {
         let workspace_id = workspace.database_id()?;
@@ -4462,10 +4461,10 @@ mod lifecycle_tests {
             .expect("workspace snapshot is UTF-8 JSON")
         });
 
-        let serialization = workspace.update_in(cx, |workspace, window, cx| {
+        let serialization = workspace.update(cx, |workspace, cx| {
             item.update(cx, |item, cx| {
                 <GraphWorkspaceItem as SerializableItem>::serialize(
-                    item, workspace, item_id, false, window, cx,
+                    item, workspace, item_id, false, cx,
                 )
             })
         });
@@ -4547,10 +4546,10 @@ mod lifecycle_tests {
             workspace.add_item_to_active_pane(Box::new(item.clone()), None, true, window, cx);
         });
 
-        let initial_save = workspace.update_in(cx, |workspace, window, cx| {
+        let initial_save = workspace.update(cx, |workspace, cx| {
             item.update(cx, |item, cx| {
                 <GraphWorkspaceItem as SerializableItem>::serialize(
-                    item, workspace, item_id, false, window, cx,
+                    item, workspace, item_id, false, cx,
                 )
             })
         });
@@ -4576,10 +4575,10 @@ mod lifecycle_tests {
             .install_write_failure_for_tests()
             .await
             .expect("install deterministic write failure");
-        let failed_save = workspace.update_in(cx, |workspace, window, cx| {
+        let failed_save = workspace.update(cx, |workspace, cx| {
             item.update(cx, |item, cx| {
                 <GraphWorkspaceItem as SerializableItem>::serialize(
-                    item, workspace, item_id, false, window, cx,
+                    item, workspace, item_id, false, cx,
                 )
             })
         });
@@ -4601,10 +4600,10 @@ mod lifecycle_tests {
             .await
             .expect("remove deterministic write failure");
 
-        let retry = workspace.update_in(cx, |workspace, window, cx| {
+        let retry = workspace.update(cx, |workspace, cx| {
             item.update(cx, |item, cx| {
                 <GraphWorkspaceItem as SerializableItem>::serialize(
-                    item, workspace, item_id, false, window, cx,
+                    item, workspace, item_id, false, cx,
                 )
             })
         });

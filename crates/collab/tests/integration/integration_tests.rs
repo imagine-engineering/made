@@ -10616,3 +10616,1452 @@ async fn test_resync_requester_drop_does_not_cancel_host_owner(
 ) {
     check_resync_cancellation(executor, cx_a, cx_b, false).await;
 }
+
+#[derive(Clone, Copy)]
+enum PeerIngressMutation {
+    Edit,
+    Save,
+    SaveAs(&'static str),
+}
+
+async fn check_peer_ingress_retained_buffer(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+    mutation: PeerIngressMutation,
+    private_source: bool,
+    private_destination: bool,
+    explicit_opt_in: bool,
+) {
+    use rpc::ErrorExt as _;
+
+    let mut server = TestServer::start(executor.clone()).await;
+    let host = server.create_client(cx_a, "ingress_host").await;
+    let guest = server.create_client(cx_b, "ingress_guest").await;
+    server
+        .create_room(&mut [(&host, cx_a), (&guest, cx_b)])
+        .await;
+    host.fs()
+        .insert_tree(
+            "/root/peer-ingress",
+            json!({
+                "secret.txt": "INGRESS_BASE",
+                "public.txt": "INGRESS_PUBLIC",
+                "existing-destination.txt": "DO_NOT_OVERWRITE"
+            }),
+        )
+        .await;
+    let (project_a, worktree_id) = host.build_local_project("/root/peer-ingress", cx_a).await;
+    let host_buffer = project_a
+        .update(cx_a, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("secret.txt")), cx)
+        })
+        .await
+        .expect("host opens initially public source");
+    let project_id = cx_a
+        .read(ActiveCall::global)
+        .update(cx_a, |call, cx| call.share_project(project_a.clone(), cx))
+        .await
+        .expect("share actual project");
+    let project_b = guest.join_remote_project(project_id, cx_b).await;
+    let guest_buffer = project_b
+        .update(cx_b, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("secret.txt")), cx)
+        })
+        .await
+        .expect("guest retains source before policy transition");
+    assert_eq!(
+        guest_buffer.read_with(cx_b, |buffer, _| buffer.text()),
+        "INGRESS_BASE"
+    );
+
+    let mut edit_operations = Vec::new();
+    if matches!(mutation, PeerIngressMutation::Edit) {
+        let (state, replica_id, capability, version, original_text) =
+            guest_buffer.read_with(cx_b, |buffer, cx| {
+                (
+                    buffer.to_proto(cx),
+                    buffer.replica_id(),
+                    buffer.capability(),
+                    buffer.version(),
+                    buffer.text(),
+                )
+            });
+        let history = guest_buffer
+            .read_with(cx_b, |buffer, cx| buffer.serialize_ops(None, cx))
+            .await;
+        let detached = cx_b.new(|_| {
+            language::Buffer::from_proto(replica_id, capability, state, None)
+                .expect("detached genuine guest replica")
+        });
+        let history = history
+            .into_iter()
+            .map(language::proto::deserialize_operation)
+            .collect::<Result<Vec<_>>>()
+            .expect("actual base history deserializes");
+        detached.update(cx_b, |buffer, cx| {
+            buffer.apply_ops(history, cx);
+            assert_eq!(buffer.version(), version);
+            assert_eq!(buffer.text(), original_text);
+            buffer.edit([(0..0, "GUEST_INGRESS_EDIT ")], None, cx);
+        });
+        edit_operations = detached
+            .read_with(cx_b, |buffer, cx| buffer.serialize_ops(Some(version), cx))
+            .await;
+        assert!(queued_flusher_has_marker(
+            &edit_operations,
+            "GUEST_INGRESS_EDIT"
+        ));
+    } else {
+        host_buffer.update(cx_a, |buffer, cx| {
+            buffer.edit([(0..0, "HOST_UNSAVED ")], None, cx)
+        });
+    }
+    let destination = match mutation {
+        PeerIngressMutation::SaveAs(path) => Some(path),
+        _ => None,
+    };
+    let patterns = [
+        private_source.then_some("**/secret.txt"),
+        destination
+            .filter(|_| private_destination)
+            .map(|_| "**/*destination.txt"),
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+    cx_a.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_exclusions = Some(vec!["**".into()]);
+                settings.project.worktree.private_files = Some(patterns.into());
+            });
+        });
+    });
+    executor.run_until_parked();
+    if explicit_opt_in {
+        let worktree = host_buffer.read_with(cx_a, |buffer, _| {
+            worktree::File::from_dyn(buffer.file())
+                .expect("local file")
+                .worktree
+                .clone()
+        });
+        worktree.update(cx_a, |worktree, cx| {
+            worktree
+                .as_local_mut()
+                .expect("local owner")
+                .share_private_files(cx);
+        });
+        executor.run_until_parked();
+    }
+    host_buffer.read_with(cx_a, |buffer, cx| {
+        let file = worktree::File::from_dyn(buffer.file()).expect("local source");
+        assert!(!file.is_private, "require stale public File flag");
+        let local = file
+            .worktree
+            .read(cx)
+            .as_local()
+            .expect("local policy owner");
+        assert_eq!(
+            local.is_path_private(rel_path("secret.txt")),
+            private_source && !explicit_opt_in
+        );
+        if let Some(destination) = destination {
+            assert_eq!(
+                local.is_path_private(rel_path(destination)),
+                private_destination && !explicit_opt_in
+            );
+        }
+    });
+    let before = host_buffer.read_with(cx_a, |buffer, cx| {
+        (
+            buffer.text(),
+            buffer.version(),
+            buffer.saved_version().clone(),
+            buffer.saved_mtime(),
+            buffer.is_dirty(),
+            buffer.file().map(|file| file.to_proto(cx)),
+        )
+    });
+    let source_path = Path::new("/root/peer-ingress/secret.txt");
+    let disk_before = host.fs().load(source_path).await.expect("source on disk");
+    let metadata_snapshot = |metadata: fs::Metadata| {
+        (
+            metadata.inode,
+            metadata.mtime,
+            metadata.is_symlink,
+            metadata.is_dir,
+            metadata.len,
+            metadata.is_fifo,
+            metadata.is_executable,
+            metadata.is_writable,
+        )
+    };
+    let source_metadata_before = host
+        .fs()
+        .metadata(source_path)
+        .await
+        .expect("source metadata before request")
+        .map(metadata_snapshot);
+    let destination_path =
+        destination.map(|destination| Path::new("/root/peer-ingress").join(destination));
+    let destination_metadata_before = if let Some(path) = &destination_path {
+        host.fs()
+            .metadata(path)
+            .await
+            .expect("destination metadata before request")
+            .map(metadata_snapshot)
+    } else {
+        None
+    };
+    let destination_before = if let Some(path) = &destination_path {
+        if host
+            .fs()
+            .metadata(path)
+            .await
+            .expect("destination metadata")
+            .is_some()
+        {
+            Some(host.fs().load(path).await.expect("existing destination"))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let buffer_id = host_buffer.read_with(cx_a, |buffer, _| buffer.remote_id().to_proto());
+    let outcome = match mutation {
+        PeerIngressMutation::Edit => resync_gate_within(
+            &executor,
+            guest.request(proto::UpdateBuffer {
+                project_id,
+                buffer_id,
+                operations: edit_operations,
+            }),
+        )
+        .await
+        .expect("actual guest edit deadline")
+        .map(|_| ()),
+        PeerIngressMutation::Save | PeerIngressMutation::SaveAs(_) => resync_gate_within(
+            &executor,
+            guest.request(proto::SaveBuffer {
+                project_id,
+                buffer_id,
+                version: language::proto::serialize_version(&before.1),
+                new_path: destination.map(|path| proto::ProjectPath {
+                    worktree_id: worktree_id.to_proto(),
+                    path: path.into(),
+                }),
+            }),
+        )
+        .await
+        .expect("actual guest save deadline")
+        .map(|_| ()),
+    }
+    .map_err(|error| error.error_code());
+    executor.run_until_parked();
+    let after = host_buffer.read_with(cx_a, |buffer, cx| {
+        (
+            buffer.text(),
+            buffer.version(),
+            buffer.saved_version().clone(),
+            buffer.saved_mtime(),
+            buffer.is_dirty(),
+            buffer.file().map(|file| file.to_proto(cx)),
+        )
+    });
+    let disk_after = host
+        .fs()
+        .load(source_path)
+        .await
+        .expect("source remains on disk");
+    let source_metadata_after = host
+        .fs()
+        .metadata(source_path)
+        .await
+        .expect("source metadata after request")
+        .map(metadata_snapshot);
+    let destination_metadata_after = if let Some(path) = &destination_path {
+        host.fs()
+            .metadata(path)
+            .await
+            .expect("destination metadata after request")
+            .map(metadata_snapshot)
+    } else {
+        None
+    };
+    let destination_after = if let Some(path) = &destination_path {
+        if host
+            .fs()
+            .metadata(path)
+            .await
+            .expect("result destination metadata")
+            .is_some()
+        {
+            Some(
+                host.fs()
+                    .load(path)
+                    .await
+                    .expect("result destination bytes"),
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let host_hang_up = cx_a
+        .read(ActiveCall::global)
+        .update(cx_a, |call, cx| call.hang_up(cx));
+    let guest_hang_up = cx_b
+        .read(ActiveCall::global)
+        .update(cx_b, |call, cx| call.hang_up(cx));
+    resync_gate_within(&executor, host_hang_up)
+        .await
+        .expect("host cleanup deadline")
+        .expect("host cleanup");
+    resync_gate_within(&executor, guest_hang_up)
+        .await
+        .expect("guest cleanup deadline")
+        .expect("guest cleanup");
+    cx_a.run_until_parked();
+    cx_b.run_until_parked();
+    if (private_source || private_destination) && !explicit_opt_in {
+        assert_eq!(
+            outcome,
+            Err(proto::ErrorCode::UnsharedItem),
+            "current host privacy must reject a retained guest mutation"
+        );
+        assert_eq!(
+            after, before,
+            "denied ingress must preserve host text/version/saved state/file identity"
+        );
+        assert_eq!(
+            disk_after, disk_before,
+            "denied ingress must not save host content"
+        );
+        assert_eq!(
+            destination_after, destination_before,
+            "denied SaveAs must neither create nor overwrite destination"
+        );
+        assert_eq!(
+            source_metadata_after, source_metadata_before,
+            "denied ingress must preserve source filesystem metadata"
+        );
+        assert_eq!(
+            destination_metadata_after, destination_metadata_before,
+            "denied SaveAs must preserve destination filesystem metadata"
+        );
+    } else {
+        assert_eq!(outcome, Ok(()), "ordinary public ingress must succeed");
+        match mutation {
+            PeerIngressMutation::Edit => {
+                assert_eq!(after.0, "GUEST_INGRESS_EDIT INGRESS_BASE");
+                assert_ne!(after.1, before.1);
+                assert_eq!(disk_after, disk_before);
+            }
+            PeerIngressMutation::Save => {
+                assert_eq!(disk_after, "HOST_UNSAVED INGRESS_BASE");
+                assert_eq!(after.0, before.0);
+                assert_eq!(after.2, before.1);
+                assert!(!after.4);
+            }
+            PeerIngressMutation::SaveAs(_) => {
+                assert_eq!(destination_after, Some(before.0));
+                assert_eq!(disk_after, disk_before);
+                assert_eq!(after.1, before.1);
+                assert_eq!(after.2, before.1);
+                assert!(!after.4);
+                assert_eq!(
+                    after.5.expect("saved public destination file").path,
+                    destination.expect("SaveAs path")
+                );
+            }
+        }
+    }
+}
+
+#[gpui::test]
+async fn test_peer_edit_current_private_retained_buffer(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::Edit,
+        true,
+        false,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_edit_current_public_control(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::Edit,
+        false,
+        false,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_current_private_retained_buffer(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::Save,
+        true,
+        false,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_current_public_control(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::Save,
+        false,
+        false,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_as_current_private_destination(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::SaveAs("existing-destination.txt"),
+        false,
+        true,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_as_current_private_new_destination(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::SaveAs("new-destination.txt"),
+        false,
+        true,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_private_source_save_as_public(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::SaveAs("public-destination.txt"),
+        true,
+        false,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_as_current_public_control(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        cx_a,
+        cx_b,
+        PeerIngressMutation::SaveAs("public-destination.txt"),
+        false,
+        false,
+        false,
+    )
+    .await;
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum PeerUpdateRevocation {
+    GuestLeavesRoom,
+    HostLeavesRoom,
+    GuestLeavesProjectBeforeRequest,
+    GuestLeavesProjectAfterAcceptance,
+}
+
+async fn check_peer_edit_observer_publication(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+    private: bool,
+    revocation: Option<PeerUpdateRevocation>,
+) {
+    use rpc::ErrorExt as _;
+    let mut server = TestServer::start(executor.clone()).await;
+    let host = server.create_client(host_cx, "acceptance_host").await;
+    let guest = server.create_client(guest_cx, "acceptance_guest").await;
+    let observer = server
+        .create_client(observer_cx, "acceptance_observer")
+        .await;
+    server
+        .create_room(&mut [
+            (&host, host_cx),
+            (&guest, guest_cx),
+            (&observer, observer_cx),
+        ])
+        .await;
+    host.fs()
+        .insert_tree("/root/peer-acceptance", json!({"secret.txt":"BASE"}))
+        .await;
+    let (host_project, worktree_id) = host
+        .build_local_project("/root/peer-acceptance", host_cx)
+        .await;
+    let host_buffer = host_project
+        .update(host_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("secret.txt")), cx)
+        })
+        .await
+        .expect("host source");
+    let project_id = host_cx
+        .read(ActiveCall::global)
+        .update(host_cx, |call, cx| {
+            call.share_project(host_project.clone(), cx)
+        })
+        .await
+        .expect("shared project");
+    let guest_project = guest.join_remote_project(project_id, guest_cx).await;
+    let observer_project = observer.join_remote_project(project_id, observer_cx).await;
+    let guest_buffer = guest_project
+        .update(guest_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("secret.txt")), cx)
+        })
+        .await
+        .expect("guest source");
+    let observer_buffer = observer_project
+        .update(observer_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("secret.txt")), cx)
+        })
+        .await
+        .expect("observer source");
+    let (state, replica_id, capability, version) =
+        guest_buffer.read_with(guest_cx, |buffer, cx| {
+            (
+                buffer.to_proto(cx),
+                buffer.replica_id(),
+                buffer.capability(),
+                buffer.version(),
+            )
+        });
+    let history = guest_buffer
+        .read_with(guest_cx, |buffer, cx| buffer.serialize_ops(None, cx))
+        .await;
+    let detached = guest_cx.new(|_| {
+        language::Buffer::from_proto(replica_id, capability, state, None).expect("guest replica")
+    });
+    let history = history
+        .into_iter()
+        .map(language::proto::deserialize_operation)
+        .collect::<Result<Vec<_>>>()
+        .expect("base operations");
+    detached.update(guest_cx, |buffer, cx| {
+        buffer.apply_ops(history, cx);
+        assert_eq!(buffer.version(), version);
+        buffer.edit([(0..0, "REJECTED_PEER_EDIT ")], None, cx);
+    });
+    let operations = detached
+        .read_with(guest_cx, |buffer, cx| {
+            buffer.serialize_ops(Some(version), cx)
+        })
+        .await;
+    assert!(queued_flusher_has_marker(&operations, "REJECTED_PEER_EDIT"));
+    host_cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_exclusions = Some(vec!["**".into()]);
+                settings.project.worktree.private_files = Some(
+                    if private {
+                        vec!["**/secret.txt".to_owned()]
+                    } else {
+                        Vec::new()
+                    }
+                    .into(),
+                );
+            })
+        })
+    });
+    executor.run_until_parked();
+    host_buffer.read_with(host_cx, |buffer, cx| {
+        let file = worktree::File::from_dyn(buffer.file()).expect("host file");
+        assert!(
+            !file.is_private,
+            "retained public metadata is deliberately stale"
+        );
+        assert_eq!(
+            file.worktree
+                .read(cx)
+                .as_local()
+                .expect("local policy")
+                .is_path_private(rel_path("secret.txt")),
+            private
+        );
+    });
+    let buffer_id = host_buffer.read_with(host_cx, |buffer, _| buffer.remote_id().to_proto());
+    let request = proto::UpdateBuffer {
+        project_id,
+        buffer_id,
+        operations,
+    };
+    if revocation == Some(PeerUpdateRevocation::GuestLeavesProjectBeforeRequest) {
+        guest
+            .send(proto::LeaveProject { project_id })
+            .expect("leave only the project");
+        resync_gate_within(&executor, async {
+            while host_project.read_with(host_cx, |project, _| {
+                project
+                    .collaborators()
+                    .contains_key(&guest.peer_id().expect("guest connection"))
+            }) {
+                executor.timer(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("project departure deadline");
+        assert!(guest_cx.read(|cx| ActiveCall::global(cx).read(cx).room().is_some()));
+    }
+    let outcome = if let Some(revocation) = revocation
+        .filter(|revocation| *revocation != PeerUpdateRevocation::GuestLeavesProjectBeforeRequest)
+    {
+        let (observed, release) = server
+            .hold_peer_update_after_acceptance(
+                host.peer_id().expect("host connection"),
+                project_id,
+                buffer_id,
+            )
+            .expect("server acceptance gate");
+        let pending = executor.spawn(guest.request(request));
+        let observed = resync_gate_within(&executor, observed)
+            .await
+            .expect("host acceptance deadline")
+            .expect("actual accepted request");
+        assert_eq!(observed.request.buffer_id, buffer_id);
+        assert_eq!(
+            observed.sender_id,
+            guest.peer_id().expect("guest connection")
+        );
+        assert_eq!(
+            host_buffer.read_with(host_cx, |buffer, _| buffer.text()),
+            "REJECTED_PEER_EDIT BASE"
+        );
+        match revocation {
+            PeerUpdateRevocation::GuestLeavesProjectAfterAcceptance => {
+                guest
+                    .send(proto::LeaveProject { project_id })
+                    .expect("leave only the project");
+                resync_gate_within(&executor, async {
+                    while host_project.read_with(host_cx, |project, _| {
+                        project
+                            .collaborators()
+                            .contains_key(&guest.peer_id().expect("guest connection"))
+                    }) {
+                        executor.timer(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .expect("project departure deadline");
+                assert!(guest_cx.read(|cx| ActiveCall::global(cx).read(cx).room().is_some()));
+            }
+            PeerUpdateRevocation::HostLeavesRoom | PeerUpdateRevocation::GuestLeavesRoom => {
+                let leave = if revocation == PeerUpdateRevocation::HostLeavesRoom {
+                    host_cx
+                        .read(ActiveCall::global)
+                        .update(host_cx, |call, cx| call.hang_up(cx))
+                } else {
+                    guest_cx
+                        .read(ActiveCall::global)
+                        .update(guest_cx, |call, cx| call.hang_up(cx))
+                };
+                resync_gate_within(&executor, leave)
+                    .await
+                    .expect("membership change deadline")
+                    .expect("leave before publication");
+            }
+            PeerUpdateRevocation::GuestLeavesProjectBeforeRequest => {
+                unreachable!("handled before request")
+            }
+        }
+        executor.run_until_parked();
+        release
+            .send(Ok(()))
+            .expect("release actual accepted request");
+        resync_gate_within(&executor, pending)
+            .await
+            .expect("update deadline")
+    } else {
+        resync_gate_within(&executor, guest.request(request))
+            .await
+            .expect("update deadline")
+    }
+    .map(|_| ())
+    .map_err(|error| error.error_code());
+    executor.run_until_parked();
+    let host_text = host_buffer.read_with(host_cx, |buffer, _| buffer.text());
+    let observer_text = observer_buffer.read_with(observer_cx, |buffer, _| buffer.text());
+    let mut cleanup = Vec::new();
+    if revocation != Some(PeerUpdateRevocation::HostLeavesRoom) {
+        cleanup.push(
+            host_cx
+                .read(ActiveCall::global)
+                .update(host_cx, |call, cx| call.hang_up(cx)),
+        );
+    }
+    if revocation != Some(PeerUpdateRevocation::GuestLeavesRoom) {
+        cleanup.push(
+            guest_cx
+                .read(ActiveCall::global)
+                .update(guest_cx, |call, cx| call.hang_up(cx)),
+        );
+    }
+    cleanup.push(
+        observer_cx
+            .read(ActiveCall::global)
+            .update(observer_cx, |call, cx| call.hang_up(cx)),
+    );
+    for hang_up in cleanup {
+        resync_gate_within(&executor, hang_up)
+            .await
+            .expect("cleanup deadline")
+            .expect("leave call");
+    }
+    executor.run_until_parked();
+    if revocation.is_some() {
+        assert!(
+            outcome.is_err(),
+            "lost authority must not produce a successful Ack"
+        );
+        assert_eq!(
+            host_text,
+            if revocation == Some(PeerUpdateRevocation::GuestLeavesProjectBeforeRequest) {
+                "BASE"
+            } else {
+                "REJECTED_PEER_EDIT BASE"
+            },
+            "pre-admission departure rejects mutation; accepted edits are not rolled back"
+        );
+        assert_eq!(
+            observer_text, "BASE",
+            "revoked authority must not reach observers"
+        );
+    } else if private {
+        assert_eq!(outcome, Err(proto::ErrorCode::UnsharedItem));
+        assert_eq!(host_text, "BASE", "host must reject the mutation");
+        assert_eq!(
+            observer_text, "BASE",
+            "host-rejected operations must never reach another guest"
+        );
+    } else {
+        assert_eq!(outcome, Ok(()));
+        assert_eq!(host_text, "REJECTED_PEER_EDIT BASE");
+        assert_eq!(
+            observer_text, host_text,
+            "accepted public edits still converge"
+        );
+    }
+}
+
+#[gpui::test]
+async fn test_peer_edit_observer_rejects_host_denied_operation(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+) {
+    check_peer_edit_observer_publication(executor, host_cx, guest_cx, observer_cx, true, None)
+        .await;
+}
+
+#[gpui::test]
+async fn test_peer_edit_observer_public_control(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+) {
+    check_peer_edit_observer_publication(executor, host_cx, guest_cx, observer_cx, false, None)
+        .await;
+}
+
+#[gpui::test]
+async fn test_peer_edit_observer_membership_lost_after_acceptance(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+) {
+    check_peer_edit_observer_publication(
+        executor,
+        host_cx,
+        guest_cx,
+        observer_cx,
+        false,
+        Some(PeerUpdateRevocation::GuestLeavesRoom),
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_edit_observer_host_lost_after_acceptance(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+) {
+    check_peer_edit_observer_publication(
+        executor,
+        host_cx,
+        guest_cx,
+        observer_cx,
+        false,
+        Some(PeerUpdateRevocation::HostLeavesRoom),
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_edit_observer_project_membership_required_before_request(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+) {
+    check_peer_edit_observer_publication(
+        executor,
+        host_cx,
+        guest_cx,
+        observer_cx,
+        false,
+        Some(PeerUpdateRevocation::GuestLeavesProjectBeforeRequest),
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_edit_observer_project_membership_lost_after_acceptance(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    observer_cx: &mut TestAppContext,
+) {
+    check_peer_edit_observer_publication(
+        executor,
+        host_cx,
+        guest_cx,
+        observer_cx,
+        false,
+        Some(PeerUpdateRevocation::GuestLeavesProjectAfterAcceptance),
+    )
+    .await;
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum PeerIngressBufferState {
+    Unknown,
+    Queued,
+    Expired,
+}
+
+async fn check_peer_ingress_unknown_buffer(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    buffer_state: PeerIngressBufferState,
+) {
+    use rpc::ErrorExt as _;
+    let mut server = TestServer::start(executor.clone()).await;
+    let host = server.create_client(host_cx, "unknown_host").await;
+    let guest = server.create_client(guest_cx, "unknown_guest").await;
+    server
+        .create_room(&mut [(&host, host_cx), (&guest, guest_cx)])
+        .await;
+    host.fs()
+        .insert_tree("/root/unknown-ingress", json!({"public.txt":"BASE"}))
+        .await;
+    let (project, worktree_id) = host
+        .build_local_project("/root/unknown-ingress", host_cx)
+        .await;
+    let host_buffer = project
+        .update(host_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("public.txt")), cx)
+        })
+        .await
+        .expect("host source");
+    let project_id = host_cx
+        .read(ActiveCall::global)
+        .update(host_cx, |call, cx| call.share_project(project.clone(), cx))
+        .await
+        .expect("shared project");
+    let guest_project = guest.join_remote_project(project_id, guest_cx).await;
+    let guest_buffer = guest_project
+        .update(guest_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("public.txt")), cx)
+        })
+        .await
+        .expect("guest source");
+    guest_buffer.update(guest_cx, |buffer, cx| {
+        buffer.edit([(0..0, "PUBLIC_CONTROL ")], None, cx)
+    });
+    executor.run_until_parked();
+    assert_eq!(
+        host_buffer.read_with(host_cx, |buffer, _| buffer.text()),
+        "PUBLIC_CONTROL BASE"
+    );
+    let operations = guest_buffer
+        .read_with(guest_cx, |buffer, cx| buffer.serialize_ops(None, cx))
+        .await;
+    assert!(!operations.is_empty(), "genuine peer operations");
+    let store = project.read_with(host_cx, |project, _| project.buffer_store().clone());
+    let unknown_id = if buffer_state == PeerIngressBufferState::Expired {
+        let expired = project.update(host_cx, |project, cx| {
+            project.create_local_buffer("EXPIRED_OWNER_BUFFER", None, false, cx)
+        });
+        let buffer_id = expired.read_with(host_cx, |buffer, _| buffer.remote_id());
+        let weak = expired.downgrade();
+        drop(expired);
+        host_cx.update(|_| {});
+        executor.run_until_parked();
+        assert!(weak.upgrade().is_none(), "real Complete buffer has expired");
+        assert!(
+            store.read_with(host_cx, |store, _| {
+                store.has_buffer_or_pending_operations(buffer_id)
+            }),
+            "retain the expired Complete entry"
+        );
+        buffer_id
+    } else {
+        let buffer_id = text::BufferId::new(900_000_000).expect("unused fixture ID");
+        assert!(!store.read_with(host_cx, |store, _| {
+            store.has_buffer_or_pending_operations(buffer_id)
+        }));
+        buffer_id
+    };
+    if buffer_state == PeerIngressBufferState::Queued {
+        let envelope = rpc::TypedEnvelope {
+            sender_id: host.peer_id().expect("host connection"),
+            original_sender_id: None,
+            message_id: 0,
+            received_at: std::time::Instant::now(),
+            payload: proto::UpdateBuffer {
+                project_id,
+                buffer_id: unknown_id.to_proto(),
+                operations: Vec::new(),
+            },
+        };
+        resync_gate_within(
+            &executor,
+            project::buffer_store::BufferStore::handle_update_buffer_from_owner(
+                store.clone(),
+                envelope,
+                host_cx.to_async(),
+            ),
+        )
+        .await
+        .expect("owner queue deadline")
+        .expect("owner initialization path remains available");
+    }
+    let before = store.read_with(host_cx, |store, _| {
+        store.queued_operation_count_for_test(unknown_id)
+    });
+    assert_eq!(
+        before,
+        (buffer_state == PeerIngressBufferState::Queued).then_some(0)
+    );
+    let outcome = resync_gate_within(
+        &executor,
+        guest.request(proto::UpdateBuffer {
+            project_id,
+            buffer_id: unknown_id.to_proto(),
+            operations,
+        }),
+    )
+    .await
+    .expect("guest update deadline")
+    .map(|_| ())
+    .map_err(|error| error.error_code());
+    executor.run_until_parked();
+    let after = store.read_with(host_cx, |store, _| {
+        store.queued_operation_count_for_test(unknown_id)
+    });
+    let source = host_buffer.read_with(host_cx, |buffer, _| buffer.text());
+    let host_leave = host_cx
+        .read(ActiveCall::global)
+        .update(host_cx, |call, cx| call.hang_up(cx));
+    let guest_leave = guest_cx
+        .read(ActiveCall::global)
+        .update(guest_cx, |call, cx| call.hang_up(cx));
+    for leave in [host_leave, guest_leave] {
+        resync_gate_within(&executor, leave)
+            .await
+            .expect("cleanup deadline")
+            .expect("leave call");
+    }
+    executor.run_until_parked();
+    assert_eq!(outcome, Err(proto::ErrorCode::UnsharedItem));
+    assert_eq!(
+        after, before,
+        "peer ingress must neither create nor extend initialization queues"
+    );
+    assert_eq!(source, "PUBLIC_CONTROL BASE");
+}
+
+#[gpui::test]
+async fn test_peer_ingress_unknown_buffer_rejected(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_ingress_unknown_buffer(executor, host_cx, guest_cx, PeerIngressBufferState::Unknown)
+        .await;
+}
+
+#[gpui::test]
+async fn test_peer_ingress_queued_only_buffer_rejected(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_ingress_unknown_buffer(executor, host_cx, guest_cx, PeerIngressBufferState::Queued)
+        .await;
+}
+
+#[gpui::test]
+async fn test_peer_ingress_expired_buffer_rejected(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_ingress_unknown_buffer(executor, host_cx, guest_cx, PeerIngressBufferState::Expired)
+        .await;
+}
+
+#[derive(Clone, Copy)]
+enum PeerSaveWaitChange {
+    DestinationPrivate,
+    SourcePrivate,
+    Unshared,
+    Public,
+}
+
+async fn check_peer_save_rechecks_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+    change: PeerSaveWaitChange,
+    save_as: bool,
+) {
+    use futures::FutureExt as _;
+    use rpc::ErrorExt as _;
+    let mut server = TestServer::start(executor.clone()).await;
+    let host = server.create_client(host_cx, "save_wait_host").await;
+    let guest = server.create_client(guest_cx, "save_wait_guest").await;
+    server
+        .create_room(&mut [(&host, host_cx), (&guest, guest_cx)])
+        .await;
+    host.fs()
+        .insert_tree(
+            "/root/save-wait",
+            json!({"source.txt":"BASE","destination.txt":"DO_NOT_OVERWRITE"}),
+        )
+        .await;
+    let (project, worktree_id) = host.build_local_project("/root/save-wait", host_cx).await;
+    let host_buffer = project
+        .update(host_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("source.txt")), cx)
+        })
+        .await
+        .expect("host source");
+    let project_id = host_cx
+        .read(ActiveCall::global)
+        .update(host_cx, |call, cx| call.share_project(project.clone(), cx))
+        .await
+        .expect("shared project");
+    let guest_project = guest.join_remote_project(project_id, guest_cx).await;
+    let guest_buffer = guest_project
+        .update(guest_cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("source.txt")), cx)
+        })
+        .await
+        .expect("guest source");
+    let (state, replica_id, capability, version) =
+        guest_buffer.read_with(guest_cx, |buffer, cx| {
+            (
+                buffer.to_proto(cx),
+                buffer.replica_id(),
+                buffer.capability(),
+                buffer.version(),
+            )
+        });
+    let history = guest_buffer
+        .read_with(guest_cx, |buffer, cx| buffer.serialize_ops(None, cx))
+        .await;
+    let detached = guest_cx.new(|_| {
+        language::Buffer::from_proto(replica_id, capability, state, None).expect("guest replica")
+    });
+    let history = history
+        .into_iter()
+        .map(language::proto::deserialize_operation)
+        .collect::<Result<Vec<_>>>()
+        .expect("base history");
+    detached.update(guest_cx, |buffer, cx| {
+        buffer.apply_ops(history, cx);
+        assert_eq!(buffer.version(), version);
+        buffer.edit([(0..0, "PENDING_EDIT ")], None, cx);
+    });
+    let requested_version = detached.read_with(guest_cx, |buffer, _| buffer.version());
+    let operations = detached
+        .read_with(guest_cx, |buffer, cx| {
+            buffer.serialize_ops(Some(version), cx)
+        })
+        .await;
+    assert!(queued_flusher_has_marker(&operations, "PENDING_EDIT"));
+    let buffer_id = host_buffer.read_with(host_cx, |buffer, _| buffer.remote_id());
+    let store = project.read_with(host_cx, |project, _| project.buffer_store().clone());
+    let observed = store
+        .update(host_cx, |store, _| {
+            store.observe_peer_save_wait_for_test(project_id, buffer_id)
+        })
+        .expect("save wait observer");
+    let mut save = executor.spawn(guest.request(proto::SaveBuffer {
+        project_id,
+        buffer_id: buffer_id.to_proto(),
+        version: language::proto::serialize_version(&requested_version),
+        new_path: save_as.then(|| proto::ProjectPath {
+            worktree_id: worktree_id.to_proto(),
+            path: "destination.txt".into(),
+        }),
+    }));
+    resync_gate_within(&executor, observed)
+        .await
+        .expect("save registration deadline")
+        .expect("actual save waiter registered");
+    assert!(!host_buffer.read_with(host_cx, |buffer, _| {
+        buffer.version().observed_all(&requested_version)
+    }));
+    assert!(
+        (&mut save).now_or_never().is_none(),
+        "save must actually be waiting for withheld operations"
+    );
+    match change {
+        PeerSaveWaitChange::DestinationPrivate | PeerSaveWaitChange::SourcePrivate => {
+            let private_path = match change {
+                PeerSaveWaitChange::DestinationPrivate => "**/destination.txt",
+                _ => "**/source.txt",
+            };
+            host_cx.update(|cx| {
+                SettingsStore::update_global(cx, |store, cx| {
+                    store.update_user_settings(cx, |settings| {
+                        settings.project.worktree.file_scan_exclusions = Some(vec!["**".into()]);
+                        settings.project.worktree.private_files =
+                            Some(vec![private_path.to_owned()].into());
+                    })
+                })
+            });
+            executor.run_until_parked();
+            host_buffer.read_with(host_cx, |buffer, cx| {
+                let file = worktree::File::from_dyn(buffer.file()).expect("host file");
+                assert!(!file.is_private, "retained metadata must remain stale");
+                let local = file.worktree.read(cx).as_local().expect("local policy");
+                assert_eq!(
+                    local.is_path_private(rel_path("source.txt")),
+                    matches!(change, PeerSaveWaitChange::SourcePrivate)
+                );
+                assert_eq!(
+                    local.is_path_private(rel_path("destination.txt")),
+                    matches!(change, PeerSaveWaitChange::DestinationPrivate)
+                );
+            });
+        }
+        PeerSaveWaitChange::Unshared => {
+            host_cx
+                .read(ActiveCall::global)
+                .update(host_cx, |call, cx| {
+                    call.unshare_project(project.clone(), cx)
+                })
+                .expect("unshare while save awaits its version");
+            executor.run_until_parked();
+        }
+        PeerSaveWaitChange::Public => {}
+    }
+    if matches!(
+        change,
+        PeerSaveWaitChange::SourcePrivate | PeerSaveWaitChange::Unshared
+    ) {
+        // Only the owner releases the clock barrier: peer ingress is no longer authorized.
+        let operations = operations
+            .into_iter()
+            .map(language::proto::deserialize_operation)
+            .collect::<Result<Vec<_>>>()
+            .expect("withheld operations");
+        host_buffer.update(host_cx, |buffer, cx| buffer.apply_ops(operations, cx));
+    } else {
+        resync_gate_within(
+            &executor,
+            guest.request(proto::UpdateBuffer {
+                project_id,
+                buffer_id: buffer_id.to_proto(),
+                operations,
+            }),
+        )
+        .await
+        .expect("public edit deadline")
+        .expect("public source edit releases version waiter");
+    }
+    let outcome = resync_gate_within(&executor, save)
+        .await
+        .expect("save response deadline")
+        .map(|_| ())
+        .map_err(|error| error.error_code());
+    executor.run_until_parked();
+    let destination = host
+        .fs()
+        .load(Path::new("/root/save-wait/destination.txt"))
+        .await
+        .expect("destination remains");
+    let source = host
+        .fs()
+        .load(Path::new("/root/save-wait/source.txt"))
+        .await
+        .expect("source remains");
+    let (text, dirty, path) = host_buffer.read_with(host_cx, |buffer, cx| {
+        (
+            buffer.text(),
+            buffer.is_dirty(),
+            buffer.file().map(|file| file.to_proto(cx).path),
+        )
+    });
+    let host_leave = host_cx
+        .read(ActiveCall::global)
+        .update(host_cx, |call, cx| call.hang_up(cx));
+    let guest_leave = guest_cx
+        .read(ActiveCall::global)
+        .update(guest_cx, |call, cx| call.hang_up(cx));
+    for leave in [host_leave, guest_leave] {
+        resync_gate_within(&executor, leave)
+            .await
+            .expect("cleanup deadline")
+            .expect("leave call");
+    }
+    executor.run_until_parked();
+    assert_eq!(text, "PENDING_EDIT BASE");
+    if matches!(change, PeerSaveWaitChange::Public) {
+        assert_eq!(outcome, Ok(()));
+        assert!(!dirty);
+        if save_as {
+            assert_eq!(destination, "PENDING_EDIT BASE");
+            assert_eq!(source, "BASE");
+            assert_eq!(path.as_deref(), Some("destination.txt"));
+        } else {
+            assert_eq!(source, "PENDING_EDIT BASE");
+            assert_eq!(destination, "DO_NOT_OVERWRITE");
+            assert_eq!(path.as_deref(), Some("source.txt"));
+        }
+    } else {
+        assert_eq!(outcome, Err(proto::ErrorCode::UnsharedItem));
+        assert_eq!(destination, "DO_NOT_OVERWRITE");
+        assert_eq!(source, "BASE");
+        assert!(dirty);
+        assert_eq!(path.as_deref(), Some("source.txt"));
+    }
+}
+
+#[gpui::test]
+async fn test_peer_save_as_rechecks_destination_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::DestinationPrivate,
+        true,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_rechecks_source_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::SourcePrivate,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_as_rechecks_source_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::SourcePrivate,
+        true,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_rechecks_share_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::Unshared,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_as_rechecks_share_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::Unshared,
+        true,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_public_control_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::Public,
+        false,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_save_as_public_control_after_version_wait(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_save_rechecks_after_version_wait(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerSaveWaitChange::Public,
+        true,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_ingress_explicit_private_edit_opt_in(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerIngressMutation::Edit,
+        true,
+        false,
+        true,
+    )
+    .await;
+}
+
+#[gpui::test]
+async fn test_peer_ingress_explicit_private_save_as_opt_in(
+    executor: BackgroundExecutor,
+    host_cx: &mut TestAppContext,
+    guest_cx: &mut TestAppContext,
+) {
+    check_peer_ingress_retained_buffer(
+        executor,
+        host_cx,
+        guest_cx,
+        PeerIngressMutation::SaveAs("existing-destination.txt"),
+        true,
+        true,
+        true,
+    )
+    .await;
+}

@@ -2211,6 +2211,7 @@ mod tests {
                 "This is file2.rs".as_bytes().to_vec(),
             )
             .await;
+        refresh_worktree_path(&mut cx, rel_path("dir/file2.rs")).await;
 
         // Base document with {ABS} placeholder for absolute path prefix.
         // Each test case replaces a specific line to add cursor (ˇ) or highlight («»ˇ) markers.

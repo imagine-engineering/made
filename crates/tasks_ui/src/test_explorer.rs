@@ -6563,15 +6563,24 @@ mod tests {{
                     NODE_LIMIT
                 }
             );
+            panel.read_with(cx, |panel, _| {
+                let timings = &panel.projection_timings;
+                eprintln!(
+                    "structured-execution-production-budget phase={phase} input_nodes={NODE_LIMIT} rows={row_count} foreground_us={} background_us={} total_ms={} scheduling_us={} refresh_us={} admission_us={} application_us={} pending_paint_us={} painting_us={}",
+                    foreground.as_micros(),
+                    background.as_micros(),
+                    total.as_millis(),
+                    scheduling.as_micros(),
+                    timings.refresh.as_micros(),
+                    timings.admission.as_micros(),
+                    timings.application.as_micros(),
+                    pending_paint.as_micros(),
+                    painting.as_micros(),
+                );
+            });
             assert!(
                 foreground <= FOREGROUND_BUDGET,
                 "{phase}: production foreground work took {foreground:?}, exceeding {FOREGROUND_BUDGET:?}; background={background:?}, total={total:?}"
-            );
-            eprintln!(
-                "structured-execution-production-budget phase={phase} input_nodes={NODE_LIMIT} rows={row_count} foreground_us={} background_us={} total_ms={}",
-                foreground.as_micros(),
-                background.as_micros(),
-                total.as_millis()
             );
         }
         cx.deactivate_window();

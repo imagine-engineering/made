@@ -5747,7 +5747,8 @@ impl LspStore {
                     worktree::Event::UpdatedEntries(changes) => {
                         this.update_local_worktree_language_servers(&worktree, changes, cx);
                     }
-                    worktree::Event::UpdatedGitRepositories(_)
+                    worktree::Event::LocalSettingsInvalidated(_)
+                    | worktree::Event::UpdatedGitRepositories(_)
                     | worktree::Event::DeletedEntry(_)
                     | worktree::Event::Deleted
                     | worktree::Event::UpdatedRootRepoCommonDir { .. } => {}
@@ -12357,14 +12358,15 @@ impl LspStore {
             })
             .await?;
         this.update(&mut cx, |this, cx| {
-            Ok(GetCompletions::response_to_proto(
+            GetCompletions::response_to_proto(
                 response,
                 this,
                 sender_id,
                 &buffer_handle.read(cx).version(),
                 cx,
-            ))
+            )
         })
+        .await
     }
 
     async fn handle_lsp_command<T: LspCommand>(
@@ -12399,14 +12401,15 @@ impl LspStore {
             })
             .await?;
         this.update(&mut cx, |this, cx| {
-            Ok(T::response_to_proto(
+            T::response_to_proto(
                 response,
                 this,
                 sender_id,
                 &buffer_handle.read(cx).version(),
                 cx,
-            ))
+            )
         })
+        .await
     }
 
     async fn handle_lsp_query(
@@ -12516,28 +12519,30 @@ impl LspStore {
                     &mut cx,
                 )
                 .await?;
-                lsp_store.update(&mut cx, |lsp_store, cx| {
-                    let document_links_task = lsp_store.fetch_document_links(&buffer, cx);
-                    let fetch_task = cx.background_spawn(async move {
-                        document_links_task
-                            .await
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|(server_id, links)| {
-                                (server_id, links.into_values().collect::<Vec<_>>())
-                            })
-                            .collect()
-                    });
-                    lsp_store.serve_lsp_query::<GetDocumentLinks>(
-                        server_id,
-                        sender_id,
-                        lsp_request_id,
-                        &buffer,
-                        buffer_version,
-                        fetch_task,
-                        cx,
-                    );
-                });
+                lsp_store
+                    .update(&mut cx, |lsp_store, cx| {
+                        let document_links_task = lsp_store.fetch_document_links(&buffer, cx);
+                        let fetch_task = cx.background_spawn(async move {
+                            document_links_task
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|(server_id, links)| {
+                                    (server_id, links.into_values().collect::<Vec<_>>())
+                                })
+                                .collect()
+                        });
+                        lsp_store.serve_lsp_query::<GetDocumentLinks>(
+                            server_id,
+                            sender_id,
+                            lsp_request_id,
+                            &buffer,
+                            buffer_version,
+                            fetch_task,
+                            cx,
+                        )
+                    })
+                    .await?;
             }
             Request::GetHover(get_hover) => {
                 let position = get_hover.position.clone().and_then(deserialize_anchor);
@@ -12767,21 +12772,23 @@ impl LspStore {
                 )
                 .await?;
                 let for_server = semantic_tokens.for_server.map(LanguageServerId::from_proto);
-                lsp_store.update(&mut cx, |lsp_store, cx| {
-                    let semantic_tokens_task =
-                        lsp_store.fetch_semantic_tokens_for_buffer(&buffer, for_server, cx);
-                    lsp_store.serve_lsp_query::<SemanticTokensFull>(
-                        server_id,
-                        sender_id,
-                        lsp_request_id,
-                        &buffer,
-                        buffer_version,
-                        cx.background_spawn(async move {
-                            semantic_tokens_task.await.unwrap_or_default()
-                        }),
-                        cx,
-                    );
-                });
+                lsp_store
+                    .update(&mut cx, |lsp_store, cx| {
+                        let semantic_tokens_task =
+                            lsp_store.fetch_semantic_tokens_for_buffer(&buffer, for_server, cx);
+                        lsp_store.serve_lsp_query::<SemanticTokensFull>(
+                            server_id,
+                            sender_id,
+                            lsp_request_id,
+                            &buffer,
+                            buffer_version,
+                            cx.background_spawn(async move {
+                                semantic_tokens_task.await.unwrap_or_default()
+                            }),
+                            cx,
+                        )
+                    })
+                    .await?;
             }
         }
         Ok(proto::Ack {})
@@ -12815,15 +12822,17 @@ impl LspStore {
         })?;
 
         let project_transaction = apply_code_action.await?;
-        let project_transaction = this.update(&mut cx, |this, cx| {
-            this.buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store.serialize_project_transaction_for_peer(
-                    project_transaction,
-                    sender_id,
-                    cx,
-                )
+        let project_transaction = this
+            .update(&mut cx, |this, cx| {
+                this.buffer_store.update(cx, |buffer_store, cx| {
+                    buffer_store.serialize_project_transaction_for_peer(
+                        project_transaction,
+                        sender_id,
+                        cx,
+                    )
+                })
             })
-        });
+            .await?;
         Ok(proto::ApplyCodeActionResponse {
             transaction: Some(project_transaction),
         })
@@ -17983,15 +17992,17 @@ impl LspStore {
         })?;
 
         let project_transaction = format.await?;
-        let project_transaction = this.update(&mut cx, |this, cx| {
-            this.buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store.serialize_project_transaction_for_peer(
-                    project_transaction,
-                    sender_id,
-                    cx,
-                )
+        let project_transaction = this
+            .update(&mut cx, |this, cx| {
+                this.buffer_store.update(cx, |buffer_store, cx| {
+                    buffer_store.serialize_project_transaction_for_peer(
+                        project_transaction,
+                        sender_id,
+                        cx,
+                    )
+                })
             })
-        });
+            .await?;
         Ok(proto::FormatBuffersResponse {
             transaction: Some(project_transaction),
         })
@@ -18028,15 +18039,17 @@ impl LspStore {
         })?;
 
         let project_transaction = format.await?;
-        let project_transaction = this.update(&mut cx, |this, cx| {
-            this.buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store.serialize_project_transaction_for_peer(
-                    project_transaction,
-                    sender_id,
-                    cx,
-                )
+        let project_transaction = this
+            .update(&mut cx, |this, cx| {
+                this.buffer_store.update(cx, |buffer_store, cx| {
+                    buffer_store.serialize_project_transaction_for_peer(
+                        project_transaction,
+                        sender_id,
+                        cx,
+                    )
+                })
             })
-        });
+            .await?;
         Ok(proto::ApplyCodeActionKindResponse {
             transaction: Some(project_transaction),
         })
@@ -19982,6 +19995,9 @@ impl LspStore {
         <T::ProtoRequest as proto::RequestMessage>::Response:
             Into<<T::ProtoRequest as proto::LspRequestMessage>::Response>,
     {
+        let publication_scope = lsp_store
+            .read_with(cx, |store, _| store.downstream_client.clone())
+            .context("Project is no longer shared")?;
         let (buffer_version, buffer) =
             Self::wait_for_buffer_version::<T>(&lsp_store, &proto_request, cx).await?;
         let request =
@@ -19990,7 +20006,9 @@ impl LspStore {
             request_type: TypeId::of::<T>(),
             server_queried: for_server_id,
         };
+        let (completion, finished) = oneshot::channel();
         lsp_store.update(cx, |lsp_store, cx| {
+            lsp_store.ensure_lsp_response_scope(&publication_scope)?;
             let request_task = match for_server_id {
                 Some(server_id) => {
                     let server_task = lsp_store.request_lsp(
@@ -20023,44 +20041,31 @@ impl LspStore {
             lsp_data.lsp_requests.entry(key).or_default().insert(
                 lsp_request_id,
                 cx.spawn(async move |lsp_store, cx| {
-                    let response = request_task.await;
-                    lsp_store
-                        .update(cx, |lsp_store, cx| {
-                            if let Some((client, project_id)) = lsp_store.downstream_client.clone()
-                            {
-                                let response = response
-                                    .into_iter()
-                                    .map(|(server_id, response)| {
-                                        (
-                                            server_id.to_proto(),
-                                            T::response_to_proto(
-                                                response,
-                                                lsp_store,
-                                                sender_id,
-                                                &buffer_version,
-                                                cx,
-                                            )
-                                            .into(),
-                                        )
-                                    })
-                                    .collect::<HashMap<_, _>>();
-                                match client.send_lsp_response::<T::ProtoRequest>(
-                                    project_id,
+                    let result = async {
+                        let responses = request_task.await;
+                        lsp_store
+                            .update(cx, |lsp_store, cx| {
+                                lsp_store.serialize_lsp_query_response::<T>(
+                                    responses,
+                                    sender_id,
                                     lsp_request_id,
-                                    response,
-                                ) {
-                                    Ok(()) => {}
-                                    Err(e) => {
-                                        log::error!("Failed to send LSP response: {e:#}",)
-                                    }
-                                }
-                            }
-                        })
-                        .ok();
+                                    &buffer_version,
+                                    publication_scope,
+                                    cx,
+                                )
+                            })?
+                            .await
+                    }
+                    .await;
+                    if completion.send(result).is_err() {
+                        log::debug!("LSP query requester was dropped before conversion completed");
+                    }
                 }),
             );
-        });
-        Ok(())
+            anyhow::Ok(())
+        })?;
+        // Superseding a query drops its stored task; keep that cancellation distinct from failure.
+        finished.await.unwrap_or(Ok(()))
     }
 
     fn serve_lsp_query<T>(
@@ -20072,15 +20077,17 @@ impl LspStore {
         buffer_version: Global,
         fetch_task: Task<HashMap<LanguageServerId, T::Response>>,
         cx: &mut Context<Self>,
-    ) where
+    ) -> Task<Result<()>>
+    where
         T: LspCommand + 'static,
         T::ProtoRequest: proto::LspRequestMessage,
         <T::ProtoRequest as proto::RequestMessage>::Response:
             Into<<T::ProtoRequest as proto::LspRequestMessage>::Response>,
     {
-        let Some((client, project_id)) = self.downstream_client.clone() else {
-            return;
+        let Some(publication_scope) = self.downstream_client.clone() else {
+            return Task::ready(Err(anyhow!("Project is no longer shared")));
         };
+        let (completion, finished) = oneshot::channel();
         let lsp_data = self.latest_lsp_data(buffer, cx);
         let key = LspKey {
             request_type: TypeId::of::<T>(),
@@ -20094,39 +20101,80 @@ impl LspStore {
         lsp_data.lsp_requests.entry(key).or_default().insert(
             lsp_request_id,
             cx.spawn(async move |lsp_store, cx| {
-                let by_server = fetch_task.await;
-                lsp_store
-                    .update(cx, |lsp_store, cx| {
-                        let response = by_server
-                            .into_iter()
-                            .map(|(server_id, response)| {
-                                (
-                                    server_id.to_proto(),
-                                    T::response_to_proto(
-                                        response,
-                                        lsp_store,
-                                        sender_id,
-                                        &buffer_version,
-                                        cx,
-                                    )
-                                    .into(),
-                                )
-                            })
-                            .collect::<HashMap<_, _>>();
-                        if let Err(e) = client.send_lsp_response::<T::ProtoRequest>(
-                            project_id,
-                            lsp_request_id,
-                            response,
-                        ) {
-                            log::error!(
-                                "Failed to send {} LSP response: {e:#}",
-                                std::any::type_name::<T>()
-                            );
-                        }
-                    })
-                    .ok();
+                let result = async {
+                    let responses = fetch_task.await;
+                    lsp_store
+                        .update(cx, |lsp_store, cx| {
+                            lsp_store.serialize_lsp_query_response::<T>(
+                                responses,
+                                sender_id,
+                                lsp_request_id,
+                                &buffer_version,
+                                publication_scope,
+                                cx,
+                            )
+                        })?
+                        .await
+                }
+                .await;
+                if completion.send(result).is_err() {
+                    log::debug!("LSP query requester was dropped before conversion completed");
+                }
             }),
         );
+        cx.background_spawn(async move { finished.await.unwrap_or(Ok(())) })
+    }
+
+    fn serialize_lsp_query_response<T>(
+        &mut self,
+        responses: impl IntoIterator<Item = (LanguageServerId, T::Response)>,
+        sender_id: proto::PeerId,
+        lsp_request_id: LspRequestId,
+        buffer_version: &Global,
+        publication_scope: (AnyProtoClient, u64),
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>>
+    where
+        T: LspCommand,
+        T::ProtoRequest: proto::LspRequestMessage,
+        <T::ProtoRequest as proto::RequestMessage>::Response:
+            Into<<T::ProtoRequest as proto::LspRequestMessage>::Response>,
+    {
+        if let Err(error) = self.ensure_lsp_response_scope(&publication_scope) {
+            return Task::ready(Err(error));
+        }
+        let (client, project_id) = publication_scope;
+        let conversions = responses
+            .into_iter()
+            .map(|(server_id, response)| {
+                (
+                    server_id.to_proto(),
+                    T::response_to_proto(response, self, sender_id, buffer_version, cx),
+                )
+            })
+            .collect::<Vec<_>>();
+        cx.spawn(async move |lsp_store, cx| {
+            let mut responses = HashMap::default();
+            for (server_id, response) in conversions {
+                responses.insert(server_id, response.await?.into());
+            }
+            lsp_store.update(cx, |lsp_store, _| {
+                lsp_store.ensure_lsp_response_scope(&(client.clone(), project_id))?;
+                client.send_lsp_response::<T::ProtoRequest>(project_id, lsp_request_id, responses)
+            })?
+        })
+    }
+
+    fn ensure_lsp_response_scope(&self, scope: &(AnyProtoClient, u64)) -> Result<()> {
+        anyhow::ensure!(
+            self.downstream_client
+                .as_ref()
+                .is_some_and(|(current, project_id)| {
+                    *project_id == scope.1 && current.is_same_instance(&scope.0)
+                }),
+            "Project sharing changed during LSP response conversion"
+        );
+        Ok(())
     }
 
     async fn wait_for_buffer_version<T>(

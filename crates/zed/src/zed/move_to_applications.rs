@@ -214,7 +214,7 @@ fn should_offer_to_move(app_path: &Path) -> bool {
 
 async fn move_to_applications(app_path: &Path, cx: &mut AsyncWindowContext) -> Result<()> {
     let destination_path = install_destination(app_path).await?;
-    restart_into(destination_path, cx)
+    restart_into(destination_path, cx).await
 }
 
 async fn install_destination(app_path: &Path) -> Result<PathBuf> {
@@ -305,7 +305,12 @@ async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<()> {
+async fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<()> {
+    let preparation = cx.update(|_, cx| workspace::prepare_to_reload(cx))?;
+    let prepared = preparation.await?;
+    if !prepared.accepted {
+        return Ok(());
+    }
     cx.update(|_window, cx| {
         cx.set_restart_path(app_path);
         cx.restart();

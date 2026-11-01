@@ -6545,7 +6545,7 @@ impl Project {
             }
             this.buffer_store.clone()
         });
-        BufferStore::handle_update_buffer(buffer_store, envelope, cx).await
+        BufferStore::handle_update_buffer_from_owner(buffer_store, envelope, cx).await
     }
 
     async fn handle_trust_worktrees(
@@ -6626,16 +6626,42 @@ impl Project {
         envelope: TypedEnvelope<proto::UpdateBuffer>,
         cx: AsyncApp,
     ) -> Result<proto::Ack> {
-        let buffer_store = this.read_with(&cx, |this, cx| {
+        let (buffer_store, from_peer) = this.read_with(&cx, |this, cx| {
+            let from_peer = match &this.client_state {
+                ProjectClientState::Shared { remote_id } => {
+                    anyhow::ensure!(
+                        *remote_id == envelope.payload.project_id,
+                        rpc::ErrorCode::UnsharedItem
+                    );
+                    this.buffer_store.read(cx).ensure_peer_buffer_mutation(
+                        BufferId::new(envelope.payload.buffer_id)?,
+                        *remote_id,
+                        cx,
+                    )?;
+                    true
+                }
+                ProjectClientState::Collab { remote_id, .. } => {
+                    anyhow::ensure!(
+                        *remote_id == envelope.payload.project_id,
+                        rpc::ErrorCode::UnsharedItem
+                    );
+                    false
+                }
+                ProjectClientState::Local => anyhow::bail!(rpc::ErrorCode::UnsharedItem),
+            };
             if let Some(ssh) = &this.remote_client {
                 let mut payload = envelope.payload.clone();
                 payload.project_id = REMOTE_SERVER_PROJECT_ID;
                 cx.background_spawn(ssh.read(cx).proto_client().request(payload))
                     .detach_and_log_err(cx);
             }
-            this.buffer_store.clone()
-        });
-        BufferStore::handle_update_buffer(buffer_store, envelope, cx).await
+            anyhow::Ok((this.buffer_store.clone(), from_peer))
+        })?;
+        if from_peer {
+            BufferStore::handle_update_buffer_from_peer(buffer_store, envelope, cx).await
+        } else {
+            BufferStore::handle_update_buffer_from_owner(buffer_store, envelope, cx).await
+        }
     }
 
     fn retain_remotely_created_models(

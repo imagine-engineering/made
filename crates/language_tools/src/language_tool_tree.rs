@@ -607,6 +607,9 @@ impl LanguageToolTreeHost {
     }
 
     pub fn expand_all(&mut self) {
+        if self.expanded == self.branches {
+            return;
+        }
         self.expanded = self.branches.clone();
         self.rebuild_visible_rows();
     }
@@ -624,6 +627,9 @@ impl LanguageToolTreeHost {
     }
 
     pub fn collapse_all(&mut self) {
+        if self.expanded.is_empty() {
+            return;
+        }
         self.expanded.clear();
         self.rebuild_visible_rows();
     }
@@ -1156,5 +1162,30 @@ mod tests {
                 status: LanguageToolProviderStatus::Current,
             }),
         ));
+    }
+    #[test]
+    fn tree_repeated_bulk_expansion_retains_rows_and_selection() {
+        let mut host = LanguageToolTreeHost::default();
+        host.replace_snapshot(LanguageToolSnapshot {
+            roots: vec![node(
+                "root",
+                vec![node("branch", vec![node("leaf", vec![])])],
+            )],
+            status: LanguageToolProviderStatus::Current,
+        });
+        host.expand_all();
+        host.select_last();
+        let expanded = host.visible_rows_snapshot();
+        let selected = host.selected().cloned();
+        host.expand_all();
+        assert!(Arc::ptr_eq(&expanded, &host.visible_rows_snapshot()));
+        assert_eq!(host.selected(), selected.as_ref());
+        host.collapse_all();
+        let collapsed = host.visible_rows_snapshot();
+        assert_eq!(collapsed.len(), 1);
+        host.collapse_all();
+        assert!(Arc::ptr_eq(&collapsed, &host.visible_rows_snapshot()));
+        assert_eq!(host.selected(), selected.as_ref());
+        assert_eq!(expanded.len(), 3);
     }
 }

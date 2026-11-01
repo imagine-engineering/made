@@ -28,6 +28,208 @@ use util::path;
 use crate::init_test;
 
 #[gpui::test]
+async fn lsp_response_ranges_are_normalized_before_anchoring(cx: &mut TestAppContext) {
+    use language::{PointUtf16, ToPointUtf16 as _};
+
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/ranges"), json!({"lib.rs": "// a😀bc\n// second"}))
+        .await;
+    let project = Project::test(fs, [path!("/ranges").as_ref()], cx).await;
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.add(rust_lang());
+    let mut servers = languages.register_fake_lsp(
+        "Rust",
+        FakeLspAdapter {
+            capabilities: lsp::ServerCapabilities {
+                references_provider: Some(lsp::OneOf::Left(true)),
+                definition_provider: Some(lsp::OneOf::Left(true)),
+                document_highlight_provider: Some(lsp::OneOf::Left(true)),
+                hover_provider: Some(lsp::HoverProviderCapability::Simple(true)),
+                linked_editing_range_provider: Some(
+                    lsp::LinkedEditingRangeServerCapabilities::Simple(true),
+                ),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    let (buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/ranges/lib.rs"), cx)
+        })
+        .await
+        .expect("range fixture buffer");
+    let server = servers.next().await.expect("range fixture server");
+    cx.run_until_parked();
+    let uri = Uri::from_file_path(path!("/ranges/lib.rs")).expect("fixture URI");
+    for (start, end, expected_start, expected_end, prediction_end) in [
+        ((1, 5), (0, 4), (0, 4), (1, 5), (1, 5)),
+        ((0, 4), (1, 5), (0, 4), (1, 5), (1, 5)),
+        ((0, 6), (0, 4), (0, 4), (0, 6), (0, 6)),
+        ((0, 4), (0, 4), (0, 4), (0, 4), (0, 4)),
+        ((9, 20), (0, 4), (0, 4), (1, 9), (9, 20)),
+    ] {
+        let range = lsp::Range::new(
+            lsp::Position::new(start.0, start.1),
+            lsp::Position::new(end.0, end.1),
+        );
+        let link = lsp::LocationLink {
+            origin_selection_range: Some(range),
+            target_uri: uri.clone(),
+            target_range: range,
+            target_selection_range: range,
+        };
+        server.set_request_handler::<lsp::request::References, _, _>(move |params, _| async move {
+            Ok(Some(vec![lsp::Location {
+                uri: params.text_document_position.text_document.uri,
+                range,
+            }]))
+        });
+        server.set_request_handler::<lsp::request::GotoDefinition, _, _>({
+            let link = link.clone();
+            move |_, _| {
+                let link = link.clone();
+                async move { Ok(Some(lsp::GotoDefinitionResponse::Link(vec![link]))) }
+            }
+        });
+        server.set_request_handler::<lsp::request::DocumentHighlightRequest, _, _>(
+            move |_, _| async move {
+                Ok(Some(vec![lsp::DocumentHighlight {
+                    range,
+                    kind: Some(lsp::DocumentHighlightKind::READ),
+                }]))
+            },
+        );
+        server.set_request_handler::<lsp::request::HoverRequest, _, _>(move |_, _| async move {
+            Ok(Some(lsp::Hover {
+                contents: lsp::HoverContents::Scalar(lsp::MarkedString::String(
+                    "fixture documentation".into(),
+                )),
+                range: Some(range),
+            }))
+        });
+        server.set_request_handler::<lsp::request::LinkedEditingRange, _, _>(
+            move |_, _| async move {
+                Ok(Some(lsp::LinkedEditingRanges {
+                    ranges: vec![range],
+                    word_pattern: None,
+                }))
+            },
+        );
+
+        let references = project
+            .update(cx, |project, cx| project.references(&buffer, 0, cx))
+            .await
+            .expect("reference request")
+            .expect("capable reference server");
+        let definitions = project
+            .update(cx, |project, cx| project.definitions(&buffer, 0, cx))
+            .await
+            .expect("definition request")
+            .expect("capable definition server");
+        let prediction_definitions = project
+            .update(cx, |project, cx| {
+                project.edit_prediction_definitions(&buffer, 0, false, cx)
+            })
+            .await
+            .expect("prediction definition request");
+        let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+        let single_link = project::lsp_command::location_link_from_lsp(
+            link,
+            &lsp_store,
+            &buffer,
+            server.server.server_id(),
+            &mut cx.to_async(),
+        )
+        .await
+        .expect("single location link");
+        let highlights = project
+            .update(cx, |project, cx| {
+                project.document_highlights(&buffer, 0, cx)
+            })
+            .await
+            .expect("highlight request");
+        let hovers = project
+            .update(cx, |project, cx| project.hover(&buffer, 0, cx))
+            .await
+            .expect("capable hover server");
+        let position = buffer.read_with(cx, |buffer, _| buffer.anchor_before(0));
+        let linked_edits = project
+            .update(cx, |project, cx| {
+                project.linked_edits(&buffer, position, cx)
+            })
+            .await
+            .expect("linked edit request");
+        assert_eq!(references.len(), 1);
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(prediction_definitions.len(), 1);
+        assert_eq!(highlights.len(), 1);
+        assert_eq!(hovers.len(), 1);
+        assert_eq!(linked_edits.len(), 1);
+        let definition = definitions.first().expect("one definition");
+        let anchored_ranges = [
+            (
+                "reference",
+                references.first().expect("one reference").range.clone(),
+            ),
+            ("definition target", definition.target.range.clone()),
+            (
+                "definition origin",
+                definition.origin.as_ref().expect("origin").range.clone(),
+            ),
+            ("single target", single_link.target.range),
+            (
+                "single origin",
+                single_link.origin.expect("single origin").range,
+            ),
+            (
+                "highlight",
+                highlights.first().expect("one highlight").range.clone(),
+            ),
+            (
+                "hover",
+                hovers
+                    .first()
+                    .expect("one hover")
+                    .range
+                    .clone()
+                    .expect("hover range"),
+            ),
+            (
+                "linked edit",
+                linked_edits.first().expect("one linked edit").clone(),
+            ),
+        ];
+        buffer.read_with(cx, |buffer, _| {
+            for (label, anchored) in anchored_ranges {
+                assert_eq!(
+                    anchored.start.to_point_utf16(buffer),
+                    PointUtf16::new(expected_start.0, expected_start.1),
+                    "start for {label}, range={range:?}"
+                );
+                assert_eq!(
+                    anchored.end.to_point_utf16(buffer),
+                    PointUtf16::new(expected_end.0, expected_end.1),
+                    "end for {label}, range={range:?}"
+                );
+            }
+        });
+        let prediction = prediction_definitions
+            .first()
+            .expect("one prediction definition");
+        assert_eq!(
+            prediction.range.start.0,
+            PointUtf16::new(expected_start.0, expected_start.1)
+        );
+        assert_eq!(
+            prediction.range.end.0,
+            PointUtf16::new(prediction_end.0, prediction_end.1)
+        );
+    }
+}
+
+#[gpui::test]
 async fn host_provider_capability_denial_status_preserves_copper_and_names_jvm_recovery(
     cx: &mut TestAppContext,
 ) {

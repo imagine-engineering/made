@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::fs;
 
 use anyhow::Context as _;
 use gpui::{App, AppContext as _, Context, Entity, TaskExt, Window};
@@ -251,6 +251,7 @@ pub fn open_docs(editor: &mut Editor, _: &OpenDocs, window: &mut Window, cx: &mu
 
     let project = project.clone();
     let upstream_client = project.read(cx).lsp_store().read(cx).upstream_client();
+    let client_owned_docs = project.read(cx).is_local() && upstream_client.is_none();
     cx.spawn_in(window, async move |_editor, cx| {
         let docs_urls = if let Some((client, project_id)) = upstream_client {
             let buffer_id = buffer.read_with(cx, |buffer, _| buffer.remote_id());
@@ -288,18 +289,30 @@ pub fn open_docs(editor: &mut Editor, _: &OpenDocs, window: &mut Window, cx: &mu
             return Ok(());
         }
 
-        workspace.update(cx, |_workspace, cx| {
-            // Check if the local document exists, otherwise fallback to the online document.
-            // Open with the default browser.
-            if let Some(local_url) = docs_urls.local
-                && fs::metadata(Path::new(&local_url[8..])).is_ok()
-            {
-                cx.open_url(&local_url);
-                return;
-            }
+        // A host file URL can coincide with a real client path without belonging to it.
+        let local_exists = if client_owned_docs
+            && project.read_with(cx, |project, _| project.is_local())
+            && let Some(local_url) = docs_urls.local.as_ref()
+            && let Ok(url) = url::Url::parse(local_url)
+            && url.scheme() == "file"
+            && let Ok(path) = url.to_file_path()
+        {
+            cx.background_spawn(async move { fs::metadata(path).is_ok() })
+                .await
+        } else {
+            false
+        };
 
-            if let Some(web_url) = docs_urls.web {
-                cx.open_url(&web_url);
+        workspace.update(cx, |_workspace, cx| {
+            let url = if local_exists && project.read(cx).is_local() {
+                docs_urls.local
+            } else {
+                docs_urls.web.filter(|web| {
+                    url::Url::parse(web).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+                })
+            };
+            if let Some(url) = url {
+                cx.open_url(&url);
             }
         });
         anyhow::Ok(())

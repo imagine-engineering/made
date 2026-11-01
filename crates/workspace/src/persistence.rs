@@ -1238,9 +1238,11 @@ impl WorkspaceDb {
             });
 
         let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
-            self.remote_connection(remote_connection_id)
-                .context("Get remote connection")
-                .log_err()
+            Some(
+                self.remote_connection(remote_connection_id)
+                    .context("Get remote connection")
+                    .log_err()?,
+            )
         } else {
             None
         };
@@ -1353,9 +1355,11 @@ impl WorkspaceDb {
 
         let remote_connection_id = remote_connection_id.map(|id| RemoteConnectionId(id as u64));
         let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
-            self.remote_connection(remote_connection_id)
-                .context("Get remote connection")
-                .log_err()
+            Some(
+                self.remote_connection(remote_connection_id)
+                    .context("Get remote connection")
+                    .log_err()?,
+            )
         } else {
             None
         };
@@ -3968,6 +3972,51 @@ mod tests {
         }
     }
 
+    #[gpui::test]
+    async fn test_invalid_remote_workspace_never_becomes_local() {
+        let db =
+            WorkspaceDb::open_test_db("test_invalid_remote_workspace_never_becomes_local").await;
+        let path = Path::new("/project");
+        let remote = remote_workspace_with(10_950, "remote-host", &[path]);
+        let SerializedWorkspaceLocation::Remote(options) = remote.location.clone() else {
+            panic!("remote fixture must identify its host");
+        };
+        let remote_id = db
+            .get_or_create_remote_connection(options)
+            .await
+            .expect("persist remote identity");
+        db.save_workspace(remote).await;
+        db.save_workspace(workspace_with(10_951, &[path], empty_pane_group(), None))
+            .await;
+        assert!(matches!(
+            db.workspace_for_id(WorkspaceId(10_950))
+                .expect("valid remote workspace")
+                .location,
+            SerializedWorkspaceLocation::Remote(_)
+        ));
+        db.write(move |connection| {
+            connection.exec_bound(sql!(
+                UPDATE remote_connections SET kind = ?1 WHERE id = ?2
+            ))?(("unsupported-test-kind", remote_id.0))
+        })
+        .await
+        .expect("inject invalid persisted remote kind");
+        assert!(
+            db.remote_connection(remote_id).is_err(),
+            "fixture must corrupt the remote identity"
+        );
+        assert!(
+            db.workspace_for_id(WorkspaceId(10_950)).is_none(),
+            "unresolved remote identity must never reopen paths on the local host"
+        );
+        assert!(db.remote_workspace_for_roots(&[path], remote_id).is_none());
+        let local = db
+            .workspace_for_roots(&[path])
+            .expect("local sibling remains usable");
+        assert_eq!(local.id, WorkspaceId(10_951));
+        assert_eq!(local.location, SerializedWorkspaceLocation::Local);
+    }
+
     async fn local_recent_workspace(
         workspace_id: WorkspaceId,
         paths: PathList,
@@ -4813,6 +4862,57 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_pending_serialization_flushed_on_shutdown(cx: &mut gpui::TestAppContext) {
+        crate::tests::init_test(cx);
+
+        let app_state = cx.update(crate::AppState::test);
+        cx.update(|cx| crate::init(app_state.clone(), cx));
+
+        let fs = fs::FakeFs::new(cx.executor());
+        let dir = unique_test_dir(&fs, "shutdown-flush").await;
+        let project = Project::test(fs.clone(), [dir.as_path()], cx).await;
+
+        let (multi_workspace, vcx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+
+        let workspace = multi_workspace.read_with(vcx, |mw, _| mw.workspace().clone());
+
+        let db = vcx.update(|_, cx| WorkspaceDb::global(cx));
+        let workspace_id = db.next_id().await.unwrap();
+        workspace.update(vcx, |ws, _cx| {
+            ws.set_database_id(workspace_id);
+        });
+
+        multi_workspace.update_in(vcx, |multi_workspace, window, cx| {
+            multi_workspace.workspace().update(cx, |workspace, cx| {
+                workspace.serialize_workspace(window, cx)
+            })
+        });
+
+        let serialized_paths = db
+            .workspace_for_id(workspace_id)
+            .expect("next_id should have reserved a row")
+            .paths;
+        assert_eq!(
+            serialized_paths.paths().len(),
+            0,
+            "the debounced serialization must not have fired yet"
+        );
+
+        cx.update(|cx| cx.shutdown());
+
+        let serialized_paths = db
+            .workspace_for_id(workspace_id)
+            .expect("the workspace row should still exist after shutdown")
+            .paths;
+        assert_eq!(
+            serialized_paths.paths(),
+            std::slice::from_ref(&dir),
+            "shutdown should flush the pending workspace serialization"
+        );
+    }
+
+    #[gpui::test]
     async fn test_flush_serialization_completes_before_quit(cx: &mut gpui::TestAppContext) {
         crate::tests::init_test(cx);
 
@@ -5179,7 +5279,7 @@ mod tests {
             // Note: removal_tasks may be empty if the background task already
             // completed (take_pending_removal_tasks filters out ready tasks).
             tasks.append(&mut removal_tasks);
-            tasks.push(mw.flush_serialization());
+            tasks.push(mw.flush_serialization(cx));
             tasks
         });
         futures::future::join_all(all_tasks).await;
@@ -6134,5 +6234,136 @@ mod tests {
                 "fallback should have found workspace_b, not the excluded workspace_a"
             );
         });
+    }
+
+    #[gpui::test]
+    async fn test_close_window_quit_app_preserves_all_sidebar_workspaces(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        crate::tests::init_test(cx);
+
+        cx.update_global::<settings::SettingsStore, ()>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.workspace.on_last_window_closed =
+                    Some(settings::OnLastWindowClosed::QuitApp);
+            });
+        });
+
+        let fs = fs::FakeFs::new(cx.executor());
+        let dir1 = unique_test_dir(&fs, "close-quit-a").await;
+        let dir2 = unique_test_dir(&fs, "close-quit-b").await;
+        let project1 = Project::test(fs.clone(), [dir1.as_path()], cx).await;
+        let project2 = Project::test(fs.clone(), [dir2.as_path()], cx).await;
+
+        let db = cx.update(|cx| WorkspaceDb::global(cx));
+        let ws1_id = db.next_id().await.unwrap();
+        let ws2_id = db.next_id().await.unwrap();
+
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project1.clone(), window, cx));
+
+        multi_workspace.update(cx, |mw, cx| {
+            mw.open_sidebar(cx);
+        });
+
+        let session_id = format!("close-quit-session-{}", Uuid::new_v4());
+
+        let workspace1 = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+        workspace1.update(cx, |ws, _| {
+            ws.set_database_id(ws1_id);
+            ws.session_id = Some(session_id.clone());
+        });
+
+        let workspace2 = multi_workspace.update_in(cx, |mw, window, cx| {
+            let workspace = cx.new(|cx| crate::Workspace::test_new(project2.clone(), window, cx));
+            workspace.update(cx, |ws, _| {
+                ws.set_database_id(ws2_id);
+                ws.session_id = Some(session_id.clone());
+            });
+            mw.add(workspace.clone(), window, cx);
+            workspace
+        });
+
+        multi_workspace.update_in(cx, |mw, window, cx| {
+            mw.activate(workspace2.clone(), None, window, cx);
+        });
+        cx.run_until_parked();
+
+        multi_workspace.update_in(cx, |mw, window, cx| {
+            mw.close_window(&crate::CloseWindow, window, cx);
+        });
+        cx.run_until_parked();
+
+        let mut restored_ids = db
+            .last_session_workspace_locations(&session_id, None, fs.as_ref())
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|workspace| workspace.workspace_id)
+            .collect::<Vec<_>>();
+        restored_ids.sort_by_key(|id| id.0);
+        assert_eq!(restored_ids, vec![ws1_id, ws2_id]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[gpui::test]
+    async fn test_close_window_platform_default_still_removes_from_session(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        crate::tests::init_test(cx);
+
+        let fs = fs::FakeFs::new(cx.executor());
+        let dir1 = unique_test_dir(&fs, "close-default-a").await;
+        let dir2 = unique_test_dir(&fs, "close-default-b").await;
+        let project1 = Project::test(fs.clone(), [dir1.as_path()], cx).await;
+        let project2 = Project::test(fs.clone(), [dir2.as_path()], cx).await;
+
+        let db = cx.update(|cx| WorkspaceDb::global(cx));
+        let ws1_id = db.next_id().await.unwrap();
+        let ws2_id = db.next_id().await.unwrap();
+
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project1.clone(), window, cx));
+
+        multi_workspace.update(cx, |mw, cx| {
+            mw.open_sidebar(cx);
+        });
+
+        let session_id = format!("close-default-session-{}", Uuid::new_v4());
+
+        let workspace1 = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+        workspace1.update(cx, |ws, _| {
+            ws.set_database_id(ws1_id);
+            ws.session_id = Some(session_id.clone());
+        });
+
+        let workspace2 = multi_workspace.update_in(cx, |mw, window, cx| {
+            let workspace = cx.new(|cx| crate::Workspace::test_new(project2.clone(), window, cx));
+            workspace.update(cx, |ws, _| {
+                ws.set_database_id(ws2_id);
+                ws.session_id = Some(session_id.clone());
+            });
+            mw.add(workspace.clone(), window, cx);
+            workspace
+        });
+
+        multi_workspace.update_in(cx, |mw, window, cx| {
+            mw.activate(workspace2.clone(), None, window, cx);
+        });
+        cx.run_until_parked();
+
+        multi_workspace.update_in(cx, |mw, window, cx| {
+            mw.close_window(&crate::CloseWindow, window, cx);
+        });
+        cx.run_until_parked();
+
+        let restored_ids = db
+            .last_session_workspace_locations(&session_id, None, fs.as_ref())
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|workspace| workspace.workspace_id)
+            .collect::<Vec<_>>();
+        assert_eq!(restored_ids, Vec::new());
     }
 }

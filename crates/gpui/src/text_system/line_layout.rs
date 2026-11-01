@@ -350,10 +350,10 @@ impl WrappedLineLayout {
                     .unwrapped_layout
                     .closest_index_for_x(position_in_unwrapped_line.x))
             } else {
-                Ok(self
-                    .unwrapped_layout
+                // A zero-advance wrap glyph may round past the shaped line width.
+                self.unwrapped_layout
                     .index_for_x(position_in_unwrapped_line.x)
-                    .unwrap())
+                    .ok_or(wrapped_line_end_index)
             }
         }
     }
@@ -991,6 +991,36 @@ mod tests {
             .iter()
             .map(|g| f32::from(g.position.x))
             .collect()
+    }
+
+    #[test]
+    fn test_wrapped_hit_test_past_shaped_width_returns_boundary() {
+        let width = 100.0_f32;
+        let mut layout = make_layout(vec![
+            glyph_at(0., 0),
+            glyph_at(width.next_up().next_up(), 3),
+        ]);
+        layout.len = 3;
+        let wrapped = WrappedLineLayout {
+            unwrapped_layout: Arc::new(layout),
+            wrap_boundaries: smallvec::smallvec![WrapBoundary {
+                run_ix: 0,
+                glyph_ix: 1
+            }],
+            wrap_width: Some(px(width)),
+        };
+        // Zero-advance boundary glyphs can accumulate rounding past the shaped width.
+        let position = point(px(width.next_up()), px(1.));
+        assert_eq!(wrapped.index_for_position(position, px(20.)), Err(3));
+        assert_eq!(wrapped.closest_index_for_position(position, px(20.)), Ok(3));
+        assert_eq!(
+            wrapped.index_for_position(point(px(1.), px(1.)), px(20.)),
+            Ok(0)
+        );
+        assert_eq!(
+            wrapped.index_for_position(point(px(-1.), px(1.)), px(20.)),
+            Err(0)
+        );
     }
 
     #[test]

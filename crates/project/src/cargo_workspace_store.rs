@@ -804,6 +804,7 @@ async fn prepare_rust_execution_in_environment(
     }
 }
 
+#[cfg(any(test, feature = "rust-tests"))]
 pub(crate) async fn prevent_passive_rust_downloads(
     command: &mut util::command::Command,
     include_rustdoc: bool,
