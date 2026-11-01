@@ -107,13 +107,15 @@ cargo xtask bundle --product rust \
   --dry-run
 ```
 
-Supported Phase 1 targets are Linux x86_64, macOS ARM64, and Windows x86_64.
+Phase 1 packaging targets are Linux x86_64, macOS ARM64, and Windows x86_64.
+These build targets do not establish full platform qualification; see the
+[CI scope](../../../.github/workflows/README.md) for current coverage.
 Each plan uses `--no-default-features`, exact catalog feature lists, and a
 product-specific Cargo target directory.
 
 ## Signing {#signing}
 
-Signing defaults to `auto`. A bundle remains unsigned or ad-hoc signed when the
+Development signing defaults to `auto`. A development bundle remains unsigned or ad-hoc signed when the
 complete platform credential set is unavailable. Use `--signing required` to
 fail before packaging execution when credentials are incomplete (dry runs only
 resolve the plan), or `--signing off` to
@@ -176,7 +178,87 @@ Copper's first release target is `0.1.0`. `products/flavors.toml` owns this as
 output and the updater. An explicit `RELEASE_VERSION` embeds the selected later
 release in the app and platform metadata. `cargo xtask bundle --product rust`
 defaults to the catalog version, including package filenames and installer metadata.
-The release resolver uses it only before the first `rust-v*` tag; later releases
-follow Copper's tag history. Only successful same-repository push CI on `release`,
-or a guarded manual dispatch on `release`, can start publication. `main` and tag
-pushes cannot publish. See [production signing](copper-signing.md).
+Release preparation derives the product and exact version from an existing
+catalog-prefixed tag such as `rust-vX.Y.Z`; it does not choose or increment a
+version automatically. A manual run from `main` requires main-history ancestry,
+successful exact-commit CI and the product's release qualification gate, then
+builds and verifies signed packages and leaves a draft for human review.
+Main pushes, tag pushes and successful CI do not prepare or publish releases.
+See [product releases](./product-releases.md) for the operator sequence and
+[production signing](./copper-signing.md) for credentials and qualification.
+
+## Repository owners
+
+| Owner                                                                | Purpose                                                                               |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `products/flavors.toml`, `crates/product_flavor`                     | Product identities, features and generated compile-time selections                    |
+| `crates/zed`                                                         | Desktop entry point and feature composition; the internal Cargo package remains `zed` |
+| `crates/gpui`, `crates/editor`, `crates/project`, `crates/workspace` | Shared UI, editing and project services                                               |
+| `crates/agent*`, `crates/language_model*`, `crates/acp_*`            | Native agent, model providers and external-agent integration                          |
+| `crates/cargo_ui`, `crates/tasks_ui`                                 | Cargo dashboard and Rust test workflows                                               |
+| `crates/sim_*`                                                       | Optional visual-workflow functionality                                                |
+| `tooling/xtask`, `script/`, `.github/workflows/`                     | Generation, validation, bundling and CI                                               |
+| `docs/`                                                              | Current user and development documentation                                            |
+
+## Development builds and validation
+
+Install the [macOS](./macos.md#dependencies), [Linux](./linux.md#dependencies) or
+[Windows](./windows.md#dependencies) native build dependencies and rustup first.
+Rustup selects the version in `rust-toolchain.toml`. Linux dependencies can be
+installed with `./script/linux`. Reserve space for Cargo output as well as source;
+agent-model downloads need additional space when you choose them.
+
+The enabled Copper application configuration is:
+
+```sh
+cargo run -p zed --no-default-features --features agentic-tools,rust-tools
+```
+
+For a release-mode executable without a bundle:
+
+```sh
+cargo build --release -p zed --no-default-features --features agentic-tools,rust-tools
+```
+
+Use the product-aware bundle command above for a host package. For developer
+checks, start with `cargo fmt --all -- --check`, `./script/clippy`,
+`cargo xtask products --check` and affected owner tests. The
+[CI scope](../../../.github/workflows/README.md) documents the exact required
+package/feature matrix and deferred checks. When editing catalog or workflow
+owners, regenerate their outputs with `cargo xtask products` and
+`cargo xtask workflows`; verify with `cargo xtask products --check` and
+`cargo xtask check-workflows`.
+
+## Optional builds
+
+The default Copper profile contains neither the expanded `multiplayer-tools`
+workspace nor `sim`. The [multiplayer build guide](./multiplayer-tools.md)
+describes its commands, permissions and qualification boundary. External ACP
+agents have separate setup and are optional for Copper's native-agent use.
+
+Sim provides native visual-workflow functionality for ComfyUI-compatible
+workflows. It remains opt-in and is not qualified by the ordinary Copper product
+gate. To build it explicitly:
+
+```sh
+cargo run -p zed --no-default-features --features agentic-tools,rust-tools,sim
+cargo xtask bundle --product rust --sim
+```
+
+Saved settings accept `sim_runtime` and the legacy `comfy_runtime` key; use one
+per settings file. Existing saved keybindings can still use `comfy_shell` and
+`comfy_graph` actions and `ComfyGraph`/`ComfyTextInput` contexts. These names serve
+persisted user formats. First-party Rust APIs, features and owned files use Sim;
+ComfyUI and third-party provenance keep their names.
+
+## Local build configuration
+
+| Setting                       | Purpose                                                                                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ZED_PRODUCT_ID`              | Compile-time identity; defaults to enabled `rust`. Planned products need their documented guarded preview path.                                     |
+| `ZED_RELEASE_CHANNEL`         | Development channel selection; the fallback is `crates/zed/RELEASE_CHANNEL`.                                                                        |
+| `ZED_PRODUCT_UPDATE_BASE_URL` | Build-time product updater endpoint; without one the updater stays disabled.                                                                        |
+| `RELEASE_VERSION`             | Explicit packaging/application version override. Ordinary bundles otherwise use the catalog fallback; release preparation supplies the tag version. |
+
+A local Copper build needs no production signing credentials. Provider keys, if
+needed, belong in provider setup rather than source or the product catalog.
