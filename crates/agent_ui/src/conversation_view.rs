@@ -13206,6 +13206,10 @@ pub(crate) mod tests {
             cx.read(|cx| crate::draft_prompt_store::read_for_restore(thread_id, cx)),
             earlier
         );
+        // Exercise the completed quit fence without a randomly injected tick timeout.
+        test_app_context
+            .background_executor
+            .set_block_on_ticks(usize::MAX..=usize::MAX);
         test_app_context.update(|cx| cx.shutdown());
         assert_eq!(
             test_app_context.read(|cx| crate::draft_prompt_store::read_for_restore(thread_id, cx)),
@@ -13301,6 +13305,9 @@ pub(crate) mod tests {
             });
         }
         if quit {
+            test_app_context
+                .background_executor
+                .set_block_on_ticks(usize::MAX..=usize::MAX);
             test_app_context.update(|cx| cx.shutdown());
         } else {
             let weak_conversation = conversation.downgrade();
