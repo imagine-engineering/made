@@ -12858,6 +12858,11 @@ mod tests {
                             context.output.is_empty() && context.snapshot.is_none()
                         })
                 }));
+                // This case exercises a completed quit, not the scheduler's randomized
+                // early timeout. The real shutdown deadline remains in force.
+                test_app_context
+                    .background_executor
+                    .set_block_on_ticks(usize::MAX..=usize::MAX);
                 test_app_context.update(|cx| cx.shutdown());
                 let durable_before_restart = history_owner
                     .read_with(test_app_context, |store, _| {

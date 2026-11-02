@@ -3446,6 +3446,10 @@ mod tests {
         let row = metadata("Pending normal quit", WorktreePaths::default());
         store.update(cx, |store, cx| store.save(row.clone(), cx));
         assert!(store.read_with(cx, |store, _| store.write_pending(row.terminal_id)));
+        // Normal-quit cases must reach their durable fence rather than inject a
+        // randomized scheduler tick timeout. The real shutdown deadline is unchanged.
+        cx.background_executor
+            .set_block_on_ticks(usize::MAX..=usize::MAX);
         cx.update(|cx| cx.shutdown());
         assert_eq!(
             database.list().expect("durable before any restart pumping"),
@@ -3479,6 +3483,8 @@ mod tests {
             })
             .detach();
         });
+        cx.background_executor
+            .set_block_on_ticks(usize::MAX..=usize::MAX);
         cx.update(|cx| cx.shutdown());
         let error = result
             .lock()
@@ -3527,6 +3533,8 @@ mod tests {
             })
             .detach();
         });
+        cx.background_executor
+            .set_block_on_ticks(usize::MAX..=usize::MAX);
         cx.update(|cx| cx.shutdown());
         assert_eq!(
             database.list().expect("durable before any restart pumping"),
@@ -3567,6 +3575,8 @@ mod tests {
             })
             .detach();
         });
+        cx.background_executor
+            .set_block_on_ticks(usize::MAX..=usize::MAX);
         cx.update(|cx| cx.shutdown());
         let error = result
             .lock()
