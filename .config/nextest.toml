@@ -10,7 +10,7 @@ filter = 'package(cargo_ui) and (test(=cargo_panel::tests::cargo_dashboard_foreg
 threads-required = "num-test-threads"
 
 [[profile.default.overrides]]
-filter = 'package(language_tools) and test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch)'
+filter = 'package(language_tools) and (test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=source_coverage_summary::tests::source_coverage_summary_production_large_report_foreground_budget))'
 threads-required = "num-test-threads"
 
 [[profile.default.overrides]]
