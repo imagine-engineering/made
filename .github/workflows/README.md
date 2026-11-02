@@ -35,15 +35,22 @@ cargo nextest run --no-default-features \
 
 The linked failure on `54ac8b76a08c` measured 250.820748 ms while running 3,663 tests on Ubuntu 22.04. That commit did not change the dashboard test or tree reconciliation. On macOS ARM64 with the same Rust profile/features, the unchanged test passed 12/12 isolated samples (117–136 ms); 12/24 samples failed with 12 concurrent test processes (up to 452 ms). This establishes sensitivity to scheduling load, not a hardware-normalized Linux performance baseline. The dedicated Linux CI measurement remains the acceptance check for that runner.
 
-### Source coverage foreground measurement
+### Foreground budget isolation
 
-`source_coverage_summary_production_large_report_foreground_budget` runs in the
-same isolated measurement step, using the unchanged Copper feature graph and
-unoptimized test profile. Its 100,000-range report must still apply immediately,
-update all 10,000 gutter markers and the live summary, and finish application plus
-paint within 250 ms. It also reserves all Nextest slots in an unsplit local run,
-so unrelated tests cannot compete with this wall-clock measurement. There are no
-retries or relaxed assertions.
+Copper's serial measurement step and local Nextest slot reservation use the same
+filter. Test names containing `foreground_budget` are included automatically.
+The filter also includes the flamegraph paint, deep-selection, denied-batch and
+completed-import-disposal checks in `language_tools`, whose names do not contain
+that marker. Platform-specific tests run only where compiled. This covers six
+Linux timing tests and four additional macOS profile-import/lifecycle tests.
+
+The unoptimized test profile, Copper features, 250 ms limits and functional
+assertions stay unchanged. The 100,000-range coverage test must still publish
+immediately and update all 10,000 active-editor gutter markers and the live
+summary. The 100,000-node flamegraph test must paint every flat frame while
+virtualizing offscreen depths. No timing test is ignored or retried. CI runs the
+ordinary suite using the complement of the measurement filter, then requires
+matching timing tests to execute with one test thread.
 
 ### Product releases and website refresh
 

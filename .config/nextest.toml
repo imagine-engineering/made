@@ -6,11 +6,7 @@ sequential-db-tests = { max-threads = 1 }
 
 # Preserve isolation when developers run the entire suite outside the CI split.
 [[profile.default.overrides]]
-filter = 'package(cargo_ui) and (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget))'
-threads-required = "num-test-threads"
-
-[[profile.default.overrides]]
-filter = 'package(language_tools) and (test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=source_coverage_summary::tests::source_coverage_summary_production_large_report_foreground_budget))'
+filter = 'test(foreground_budget) or (package(language_tools) and (test(=profile_view::tests::profile_view_large_flamegraph_paints_a_bounded_viewport) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=profile_view::tests::profile_view_large_denied_batch_releases_result) or test(=profile_view::tests::profile_view_completed_import_disposal_rejects_stale_result)))'
 threads-required = "num-test-threads"
 
 [[profile.default.overrides]]
