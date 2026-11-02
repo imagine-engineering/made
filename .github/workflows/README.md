@@ -35,6 +35,16 @@ cargo nextest run --no-default-features \
 
 The linked failure on `54ac8b76a08c` measured 250.820748 ms while running 3,663 tests on Ubuntu 22.04. That commit did not change the dashboard test or tree reconciliation. On macOS ARM64 with the same Rust profile/features, the unchanged test passed 12/12 isolated samples (117–136 ms); 12/24 samples failed with 12 concurrent test processes (up to 452 ms). This establishes sensitivity to scheduling load, not a hardware-normalized Linux performance baseline. The dedicated Linux CI measurement remains the acceptance check for that runner.
 
+### Source coverage foreground measurement
+
+`source_coverage_summary_production_large_report_foreground_budget` runs in the
+same isolated measurement step, using the unchanged Copper feature graph and
+unoptimized test profile. Its 100,000-range report must still apply immediately,
+update all 10,000 gutter markers and the live summary, and finish application plus
+paint within 250 ms. It also reserves all Nextest slots in an unsplit local run,
+so unrelated tests cannot compete with this wall-clock measurement. There are no
+retries or relaxed assertions.
+
 ### Product releases and website refresh
 
 Releases use **existing tag → manual preparation → draft review → human Publish**.
