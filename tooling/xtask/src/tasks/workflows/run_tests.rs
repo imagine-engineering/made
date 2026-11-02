@@ -170,6 +170,8 @@ fn setup_inventory_python() -> Step<Use> {
 const RUST_PRODUCT_ID: &str = "rust";
 const RUST_PRODUCT_TEST_UPDATE_BASE_URL: &str = "http://test.example";
 
+const RUST_PRODUCT_FOREGROUND_FILTER: &str = "test(foreground_budget) or (package(language_tools) and (test(=profile_view::tests::profile_view_large_flamegraph_paints_a_bounded_viewport) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=profile_view::tests::profile_view_large_denied_batch_releases_result) or test(=profile_view::tests::profile_view_completed_import_disposal_rejects_stale_result)))";
+
 const RUST_PRODUCT_TEST_PACKAGES: &[&str] = &[
     "agent",
     "agent_ui",
@@ -224,9 +226,11 @@ fn rust_product_nextest_command(measure_foreground: bool) -> String {
         .join(" ");
 
     let selection = if measure_foreground {
-        "-E '(test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=source_coverage_summary::tests::source_coverage_summary_production_large_report_foreground_budget))' --test-threads 1 --success-output immediate"
+        format!(
+            "-E '({RUST_PRODUCT_FOREGROUND_FILTER})' --test-threads 1 --success-output immediate"
+        )
     } else {
-        "-E 'not (test(=cargo_panel::tests::cargo_dashboard_foreground_budget) or test(=cargo_panel::tests::cargo_dashboard_production_foreground_budget) or test(=test_explorer::tests::structured_execution_foreground_budget) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=source_coverage_summary::tests::source_coverage_summary_production_large_report_foreground_budget))'"
+        format!("-E 'not ({RUST_PRODUCT_FOREGROUND_FILTER})'")
     };
     let no_tests = if measure_foreground { "fail" } else { "warn" };
     format!(
@@ -875,16 +879,26 @@ mod tests {
     }
 
     #[test]
-    fn copper_coverage_budget_runs_without_competing_tests() -> anyhow::Result<()> {
-        let coverage_test = "source_coverage_summary::tests::source_coverage_summary_production_large_report_foreground_budget";
+    fn copper_foreground_budgets_run_without_competing_tests() -> anyhow::Result<()> {
         let regular = rust_product_nextest_command(false);
         let measurement = rust_product_nextest_command(true);
-        assert!(regular.contains(&format!("test(={coverage_test})")));
-        assert!(regular.contains("-E 'not ("));
-        assert!(measurement.contains(&format!("test(={coverage_test})")));
+        assert!(regular.contains(&format!("-E 'not ({RUST_PRODUCT_FOREGROUND_FILTER})'")));
+        assert!(measurement.contains(&format!("-E '({RUST_PRODUCT_FOREGROUND_FILTER})'")));
         assert!(measurement.contains("--test-threads 1 --success-output immediate"));
         assert!(measurement.contains("--no-tests=fail"));
         assert!(!measurement.contains("--retries"));
+        assert!(RUST_PRODUCT_FOREGROUND_FILTER.contains("test(foreground_budget)"));
+        for test in [
+            "profile_view_large_flamegraph_paints_a_bounded_viewport",
+            "profile_view_deep_selection_expands_ancestors_in_one_batch",
+            "profile_view_large_denied_batch_releases_result",
+            "profile_view_completed_import_disposal_rejects_stale_result",
+        ] {
+            assert!(
+                RUST_PRODUCT_FOREGROUND_FILTER
+                    .contains(&format!("test(=profile_view::tests::{test})"))
+            );
+        }
 
         let nextest: toml::Value =
             toml::from_str(include_str!("../../../../../.config/nextest.toml"))?;
@@ -895,10 +909,8 @@ mod tests {
             .and_then(toml::Value::as_array)
             .expect("default nextest overrides");
         assert!(overrides.iter().any(|configuration| {
-            configuration
-                .get("filter")
-                .and_then(toml::Value::as_str)
-                .is_some_and(|filter| filter.contains(&format!("test(={coverage_test})")))
+            configuration.get("filter").and_then(toml::Value::as_str)
+                == Some(RUST_PRODUCT_FOREGROUND_FILTER)
                 && configuration
                     .get("threads-required")
                     .and_then(toml::Value::as_str)
@@ -1263,19 +1275,8 @@ mod tests {
         let measurement = rust_product_nextest_command(true);
         assert!(measurement.contains("--test-threads 1 --success-output immediate"));
         assert!(measurement.contains("--no-tests=fail"));
-        assert!(measurement.contains("cargo_dashboard_foreground_budget"));
-        assert!(measurement.contains("cargo_dashboard_production_foreground_budget"));
-        assert!(
-            measurement.contains("test_explorer::tests::structured_execution_foreground_budget")
-        );
-        assert!(
-            product_nextest_command
-                .contains("test_explorer::tests::structured_execution_foreground_budget")
-        );
         for command in [&measurement, &product_nextest_command] {
-            assert!(command.contains(
-                "test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch)"
-            ));
+            assert!(command.contains(RUST_PRODUCT_FOREGROUND_FILTER));
         }
         assert!(!measurement.contains("not ("));
         assert!(!measurement.contains("--retries"));
