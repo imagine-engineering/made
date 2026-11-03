@@ -44,7 +44,7 @@ The command palette (`Cmd+Shift+P`) is your gateway to every action in Zed. If y
 
 ### Panel Layout
 
-Use **Panel Layout > Agentic** from the user menu in the title bar (or the {#action workspace::UseAgenticLayout} action) when you want the Agent Panel and Threads Sidebar next to each other on the left. Use **Panel Layout > Classic** (or {#action workspace::UseClassicLayout}) to restore the editor-oriented layout.
+Copper starts with native-agent chat on the left, the editor in the center, and the Project Panel on the right. Right-click a panel icon to move that panel. Resize, hide, or zoom individual panels using their controls. Your saved positions and sizes are preserved when you reopen the application; opening a project, conversation, or Doctor does not select a different layout.
 
 ### 3. Configure Your Editor
 

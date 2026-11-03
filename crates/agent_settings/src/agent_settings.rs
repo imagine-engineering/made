@@ -12,7 +12,6 @@ use std::sync::{Arc, LazyLock};
 use anyhow::Context as _;
 use collections::{HashSet, IndexMap};
 use fs::Fs;
-use futures::channel::oneshot;
 use gpui::{App, Pixels, SharedString};
 use language_model::LanguageModel;
 use project::DisableAiSettings;
@@ -20,9 +19,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{
     DockPosition, DockSide, IntoGpui, LanguageModelParameters, LanguageModelSelection,
-    NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, RegisterSetting, Settings, SettingsContent,
-    SettingsStore, SidebarDockPosition, SidebarSide, ThinkingBlockDisplay, ToolPermissionMode,
-    update_settings_file, update_settings_file_with_completion,
+    NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, RegisterSetting, Settings, SidebarDockPosition,
+    SidebarSide, ThinkingBlockDisplay, ToolPermissionMode, update_settings_file,
 };
 use util::ResultExt as _;
 
@@ -33,114 +31,6 @@ pub const SUMMARIZE_THREAD_PROMPT: &str = include_str!("prompts/summarize_thread
 pub const SUMMARIZE_THREAD_DETAILED_PROMPT: &str =
     include_str!("prompts/summarize_thread_detailed_prompt.txt");
 pub const COMPACTION_PROMPT: &str = include_str!("prompts/compaction_prompt.txt");
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PanelLayout {
-    pub(crate) agent_dock: Option<DockPosition>,
-    pub(crate) project_panel_dock: Option<DockSide>,
-    pub(crate) outline_panel_dock: Option<DockSide>,
-    pub(crate) collaboration_panel_dock: Option<DockPosition>,
-    pub(crate) git_panel_dock: Option<DockPosition>,
-}
-
-impl PanelLayout {
-    const AGENT: Self = Self {
-        agent_dock: Some(DockPosition::Left),
-        project_panel_dock: Some(DockSide::Right),
-        outline_panel_dock: Some(DockSide::Right),
-        collaboration_panel_dock: Some(DockPosition::Right),
-        git_panel_dock: Some(DockPosition::Right),
-    };
-
-    const EDITOR: Self = Self {
-        agent_dock: Some(DockPosition::Right),
-        project_panel_dock: Some(DockSide::Left),
-        outline_panel_dock: Some(DockSide::Left),
-        collaboration_panel_dock: Some(DockPosition::Left),
-        git_panel_dock: Some(DockPosition::Left),
-    };
-
-    pub fn is_agent_layout(&self) -> bool {
-        *self == Self::AGENT
-    }
-
-    pub fn is_editor_layout(&self) -> bool {
-        *self == Self::EDITOR
-    }
-
-    fn read_from(content: &SettingsContent) -> Self {
-        Self {
-            agent_dock: content.agent.as_ref().and_then(|a| a.dock),
-            project_panel_dock: content.project_panel.as_ref().and_then(|p| p.dock),
-            outline_panel_dock: content.outline_panel.as_ref().and_then(|p| p.dock),
-            collaboration_panel_dock: content.collaboration_panel.as_ref().and_then(|p| p.dock),
-            git_panel_dock: content.git_panel.as_ref().and_then(|p| p.dock),
-        }
-    }
-
-    fn write_to(&self, settings: &mut SettingsContent) {
-        settings.agent.get_or_insert_default().dock = self.agent_dock;
-        settings.project_panel.get_or_insert_default().dock = self.project_panel_dock;
-        settings.outline_panel.get_or_insert_default().dock = self.outline_panel_dock;
-        settings.collaboration_panel.get_or_insert_default().dock = self.collaboration_panel_dock;
-        settings.git_panel.get_or_insert_default().dock = self.git_panel_dock;
-    }
-
-    fn write_diff_to(&self, current_merged: &PanelLayout, settings: &mut SettingsContent) {
-        if self.agent_dock != current_merged.agent_dock {
-            settings.agent.get_or_insert_default().dock = self.agent_dock;
-        }
-        if self.project_panel_dock != current_merged.project_panel_dock {
-            settings.project_panel.get_or_insert_default().dock = self.project_panel_dock;
-        }
-        if self.outline_panel_dock != current_merged.outline_panel_dock {
-            settings.outline_panel.get_or_insert_default().dock = self.outline_panel_dock;
-        }
-        if self.collaboration_panel_dock != current_merged.collaboration_panel_dock {
-            settings.collaboration_panel.get_or_insert_default().dock =
-                self.collaboration_panel_dock;
-        }
-        if self.git_panel_dock != current_merged.git_panel_dock {
-            settings.git_panel.get_or_insert_default().dock = self.git_panel_dock;
-        }
-    }
-
-    fn backfill_to(&self, user_layout: &PanelLayout, settings: &mut SettingsContent) {
-        if user_layout.agent_dock.is_none() {
-            settings.agent.get_or_insert_default().dock = self.agent_dock;
-        }
-        if user_layout.project_panel_dock.is_none() {
-            settings.project_panel.get_or_insert_default().dock = self.project_panel_dock;
-        }
-        if user_layout.outline_panel_dock.is_none() {
-            settings.outline_panel.get_or_insert_default().dock = self.outline_panel_dock;
-        }
-        if user_layout.collaboration_panel_dock.is_none() {
-            settings.collaboration_panel.get_or_insert_default().dock =
-                self.collaboration_panel_dock;
-        }
-        if user_layout.git_panel_dock.is_none() {
-            settings.git_panel.get_or_insert_default().dock = self.git_panel_dock;
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WindowLayout {
-    Editor(Option<PanelLayout>),
-    Agent(Option<PanelLayout>),
-    Custom(PanelLayout),
-}
-
-impl WindowLayout {
-    pub fn agent() -> Self {
-        Self::Agent(None)
-    }
-
-    pub fn editor() -> Self {
-        Self::Editor(None)
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AutoCompactThreshold {
@@ -329,64 +219,36 @@ pub fn language_model_to_selection(
 }
 
 impl AgentSettings {
-    pub fn get_layout(cx: &App) -> WindowLayout {
-        let store = cx.global::<SettingsStore>();
-        let merged = store.merged_settings();
-        let user_layout = store
-            .raw_user_settings()
-            .map(|u| PanelLayout::read_from(u.content.as_ref()))
-            .unwrap_or_default();
-        let merged_layout = PanelLayout::read_from(merged);
-
-        if merged_layout.is_agent_layout() {
-            return WindowLayout::Agent(Some(user_layout));
-        }
-
-        if merged_layout.is_editor_layout() {
-            return WindowLayout::Editor(Some(user_layout));
-        }
-
-        WindowLayout::Custom(user_layout)
-    }
-
     pub fn backfill_editor_layout(fs: Arc<dyn Fs>, cx: &App) {
-        let user_layout = cx
-            .global::<SettingsStore>()
-            .raw_user_settings()
-            .map(|u| PanelLayout::read_from(u.content.as_ref()))
-            .unwrap_or_default();
-
+        // Non-Copper products still need the pre-parallel-agent migration. Never
+        // replace explicit panel positions, including positions chosen by presets.
         update_settings_file(fs, cx, move |settings, _cx| {
-            PanelLayout::EDITOR.backfill_to(&user_layout, settings);
+            settings
+                .agent
+                .get_or_insert_default()
+                .dock
+                .get_or_insert(DockPosition::Right);
+            settings
+                .project_panel
+                .get_or_insert_default()
+                .dock
+                .get_or_insert(DockSide::Left);
+            settings
+                .outline_panel
+                .get_or_insert_default()
+                .dock
+                .get_or_insert(DockSide::Left);
+            settings
+                .collaboration_panel
+                .get_or_insert_default()
+                .dock
+                .get_or_insert(DockPosition::Left);
+            settings
+                .git_panel
+                .get_or_insert_default()
+                .dock
+                .get_or_insert(DockPosition::Left);
         });
-    }
-
-    pub fn set_layout(
-        layout: WindowLayout,
-        fs: Arc<dyn Fs>,
-        cx: &App,
-    ) -> oneshot::Receiver<anyhow::Result<()>> {
-        let merged = PanelLayout::read_from(cx.global::<SettingsStore>().merged_settings());
-
-        match layout {
-            WindowLayout::Agent(None) => {
-                update_settings_file_with_completion(fs, cx, move |settings, _cx| {
-                    PanelLayout::AGENT.write_diff_to(&merged, settings);
-                })
-            }
-            WindowLayout::Editor(None) => {
-                update_settings_file_with_completion(fs, cx, move |settings, _cx| {
-                    PanelLayout::EDITOR.write_diff_to(&merged, settings);
-                })
-            }
-            WindowLayout::Agent(Some(saved))
-            | WindowLayout::Editor(Some(saved))
-            | WindowLayout::Custom(saved) => {
-                update_settings_file_with_completion(fs, cx, move |settings, _cx| {
-                    saved.write_to(settings);
-                })
-            }
-        }
     }
 }
 
@@ -1004,10 +866,10 @@ fn compile_regex_rules(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{TestAppContext, UpdateGlobal};
+    use gpui::UpdateGlobal;
     use serde_json::json;
-    use settings::ToolPermissionMode;
     use settings::ToolPermissionsContent;
+    use settings::{SettingsStore, ToolPermissionMode};
     use std::path::PathBuf;
 
     #[test]
@@ -1721,271 +1583,95 @@ mod tests {
     }
 
     #[gpui::test]
-    fn test_get_layout(cx: &mut gpui::App) {
-        let store = SettingsStore::test(cx);
-        cx.set_global(store);
-        project::DisableAiSettings::register(cx);
-        AgentSettings::register(cx);
-
-        // Should be Agent with an empty user layout (user hasn't customized).
-        let layout = AgentSettings::get_layout(cx);
-        let WindowLayout::Agent(Some(user_layout)) = layout else {
-            panic!("expected Agent(Some), got {:?}", layout);
-        };
-        assert_eq!(user_layout, PanelLayout::default());
-
-        // User explicitly sets agent dock to left (matching the default).
-        // The merged result is still agent, but the user layout captures
-        // only what the user wrote.
-        SettingsStore::update_global(cx, |store, cx| {
-            store
-                .set_user_settings(r#"{ "agent": { "dock": "left" } }"#, cx)
-                .unwrap();
-        });
-
-        let layout = AgentSettings::get_layout(cx);
-        let WindowLayout::Agent(Some(user_layout)) = layout else {
-            panic!("expected Agent(Some), got {:?}", layout);
-        };
-        assert_eq!(user_layout.agent_dock, Some(DockPosition::Left));
-        assert_eq!(user_layout.project_panel_dock, None);
-        assert_eq!(user_layout.outline_panel_dock, None);
-        assert_eq!(user_layout.collaboration_panel_dock, None);
-        assert_eq!(user_layout.git_panel_dock, None);
-
-        // User sets a combination that doesn't match either preset:
-        // agent on the left but project panel also on the left.
-        SettingsStore::update_global(cx, |store, cx| {
-            store
-                .set_user_settings(
-                    r#"{
-                        "agent": { "dock": "left" },
-                        "project_panel": { "dock": "left" }
-                    }"#,
-                    cx,
-                )
-                .unwrap();
-        });
-
-        let layout = AgentSettings::get_layout(cx);
-        let WindowLayout::Custom(user_layout) = layout else {
-            panic!("expected Custom, got {:?}", layout);
-        };
-        assert_eq!(user_layout.agent_dock, Some(DockPosition::Left));
-        assert_eq!(user_layout.project_panel_dock, Some(DockSide::Left));
-    }
-
-    #[gpui::test]
-    fn test_set_layout_round_trip(cx: &mut gpui::App) {
-        let store = SettingsStore::test(cx);
-        cx.set_global(store);
-        project::DisableAiSettings::register(cx);
-        AgentSettings::register(cx);
-
-        // User has a custom layout: agent on the right with project panel
-        // also on the right. This doesn't match either preset.
-        SettingsStore::update_global(cx, |store, cx| {
-            store
-                .set_user_settings(
-                    r#"{
-                        "agent": { "dock": "right" },
-                        "project_panel": { "dock": "right" }
-                    }"#,
-                    cx,
-                )
-                .unwrap();
-        });
-
-        let original = AgentSettings::get_layout(cx);
-        let WindowLayout::Custom(ref original_user_layout) = original else {
-            panic!("expected Custom, got {:?}", original);
-        };
-        assert_eq!(original_user_layout.agent_dock, Some(DockPosition::Right));
-        assert_eq!(
-            original_user_layout.project_panel_dock,
-            Some(DockSide::Right)
-        );
-        assert_eq!(original_user_layout.outline_panel_dock, None);
-
-        // Switch to the agent layout. This overwrites the user settings.
-        SettingsStore::update_global(cx, |store, cx| {
-            store.update_user_settings(cx, |settings| {
-                PanelLayout::AGENT.write_to(settings);
-            });
-        });
-
-        let layout = AgentSettings::get_layout(cx);
-        assert!(matches!(layout, WindowLayout::Agent(_)));
-
-        // Restore the original custom layout.
-        SettingsStore::update_global(cx, |store, cx| {
-            store.update_user_settings(cx, |settings| {
-                original_user_layout.write_to(settings);
-            });
-        });
-
-        // Should be back to the same custom layout.
-        let restored = AgentSettings::get_layout(cx);
-        let WindowLayout::Custom(restored_user_layout) = restored else {
-            panic!("expected Custom, got {:?}", restored);
-        };
-        assert_eq!(restored_user_layout.agent_dock, Some(DockPosition::Right));
-        assert_eq!(
-            restored_user_layout.project_panel_dock,
-            Some(DockSide::Right)
-        );
-        assert_eq!(restored_user_layout.outline_panel_dock, None);
-    }
-
-    #[gpui::test]
-    async fn test_set_layout_minimal_diff(cx: &mut TestAppContext) {
+    async fn test_legacy_panel_backfill_preserves_explicit_positions(
+        cx: &mut gpui::TestAppContext,
+    ) {
         let fs = fs::FakeFs::new(cx.background_executor.clone());
+        let saved = r#"{"agent":{"dock":"left"},"project_panel":{"dock":"right"},"git_panel":{"dock":"bottom"}}"#;
         fs.save(
             paths::settings_file().as_path(),
-            &serde_json::json!({
-                "agent": { "dock": "left" },
-                "project_panel": { "dock": "left" }
-            })
-            .to_string()
-            .into(),
+            &saved.into(),
             Default::default(),
         )
         .await
-        .unwrap();
-
+        .expect("saved legacy settings");
         cx.update(|cx| {
             let store = SettingsStore::test(cx);
             cx.set_global(store);
-            project::DisableAiSettings::register(cx);
-            AgentSettings::register(cx);
-
-            // User has agent=left (matches preset) and project_panel=left (does not)
-            SettingsStore::update_global(cx, |store, cx| {
-                store
-                    .set_user_settings(
-                        r#"{
-                            "agent": { "dock": "left" },
-                            "project_panel": { "dock": "left" }
-                        }"#,
-                        cx,
-                    )
-                    .unwrap();
-            });
-
-            let layout = AgentSettings::get_layout(cx);
-            assert!(matches!(layout, WindowLayout::Custom(_)));
-
-            AgentSettings::set_layout(WindowLayout::agent(), fs.clone(), cx)
-        })
-        .await
-        .ok();
-
-        cx.run_until_parked();
-
-        let written = fs.load(paths::settings_file().as_path()).await.unwrap();
-        cx.update(|cx| {
-            SettingsStore::update_global(cx, |store, cx| {
-                store.set_user_settings(&written, cx).unwrap();
-            });
-
-            // The user settings should still have agent=left (preserved)
-            // and now project_panel=right (changed to match preset).
-            let store = cx.global::<SettingsStore>();
-            let user_layout = store
-                .raw_user_settings()
-                .map(|u| PanelLayout::read_from(u.content.as_ref()))
-                .unwrap_or_default();
-
-            assert_eq!(user_layout.agent_dock, Some(DockPosition::Left));
-            assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));
-            // Other fields weren't in user settings and didn't need changing.
-            assert_eq!(user_layout.outline_panel_dock, None);
-
-            // And the merged result should now match agent.
-            let layout = AgentSettings::get_layout(cx);
-            assert!(matches!(layout, WindowLayout::Agent(_)));
-        });
-    }
-
-    #[gpui::test]
-    async fn test_backfill_editor_layout(cx: &mut TestAppContext) {
-        let fs = fs::FakeFs::new(cx.background_executor.clone());
-        // User has only customized project_panel to "right".
-        fs.save(
-            paths::settings_file().as_path(),
-            &serde_json::json!({
-                "project_panel": { "dock": "right" }
-            })
-            .to_string()
-            .into(),
-            Default::default(),
-        )
-        .await
-        .unwrap();
-
-        cx.update(|cx| {
-            let store = SettingsStore::test(cx);
-            cx.set_global(store);
-            project::DisableAiSettings::register(cx);
-            AgentSettings::register(cx);
-
-            // Simulate pre-migration state: editor defaults (the old world).
-            SettingsStore::update_global(cx, |store, cx| {
-                store.update_default_settings(cx, |defaults| {
-                    PanelLayout::EDITOR.write_to(defaults);
-                });
-            });
-
-            // User has only customized project_panel to "right".
-            SettingsStore::update_global(cx, |store, cx| {
-                store
-                    .set_user_settings(r#"{ "project_panel": { "dock": "right" } }"#, cx)
-                    .unwrap();
-            });
-
-            // Run the one-time backfill while still on old defaults.
             AgentSettings::backfill_editor_layout(fs.clone(), cx);
         });
-
         cx.run_until_parked();
+        let content = fs
+            .load(paths::settings_file().as_path())
+            .await
+            .expect("backfilled settings");
+        let content: serde_json_lenient::Value =
+            serde_json_lenient::from_str(&content).expect("settings");
+        assert_eq!(content["agent"]["dock"], "left");
+        assert_eq!(content["project_panel"]["dock"], "right");
+        assert_eq!(content["git_panel"]["dock"], "bottom");
+        assert_eq!(content["outline_panel"]["dock"], "left");
+        assert_eq!(content["collaboration_panel"]["dock"], "left");
+    }
 
-        // Read back the file and apply it.
-        let written = fs.load(paths::settings_file().as_path()).await.unwrap();
-        cx.update(|cx| {
-            SettingsStore::update_global(cx, |store, cx| {
-                store.set_user_settings(&written, cx).unwrap();
-            });
-
-            // The user's project_panel=right should be preserved (they set it).
-            // All other fields should now have the editor preset values
-            // written into user settings.
-            let store = cx.global::<SettingsStore>();
-            let user_layout = store
-                .raw_user_settings()
-                .map(|u| PanelLayout::read_from(u.content.as_ref()))
-                .unwrap_or_default();
-
-            assert_eq!(user_layout.agent_dock, Some(DockPosition::Right));
-            assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));
-            assert_eq!(user_layout.outline_panel_dock, Some(DockSide::Left));
-            assert_eq!(
-                user_layout.collaboration_panel_dock,
-                Some(DockPosition::Left)
-            );
-            assert_eq!(user_layout.git_panel_dock, Some(DockPosition::Left));
-
-            // Even though defaults are now agent, the backfilled user settings
-            // keep everything in the editor layout. The user's experience
-            // hasn't changed.
-            let layout = AgentSettings::get_layout(cx);
-            let WindowLayout::Custom(user_layout) = layout else {
-                panic!(
-                    "expected Custom (editor values override agent defaults), got {:?}",
-                    layout
+    #[gpui::test]
+    fn test_panel_positions_survive_settings_reload(cx: &mut gpui::App) {
+        let store = SettingsStore::test(cx);
+        cx.set_global(store);
+        project::DisableAiSettings::register(cx);
+        AgentSettings::register(cx);
+        for (agent, project, outline, collaboration, git) in [
+            ("right", "left", "left", "left", "left"),
+            ("left", "right", "right", "right", "right"),
+            ("right", "right", "left", "bottom", "bottom"),
+        ] {
+            let saved = serde_json::json!({
+                "agent": { "dock": agent, "default_width": 510 },
+                "project_panel": { "dock": project, "default_width": 280 },
+                "outline_panel": { "dock": outline },
+                "collaboration_panel": { "dock": collaboration },
+                "git_panel": { "dock": git },
+            })
+            .to_string();
+            for _ in 0..2 {
+                SettingsStore::update_global(cx, |store, cx| {
+                    store
+                        .set_user_settings(&saved, cx)
+                        .expect("saved panel settings");
+                });
+                let merged = cx.global::<SettingsStore>().merged_settings();
+                assert_eq!(
+                    serde_json::to_value(merged.agent.as_ref().expect("agent").dock).expect("dock"),
+                    agent
                 );
-            };
-            assert_eq!(user_layout.agent_dock, Some(DockPosition::Right));
-            assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));
-        });
+                assert_eq!(
+                    serde_json::to_value(merged.project_panel.as_ref().expect("project").dock)
+                        .expect("dock"),
+                    project
+                );
+                assert_eq!(
+                    serde_json::to_value(merged.outline_panel.as_ref().expect("outline").dock)
+                        .expect("dock"),
+                    outline
+                );
+                assert_eq!(
+                    serde_json::to_value(
+                        merged
+                            .collaboration_panel
+                            .as_ref()
+                            .expect("collaboration")
+                            .dock
+                    )
+                    .expect("dock"),
+                    collaboration
+                );
+                assert_eq!(
+                    serde_json::to_value(merged.git_panel.as_ref().expect("git").dock)
+                        .expect("dock"),
+                    git
+                );
+                assert_eq!(AgentSettings::get_global(cx).default_width, gpui::px(510.0));
+            }
+        }
     }
 }

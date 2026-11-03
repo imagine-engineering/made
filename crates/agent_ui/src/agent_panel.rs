@@ -18053,6 +18053,50 @@ mod tests {
         });
     }
 
+    #[gpui::test]
+    async fn test_manual_agent_dock_persists_and_conversations_do_not_move_it(
+        cx: &mut TestAppContext,
+    ) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        let fs = panel.read_with(&cx, |panel, _| panel.fs.clone());
+        fs.save(
+            paths::settings_file().as_path(),
+            &"{}".into(),
+            Default::default(),
+        )
+        .await
+        .expect("isolated settings");
+        for position in [DockPosition::Left, DockPosition::Right] {
+            panel.update_in(&mut cx, |panel, window, cx| {
+                panel.set_position(position, window, cx)
+            });
+            cx.run_until_parked();
+            let saved = fs
+                .load(paths::settings_file().as_path())
+                .await
+                .expect("manual dock persisted");
+            cx.update(|_, cx| {
+                let store = SettingsStore::test(cx);
+                cx.set_global(store);
+                cx.update_global::<SettingsStore, _>(|store, cx| {
+                    store
+                        .set_user_settings(&saved, cx)
+                        .expect("reload saved dock");
+                });
+            });
+            cx.run_until_parked();
+            panel.update_in(&mut cx, |panel, window, cx| {
+                assert_eq!(panel.position(window, cx), position);
+                panel.new_thread(&NewThread, window, cx);
+                assert_eq!(panel.position(window, cx), position);
+            });
+            cx.run_until_parked();
+            panel.read_with(&cx, |_, cx| {
+                assert_eq!(agent_panel_dock_position(cx), position)
+            });
+        }
+    }
+
     #[cfg(not(feature = "multiplayer-tools"))]
     #[gpui::test]
     async fn test_standard_agent_settings_preserve_canonical_dock(cx: &mut TestAppContext) {

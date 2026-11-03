@@ -204,7 +204,7 @@ pub struct AgentSettingsContent {
     pub button: Option<bool>,
     /// Where to dock the agent panel.
     ///
-    /// Default: left (Agentic layout), right (Classic layout)
+    /// Default: left
     pub dock: Option<DockPosition>,
     /// Whether the agent panel should use flexible (proportional) sizing.
     ///

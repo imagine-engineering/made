@@ -29,7 +29,6 @@ participating_crates=(
   onboarding
   settings_ui
   terminal_view
-  title_bar
   workspace
   zed_actions
 )
