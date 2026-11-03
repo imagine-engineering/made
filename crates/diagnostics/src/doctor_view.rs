@@ -10,6 +10,7 @@ use project::{DoctorExecutionHost, Project, ProjectPath};
 use settings::WorktreeId;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ui::prelude::*;
+use ui::{TintColor, TreeViewItem, WithScrollbar as _};
 use workspace::{
     Workspace,
     item::{Item, ItemEvent},
@@ -54,6 +55,35 @@ enum OwnerRepair {
 }
 
 impl OwnerRepair {
+    fn conversation_identity(&self) -> DiagnosticText {
+        let identity = match self {
+            Self::Reproduction(review) => format!(
+                "{}; Task command: {}",
+                self.target(),
+                review
+                    .action()
+                    .task()
+                    .resolved
+                    .command
+                    .as_deref()
+                    .unwrap_or("Command unavailable")
+            ),
+            #[cfg(any(feature = "rust-tools", feature = "jvm-tools"))]
+            Self::Dependency(review) => format!(
+                "{}; arguments: {}",
+                self.target(),
+                review
+                    .action()
+                    .executable()
+                    .kind()
+                    .version_arguments()
+                    .join(" ")
+            ),
+            _ => self.target(),
+        };
+        DiagnosticText::new(identity)
+    }
+
     fn before(&self) -> &DoctorCheck {
         match self {
             Self::Reproduction(review) => review.before(),
@@ -1945,7 +1975,7 @@ enum RestartCoordination {
 }
 
 enum ExportSource {
-    Current { generation: u64 },
+    Current { generation: u64, stale: bool },
     History(crate::doctor::DoctorHistoryRecord),
 }
 
@@ -2769,6 +2799,8 @@ impl DoctorView {
     }
 }
 
+pub struct DoctorEvidenceUpdated;
+
 pub struct DoctorView {
     project: Entity<Project>,
     workspace: WeakEntity<Workspace>,
@@ -2780,11 +2812,17 @@ pub struct DoctorView {
     selected_product: DoctorProduct,
     generation: u64,
     report: Option<DoctorReport>,
+    report_stale: bool,
+    collection_revision: Option<u64>,
+    collection_cancelled: bool,
+    collection_failed: bool,
+    advanced_open: bool,
     error: Option<DiagnosticText>,
     collection: Option<Task<()>>,
     closed: bool,
     proposal: Option<OwnerRepair>,
     owner_result: Option<OwnerRepair>,
+    reviewed_action: Option<DiagnosticText>,
     repair_status: Option<DiagnosticText>,
     repair_task: Option<Task<()>>,
     repair_cancel: Option<async_channel::Sender<()>>,
@@ -2889,6 +2927,15 @@ impl DoctorView {
                 this.selected_worktree = None;
                 this.invalidate(cx);
             }
+            project::Event::WorktreeUpdatedEntries(id, _)
+                if this.selected_worktree == Some(*id)
+                    && (this.report.is_some() || this.collection.is_some())
+                    && !this.report_stale =>
+            {
+                this.report_stale = true;
+                cx.emit(DoctorEvidenceUpdated);
+                cx.notify();
+            }
             project::Event::DisconnectedFromRemote { .. }
             | project::Event::DisconnectedFromHost
                 if this.restart_active.is_some() =>
@@ -2900,6 +2947,16 @@ impl DoctorView {
             _ => cx.notify(),
         })];
         let mut subscriptions = subscriptions;
+        subscriptions.push(cx.observe_global::<settings::SettingsStore>(|this, cx| {
+            if (this.report.is_some() || this.collection.is_some())
+                && !this.report_stale
+                && this.report_is_stale(cx)
+            {
+                this.report_stale = true;
+                cx.emit(DoctorEvidenceUpdated);
+                cx.notify();
+            }
+        }));
         #[cfg(any(feature = "rust-tools", feature = "jvm-tools"))]
         let install = {
             let input = |placeholder: &str, cx: &mut Context<Self>| {
@@ -3079,11 +3136,17 @@ impl DoctorView {
             },
             generation: 0,
             report: None,
+            report_stale: false,
+            collection_revision: None,
+            collection_cancelled: false,
+            collection_failed: false,
+            advanced_open: false,
             error: None,
             collection: None,
             closed: false,
             proposal: None,
             owner_result: None,
+            reviewed_action: None,
             repair_status: None,
             repair_task: None,
             repair_cancel: None,
@@ -3142,9 +3205,14 @@ impl DoctorView {
         self.error = None;
         self.cancel_repair(cx);
         self.owner_result = None;
+        self.reviewed_action = None;
         self.generation = self.generation.saturating_add(1);
         self.collection = None;
         self.report = None;
+        self.report_stale = false;
+        self.collection_revision = None;
+        self.collection_cancelled = false;
+        self.collection_failed = false;
         self.investigation.tasks.clear();
         #[cfg(any(feature = "rust-tools", feature = "jvm-tools"))]
         self.investigation.debug_scenarios.clear();
@@ -3230,6 +3298,25 @@ impl DoctorView {
         }
     }
 
+    fn report_is_stale(&self, cx: &App) -> bool {
+        self.report_stale
+            || self.collection_revision.is_some_and(|revision| {
+                cx.try_global::<settings::SettingsStore>()
+                    .and_then(|store| store.observed_revision())
+                    != Some(revision)
+            })
+    }
+
+    fn cancel_collection(&mut self, cx: &mut Context<Self>) {
+        if self.collection.is_some() {
+            self.generation = self.generation.saturating_add(1);
+            self.collection = None;
+            self.collection_cancelled = true;
+            cx.emit(DoctorEvidenceUpdated);
+            cx.notify();
+        }
+    }
+
     fn refresh(&mut self, cx: &mut Context<Self>) {
         if self.repair_task.is_some() {
             self.error = Some(DiagnosticText::new(
@@ -3246,13 +3333,18 @@ impl DoctorView {
             return;
         };
         self.invalidate(cx);
+        self.collection_revision = cx
+            .try_global::<settings::SettingsStore>()
+            .and_then(|store| store.observed_revision());
         let generation = self.generation;
         let observed_at = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(time) => time.as_secs(),
             Err(error) => {
+                self.collection_failed = true;
                 self.error = Some(DiagnosticText::new(format!(
                     "Observation clock is unavailable: {error}"
                 )));
+                cx.emit(DoctorEvidenceUpdated);
                 cx.notify();
                 return;
             }
@@ -3281,11 +3373,8 @@ impl DoctorView {
                 CheckOutcome::Blocked
             },
             &format!(
-                "Host {:?}; trusted {:?}; read-only {}; isolated recipe test {}. This observes existing authority and grants no permissions or production access.",
-                observation.host,
-                observation.trusted,
-                observation.read_only,
-                observation.isolated_recipe_test
+                "{} This observes existing authority and grants no permissions or production access.",
+                crate::doctor::project_authority_description(&observation)
             ),
             observed_at,
         )];
@@ -3338,6 +3427,26 @@ impl DoctorView {
                 if let Some(task) = groovy {
                     checks.extend(task.await?);
                 }
+                let development = this.read_with(cx, |this, cx| {
+                    crate::doctor::collect_development(
+                        &this.project,
+                        &directory,
+                        product,
+                        observed_at,
+                        cx,
+                    )
+                })??;
+                // Product and development projections share some Cargo facts.
+                // Retain one observation per owner identity, not duplicate results.
+                let mut identifiers: std::collections::HashSet<_> = checks
+                    .iter()
+                    .map(|check| check.id.as_str().to_owned())
+                    .collect();
+                checks.extend(
+                    development
+                        .into_iter()
+                        .filter(|check| identifiers.insert(check.id.as_str().to_owned())),
+                );
                 DoctorReport::with_checks(scope, generation, observed_at, checks)
             }
             .await;
@@ -3349,13 +3458,165 @@ impl DoctorView {
                 this.collection = None;
                 match result {
                     Ok(report) => this.report = Some(report),
-                    Err(error) => this.error = Some(DiagnosticText::new(error.to_string())),
+                    Err(error) => {
+                        this.collection_failed = true;
+                        this.error = Some(DiagnosticText::new(error.to_string()));
+                    }
                 }
+                cx.emit(DoctorEvidenceUpdated);
                 cx.notify();
             }) {
                 log::debug!("Doctor view closed during collection: {error}");
             }
         }));
+        cx.emit(DoctorEvidenceUpdated);
+        cx.notify();
+    }
+
+    pub fn conversation_context(&self, cx: &App) -> Option<String> {
+        let state = if self.collection.is_some() {
+            "Running"
+        } else if self.collection_cancelled {
+            "Cancelled"
+        } else if self.report.is_some() && self.report_is_stale(cx) {
+            "Stale"
+        } else if self.report.is_some() {
+            "Collected"
+        } else if self.collection_failed {
+            "Failed"
+        } else {
+            return None;
+        };
+        let project = self.project.read(cx);
+        let roots = project
+            .visible_worktrees(cx)
+            .map(|worktree| worktree.read(cx).root_name_str().to_owned())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let worktree = self
+            .selected_worktree
+            .and_then(|identifier| project.worktree_for_id(identifier, cx))
+            .map(|worktree| worktree.read(cx).root_name_str().to_owned())
+            .unwrap_or_else(|| "No selected worktree".to_owned());
+        let mut summary = format!(
+            "collection status: {state}. Project: {roots}. Worktree: {worktree}. Check family: {}. Host: {}. ",
+            self.selected_product.name(),
+            self.host_label(cx)
+        );
+        if let Some(report) = &self.report {
+            summary.push_str(if state == "Collected" {
+                "Latest collection replaces earlier collection snapshots for this scope. Current counts: "
+            } else {
+                "Retained observation counts, not a new current collection: "
+            });
+            for label in [
+                "Blocked",
+                "Failed",
+                "Warning",
+                "Passed",
+                "Stale",
+                "Unverified",
+                "Unsupported",
+                "Cancelled",
+            ] {
+                let count = report
+                    .checks()
+                    .iter()
+                    .filter(|check| check.state_label() == label)
+                    .count();
+                summary.push_str(&format!("{label} {count}; "));
+            }
+        }
+        if let Some(identity) = &self.reviewed_action {
+            let identity: String = identity.as_str().chars().take(220).collect();
+            summary.push_str(&format!("Reviewed action: {identity}. "));
+            if self.repair_task.is_some() {
+                if self
+                    .repair_cancel
+                    .as_ref()
+                    .is_some_and(|sender| sender.is_closed())
+                {
+                    summary.push_str("Action status: Stop requested; awaiting the owned outcome. ");
+                } else {
+                    summary.push_str("Action status: Running; no completed result yet. ");
+                }
+            } else if let Some(result) = &self.owner_result {
+                summary.push_str(&format!("Action status: {:?}. ", result.phase()));
+                if let Some(detail) = result.operation_detail() {
+                    summary.push_str(&format!(
+                        "Observed operation: {}. ",
+                        detail.as_str().chars().take(160).collect::<String>()
+                    ));
+                }
+                if let Some(after) = result.after() {
+                    summary.push_str(&format!(
+                        "Relevant recheck: {} — {}. ",
+                        after.state_label(),
+                        after.detail.as_str().chars().take(160).collect::<String>()
+                    ));
+                }
+            } else if let Some(status) = &self.repair_status {
+                summary.push_str(&format!("Action status: {}. ", status.as_str()));
+            }
+            if self.repair_task.is_none()
+                && matches!(
+                    self.owner_result.as_ref(),
+                    Some(OwnerRepair::Reproduction(_))
+                )
+                && let Some(investigation) =
+                    self.report.as_ref().and_then(DoctorReport::investigation)
+            {
+                for row in investigation.evidence().iter().rev().take(3) {
+                    summary.push_str(&format!(
+                        "Evidence {:?}: {:?}; {:?}; {}. ",
+                        row.owner,
+                        row.classification,
+                        row.observation,
+                        if row.historical {
+                            "historical observation"
+                        } else {
+                            "observed for this reviewed run"
+                        }
+                    ));
+                }
+            }
+        }
+        if let Some(report) = &self.report {
+            summary.push_str(&format!(
+                "Collected {}. {}. ",
+                Self::timestamp(report.observed_at),
+                report.summary()
+            ));
+            let mut checks: Vec<_> = report.checks().iter().collect();
+            checks.sort_by_key(|check| check.priority());
+            for check in checks.into_iter().take(4) {
+                let detail: String = check.detail.as_str().chars().take(180).collect();
+                summary.push_str(&format!(
+                    "[{}; {}; {}] {}: {}. ",
+                    check.state_label(),
+                    check.id.as_str(),
+                    check.evidence_source(),
+                    check.title.as_str(),
+                    detail
+                ));
+            }
+        }
+        if let Some(error) = &self.error {
+            summary.push_str(&format!("Error: {}. ", error.as_str()));
+        }
+        // The full report remains in Doctor; conversation context is selected,
+        // redacted owner metadata rather than raw logs or project source.
+        let bounded = DiagnosticText::new(summary);
+        Some(format!(
+            "/doctor {} Only a bounded problem-first excerpt is included. Named reviewed-action observations do not establish general correctness or a verified repair. Collection reads configuration and cached development evidence; it does not execute the selected application, builds, tests, repairs or grant permissions. Inspect Doctor for the complete report; unperformed application checks remain Not run.",
+            bounded.as_str()
+        ))
+    }
+
+    pub fn conversation_context_failed(&mut self, cx: &mut Context<Self>) {
+        self.error = Some(DiagnosticText::new(
+            "Doctor cannot update its originating conversation. Results remain in Doctor; invoke /doctor from an available native conversation to discuss them.",
+        ));
         cx.notify();
     }
 
@@ -3398,8 +3659,16 @@ impl DoctorView {
                 (
                     ExportSource::Current {
                         generation: report.generation,
+                        stale: self.report_is_stale(cx),
                     },
-                    report.export()?,
+                    if self.report_is_stale(cx) {
+                        format!(
+                            "Stale report — selected inputs changed after collection. Original observations below do not establish current health; collect again.\n\n{}",
+                            report.export()?
+                        )
+                    } else {
+                        report.export()?
+                    },
                 )
             };
             anyhow::ensure!(
@@ -3431,10 +3700,11 @@ impl DoctorView {
             let result: anyhow::Result<bool> = async {
                 let Some(path) = path.await?? else { return Ok(false); };
                 anyhow::ensure!(path.is_absolute(), "Export requires an absolute selected destination");
-                this.read_with(cx, |this, _| {
+                this.read_with(cx, |this, cx| {
                     anyhow::ensure!(!this.closed && this.generation == generation, "Doctor scope changed while choosing an export destination; choose again");
-                    if let ExportSource::Current { generation } = &source {
+                    if let ExportSource::Current { generation, stale } = &source {
                         anyhow::ensure!(this.report.as_ref().is_some_and(|report| report.generation == *generation), "Selected checks changed before export");
+                        anyhow::ensure!(this.report_is_stale(cx) == *stale, "Report freshness changed while choosing an export destination; review it again");
                     }
                     Ok::<_, anyhow::Error>(())
                 })??;
@@ -3449,6 +3719,9 @@ impl DoctorView {
                 }
                 this.update(cx, |this, cx| {
                     anyhow::ensure!(!this.closed && this.generation == generation, "Doctor scope changed before writing");
+                    if let ExportSource::Current { stale, .. } = &source {
+                        anyhow::ensure!(this.report_is_stale(cx) == *stale, "Report freshness changed before writing; review it again");
+                    }
                     this.export_writing = true;
                     this.export_status = Some(DiagnosticText::new("Writing only the explicitly selected redacted report. The accepted atomic file write may finish."));
                     cx.notify();
@@ -4563,6 +4836,9 @@ impl DoctorView {
                 "Cancellation requested; accepted owner effects may continue or remain. Waiting for the observed outcome.",
             ));
         }
+        if self.reviewed_action.is_some() {
+            cx.emit(DoctorEvidenceUpdated);
+        }
         cx.notify();
     }
 
@@ -4948,8 +5224,7 @@ impl DoctorView {
         if !self.investigation.open {
             return controls.into_any_element();
         }
-        controls = controls.child(Label::new("Project and execution host follow the selected worktree above. Groovy release readiness is unchanged. Each action is reviewed independently; this view grants no production, external-service, network, credential or unattended authority."))
-            .child(h_flex().flex_wrap().gap_2().children([(Scope::Product, "Product health"), (Scope::Development, "Project development"), (Scope::Application, "Application correctness / performance")].into_iter().enumerate().map(|(index, (scope, label))| div().debug_selector(move || format!("doctor-investigation-scope-{index}")).child(Button::new(("doctor-investigation-scope", index), label).toggle_state(self.investigation.scope == scope).disabled(busy).tab_index(0_isize).on_click(cx.listener(move |this, _, _, cx| { this.cancel_repair(cx); this.investigation.scope = scope; this.investigation.problem = match scope { Scope::Product => crate::doctor::DoctorInvestigationProblem::ProductReadiness, Scope::Development => crate::doctor::DoctorInvestigationProblem::Build, Scope::Application => crate::doctor::DoctorInvestigationProblem::IncorrectBehavior }; cx.notify(); }))))));
+        controls = controls.child(Label::new("This investigation uses the section, worktree and execution host selected above. Each action is reviewed independently; this form grants no production, external-service, credential or unattended authority."));
         if self.investigation.scope == Scope::Product {
             return controls
                 .child(Label::new(
@@ -5406,6 +5681,8 @@ impl DoctorView {
                     .disabled(busy)
                     .tab_index(0_isize)
                     .on_click(cx.listener(move |this, _, window, cx| {
+                        this.advanced_open = true;
+                        this.investigation.open = false;
                         this.native_repair_open = true;
                         this.native_target.update(cx, |editor, cx| {
                             editor.set_text(target.as_str(), window, cx)
@@ -5415,7 +5692,12 @@ impl DoctorView {
                         this.scroll_handle
                             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
                         cx.notify();
-                    })),
+                    }))
+                    .map(|button| {
+                        div()
+                            .debug_selector(|| "doctor-investigation-native-select".into())
+                            .child(button)
+                    }),
                 );
             }
         }
@@ -5656,6 +5938,8 @@ impl DoctorView {
             cx.notify();
             return;
         }
+        self.reviewed_action = Some(review.conversation_identity());
+        self.owner_result = None;
         let product = Self::product();
         let (cancel, cancelled) = async_channel::bounded(1);
         #[cfg(any(feature = "agentic", feature = "rust-tools", feature = "jvm-tools"))]
@@ -6297,9 +6581,11 @@ impl DoctorView {
                     }
                     Err(error) => { this.error = Some(DiagnosticText::new(error.to_string())); this.repair_status = Some(DiagnosticText::new("Repair admission or observation failed; no verified fix. Reached receipts are retained without replay.")); }
                 }
+                cx.emit(DoctorEvidenceUpdated);
                 cx.notify();
             }) { log::debug!("Doctor view closed after repair observation: {error}"); }
         }));
+        cx.emit(DoctorEvidenceUpdated);
         cx.notify();
     }
 
@@ -7074,6 +7360,7 @@ impl Focusable for DoctorView {
     }
 }
 impl EventEmitter<ItemEvent> for DoctorView {}
+impl EventEmitter<DoctorEvidenceUpdated> for DoctorView {}
 impl EventEmitter<std::rc::Rc<crate::doctor::DoctorNativeRepairRequest>> for DoctorView {}
 impl Drop for DoctorView {
     fn drop(&mut self) {
@@ -7113,88 +7400,338 @@ impl Item for DoctorView {
     }
 }
 
+impl DoctorView {
+    fn navigation_controls(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        use crate::doctor::DoctorInvestigationScope as Scope;
+        let busy = self.repair_task.is_some() || self.preparation.is_some();
+        v_flex()
+            .id("doctor-navigation")
+            .role(gpui::Role::Tree)
+            .aria_label("Doctor sections")
+            .w(rems(12.))
+            .h_full()
+            .flex_shrink_0()
+            .p_2()
+            .gap_1()
+            .border_r_1()
+            .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().panel_background)
+            .children([
+                (Scope::Product, "Configuration health"),
+                (Scope::Development, "Development health"),
+                (Scope::Application, "Application behavior"),
+            ].into_iter().enumerate().map(|(index, (scope, label))| {
+                div().debug_selector(move || format!("doctor-investigation-scope-{index}")).child(
+                    TreeViewItem::new(("doctor-section", index), label)
+                        .toggle_state(!self.advanced_open && self.investigation.scope == scope)
+                        .disabled(busy)
+                        .tab_index(0_isize)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.cancel_repair(cx);
+                            this.advanced_open = false;
+                            this.investigation.scope = scope;
+                            this.investigation.problem = match scope {
+                                Scope::Product => crate::doctor::DoctorInvestigationProblem::ProductReadiness,
+                                Scope::Development => crate::doctor::DoctorInvestigationProblem::Build,
+                                Scope::Application => crate::doctor::DoctorInvestigationProblem::IncorrectBehavior,
+                            };
+                            this.scroll_handle.set_offset(gpui::Point::default());
+                            cx.notify();
+                        })),
+                )
+            }))
+            .child(div().debug_selector(|| "doctor-advanced".into()).child(
+                TreeViewItem::new("doctor-advanced-section", "Advanced actions")
+                    .toggle_state(self.advanced_open)
+                    .disabled(busy)
+                    .tab_index(0_isize)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.advanced_open = true;
+                        this.scroll_handle.set_offset(gpui::Point::default());
+                        cx.notify();
+                    })),
+            ))
+            .into_any_element()
+    }
+
+    fn scope_controls(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        use crate::doctor::DoctorInvestigationScope as Scope;
+        let (title, inputs, effects, next) = match self.investigation.scope {
+            Scope::Product => (
+                format!("{} configuration health", product_flavor::DISPLAY_NAME),
+                "Examines the configured model/provider, extensions, context servers, project authority and automation owners.",
+                "Inputs: existing application settings and owner status. Collection reads these facts; it does not send a model request or prove connectivity.",
+                "Next: Collect checks, inspect problems below, then use a separately reviewed advanced probe or recovery action if needed.",
+            ),
+            Scope::Development => (
+                "Project development environment and build/test health".to_owned(),
+                "Examines the selected project's toolchain declaration, cached Cargo/JVM metadata, language servers and recorded build/test evidence.",
+                "Inputs: this worktree and its existing development owners. Collection does not run Cargo, build scripts, builds or tests, download dependencies, or edit files.",
+                "Next: Collect checks. To reproduce a build/test failure, set up an investigation and review its exact command and development effects.",
+            ),
+            Scope::Application => (
+                "Application correctness and performance".to_owned(),
+                "Examines the program you develop, using a selected symptom, validation target and reviewed Task, test, debugger or supported profile evidence.",
+                "Inputs: an explicit reproduction and attributable results. No application check has run merely because configuration collection passed. Memory, race and performance claims require suitable measurements.",
+                "Next: Set up an investigation below. Review each execution separately; source changes, installations and repairs require their own approval.",
+            ),
+        };
+        v_flex()
+            .min_w_0()
+            .gap_2()
+            .child(
+                v_flex()
+                    .min_w_0()
+                    .p_3()
+                    .gap_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().colors().border)
+                    .child(Label::new(title).weight(gpui::FontWeight::SEMIBOLD))
+                    .child(Label::new(inputs))
+                    .child(
+                        Label::new(effects)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .child(Label::new(next).size(LabelSize::Small)),
+            )
+            .into_any_element()
+    }
+
+    fn result_controls(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        use crate::doctor::DoctorInvestigationScope as Scope;
+        let scope = self.investigation.scope;
+        if scope == Scope::Application {
+            return v_flex().gap_2()
+                .when(self.report.as_ref().and_then(DoctorReport::investigation).is_none(), |element| {
+                    element.child(div().id("doctor-application-not-run").role(gpui::Role::Status)
+                        .aria_label("Application behavior: Not run")
+                        .child(Label::new("Not run — no application reproduction or performance baseline has been collected.")))
+                })
+                .into_any_element();
+        }
+        let Some(report) = &self.report else {
+            return div().into_any_element();
+        };
+        let stale = self.report_is_stale(cx);
+        let mut checks: Vec<_> = report
+            .checks()
+            .iter()
+            .enumerate()
+            .filter(|(_, check)| check.scope() == scope)
+            .collect();
+        checks.sort_by_key(|(_, check)| check.priority());
+        let mut results = v_flex().min_w_0().gap_2()
+            .child(Label::new("Results — problems first").weight(gpui::FontWeight::SEMIBOLD))
+            .child(Label::new("Passed means the stated observation passed. It does not certify a build, test, model response or application behavior that was not performed.").size(LabelSize::Small).color(Color::Muted));
+        if checks.is_empty() {
+            results = results.child(Label::new(
+                "Not run — no evidence for this section was collected.",
+            ));
+        }
+        for (index, check) in checks {
+            let state = if stale { "Stale" } else { check.state_label() };
+            let color = match state {
+                "Failed" => Color::Error,
+                "Warning" | "Blocked" | "Stale" => Color::Warning,
+                "Passed" => Color::Success,
+                _ => Color::Muted,
+            };
+            let next = if stale {
+                "Collect checks again: the selected inputs changed after this observation."
+            } else {
+                check.next_step()
+            };
+            let card = v_flex()
+                .id(("doctor-check", index))
+                .debug_selector(move || format!("doctor-result-{index}"))
+                .min_w_0()
+                .flex_shrink_0()
+                .p_3()
+                .gap_1()
+                .rounded_md()
+                .border_1()
+                .border_color(cx.theme().colors().border)
+                .role(gpui::Role::Group)
+                .aria_label(format!(
+                    "{state}: {}. Evidence: {}. Next step: {next}",
+                    check.title.as_str(),
+                    check.detail.as_str()
+                ))
+                .child(Label::new(format!("{state} — {}", check.title.as_str())).color(color))
+                .child(Label::new(check.detail.as_str().to_owned()))
+                .child(
+                    Label::new(format!(
+                        "Source: {} · {} · {}",
+                        check.evidence_source(),
+                        check.id.as_str(),
+                        Self::timestamp(check.observed_at)
+                    ))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+                )
+                .child(Label::new(format!("Next: {next}")).size(LabelSize::Small));
+            #[cfg(feature = "agentic")]
+            let card = if self.advanced_open {
+                let identifier = check.id.as_str().to_owned();
+                card.child(
+                    Button::new(
+                        ("doctor-native-evidence", index),
+                        "Select for native repair",
+                    )
+                    .toggle_state(self.native_evidence.contains(&identifier))
+                    .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                    .disabled(stale || self.repair_task.is_some())
+                    .tab_index(0_isize)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.cancel_repair(cx);
+                        this.native_investigation_evidence.clear();
+                        if this.native_evidence.contains(&identifier) {
+                            this.native_evidence
+                                .retain(|selected| selected != &identifier);
+                        } else if this.native_evidence.len() < 8 {
+                            this.native_evidence.push(identifier.clone());
+                        } else {
+                            this.error = Some(DiagnosticText::new("Select at most eight checks"));
+                        }
+                        cx.notify();
+                    })),
+                )
+            } else {
+                card
+            };
+            results = results.child(card);
+        }
+        results.into_any_element()
+    }
+}
+
 impl Render for DoctorView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let roots: Vec<_> = self
             .project
             .read(cx)
             .visible_worktrees(cx)
             .map(|root| (root.read(cx).id(), root.read(cx).root_name_str().to_owned()))
             .collect();
+        let stale = self.report.is_some() && self.report_is_stale(cx);
         let status = if self.collection.is_some() {
-            "Collecting selected checks".to_owned()
+            "Running — reading selected owner state; no build, test or repair is running".to_owned()
+        } else if self.collection_cancelled {
+            "Cancelled — collection stopped; collect again to obtain current results".to_owned()
+        } else if self.collection_failed {
+            "Failed — collection did not produce a report; inspect the error and retry".to_owned()
         } else if let Some(report) = &self.report {
-            report.summary()
+            format!(
+                "{}{}",
+                if stale {
+                    "Stale — inputs changed; collect again. "
+                } else {
+                    ""
+                },
+                report.summary()
+            )
         } else {
-            "No checks collected".to_owned()
+            "Not run — choose Collect checks to read configuration and cached development evidence"
+                .to_owned()
         };
-        let content = v_flex().w_full().flex_shrink_0().p_4().gap_3()
+        let selected_path = self.directory(cx).and_then(|directory| {
+            self.project
+                .read(cx)
+                .worktree_for_id(directory.worktree_id, cx)
+                .map(|worktree| worktree.read(cx).abs_path().display().to_string())
+        });
+        let scope_label = format!(
+            "Project: {} · Check family: {} · Host: {}",
+            roots
+                .iter()
+                .map(|(_, name)| name.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.selected_product.name(),
+            self.host_label(cx)
+        );
+        let content = v_flex().w_full().min_w_0().flex_shrink_0().p_4().gap_3()
             .child(Label::new(format!("{} Doctor", product_flavor::DISPLAY_NAME)).size(LabelSize::Large))
-            .child(Label::new("Choose a worktree and check family. Opening this view performs no probes or repairs."))
-            .child(h_flex().flex_wrap().gap_2().children(roots.into_iter().map(|(id, label)| div().debug_selector(|| "doctor-worktree".into()).child(Button::new(("doctor-worktree", id.to_usize()), label.clone()).toggle_state(self.selected_worktree == Some(id)).disabled(self.repair_task.is_some()).tab_index(0_isize).aria_label(format!("Select Doctor worktree {label}")).on_click(cx.listener(move |this, _, _, cx| this.select_worktree(id, cx)))))))
-            .child(h_flex().gap_2().children([DoctorProduct::Made, DoctorProduct::Copper, DoctorProduct::Groovy].into_iter().enumerate().map(|(index, product)| div().debug_selector(move || format!("doctor-product-{index}")).child(Button::new(("doctor-product", index), format!("{} checks", product.name())).toggle_state(self.selected_product == product).disabled(self.repair_task.is_some()).tab_index(0_isize).on_click(cx.listener(move |this, _, _, cx| { this.selected_product = product; this.invalidate(cx); }))))))
-            .child(h_flex().gap_2().child(Label::new(self.host_label(cx))).child(Button::new("doctor-choose-host", "Choose development host").tab_index(0_isize).on_click(cx.listener(|this, _, window, cx| {
-                match cx.build_action("projects::OpenRemote", None) {
-                    Ok(action) => window.dispatch_action(action, cx),
-                    Err(error) => { this.error = Some(DiagnosticText::new(format!("Existing remote-project controls are unavailable: {error}"))); cx.notify(); }
-                }
-            }))))
-            .child(h_flex().gap_2().child(div().debug_selector(|| "doctor-refresh".into()).child(Button::new("doctor-refresh", "Collect checks").disabled(self.directory(cx).is_none() || self.collection.is_some() || self.repair_task.is_some()).tab_index(0_isize).on_click(cx.listener(|this, _, _, cx| this.refresh(cx)))))
-                .child(Button::new("doctor-settings", "Project settings").tab_index(0_isize).on_click(cx.listener(|this, _, window, cx| this.open_handoff(crate::doctor::DoctorProjectHandoff::Settings, window, cx)))))
+            .child(Label::new("Collect evidence, inspect problems, then separately review any execution or repair.").color(Color::Muted))
+            .child(v_flex().id("doctor-selected-scope").min_w_0().gap_1().role(gpui::Role::Group).aria_label(scope_label.clone())
+                .child(Label::new(scope_label).size(LabelSize::Small))
+                .child(Label::new(format!("Worktree: {}", selected_path.as_deref().unwrap_or("Select a worktree below"))).size(LabelSize::Small)))
+            .child(h_flex().flex_wrap().gap_2().children(roots.into_iter().map(|(id, label)| div().debug_selector(|| "doctor-worktree".into()).child(
+                Button::new(("doctor-worktree", id.to_usize()), label.clone())
+                    .style(ButtonStyle::Outlined).selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                    .toggle_state(self.selected_worktree == Some(id)).disabled(self.repair_task.is_some()).tab_index(0_isize)
+                    .aria_label(format!("Select Doctor worktree {label}"))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if this.selected_worktree != Some(id) { this.select_worktree(id, cx); }
+                    })))))
+                .child(Button::new("doctor-choose-host", "Change execution host…").tab_index(0_isize).on_click(cx.listener(|this, _, window, cx| {
+                    match cx.build_action("projects::OpenRemote", None) {
+                        Ok(action) => window.dispatch_action(action, cx),
+                        Err(error) => { this.error = Some(DiagnosticText::new(format!("Existing remote-project controls are unavailable: {error}"))); cx.notify(); }
+                    }
+                }))))
+            .when(!self.advanced_open, |element| element.child(self.scope_controls(cx)))
+            .when(self.advanced_open, |element| element.child(
+                v_flex().gap_1()
+                    .child(Label::new("Advanced actions").weight(gpui::FontWeight::SEMIBOLD))
+                    .child(Label::new("Choose a diagnostic probe or recovery action below. Opening a form performs no execution, repair, installation or permission grant.").size(LabelSize::Small).color(Color::Muted))))
+            .child(h_flex().flex_wrap().gap_2()
+                .child(div().debug_selector(|| "doctor-refresh".into()).child(
+                    Button::new("doctor-refresh", if self.error.is_some() || self.collection_cancelled { "Retry checks" } else { "Collect checks" })
+                        .style(ButtonStyle::Filled).disabled(self.directory(cx).is_none() || self.collection.is_some() || self.repair_task.is_some() || self.preparation.is_some())
+                        .tab_index(0_isize).on_click(cx.listener(|this, _, _, cx| this.refresh(cx)))))
+                .when(self.collection.is_some(), |element| element.child(
+                    div().debug_selector(|| "doctor-cancel-collection".into()).child(
+                        Button::new("doctor-cancel-collection", "Cancel collection").style(ButtonStyle::Outlined).tab_index(0_isize)
+                            .on_click(cx.listener(|this, _, _, cx| this.cancel_collection(cx))))))
+                .child(div().debug_selector(|| "doctor-export-current".into()).child(
+                    Button::new("doctor-export-current", "Export redacted report…").disabled(self.report.is_none() || self.export_task.is_some()).tab_index(0_isize)
+                        .on_click(cx.listener(|this, _, _, cx| this.export_selected(false, cx)))))
+)
+            .when(self.directory(cx).is_none(), |element| element.child(Label::new("Collection is disabled until an available worktree is selected. Doctor never chooses another host as a fallback.").color(Color::Warning)))
+            .when(self.repair_task.is_some() || self.preparation.is_some(), |element| element.child(Label::new("Collection is disabled while an action is being prepared or observed. Finish or cancel that action first.").color(Color::Warning)))
             .child(div().id("doctor-status").role(gpui::Role::Status).aria_label("Doctor collection status").aria_value(status.clone()).aria_live(gpui::accesskit::Live::Polite).child(Label::new(status)))
-            .when_some(self.report.as_ref(), |element, report| element.child(Label::new(format!("Collected {}", Self::timestamp(report.observed_at)))))
-            .child(h_flex().gap_2().child(div().debug_selector(|| "doctor-export-current".into()).child(Button::new("doctor-export-current", "Export current redacted report…").disabled(self.report.is_none() || self.export_task.is_some()).tab_index(0_isize).on_click(cx.listener(|this, _, _, cx| this.export_selected(false, cx))))))
+            .when_some(self.report.as_ref(), |element, report| element.child(Label::new(format!("Last collection: {} · configuration and cached development evidence only", Self::timestamp(report.observed_at))).size(LabelSize::Small).color(Color::Muted)))
+            .when_some(self.error.as_ref(), |element, error| element.child(div().id("doctor-error").role(gpui::Role::Alert).aria_value(error.as_str().to_owned()).aria_label("Doctor error").child(Label::new(error.as_str().to_owned()).color(Color::Error))))
             .when_some(self.export_status.as_ref(), |element, status| element.child(div().id("doctor-export-status").role(gpui::Role::Status).aria_live(gpui::accesskit::Live::Polite).child(Label::new(status.as_str().to_owned()))))
-            .map(|element| {
-                #[cfg(feature = "agentic")]
-                let element = element.child(self.native_repair_controls(cx));
-                element
-            })
             .child(self.investigation_controls(cx))
-            .child(self.investigation_evidence_controls(cx))
-            .child(self.history_controls(cx))
-            .child(self.repair_controls(cx))
-            .child(self.restart_controls(cx))
-            .map(|element| {
+            .when(self.advanced_open || self.proposal.is_some() || self.owner_result.is_some() || self.repair_status.is_some(), |element| element.child(self.repair_controls(cx)))
+            .when(self.advanced_open, |element| {
+                let element = element
+                    .child(Label::new("Advanced actions — opening a form performs no execution or repair").weight(gpui::FontWeight::SEMIBOLD))
+                    .child(h_flex().flex_wrap().gap_2().children([DoctorProduct::Made, DoctorProduct::Copper, DoctorProduct::Groovy].into_iter().enumerate().map(|(index, product)| div().debug_selector(move || format!("doctor-product-{index}")).child(
+                        Button::new(("doctor-product", index), format!("{} checks", product.name()))
+                            .selected_style(ButtonStyle::Tinted(TintColor::Accent)).toggle_state(self.selected_product == product)
+                            .disabled(self.repair_task.is_some()).tab_index(0_isize).on_click(cx.listener(move |this, _, _, cx| {
+                                if this.selected_product != product { this.selected_product = product; this.invalidate(cx); }
+                            }))))))
+                    .child(Label::new("The check family selects language integration; it does not change the running product. Integrations absent from this build report Unsupported.").size(LabelSize::Small).color(Color::Muted))
+                    .child(Button::new("doctor-settings", "Inspect project settings").tab_index(0_isize).on_click(cx.listener(|this, _, window, cx| this.open_handoff(crate::doctor::DoctorProjectHandoff::Settings, window, cx))))
+                    .child(self.history_controls(cx))
+                    .child(self.restart_controls(cx));
                 #[cfg(feature = "agentic")]
-                let element = element.child(self.probe_controls(cx)).child(self.github_controls(cx)).child(self.security_setup_controls(cx));
-                element
-            })
-            .map(|element| {
+                let element = element.child(self.native_repair_controls(cx)).child(self.probe_controls(cx)).child(self.github_controls(cx)).child(self.security_setup_controls(cx));
                 #[cfg(any(feature = "rust-tools", feature = "jvm-tools"))]
                 let element = element.child(self.dependency_controls(cx)).child(self.security_controls(cx)).child(self.installation_controls(cx));
                 element
             })
-            .when_some(self.error.as_ref(), |element, error| element.child(div().id("doctor-error").role(gpui::Role::Alert).aria_value(error.as_str().to_owned()).aria_label("Doctor error").child(Label::new(error.as_str().to_owned()).color(Color::Error))))
-            .when_some(self.report.as_ref(), |element, report| element.children(report.checks().iter().enumerate().map(|(index, check)| {
-                v_flex().id(("doctor-check", index)).p_2().gap_1().border_1().border_color(cx.theme().colors().border)
-                    .child(Label::new(format!("{} — {}{}", check.outcome.label(), check.title.as_str(), if check.historical { " (historical)" } else { "" })))
-                    .child(Label::new(check.detail.as_str().to_owned()))
-                    .map(|element| {
-                        #[cfg(feature = "agentic")]
-                        let element = {
-                            let id = check.id.as_str().to_owned();
-                            element.child(Button::new(("doctor-native-evidence", index), "Select for native repair")
-                                .toggle_state(self.native_evidence.contains(&id)).disabled(self.repair_task.is_some())
-                                .tab_index(0_isize).on_click(cx.listener(move |this, _, _, cx| {
-                                    this.cancel_repair(cx);
-                                    this.native_investigation_evidence.clear();
-                                    if this.native_evidence.contains(&id) { this.native_evidence.retain(|selected| selected != &id); }
-                                    else if this.native_evidence.len() < 8 { this.native_evidence.push(id.clone()); }
-                                    else { this.error = Some(DiagnosticText::new("Select at most eight checks")); }
-                                    cx.notify();
-                                })))
-                        };
-                        element
-                    })
-                    .when_some(check.remedy.as_ref(), |element, remedy| element.child(Label::new(remedy.as_str().to_owned())))
-            })));
+            .child(self.investigation_evidence_controls(cx))
+            .when(!self.advanced_open, |element| element.child(self.result_controls(cx)))
+            .map(|element| {
+                #[cfg(feature = "agentic")]
+                let element = element.when(self.advanced_open && self.native_repair_open, |element| element.child(self.result_controls(cx)));
+                element
+            });
         v_flex()
             .id("made-doctor")
             .debug_selector(|| "made-doctor".into())
             .track_focus(&self.focus_handle)
             .key_context("Doctor")
             .size_full()
+            .min_h_0()
+            .overflow_hidden()
             .when(self.repair_task.is_some(), |element| {
                 element.child(
                     h_flex()
@@ -7253,14 +7790,34 @@ impl Render for DoctorView {
                 )
             })
             .child(
-                div()
-                    .id("doctor-evidence-scroll")
+                h_flex()
                     .flex_1()
                     .min_h_0()
                     .w_full()
-                    .track_scroll(&self.scroll_handle)
-                    .overflow_y_scroll()
-                    .child(content),
+                    .overflow_hidden()
+                    .child(self.navigation_controls(cx))
+                    .child(
+                        v_flex()
+                            .id("doctor-content-frame")
+                            .relative()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .h_full()
+                            .vertical_scrollbar_for(&self.scroll_handle, window, cx)
+                            .child(
+                                // Keep long pages out of the parent pane's intrinsic height.
+                                div()
+                                    .id("doctor-evidence-scroll")
+                                    .absolute()
+                                    .inset_0()
+                                    .min_w_0()
+                                    .min_h_0()
+                                    .track_scroll(&self.scroll_handle)
+                                    .overflow_y_scroll()
+                                    .child(content),
+                            ),
+                    ),
             )
     }
 }
@@ -8879,6 +9436,14 @@ mod tests {
                 .await
                 .expect("Scoped collection");
         }
+        visual
+            .refresh()
+            .expect("Completed collection and disclosure");
+        let advanced = visual
+            .debug_bounds("doctor-advanced")
+            .expect("Advanced action disclosure");
+        visual.simulate_click(advanced.center(), gpui::Modifiers::default());
+        visual.run_until_parked();
         (view, visual, history, workspace)
     }
 
@@ -8889,15 +9454,15 @@ mod tests {
     ) {
         view.update(visual, |_, cx| cx.notify());
         visual.run_until_parked();
-        let review = visual
-            .debug_bounds(if remote {
+        click_investigation_control(
+            view,
+            visual,
+            if remote {
                 "doctor-review-remote-restart"
             } else {
                 "doctor-review-application-restart"
-            })
-            .expect("Native restart review control");
-        visual.simulate_click(review.center(), gpui::Modifiers::default());
-        visual.run_until_parked();
+            },
+        );
         let mut notifications = visual.notifications(view);
         while view.read_with(visual, |view, _| view.preparation.is_some()) {
             futures::StreamExt::next(&mut notifications)
@@ -9693,6 +10258,53 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn doctor_export_freshness_change_rejects_dialog_and_stale_report_is_labelled(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, mut visual, filesystem, _) = export_ui(cx).await;
+        export_click(&view, &mut visual, "doctor-export-current");
+        filesystem
+            .insert_tree(
+                "/doctor-restart",
+                serde_json::json!({"source.rs":"changed fixture input"}),
+            )
+            .await;
+        visual.run_until_parked();
+        assert!(view.read_with(&visual, |view, cx| view.report_is_stale(cx)));
+        cx.simulate_new_path_selection(|_| Some(std::path::PathBuf::from("/exports/fresh.md")));
+        export_observe(&view, &mut visual).await;
+        assert!(
+            fs::Fs::metadata(
+                filesystem.as_ref(),
+                std::path::Path::new("/exports/fresh.md")
+            )
+            .await
+            .expect("Rejected stale export")
+            .is_none()
+        );
+        assert!(view.read_with(&visual, |view, _| {
+            view.export_status
+                .as_ref()
+                .expect("Freshness error")
+                .as_str()
+                .contains("freshness changed")
+        }));
+        export_click(&view, &mut visual, "doctor-export-current");
+        cx.simulate_new_path_selection(|_| {
+            Some(std::path::PathBuf::from("/exports/stale-labelled.md"))
+        });
+        export_observe(&view, &mut visual).await;
+        let contents = fs::Fs::load(
+            filesystem.as_ref(),
+            std::path::Path::new("/exports/stale-labelled.md"),
+        )
+        .await
+        .expect("Explicit stale export");
+        assert!(contents.starts_with("Stale report"));
+        assert!(contents.contains("Original observations below do not establish current health"));
+    }
+
+    #[gpui::test]
     async fn doctor_export_symbolic_link_does_not_overwrite_original_source(
         cx: &mut TestAppContext,
     ) {
@@ -9895,7 +10507,8 @@ mod tests {
             std::fs::write(
                 &wrapper,
                 format!(
-                    "#!/bin/sh\n{stop_delay}exec {} --test-data-dir {} \"$@\"\n",
+                    "#!/bin/sh\nprintf '%s %s\\n' \"$$\" \"$*\" >> {}\n{stop_delay}exec {} --test-data-dir {} \"$@\"\n",
+                    quote(&directory.path().join("wrapper-invocations.log")),
                     quote(&binary),
                     quote(directory.path())
                 ),
@@ -10208,12 +10821,13 @@ mod tests {
         view.read_with(&visual, |view, _| {
             assert!(
                 started,
-                "Owned stop helper unavailable; error {:?}; outcome {:?}; detail {:?}",
+                "Owned stop helper unavailable; error {:?}; outcome {:?}; detail {:?}; wrapper invocations {:?}",
                 view.error,
                 view.owner_result.as_ref().map(OwnerRepair::phase),
                 view.owner_result
                     .as_ref()
-                    .and_then(OwnerRepair::operation_detail)
+                    .and_then(OwnerRepair::operation_detail),
+                std::fs::read_to_string(fixture.directory.path().join("wrapper-invocations.log"))
             )
         });
         let observation = cx
@@ -10448,6 +11062,7 @@ mod tests {
             view.refresh(cx);
         });
         visual.run_until_parked();
+        click_investigation_control(&view, &mut visual, "doctor-advanced");
         let review = visual
             .debug_bounds("doctor-review-mcp")
             .expect("Native owner review control");
@@ -10779,6 +11394,7 @@ mod tests {
                 .await
                 .expect("Native collection view remains available");
         }
+        click_investigation_control(&view, &mut visual, "doctor-advanced");
         view.update_in(&mut visual, |view, window, cx| {
             assert_eq!(view.generation, 1);
             view.accept_proposal(Ok(review), window, cx);
@@ -11089,11 +11705,7 @@ mod tests {
             cx.notify();
         });
         visual.run_until_parked();
-        let prepare = visual
-            .debug_bounds("doctor-prepare-install")
-            .expect("Native prepare-review control");
-        visual.simulate_click(prepare.center(), gpui::Modifiers::default());
-        visual.run_until_parked();
+        click_investigation_control(&view, &mut visual, "doctor-prepare-install");
         visual
             .condition(&view, |view, _| view.preparation.is_none())
             .await;
@@ -12011,6 +12623,270 @@ int main(int count, char **arguments) {
     }
 
     #[gpui::test]
+    async fn doctor_conversation_context_latest_snapshot_clears_resolved_block(
+        cx: &mut TestAppContext,
+    ) {
+        let (_, workspace, window) = fixture(cx, false).await;
+        let mut visual = VisualTestContext::from_window(window.into(), cx);
+        visual.dispatch_action(Doctor);
+        visual.run_until_parked();
+        let view = workspace
+            .read_with(&visual, |workspace, cx| {
+                workspace.item_of_type::<DoctorView>(cx)
+            })
+            .expect("Doctor");
+        for (outcome, expected) in [
+            (CheckOutcome::Blocked, "Blocked 1;"),
+            (CheckOutcome::Ready, "Blocked 0;"),
+        ] {
+            view.update(&mut visual, |view, cx| {
+                view.report = Some(
+                    DoctorReport::with_checks(
+                        DoctorScope {
+                            product: DiagnosticText::new("Copper"),
+                            project: DiagnosticText::new("fixture"),
+                            worktree: DiagnosticText::new("first"),
+                            host: DiagnosticText::new("Local"),
+                        },
+                        view.generation,
+                        10,
+                        vec![DoctorCheck::new(
+                            "made.provider",
+                            "Resolved default model/provider",
+                            outcome,
+                            "Observed provider configuration only",
+                            10,
+                        )],
+                    )
+                    .expect("Observed report"),
+                );
+                let context = view.conversation_context(cx).expect("Latest collection");
+                assert!(
+                    context.contains("Latest collection replaces earlier collection snapshots")
+                );
+                assert!(context.contains(expected), "{context}");
+                assert!(context.contains("Failed 0;"), "{context}");
+                if outcome == CheckOutcome::Ready {
+                    assert!(context.contains("Passed 1;"), "{context}");
+                }
+            });
+        }
+    }
+
+    #[gpui::test]
+    async fn doctor_view_scope_guides_collection_exposes_development_and_preserves_repeated_open(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::doctor::DoctorInvestigationScope;
+        let (project, workspace, window) = fixture(cx, false).await;
+        let mut visual = VisualTestContext::from_window(window.into(), cx);
+        visual.dispatch_action(Doctor);
+        visual.run_until_parked();
+        let view = workspace
+            .read_with(&visual, |workspace, cx| {
+                workspace.item_of_type::<DoctorView>(cx)
+            })
+            .expect("Doctor");
+        view.read_with(&visual, |view, cx| {
+            assert!(!view.advanced_open);
+            assert!(view.report.is_none());
+            assert!(view.conversation_context(cx).is_none());
+        });
+        assert!(
+            visual
+                .debug_bounds("doctor-investigation-scope-0")
+                .is_some()
+        );
+        assert!(
+            visual
+                .debug_bounds("doctor-investigation-scope-1")
+                .is_some()
+        );
+        assert!(
+            visual
+                .debug_bounds("doctor-investigation-scope-2")
+                .is_some()
+        );
+        assert!(
+            visual.debug_bounds("doctor-product-0").is_none(),
+            "Advanced operations start disclosed, not expanded"
+        );
+        view.update(&mut visual, |view, cx| {
+            view.error = Some(DiagnosticText::new("Execution-host navigation failed"));
+            assert!(view.conversation_context(cx).is_none());
+            assert!(!view.collection_failed);
+        });
+        click_investigation_control(&view, &mut visual, "doctor-refresh");
+        visual
+            .condition(&view, |view, _| view.collection.is_none())
+            .await;
+        view.read_with(&visual, |view, cx| {
+            let report = view.report.as_ref().expect("Real owner collection");
+            assert!(
+                report
+                    .checks()
+                    .iter()
+                    .any(|check| check.id.as_str() == "development.scope")
+            );
+            assert!(
+                report.investigation().is_none(),
+                "Passive collection does not perform an application reproduction"
+            );
+            let summary = view
+                .conversation_context(cx)
+                .expect("Attributable collection context");
+            assert!(summary.starts_with("/doctor collection status: Collected."));
+            assert!(summary.contains("Project:"));
+            assert!(summary.contains("Worktree:"));
+            assert!(summary.contains("does not execute"));
+            assert!(!view.report_is_stale(cx));
+        });
+        click_investigation_control(&view, &mut visual, "doctor-investigation-scope-1");
+        let generation = view.read_with(&visual, |view, _| view.generation);
+        visual.dispatch_action(Doctor);
+        visual.run_until_parked();
+        view.read_with(&visual, |view, _| {
+            assert_eq!(
+                view.investigation.scope,
+                DoctorInvestigationScope::Development
+            );
+            assert_eq!(view.generation, generation);
+            assert!(view.report.is_some());
+        });
+        let filesystem = project.read_with(&visual, |project, _| project.fs().as_fake());
+        filesystem
+            .insert_tree(
+                "/first",
+                serde_json::json!({"keep.txt":"changed fixture input"}),
+            )
+            .await;
+        visual.run_until_parked();
+        view.read_with(&visual, |view, cx| {
+            assert!(
+                view.report_is_stale(cx),
+                "Changed worktree inputs cannot leave a current passing report"
+            );
+            assert!(
+                view.conversation_context(cx)
+                    .expect("Stale context")
+                    .contains("Stale")
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn doctor_view_scope_narrow_results_wrap_and_scroll_without_overlapping(
+        cx: &mut TestAppContext,
+    ) {
+        let (_project, workspace, window) = fixture(cx, false).await;
+        let mut visual = VisualTestContext::from_window(window.into(), cx);
+        visual.simulate_resize(gpui::size(gpui::px(520.), gpui::px(700.)));
+        visual.dispatch_action(Doctor);
+        visual.run_until_parked();
+        let view = workspace
+            .read_with(&visual, |workspace, cx| {
+                workspace.item_of_type::<DoctorView>(cx)
+            })
+            .expect("Doctor");
+        click_investigation_control(&view, &mut visual, "doctor-advanced");
+        visual.refresh().expect("Advanced page layout");
+        let visible_height = visual.update(|window, _| window.viewport_size().height);
+        assert!(
+            view.read_with(&visual, |view, _| view.scroll_handle.bounds().bottom()
+                <= visible_height),
+            "Advanced content must remain inside the actual window"
+        );
+        click_investigation_control(&view, &mut visual, "doctor-investigation-scope-1");
+        view.update(&mut visual, |view, cx| {
+            view.investigation.scope = crate::doctor::DoctorInvestigationScope::Development;
+            view.report = Some(DoctorReport::with_checks(DoctorScope {
+                product: DiagnosticText::new("Copper"), project: DiagnosticText::new("fixture"),
+                worktree: DiagnosticText::new("first"), host: DiagnosticText::new("Local"),
+            }, view.generation, 10, (0..3).map(|index| DoctorCheck::new(
+                &format!("rust.failure.{index}"), "A failed Cargo collection with a long diagnostic",
+                CheckOutcome::Failed, &"Missing dependency; offline restriction requires explicit recovery. ".repeat(20), 10,
+            )).collect()).expect("Bounded diagnostic fixtures"));
+            cx.notify();
+        });
+        visual.refresh().expect("Narrow result layout");
+        let first = visual
+            .debug_bounds("doctor-result-0")
+            .expect("First diagnostic");
+        let second = visual
+            .debug_bounds("doctor-result-1")
+            .expect("Second diagnostic");
+        assert!(
+            first.size.height > gpui::px(100.),
+            "Long evidence must grow its card"
+        );
+        assert!(
+            first.bottom() <= second.top(),
+            "Diagnostic rows must not overlap"
+        );
+        let navigation = visual
+            .debug_bounds("doctor-advanced")
+            .expect("Always visible navigation");
+        let (viewport, before) = view.read_with(&visual, |view, _| {
+            (view.scroll_handle.bounds(), view.scroll_handle.offset())
+        });
+        visual.simulate_event(gpui::ScrollWheelEvent {
+            position: viewport.center(),
+            delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-500.))),
+            modifiers: gpui::Modifiers::default(),
+            touch_phase: gpui::TouchPhase::Moved,
+        });
+        visual.run_until_parked();
+        visual
+            .refresh()
+            .expect("Settled layout after precise scrolling");
+        assert!(
+            view.read_with(&visual, |view, _| view.scroll_handle.offset().y < before.y),
+            "Real scroll input must make lower results reachable"
+        );
+        view.update(&mut visual, |view, cx| {
+            view.scroll_handle
+                .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
+            cx.notify();
+        });
+        visual.run_until_parked();
+        visual.simulate_event(gpui::ScrollWheelEvent {
+            position: viewport.center(),
+            delta: gpui::ScrollDelta::Lines(gpui::point(0., -3.)),
+            modifiers: gpui::Modifiers::default(),
+            touch_phase: gpui::TouchPhase::default(),
+        });
+        visual.run_until_parked();
+        visual
+            .refresh()
+            .expect("Settled layout after discrete scrolling");
+        assert!(
+            view.read_with(&visual, |view, _| view.scroll_handle.offset().y
+                < gpui::px(0.)),
+            "Discrete native wheel input must make lower results reachable"
+        );
+        assert_eq!(
+            navigation,
+            visual
+                .debug_bounds("doctor-advanced")
+                .expect("Fixed navigation survives scrolling")
+        );
+        click_investigation_control(&view, &mut visual, "doctor-advanced");
+        assert!(view.read_with(&visual, |view, _| view.advanced_open
+            && view.report.is_some()));
+        assert!(visual.debug_bounds("doctor-product-0").is_some());
+        assert!(
+            visual.debug_bounds("doctor-result-0").is_none(),
+            "Advanced actions must not bury their controls beneath health results"
+        );
+        click_investigation_control(&view, &mut visual, "doctor-investigation-scope-1");
+        assert!(visual.debug_bounds("doctor-result-0").is_some());
+        assert_eq!(
+            view.read_with(&visual, |view, _| view.scroll_handle.offset().y),
+            gpui::px(0.)
+        );
+    }
+
+    #[gpui::test]
     async fn doctor_view_scope_native_action_requires_root_and_collects_only_on_click(
         cx: &mut TestAppContext,
     ) {
@@ -12279,11 +13155,7 @@ int main(int count, char **arguments) {
                 .expect("Passive history")
                 .is_empty()
         );
-        let cancel = visual
-            .debug_bounds("doctor-cancel-repair")
-            .expect("Cancel exact proposal");
-        visual.simulate_click(cancel.center(), gpui::Modifiers::default());
-        visual.run_until_parked();
+        click_investigation_control(&view, &mut visual, "doctor-cancel-repair");
         view.read_with(&visual, |view, _| {
             assert!(view.proposal.is_none());
             assert!(view.repair_task.is_none());
@@ -12479,7 +13351,30 @@ int main(int count, char **arguments) {
         visual: &mut VisualTestContext,
         selector: &'static str,
     ) {
+        visual.refresh().expect("Current Doctor controls");
+        if visual.debug_bounds("made-doctor").is_none() {
+            visual.dispatch_action(Doctor);
+            visual
+                .refresh()
+                .expect("Return to the existing Doctor Item");
+        }
+        if visual.debug_bounds(selector).is_none()
+            && !view.read_with(visual, |view, _| view.advanced_open)
+        {
+            click_investigation_control(view, visual, "doctor-advanced");
+        }
         let bounds = visual.debug_bounds(selector).expect("Rendered control");
+        if selector == "doctor-advanced" || selector.starts_with("doctor-investigation-scope-") {
+            assert!(
+                visual
+                    .debug_bounds("made-doctor")
+                    .expect("Doctor Item")
+                    .contains(&bounds.center())
+            );
+            visual.simulate_click(bounds.center(), gpui::Modifiers::default());
+            visual.run_until_parked();
+            return;
+        }
         view.update(visual, |view, cx| {
             let viewport = view.scroll_handle.bounds();
             let offset = view.scroll_handle.offset();
@@ -12507,6 +13402,15 @@ int main(int count, char **arguments) {
             atomic::{AtomicUsize, Ordering},
         };
         let (view, mut visual, history, workspace) = restart_ui(cx).await;
+        let contexts = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscription = visual.update(|_, cx| {
+            let contexts = contexts.clone();
+            cx.subscribe(&view, move |view, _: &DoctorEvidenceUpdated, cx| {
+                if let Some(context) = view.read(cx).conversation_context(cx) {
+                    contexts.borrow_mut().push(context);
+                }
+            })
+        });
         view.update(&mut visual, |view, cx| {
             view.investigation.open = true;
             view.investigation.scope = crate::doctor::DoctorInvestigationScope::Development;
@@ -12576,10 +13480,39 @@ int main(int count, char **arguments) {
                 assert!(view.repair_task.is_some());
                 assert!(view.repair_cancel.is_some());
             });
+            visual.run_until_parked();
+            {
+                let contexts = contexts.borrow();
+                let context = contexts
+                    .last()
+                    .expect("Running action delivered to conversation");
+                assert!(context.contains("selected_regression"), "{context}");
+                assert!(context.contains("Action status: Running"), "{context}");
+                assert!(
+                    !context.contains("CommandExit"),
+                    "Previous exit cannot describe a new run: {context}"
+                );
+            }
             completion.send(code).await.expect("Observed fixture exit");
             visual
                 .condition(&view, |view, _| view.repair_task.is_none())
                 .await;
+            visual.run_until_parked();
+            {
+                let contexts = contexts.borrow();
+                let context = contexts
+                    .last()
+                    .expect("Observed result delivered to conversation");
+                assert!(context.contains("selected_regression"), "{context}");
+                assert!(
+                    context.contains(&format!("CommandExit {{ code: Some({code}) }}")),
+                    "{context}"
+                );
+                assert!(
+                    context.contains("do not establish general correctness"),
+                    "{context}"
+                );
+            }
             view.read_with(&visual, |view, _| {
                 assert_eq!(
                     view.owner_result.as_ref().expect("Observed result").phase(),

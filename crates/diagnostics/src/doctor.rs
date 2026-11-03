@@ -96,11 +96,11 @@ pub enum CheckOutcome {
 impl CheckOutcome {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Ready => "Ready",
+            Self::Ready => "Passed",
             Self::Warning => "Warning",
             Self::Blocked => "Blocked",
             Self::Failed => "Failed",
-            Self::Untested => "Untested",
+            Self::Untested => "Unverified",
             Self::Unsupported => "Unsupported",
             Self::Cancelled => "Cancelled",
         }
@@ -115,6 +115,33 @@ pub struct DoctorScope {
     pub host: DiagnosticText,
 }
 
+pub(crate) fn project_authority_description(
+    observation: &project::DoctorProjectObservation,
+) -> String {
+    let host = match observation.host {
+        project::DoctorExecutionHost::Local => "Local development host",
+        project::DoctorExecutionHost::RemoteConnected => "Connected project development host",
+        project::DoctorExecutionHost::RemoteUnavailable => "Project development host unavailable",
+        project::DoctorExecutionHost::CollaborationGuest => {
+            "Collaboration guest — host checks unavailable"
+        }
+    };
+    let trust = match observation.trusted {
+        Some(true) => "granted",
+        Some(false) => "not granted",
+        None => "unknown",
+    };
+    format!(
+        "Host: {host}. Execution trust: {trust}. Project read-only mode: {}.{}",
+        if observation.read_only { "on" } else { "off" },
+        if observation.isolated_recipe_test {
+            " Isolated recipe-test host."
+        } else {
+            ""
+        }
+    )
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DoctorCheck {
     pub id: DiagnosticText,
@@ -127,6 +154,96 @@ pub struct DoctorCheck {
 }
 
 impl DoctorCheck {
+    pub(crate) fn scope(&self) -> DoctorInvestigationScope {
+        let identifier = self.id.as_str();
+        if identifier.starts_with("rust.")
+            || identifier.starts_with("jvm.")
+            || identifier.starts_with("development.")
+            || identifier.starts_with("coverage.rust.")
+            || identifier.starts_with("coverage.jvm.")
+            || identifier.starts_with("coverage.development.")
+        {
+            DoctorInvestigationScope::Development
+        } else {
+            DoctorInvestigationScope::Product
+        }
+    }
+
+    pub(crate) fn state_label(&self) -> &'static str {
+        if self.historical {
+            "Stale"
+        } else {
+            self.outcome.label()
+        }
+    }
+
+    pub(crate) fn priority(&self) -> u8 {
+        if self.historical {
+            return 3;
+        }
+        match self.outcome {
+            CheckOutcome::Failed => 0,
+            CheckOutcome::Blocked => 1,
+            CheckOutcome::Warning => 2,
+            CheckOutcome::Untested => 4,
+            CheckOutcome::Unsupported => 5,
+            CheckOutcome::Cancelled => 6,
+            CheckOutcome::Ready => 7,
+        }
+    }
+
+    pub(crate) fn evidence_source(&self) -> &'static str {
+        let identifier = self.id.as_str();
+        if identifier == "project.authority" {
+            "Project trust and execution-host owner"
+        } else if identifier == "rust.pin" {
+            "Selected worktree's toolchain declaration"
+        } else if identifier == "rust.selection" {
+            "Project toolchain selection"
+        } else if identifier.contains("lsp") || identifier.starts_with("jvm.") {
+            "Project language-server and imported-project owners"
+        } else if identifier.contains("debug") {
+            "Project debugger session metadata"
+        } else if identifier.contains("tests") || identifier.contains("run.") {
+            "Project structured test and Task results"
+        } else if identifier.starts_with("rust.") || identifier.starts_with("development.cargo") {
+            "Cargo workspace owner's cached metadata"
+        } else if identifier.starts_with("made.provider") {
+            "Configured provider discovery and credential status"
+        } else if identifier.starts_with("made.mcp") {
+            "Project context-server status and authority"
+        } else if identifier.starts_with("made.extension") || identifier.starts_with("made.plugin")
+        {
+            "Product extension and plugin owners"
+        } else if identifier.starts_with("made.recipe") || identifier.starts_with("made.schedule") {
+            "Project recipe and schedule owners"
+        } else {
+            "Selected Doctor collector; see the evidence identifier and details"
+        }
+    }
+
+    pub(crate) fn next_step(&self) -> &str {
+        if self.historical {
+            return "Collect checks again for the current inputs. This retained observation cannot establish current health.";
+        }
+        if let Some(remedy) = &self.remedy {
+            return remedy.as_str();
+        }
+        if self.outcome == CheckOutcome::Unsupported {
+            return "Use a supported product or execution host. This check did not run; no alternate host was used.";
+        }
+        if self.id.as_str() == "project.authority" {
+            return "Inspect project trust and host availability in the existing project controls. Doctor cannot grant execution permission.";
+        }
+        if self.id.as_str().starts_with("made.provider") {
+            return "Inspect the selected model's settings. A separately reviewed connectivity probe can test a real response; configuration alone does not prove inference works.";
+        }
+        if self.scope() == DoctorInvestigationScope::Development {
+            return "Inspect the relevant Cargo, toolchain or Tests surface. For a real build/test result, set up a development investigation and review the exact command and effects before running it.";
+        }
+        "Inspect the evidence and relevant settings. Advanced actions offer separately reviewed probes and recovery; collecting checks applies no repairs."
+    }
+
     pub fn new(
         id: &str,
         title: &str,
@@ -332,13 +449,17 @@ impl DoctorReport {
     }
 
     pub fn summary(&self) -> String {
-        let ready = self
-            .checks
-            .iter()
-            .filter(|check| check.outcome == CheckOutcome::Ready)
-            .count();
+        let mut states = std::collections::BTreeMap::new();
+        for check in &self.checks {
+            *states.entry(check.state_label()).or_insert(0_usize) += 1;
+        }
+        let summary = states
+            .into_iter()
+            .map(|(state, count)| format!("{count} {}", state.to_lowercase()))
+            .collect::<Vec<_>>()
+            .join(" · ");
         format!(
-            "{ready} ready · {} total checks{}",
+            "{summary} · {} total checks{}",
             self.checks.len(),
             if self
                 .checks
@@ -369,10 +490,10 @@ impl DoctorReport {
             writeln!(
                 output,
                 "\n- {} — {}{}: {}",
-                check.outcome.label(),
+                check.state_label(),
                 check.title.as_str(),
                 if check.historical {
-                    " (recorded failure)"
+                    " (retained observation)"
                 } else {
                     ""
                 },
@@ -6175,8 +6296,8 @@ pub fn collect_development(
         "Project development evidence scope",
         CheckOutcome::Untested,
         &format!(
-            "Selected host {:?}; trusted {:?}; read-only {}. Cached owner metadata only: no shell, wrapper, dependency refresh, build, test, download, lockfile rewrite or permission change. Recorded observations require a separately reviewed relevant reproduction/verification target.",
-            observation.host, observation.trusted, observation.read_only
+            "{} Cached owner metadata only: no shell, wrapper, dependency refresh, build, test, download, lockfile rewrite or permission change. Recorded observations require a separately reviewed relevant reproduction/verification target.",
+            project_authority_description(&observation)
         ),
         observed_at,
     )];
@@ -6548,7 +6669,10 @@ fn copper_snapshot_checks(
     {
         let mut check = DoctorCheck::new(
             &format!("rust.failure.{index}"),
-            "Recorded Cargo collection failure",
+            &format!(
+                "Cargo metadata — {}",
+                failure.manifest_path.path.as_unix_str()
+            ),
             if !current {
                 CheckOutcome::Untested
             } else if failure.category
@@ -6558,9 +6682,20 @@ fn copper_snapshot_checks(
             } else {
                 CheckOutcome::Failed
             },
-            &failure.message,
+            &format!(
+                "Manifest {}; category {:?}; stale cached model {}. {}",
+                failure.manifest_path.path.as_unix_str(),
+                failure.category,
+                failure.has_stale_model,
+                failure.message
+            ),
             observed_at,
         );
+        if failure.category == project::cargo_workspace::CargoWorkspaceErrorCategory::Restricted {
+            check.remedy = Some(DiagnosticText::new(
+                "Review this worktree's trust in the existing project controls, then refresh Cargo and collect again. Doctor cannot grant trust or run a build automatically.",
+            ));
+        }
         check.historical = !current;
         checks.push(check);
     }
@@ -6601,7 +6736,13 @@ fn copper_snapshot_checks(
             "Recorded host compiler",
             outcome,
             &format!(
-                "Observed compiler: {}; host target: {}. Required components and targets need a reviewed manager inventory check; no installation was performed.",
+                "Workspace {}; manifest {}. Observed compiler: {}; host target: {}. Required components and targets need a reviewed manager inventory check; no installation was performed.",
+                workspace.display_name,
+                workspace
+                    .root_manifest
+                    .as_ref()
+                    .map(|manifest| manifest.path.as_unix_str())
+                    .unwrap_or("not recorded"),
                 compiler.release.as_deref().unwrap_or("unknown"),
                 compiler.host_target.as_deref().unwrap_or("unknown")
             ),
@@ -12035,7 +12176,7 @@ pub(crate) mod tests {
                 .expect("Selected host")
                 .detail
                 .as_str()
-                .contains("CollaborationGuest")
+                .contains("Collaboration guest — host checks unavailable")
         );
         assert!(
             project.read_with(cx, |owner, _| owner.local_terminal_handles().is_empty()),
@@ -14069,7 +14210,7 @@ pub(crate) mod tests {
         let coverage = report.checks().last().expect("Reserved coverage row");
         assert_eq!(coverage.outcome, CheckOutcome::Untested);
         assert!(coverage.detail.as_str().contains("37 of 100"));
-        assert!(report.summary().contains("63 ready"));
+        assert!(report.summary().contains("63 passed"));
         assert!(report.summary().contains("incomplete coverage"));
         let serialized = serde_json::to_string(&report)?;
         assert!(!serialized.contains("private-sentinel"));
@@ -14164,8 +14305,8 @@ pub(crate) mod tests {
             input_fingerprint: 1,
             completeness: CargoSnapshotCompleteness::Partial,
             failures: (0..5)
-                .map(|_| CargoCandidateFailure {
-                    manifest_path: copper_path(1, "Cargo.toml"),
+                .map(|index| CargoCandidateFailure {
+                    manifest_path: copper_path(1, &format!("member-{index}/Cargo.toml")),
                     category: CargoWorkspaceErrorCategory::CargoFailed,
                     message: "Recorded failure".into(),
                     has_stale_model: false,
@@ -14183,6 +14324,16 @@ pub(crate) mod tests {
             has_stale_model: false,
         });
         let checks = copper_snapshot_checks(Some((&snapshot, false)), selected, 10);
+        for index in 0..4 {
+            let check = checks
+                .iter()
+                .find(|check| check.id.as_str() == format!("rust.failure.{index}"))
+                .expect("Selected failure");
+            let manifest = format!("member-{index}/Cargo.toml");
+            assert!(check.title.as_str().contains(&manifest));
+            assert!(check.detail.as_str().contains(&manifest));
+            assert!(check.detail.as_str().contains("Recorded failure"));
+        }
         for (id, count) in [
             ("coverage.rust.workspaces", "1 of 9"),
             ("coverage.rust.failures", "1 of 5"),
@@ -14733,6 +14884,87 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn doctor_report_prioritizes_problems_and_never_counts_stale_passes_as_current() -> Result<()> {
+        let mut report = report();
+        for (identifier, outcome, historical) in [
+            ("made.provider", CheckOutcome::Ready, true),
+            ("project.authority", CheckOutcome::Ready, false),
+            ("rust.failure.0", CheckOutcome::Failed, false),
+            (
+                "development.cargo.dependencies",
+                CheckOutcome::Blocked,
+                false,
+            ),
+            ("rust.selection", CheckOutcome::Untested, false),
+        ] {
+            let mut check = DoctorCheck::new(
+                identifier,
+                "Selected observation",
+                outcome,
+                "Bounded evidence",
+                10,
+            );
+            check.historical = historical;
+            report.push(check)?;
+        }
+        assert!(report.summary().contains("1 passed"));
+        assert!(report.summary().contains("1 stale"));
+        assert!(report.summary().contains("1 failed"));
+        assert!(report.summary().contains("1 blocked"));
+        assert!(report.summary().contains("1 unverified"));
+        assert!(
+            report
+                .export()?
+                .contains("Stale — Selected observation (retained observation)")
+        );
+        let mut ordered = report.checks().to_vec();
+        ordered.sort_by_key(DoctorCheck::priority);
+        assert_eq!(
+            ordered.first().map(|check| check.id.as_str()),
+            Some("rust.failure.0")
+        );
+        assert_eq!(
+            ordered.last().map(|check| check.id.as_str()),
+            Some("project.authority")
+        );
+        let reopened: DoctorReport = serde_json::from_str(&serde_json::to_string(&report)?)?;
+        assert_eq!(report, reopened);
+        assert_eq!(
+            reopened.checks().first().map(DoctorCheck::state_label),
+            Some("Stale")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn doctor_report_distinguishes_configuration_development_and_unperformed_application_checks() {
+        for (identifier, scope) in [
+            ("made.provider", DoctorInvestigationScope::Product),
+            ("project.authority", DoctorInvestigationScope::Product),
+            ("rust.cargo", DoctorInvestigationScope::Development),
+            ("jvm.import", DoctorInvestigationScope::Development),
+            ("development.timing", DoctorInvestigationScope::Development),
+            (
+                "coverage.rust.failures",
+                DoctorInvestigationScope::Development,
+            ),
+        ] {
+            let check = DoctorCheck::new(
+                identifier,
+                "Owner evidence",
+                CheckOutcome::Untested,
+                "No runtime test",
+                10,
+            );
+            assert_eq!(check.scope(), scope);
+            assert_ne!(check.scope(), DoctorInvestigationScope::Application);
+            assert_eq!(check.state_label(), "Unverified");
+            assert!(!check.evidence_source().is_empty());
+            assert!(!check.next_step().is_empty());
+        }
+    }
+
+    #[test]
     fn doctor_report_does_not_count_unknown_or_cancelled_as_ready() -> Result<()> {
         let mut report = report();
         for (index, outcome) in [
@@ -14752,7 +14984,10 @@ pub(crate) mod tests {
                 10,
             ))?;
         }
-        assert_eq!(report.summary(), "1 ready · 4 total checks");
+        assert_eq!(
+            report.summary(),
+            "1 cancelled · 1 passed · 1 unsupported · 1 unverified · 4 total checks"
+        );
         Ok(())
     }
 

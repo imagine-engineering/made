@@ -1294,6 +1294,7 @@ pub struct AgentPanel {
     agent_panel_menu_handle: PopoverMenuHandle<ContextMenu>,
     _extension_subscription: Option<Subscription>,
     _doctor_subscription: Option<(gpui::EntityId, Subscription)>,
+    _doctor_context_subscription: Option<(gpui::EntityId, acp::SessionId, Subscription)>,
     _project_subscription: Subscription,
     zoomed: bool,
     pending_serialization: Option<Task<Result<()>>>,
@@ -1819,6 +1820,7 @@ impl AgentPanel {
 
             _extension_subscription: extension_subscription,
             _doctor_subscription: None,
+            _doctor_context_subscription: None,
             _project_subscription,
             zoomed: false,
             pending_serialization: None,
@@ -6058,15 +6060,18 @@ impl AgentPanel {
         {
             return;
         }
+        let context_connection = connection.clone();
         let subscription = cx.subscribe_in(
             &connection.0,
             window,
-            |this, _, request: &agent::DoctorOpenRequest, window, cx| {
+            move |this, _, request: &agent::DoctorOpenRequest, window, cx| {
                 if request.project != this.project {
                     return;
                 }
                 let workspace = this.workspace.clone();
                 let request = request.clone();
+                let panel = cx.entity().downgrade();
+                let context_connection = context_connection.clone();
                 // Revealing the editor inspects dock panels, including this subscriber.
                 window.defer(cx, move |window, cx| {
                     let result = workspace.update(cx, |workspace, cx| {
@@ -6080,12 +6085,45 @@ impl AgentPanel {
                             .ok_or_else(|| anyhow::anyhow!("Doctor desktop view is unavailable"))
                     }).and_then(|result| result);
                     match result {
-                        Ok(view) => window.on_next_frame(move |window, cx| {
+                        Ok(view) => {
+                            if let Err(error) = panel.update(cx, |panel, cx| {
+                                let session_id = request.session_id.clone();
+                                if panel._doctor_context_subscription.as_ref().is_some_and(|(entity, session, _)| *entity == view.entity_id() && *session == session_id) {
+                                    return;
+                                }
+                                let project = request.project.clone();
+                                let subscription = cx.subscribe(&view, {
+                                    let context_connection = context_connection.clone();
+                                    let session_id = session_id.clone();
+                                    let project = project.clone();
+                                    move |panel, view, _: &diagnostics::doctor_view::DoctorEvidenceUpdated, cx| {
+                                        if panel.project != project { return; }
+                                        if let Some(summary) = view.read(cx).conversation_context(cx)
+                                            && let Err(error) = context_connection.record_doctor_context(&session_id, &project, &summary, cx)
+                                        {
+                                            log::warn!("Doctor conversation context unavailable: {error}");
+                                            view.update(cx, |view, cx| view.conversation_context_failed(cx));
+                                        }
+                                    }
+                                });
+                                panel._doctor_context_subscription = Some((view.entity_id(), session_id.clone(), subscription));
+                                if let Some(summary) = view.read(cx).conversation_context(cx)
+                                    && let Err(error) = context_connection.record_doctor_context(&session_id, &project, &summary, cx)
+                                {
+                                    log::warn!("Doctor conversation context unavailable: {error}");
+                                    view.update(cx, |view, cx| view.conversation_context_failed(cx));
+                                }
+                            }) {
+                                request.complete(Err(error));
+                                return;
+                            }
+                            window.on_next_frame(move |window, cx| {
                             let focused = view.focus_handle(cx).contains_focused(window, cx);
                             request.complete(if focused { Ok(()) } else {
                                 Err(anyhow::anyhow!("Doctor could not receive focus in the project editor; invoke Doctor again"))
                             });
-                        }),
+                            });
+                        },
                         Err(error) => request.complete(Err(error)),
                     }
                 });
@@ -20182,6 +20220,12 @@ mod tests {
         let history = visual.update(|_, cx| {
             diagnostics::doctor::DoctorHistoryStore::for_app(cx).expect("Existing AppDB history")
         });
+        visual.refresh().expect("Advanced Doctor action disclosure");
+        let advanced = visual
+            .debug_bounds("doctor-advanced")
+            .expect("Advanced actions");
+        visual.simulate_click(advanced.center(), gpui::Modifiers::default());
+        visual.run_until_parked();
         (workspace, panel, view, visual, model, history)
     }
 
@@ -20197,6 +20241,12 @@ mod tests {
     fn doctor_investigation_flow_click(visual: &mut VisualTestContext, selector: &'static str) {
         for _ in 0..4 {
             visual.refresh().expect("Rendered Doctor journey");
+            if visual.debug_bounds("made-doctor").is_none() {
+                visual.dispatch_action(diagnostics::Doctor);
+                visual
+                    .refresh()
+                    .expect("Return from source review to the same Doctor Item");
+            }
             let viewport = visual.debug_bounds("made-doctor").expect("Doctor viewport");
             let bounds = visual
                 .debug_bounds(selector)
@@ -20304,6 +20354,18 @@ mod tests {
             assert_eq!(model.completion_count(), 0);
             return;
         }
+        doctor_investigation_flow_click(&mut visual, "doctor-investigation-scope-1");
+        assert!(visual.debug_bounds("doctor-native-review").is_none());
+        doctor_investigation_flow_click(&mut visual, "doctor-investigation-native-select");
+        assert!(
+            visual.debug_bounds("doctor-native-review").is_some(),
+            "Selecting investigation observations must reveal their Advanced repair controls"
+        );
+        assert_eq!(
+            model.completion_count(),
+            0,
+            "Navigation never starts inference"
+        );
         doctor_investigation_flow_click(&mut visual, "doctor-investigation-series-0");
         doctor_investigation_flow_click(&mut visual, "doctor-investigation-evidence-0");
         doctor_investigation_flow_click(&mut visual, "doctor-native-review");
@@ -22282,6 +22344,42 @@ mod tests {
             visual.debug_bounds("doctor-refresh").is_some(),
             "Collection remains explicit"
         );
+        #[cfg(feature = "doctor-dependency-test")]
+        {
+            let view = workspace
+                .read_with(&visual, |workspace, cx| {
+                    workspace.item_of_type::<diagnostics::doctor_view::DoctorView>(cx)
+                })
+                .expect("Reused Doctor");
+            let collect = visual
+                .debug_bounds("doctor-refresh")
+                .expect("Actual collection button");
+            visual.simulate_click(collect.center(), gpui::Modifiers::default());
+            visual
+                .condition(&view, |view, _| view.report_fixture().is_some())
+                .await;
+            visual.run_until_parked();
+            let history = native.read_with(&visual, |thread, _| thread.to_markdown());
+            assert!(history.contains("/doctor collection"));
+            assert!(history.contains("collection status: Collected"));
+            assert!(history.contains("unperformed application checks remain Not run"));
+            visual.update(|_, cx| {
+                SettingsStore::update_global(cx, |store, cx| {
+                    store.update_user_settings(cx, |settings| settings.vim_mode = Some(true))
+                });
+            });
+            visual.run_until_parked();
+            let history = native.read_with(&visual, |thread, _| thread.to_markdown());
+            assert!(
+                history.contains("collection status: Stale"),
+                "The originating conversation must not retain only a current-looking status after settings change"
+            );
+            assert_eq!(
+                model.completion_count(),
+                0,
+                "Report context does not send a model request"
+            );
+        }
     }
 
     #[gpui::test]

@@ -204,6 +204,7 @@ pub struct SkillLoadingIssuesUpdated {
 #[derive(Clone)]
 pub struct DoctorOpenRequest {
     pub project: Entity<Project>,
+    pub session_id: acp::SessionId,
     completion: Rc<std::cell::RefCell<Option<futures::channel::oneshot::Sender<Result<()>>>>>,
 }
 
@@ -2948,6 +2949,49 @@ impl NativeAgent {
 pub struct NativeAgentConnection(pub Entity<NativeAgent>);
 
 impl NativeAgentConnection {
+    pub fn record_doctor_context(
+        &self,
+        session_id: &acp::SessionId,
+        project: &Entity<Project>,
+        summary: &str,
+        cx: &mut App,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            summary.len() <= 8192,
+            "Doctor conversation summary exceeds its bound"
+        );
+        let (thread, acp_thread) = {
+            let agent = self.0.read(cx);
+            let session = agent
+                .sessions
+                .get(session_id)
+                .context("Doctor's native conversation is no longer available")?;
+            anyhow::ensure!(
+                session.project_id == project.entity_id(),
+                "Doctor conversation belongs to another project"
+            );
+            (session.thread.clone(), session.acp_thread.clone())
+        };
+        anyhow::ensure!(
+            !thread.read(cx).is_doctor_repair_proposal(),
+            "A source-proposal session cannot receive unrelated Doctor collection"
+        );
+        let changed = thread.update(cx, |thread, cx| {
+            thread.record_local_command(
+                ClientUserMessageId::new(),
+                "/doctor collection",
+                summary,
+                cx,
+            )
+        });
+        if changed {
+            acp_thread.update(cx, |thread, cx| {
+                thread.push_local_command_output(summary.to_owned(), cx)
+            });
+        }
+        Ok(())
+    }
+
     pub fn thread(&self, session_id: &acp::SessionId, cx: &App) -> Option<Entity<Thread>> {
         self.0
             .read(cx)
@@ -4022,6 +4066,7 @@ impl acp_thread::AgentSessionClientUserMessageIds for NativeAgentConnection {
                 let (completion, acknowledged) = futures::channel::oneshot::channel();
                 let request = DoctorOpenRequest {
                     project: project_state.project.clone(),
+                    session_id: session_id.clone(),
                     completion: Rc::new(std::cell::RefCell::new(Some(completion))),
                 };
                 self.0.update(cx, |_, cx| cx.emit(request));
@@ -5784,6 +5829,17 @@ mod internal_tests {
                     .contains("Made Doctor is open")
             );
         });
+        let collection_context = "/doctor collection status: Collected. Project: a. Cargo failure observed; application checks Not run; no repair was performed.";
+        cx.update(|cx| {
+            connection
+                .record_doctor_context(&session, &project, collection_context, cx)
+                .expect("Existing native conversation receives actual collection status");
+            connection
+                .record_doctor_context(&session, &project, collection_context, cx)
+                .expect("Repeated status is deduplicated");
+            let native = native_thread_for_session(&agent, &session, cx);
+            assert_eq!(native.read(cx).recipe_message_count(), 4);
+        });
         cx.update(|cx| connection.clone().close_session(&session, cx))
             .await
             .expect("Save and close local-command session");
@@ -5802,6 +5858,7 @@ mod internal_tests {
         let restored = cx.update(|cx| native_thread_for_session(&agent, &session, cx));
         let history = restored.read_with(cx, |thread, _| thread.to_markdown());
         assert!(history.contains("/doctor") && history.contains("Collect checks"));
+        assert!(history.contains(collection_context));
         assert_eq!(opened.get(), 2, "Restoration never replays the command");
         assert_eq!(model.completion_count(), 0);
         restored.update(cx, |thread, cx| thread.set_model(model.clone(), cx));
@@ -5820,6 +5877,10 @@ mod internal_tests {
             context.contains("/doctor")
                 && context.contains("Collect checks")
                 && context.contains("No checks, repairs or permission grants have run")
+        );
+        assert!(
+            context.contains(collection_context),
+            "Follow-up context must include collection status, not only the opening acknowledgement"
         );
     }
 
