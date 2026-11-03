@@ -599,7 +599,11 @@ fn prepare_native_repair_handoff(
         .read(cx)
         .default_model()
         .ok_or_else(|| anyhow::anyhow!("Select an authenticated native-agent model"))?;
-    let endpoint = selected.model.network_endpoint(cx)?;
+    let endpoint = selected.model.network_endpoint(cx).map_err(|error| {
+        anyhow::anyhow!(
+            "Doctor cannot prepare a native repair with the selected provider: {error}. No repair or provider switch occurred. Continue with a separately reviewed editor change, or explicitly select a provider that supports reviewed endpoint confinement. Ordinary agent conversations are separate from this restricted repair workflow."
+        )
+    })?;
     anyhow::ensure!(
         endpoint.username().is_empty()
             && endpoint.password().is_none()
@@ -1226,6 +1230,24 @@ fn configured_provider_check(
 ) -> DoctorCheck {
     let authenticated = configured.provider.is_authenticated(cx);
     let disabled = configured.model.is_disabled();
+    let detail = if configured.provider.id().0.as_ref() == "llama.cpp" {
+        format!(
+            "Local llama.cpp; model {}; registered {}; provider-reported model discovery available {}; disabled {}. This is discovery/configuration evidence, not a successful model response. If unavailable, open Local models in the llama.cpp provider settings and inspect loading or failure state; an API key is not implied. Doctor did not load a model or switch to cloud inference.",
+            configured.model.id().0,
+            registered,
+            authenticated,
+            disabled.is_some()
+        )
+    } else {
+        format!(
+            "Provider {}; model {}; registered {}; credentials available {}; disabled {}. Availability does not prove connectivity; a provider probe requires separate exact review.",
+            configured.provider.id().0,
+            configured.model.id().0,
+            registered,
+            authenticated,
+            disabled.is_some()
+        )
+    };
     DoctorCheck::new(
         "made.provider",
         "Resolved default model/provider",
@@ -1234,14 +1256,7 @@ fn configured_provider_check(
         } else {
             CheckOutcome::Ready
         },
-        &format!(
-            "Provider {}; model {}; registered {}; credentials available {}; disabled {}. Availability does not prove connectivity; a provider probe requires separate exact review.",
-            configured.provider.id().0,
-            configured.model.id().0,
-            registered,
-            authenticated,
-            disabled.is_some()
-        ),
+        &detail,
         observed_at,
     )
 }

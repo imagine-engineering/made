@@ -2346,6 +2346,19 @@ int main(int count,char **arguments) {
                         .advance(Duration::from_secs(1));
                 }
             }
+            if matches!(reason, "revocation" | "trust") {
+                // Native filesystem validation can finish after the first clock
+                // advance. Observe the monitor's cancellation, not the install timeout.
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while !cancel.is_closed() {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "Authority monitor did not stop the owned operation: {reason}"
+                    );
+                    cx.executor().advance_clock(Duration::from_millis(100));
+                    smol::unblock(|| std::thread::sleep(Duration::from_millis(10))).await;
+                }
+            }
             let result = task.await.expect("Stopped owned operation");
             assert_eq!(
                 result.review.phase(),
