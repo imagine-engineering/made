@@ -866,6 +866,11 @@ fn show_rules_to_skills_migration_toast(
 }
 
 fn maybe_backfill_editor_layout(fs: Arc<dyn Fs>, is_new_install: bool, cx: &mut App) {
+    // Copper uses the shipped chat-first defaults for unspecified positions.
+    // The historical backfill would turn absent fields into explicit choices.
+    if product_flavor::ID == "rust" {
+        return;
+    }
     let kvp = db::kvp::KeyValueStore::global(cx);
     let already_backfilled =
         util::ResultExt::log_err(kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY))
@@ -1270,11 +1275,12 @@ mod tests {
         cx.run_until_parked();
 
         let kvp = cx.update(|cx| KeyValueStore::global(cx));
-        assert!(
+        assert_eq!(
             kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY)
                 .unwrap()
                 .is_some(),
-            "flag should be set after backfill"
+            product_flavor::ID != "rust",
+            "non-Copper migration should set its flag"
         );
     }
 
@@ -1289,10 +1295,11 @@ mod tests {
         cx.run_until_parked();
 
         let kvp = cx.update(|cx| KeyValueStore::global(cx));
-        assert!(
+        assert_eq!(
             kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY)
                 .unwrap()
                 .is_some(),
+            product_flavor::ID != "rust",
             "flag should be set even for new installs"
         );
 
@@ -1323,6 +1330,45 @@ mod tests {
             after_first, after_second,
             "second call should not change settings"
         );
+    }
+
+    #[gpui::test]
+    async fn test_copper_panel_migration_preserves_saved_positions(cx: &mut TestAppContext) {
+        if product_flavor::ID != "rust" {
+            return;
+        }
+        let fs = setup_backfill_test(cx).await;
+        for saved in [
+            "{}",
+            r#"{"agent":{"dock":"right"},"project_panel":{"dock":"left"}}"#,
+            r#"{"agent":{"dock":"left"},"project_panel":{"dock":"right"}}"#,
+            r#"{"project_panel":{"dock":"right"},"git_panel":{"dock":"bottom"}}"#,
+        ] {
+            fs.save(
+                paths::settings_file().as_path(),
+                &saved.into(),
+                Default::default(),
+            )
+            .await
+            .expect("fixture settings");
+            for new_install in [false, true, false] {
+                cx.update(|cx| {
+                    cx.update_global::<SettingsStore, _>(|store, cx| {
+                        store
+                            .set_user_settings(saved, cx)
+                            .expect("existing user settings");
+                    });
+                    maybe_backfill_editor_layout(fs.clone(), new_install, cx);
+                });
+                cx.run_until_parked();
+                assert_eq!(
+                    fs.load(paths::settings_file().as_path())
+                        .await
+                        .expect("settings"),
+                    saved
+                );
+            }
+        }
     }
 
     #[test]

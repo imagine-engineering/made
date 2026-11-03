@@ -76,6 +76,24 @@ mod cargo_settings_tests {
         CargoPresetSettingsContent, CargoSettingsContent, MergeFromTrait as _, SettingsContent,
     };
 
+    #[test]
+    fn fresh_panel_defaults_place_chat_left_and_projects_right() {
+        let defaults = super::default_settings();
+        let content = crate::parse_json_with_comments::<serde_json::Value>(&defaults)
+            .expect("expanded settings");
+        assert_eq!(content["agent"]["dock"], "left");
+        for panel in [
+            "project_panel",
+            "outline_panel",
+            "collaboration_panel",
+            "git_panel",
+        ] {
+            assert_eq!(content[panel]["dock"], "right");
+        }
+        <crate::SettingsContent as crate::RootUserSettings>::parse_json_with_comments(&defaults)
+            .expect("typed settings retain valid dock positions");
+    }
+
     #[cfg(not(feature = "rust-tools"))]
     #[test]
     fn cargo_settings_are_excluded_without_rust_tools() {

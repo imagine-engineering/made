@@ -858,7 +858,7 @@ pub struct ProjectPanelSettingsContent {
     pub default_width: Option<crate::PixelSetting>,
     /// The position of project panel
     ///
-    /// Default: right (Agentic layout), left (Classic layout)
+    /// Default: right
     pub dock: Option<DockSide>,
     /// Spacing between worktree entries in the project panel.
     ///

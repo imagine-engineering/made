@@ -7,7 +7,7 @@ description: "How Zed handles multiple projects in windows, including the thread
 
 Zed lets you work on multiple projects in a single window. Projects appear in the threads sidebar on the left, and you can switch between them while keeping your context intact.
 
-Use **Panel Layout > Agentic** from the user menu in the title bar (or the {#action workspace::UseAgenticLayout} action) to keep the Threads Sidebar and Agent Panel together on the left. Use **Panel Layout > Classic** (or {#action workspace::UseClassicLayout}) to restore the editor-oriented layout.
+Copper starts with native-agent chat on the left, the editor in the center, and the Project Panel on the right. Right-click a panel icon to move that panel. Resize, hide, or zoom individual panels using their controls. Your saved positions and sizes are preserved when you reopen the application; opening a project, conversation, or Doctor does not select a different layout.
 
 ## How Projects Open
 

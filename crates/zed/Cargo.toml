@@ -34,7 +34,6 @@ agentic-tools = [
     "onboarding/agentic",
     "settings_ui/agentic",
     "terminal_view/agentic",
-    "title_bar/agentic",
     "workspace/agentic",
     "zed_actions/agentic",
 ]

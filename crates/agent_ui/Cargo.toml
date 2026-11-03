@@ -94,6 +94,7 @@ paths.workspace = true
 picker.workspace = true
 platform_title_bar.workspace = true
 postage.workspace = true
+product_flavor.workspace = true
 project.workspace = true
 prompt_store.workspace = true
 proto.workspace = true

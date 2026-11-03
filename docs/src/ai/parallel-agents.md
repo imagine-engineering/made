@@ -9,7 +9,7 @@ Parallel Agents lets you run multiple agent threads and Terminal Threads at once
 
 Open the Threads Sidebar with {#kb multi_workspace::ToggleWorkspaceSidebar}.
 
-Use **Panel Layout > Agentic** from the user menu in the title bar (or the {#action workspace::UseAgenticLayout} action) to place the Agent Panel and Threads Sidebar on the left, with the Project Panel, Git Panel, and other panels on the right. Use **Panel Layout > Classic** (or {#action workspace::UseClassicLayout}) to restore the editor-oriented layout. You can still rearrange individual panels by right-clicking any panel icon.
+Copper starts with native-agent chat on the left, the editor in the center, and the Project Panel on the right. Right-click a panel icon to move that panel. Resize, hide, or zoom individual panels using their controls. Your saved positions and sizes are preserved when you reopen the application; opening a project, conversation, or Doctor does not select a different layout.
 
 ## Threads Sidebar {#threads-sidebar}
 
