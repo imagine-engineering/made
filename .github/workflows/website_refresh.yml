@@ -8,14 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing published Copper tag (rust-vX.Y.Z); never builds or publishes Copper
+        description: Existing published Copper tag (copper-vX.Y.Z); never builds or publishes Copper
         required: true
         type: string
 permissions:
   contents: read
 jobs:
   refresh_website:
-    if: (github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: (github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false && !contains(github.event.release.body, '"preparation_scope":"macos-only"')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     permissions:
       contents: read

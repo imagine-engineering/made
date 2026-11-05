@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Reject development signatures and verify production application/DMG trust."""
 import argparse
+import hashlib
+import json
 import os
 import plistlib
 from pathlib import Path
@@ -23,6 +25,14 @@ def field(text, name):
     return match.group(1).strip() if match else ""
 
 
+def code_entitlements(path):
+    result = subprocess.run(
+        ("/usr/bin/codesign", "--display", "--entitlements", "-", "--xml", str(path)),
+        capture_output=True, check=True,
+    )
+    return plistlib.loads(result.stdout)
+
+
 def verify_code(path, team=None, runtime=True):
     run("/usr/bin/codesign", "--verify", "--strict", "--verbose=4", str(path))
     signature = run("/usr/bin/codesign", "--display", "--verbose=4", str(path)).decode()
@@ -42,13 +52,16 @@ def verify_code(path, team=None, runtime=True):
         flags = re.search(r"\bflags=(0x[0-9a-fA-F]+)", signature)
         if flags is None or not int(flags.group(1), 16) & 0x10000:
             raise ValueError(f"Hardened runtime required: {path}")
-    return actual_team
+    return {"team": actual_team, "authority": authority, "timestamp": field(signature, "Timestamp"),
+            "hardened_runtime_required": runtime}
 
 
 def verify(path, entitlements=None, notarized=False):
     application = path.is_dir() and path.suffix == ".app"
-    team = verify_code(path, runtime=application)
-    count = 0
+    signature = verify_code(path, runtime=application)
+    team = signature["team"]
+    nested = []
+    actual_entitlements = None
     if application:
         run("/usr/bin/codesign", "--verify", "--deep", "--strict", str(path))
         for entry in sorted(path.rglob("*")):
@@ -57,17 +70,22 @@ def verify(path, entitlements=None, notarized=False):
             with entry.open("rb") as source:
                 native = source.read(4) in MACHO
             if native:
-                verify_code(entry, team)
-                count += 1
-        if not count:
+                nested_signature = verify_code(entry, team)
+                if entry.relative_to(path).as_posix() == "Contents/MacOS/native-cargo-runtime-observer":
+                    actual_helper = code_entitlements(entry)
+                    expected_helper = plistlib.loads(Path("crates/native_task_helper/resources/native-cargo-runtime-observer.entitlements").read_bytes())
+                    if actual_helper != expected_helper:
+                        raise ValueError("Native Cargo runtime helper entitlements differ from reviewed source")
+                    nested_signature["entitlements"] = actual_helper
+                with entry.open("rb") as source:
+                    digest = hashlib.file_digest(source, "sha256").hexdigest()
+                nested.append({"path": str(entry.relative_to(path)), "sha256": digest, **nested_signature})
+        if not nested:
             raise ValueError("Application has no native executable")
         if entitlements is None:
             raise ValueError("Application verification requires its authoritative entitlement file")
-        actual = subprocess.run(
-            ("/usr/bin/codesign", "--display", "--entitlements", "-", "--xml", str(path)),
-            capture_output=True, check=True,
-        ).stdout
-        if plistlib.loads(actual) != plistlib.loads(entitlements.read_bytes()):
+        actual_entitlements = code_entitlements(path)
+        if actual_entitlements != plistlib.loads(entitlements.read_bytes()):
             raise ValueError("Application entitlements differ from the reviewed source")
     if notarized:
         run("xcrun", "stapler", "validate", str(path))
@@ -75,7 +93,9 @@ def verify(path, entitlements=None, notarized=False):
             run("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(path))
         else:
             run("/usr/sbin/spctl", "--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=4", str(path))
-    print(f"Verified production signature: {path}; Team={team}; nested native files={count}; notarized={notarized}")
+    print(f"Verified production signature: {path}; Team={team}; nested native files={len(nested)}; notarized={notarized}")
+    return {"signature": signature, "nested_code": nested, "entitlements": actual_entitlements,
+            "stapled_ticket_validated": notarized, "gatekeeper_assessed": notarized}
 
 
 def main():
@@ -83,9 +103,12 @@ def main():
     parser.add_argument("path", type=Path)
     parser.add_argument("--entitlements", type=Path)
     parser.add_argument("--notarized", action="store_true")
+    parser.add_argument("--json-output", type=Path)
     arguments = parser.parse_args()
     try:
-        verify(arguments.path, arguments.entitlements, arguments.notarized)
+        evidence = verify(arguments.path, arguments.entitlements, arguments.notarized)
+        if arguments.json_output:
+            arguments.json_output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"Production signature verification failed: {error}", file=sys.stderr)
         return 1

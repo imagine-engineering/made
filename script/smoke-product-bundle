@@ -52,6 +52,7 @@ def main():
             "application_features": os.environ["ZED_PRODUCT_APP_FEATURES"].split(","),
             "remote_server_features": os.environ["ZED_PRODUCT_REMOTE_FEATURES"].split(","),
             "artifact_name": os.environ["ZED_PRODUCT_ARTIFACT_NAME"],
+            "preparation_scope": os.environ.get("RELEASE_PREPARATION_SCOPE", "full"),
         }
         for key, value in expected.items():
             if plan.get(key) != value:
@@ -70,6 +71,7 @@ def main():
     if production and plan.get("signing") != "required":
         raise RuntimeError("Production artifact validation requires a production bundle plan")
     windows_verifier = str(Path("crates/zed/resources/windows/sign.ps1").resolve())
+    macos_verification = None
 
     with tempfile.TemporaryDirectory(prefix="product-bundle-smoke-") as directory:
         directory = Path(directory)
@@ -87,7 +89,8 @@ def main():
                          application / "libexec" / f"{executable}-editor", plan, version)
         elif arguments.platform == "macos":
             if production:
-                run(["python3", "script/verify-macos-signature", str(artifact), "--notarized"])
+                dmg_evidence = directory / "dmg-signature.json"
+                run(["python3", "script/verify-macos-signature", str(artifact), "--notarized", "--json-output", str(dmg_evidence)])
             mount = directory / "mounted"
             mount.mkdir()
             run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", str(mount),
@@ -126,8 +129,11 @@ def main():
                     if "Zed" in document.get("CFBundleTypeName", ""):
                         raise RuntimeError("Upstream product name remains in a document type")
             if production:
+                app_evidence = directory / "app-signature.json"
                 run(["python3", "script/verify-macos-signature", str(application),
-                     "--entitlements", "crates/zed/resources/zed.entitlements", "--notarized"])
+                     "--entitlements", "crates/zed/resources/zed.entitlements", "--notarized", "--json-output", str(app_evidence)])
+                macos_verification = {"application": json.loads(app_evidence.read_text()),
+                                      "dmg": json.loads(dmg_evidence.read_text())}
             run(["codesign", "--verify", "--deep", "--strict", str(application)])
             check_launch(application / "Contents/MacOS/cli",
                          application / "Contents/MacOS" / executable, plan, version)
@@ -163,6 +169,7 @@ def main():
             "product_id": arguments.product, "tag": os.environ.get("RELEASE_TAG", ""),
             "version": version, "commit_sha": arguments.commit_sha,
             "channel": plan["channel"], "update_namespace": plan["update_namespace"],
+            "preparation_scope": plan["preparation_scope"],
             "platform": arguments.platform, "artifact_name": artifact.name,
             "signing": "required", "sha256": digest,
             "signing_identity": os.environ[{
@@ -171,6 +178,8 @@ def main():
             }[arguments.platform]],
             "verification": "Final package signature, installed metadata and launch checks passed",
         }
+        if macos_verification:
+            receipt["macos_verification"] = macos_verification
         receipt_path = artifact.parent / f"verification-{arguments.product}-{arguments.platform}-{arguments.target.split('-')[0]}.json"
         receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
     print(f"Verified {artifact.name}: packaged metadata, CLI version, and editor help startup", flush=True)

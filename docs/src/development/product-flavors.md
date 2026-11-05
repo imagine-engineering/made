@@ -179,7 +179,7 @@ output and the updater. An explicit `RELEASE_VERSION` embeds the selected later
 release in the app and platform metadata. `cargo xtask bundle --product rust`
 defaults to the catalog version, including package filenames and installer metadata.
 Release preparation derives the product and exact version from an existing
-catalog-prefixed tag such as `rust-vX.Y.Z`; it does not choose or increment a
+catalog-prefixed tag such as `copper-vX.Y.Z`; it does not choose or increment a
 version automatically. A manual run from `main` requires main-history ancestry,
 successful exact-commit CI and the product's release qualification gate, then
 builds and verifies signed packages and leaves a draft for human review.

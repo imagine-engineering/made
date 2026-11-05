@@ -100,7 +100,7 @@ def eligible_ci(runs, decision, name, workflow):
 
 
 def identity(decision):
-    return {key: decision[key] for key in ("product_id", "tag", "version", "commit_sha", "channel", "update_namespace")}
+    return {key: decision[key] for key in ("product_id", "tag", "version", "commit_sha", "channel", "update_namespace", "preparation_scope")}
 
 
 def marker(decision):
@@ -123,6 +123,12 @@ def check_draft(release, decision):
 
 
 def guard(decision):
+    if decision["preparation_scope"] not in ("full", "macos-only"):
+        raise ValueError("unknown release preparation scope")
+    if decision["preparation_scope"] == "macos-only" and (
+            decision["product_id"] != "rust" or not decision["matrix"]["include"]
+            or any(row["platform"] != "macos" for row in decision["matrix"]["include"])):
+        raise ValueError("macos-only preparation must contain only Copper macOS targets")
     name = repository()
     gates = json.loads(os.environ.get("RELEASE_GATES", "{}"))
     if gates.get(decision["release_gate_variable"]) != "true":
@@ -146,14 +152,14 @@ def write_outputs(decision):
     Path("release-bundle-plans").mkdir(exist_ok=True)
     Path("release-bundle-plans/decision.json").write_text(json.dumps(decision, indent=2) + "\n")
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key in ("commit_sha", "product_id", "version", "tag", "channel", "matrix"):
+        for key in ("commit_sha", "product_id", "version", "tag", "channel", "matrix", "preparation_scope"):
             value = decision[key]
             output.write(f"{key}={json.dumps(value, separators=(',', ':')) if isinstance(value, dict) else value}\n")
 
 
-def resolve(tag):
+def resolve(tag, preparation_scope):
     # Validation and planning are read-only. The Rust owner uses the catalog and exact local tag.
-    decision = json.loads(command("target/debug/xtask", "release-version", "--tag", tag))
+    decision = json.loads(command("target/debug/xtask", "release-version", "--tag", tag, "--preparation-scope", preparation_scope))
     name, evidence = guard(decision)
     decision["repository"] = name
     decision["ci"] = evidence
@@ -173,6 +179,7 @@ def bundle_plans():
                                   "--platform", row["platform"], "--target", row["target"], "--channel", decision["channel"],
                                   "--signing", "required", "--dry-run", *catalog_arguments, env=environment))
         plan["commit_sha"] = decision["commit_sha"]
+        plan["preparation_scope"] = decision["preparation_scope"]
         Path("release-bundle-plans", row["plan_file"]).write_text(json.dumps(plan, indent=2) + "\n")
 
 
@@ -188,7 +195,8 @@ def package_inventory(decision, directory):
         plan = json.loads(Path("release-bundle-plans", row["plan_file"]).read_text())
         for key, value in {"product_id": decision["product_id"], "commit_sha": decision["commit_sha"],
                            "channel": decision["channel"], "version": decision["version"], "update_namespace": decision["update_namespace"],
-                           "platform": row["platform"], "target": row["target"], "signing": "required"}.items():
+                           "platform": row["platform"], "target": row["target"], "signing": "required",
+                           "preparation_scope": decision["preparation_scope"]}.items():
             if plan.get(key) != value:
                 raise ValueError(f"bundle plan {key} does not match approved release")
         filename = plan["artifact_name"]
@@ -205,6 +213,15 @@ def package_inventory(decision, directory):
             raise ValueError("verified signing identity is missing")
         if receipt.get("sha256") != checksum(directory / filename):
             raise ValueError("verified artifact hash changed")
+        if row["platform"] == "macos":
+            verification = receipt.get("macos_verification", {})
+            for kind in ("application", "dmg"):
+                code = verification.get(kind, {})
+                if (not code.get("stapled_ticket_validated") or not code.get("gatekeeper_assessed")
+                        or not code.get("signature", {}).get("timestamp")):
+                    raise ValueError("macOS notarization, ticket, timestamp or Gatekeeper evidence missing")
+            if not verification["application"].get("nested_code") or not verification["application"].get("entitlements"):
+                raise ValueError("macOS nested code or entitlement evidence missing")
         if row["platform"] == "linux":
             expected.update((filename + ".asc", filename + ".pub"))
             command("python3", "script/sign-linux-archive", "--verify-only", str(directory / filename))
@@ -250,7 +267,17 @@ def semver_key(value):
     return tuple(map(int, match.group(1, 2, 3))) + (not bool(pre), tuple(identifiers))
 
 
-def latest_release(releases, product, channel):
+def published_scope(release):
+    body = release.get("body") or ""
+    marker_match = re.search(r"<!-- made-product-release (\{[^\n]*\}) -->", body)
+    if marker_match:
+        return json.loads(marker_match[1]).get("preparation_scope", "full")
+    if "made-product-release" in body:
+        raise ValueError("malformed product release ownership marker")
+    return "full"
+
+
+def latest_release(releases, product, channel, platform=None):
     if channel not in ("stable", "preview"):
         raise ValueError("unsupported product release channel")
     candidates = []
@@ -260,12 +287,29 @@ def latest_release(releases, product, channel):
         if release.get("draft") is not False or not release.get("published_at") or not tag.startswith(prefix):
             continue
         try:
+            scope = published_scope(release)
+            if scope not in ("full", "macos-only") or (scope == "macos-only" and platform != "macos"):
+                continue
             version = tag[len(prefix):]
             key = semver_key(version)
         except ValueError:
             continue
         prerelease = not key[3]
         if prerelease != release.get("prerelease") or prerelease != (channel == "preview"):
+            continue
+        if "targets" in product:
+            names = {asset.get("name") for asset in release.get("assets", []) if asset.get("state") == "uploaded"}
+            expected = set()
+            for target in product["targets"]:
+                target_platform, architecture = target.split("-", 1)
+                if platform and platform != target_platform:
+                    continue
+                extension = {"macos": "dmg", "windows": "exe", "linux": "tar.gz"}[target_platform]
+                expected.add(product["artifact_name"].format(product=product["id"], version=version,
+                                                            platform=target_platform, arch=architecture, extension=extension))
+            if not expected or not expected <= names:
+                continue
+        elif platform:
             continue
         candidates.append((key, release))
     return max(candidates, key=lambda entry: (entry[0], entry[1]["published_at"], entry[1]["tag_name"]))[1] if candidates else None
@@ -296,8 +340,8 @@ def _older(version, target):
 
 def draft():
     decision = load_decision()
-    for key in ("commit_sha", "product_id", "tag"):
-        environment_key = {"commit_sha": "EXPECTED_COMMIT", "product_id": "EXPECTED_PRODUCT", "tag": "EXPECTED_TAG"}[key]
+    for key in ("commit_sha", "product_id", "tag", "preparation_scope"):
+        environment_key = {"commit_sha": "EXPECTED_COMMIT", "product_id": "EXPECTED_PRODUCT", "tag": "EXPECTED_TAG", "preparation_scope": "EXPECTED_SCOPE"}[key]
         if os.environ.get(environment_key) != decision[key]:
             raise ValueError("downloaded decision differs from approved job outputs")
     name, evidence = guard(decision)
@@ -317,6 +361,9 @@ def draft():
             f"See `{manifest_name}` and `{checksum_name}`.\n\nPreparation: {run_url}\n\n"
             + "\n".join(f"Required CI: {run['html_url']}" for run in evidence)
             + "\n\nReview the packages and verification evidence before clicking **Publish release**.\n")
+    label = " (macOS only)" if decision["preparation_scope"] == "macos-only" else ""
+    if label:
+        body += "\n**macOS-only preparation.** Windows and Linux packages are not included or qualified by this release. This release is excluded from their updater selection and from the default full-platform release feed.\n"
     release = existing_release(name, decision["tag"])
     check_draft(release, decision)
     verify_remote_assets(release["assets"] if release else [], hashes)
@@ -325,7 +372,7 @@ def draft():
         guard(decision)
         release = api(f"repos/{name}/releases", "POST", {
             "tag_name": decision["tag"], "target_commitish": decision["commit_sha"],
-            "name": f"{decision['display_name']} {decision['version']} (preparing)",
+            "name": f"{decision['display_name']} {decision['version']}{label} (preparing)",
             "body": marker(decision) + "\n\nPreparation is incomplete. Do not publish.",
             "draft": True, "prerelease": decision["prerelease"], "make_latest": "false"})
     release_id = release["id"]
@@ -346,32 +393,36 @@ def draft():
         body = release["body"]
     # Never send draft=false, even when updating a fully verified draft.
     api(f"repos/{name}/releases/{release_id}", "PATCH", {
-        "name": f"{decision['display_name']} {decision['version']}", "body": body, "make_latest": "false"})
+        "name": f"{decision['display_name']} {decision['version']}{label}", "body": body, "make_latest": "false"})
     print(f"Verified draft ready for human review: https://github.com/{name}/releases")
 
 
-def contract(version, commit):
+def contract(version, commit, preparation_scope):
     # Non-publishing signing validation reuses the same catalog/matrix and bundlers.
     semver_key(version)
     product = next(product for product in catalog_products() if product["id"] == "rust")
     # The resolver remains authoritative; contract validation never resolves or creates a Git tag.
-    result = json.loads(command("target/debug/xtask", "release-version", "--tag", product["release_tag_prefix"] + version, "--plan-only"))
+    result = json.loads(command("target/debug/xtask", "release-version", "--tag", product["release_tag_prefix"] + version, "--preparation-scope", preparation_scope, "--plan-only"))
     result["commit_sha"] = commit
     result["tag"] = ""
     write_outputs(result)
 
 
-def latest(product_id, channel):
+def latest(product_id, channel, platform):
     products = [product for product in catalog_products() if product["id"] == product_id]
     if len(products) != 1 or products[0]["status"] != "enabled":
         raise ValueError("unknown or unqualified product")
     product = products[0]
-    release = latest_release(pages(f"repos/{repository()}/releases"), product, channel)
+    release = latest_release(pages(f"repos/{repository()}/releases"), product, channel, platform)
     if release is None:
         raise ValueError("no published release for this product/channel")
+    assets = release["assets"]
+    if platform:
+        suffix = {"macos": ".dmg", "windows": ".exe", "linux": ".tar.gz"}[platform]
+        assets = [asset for asset in assets if asset["name"].endswith(suffix)]
     print(json.dumps({"product_id": product_id, "update_namespace": product["update_namespace"],
                       "channel": channel, "version": release["tag_name"][len(product["release_tag_prefix"]):],
-                      "tag": release["tag_name"], "assets": release["assets"]}))
+                      "tag": release["tag_name"], "assets": assets}))
 
 
 def main():
@@ -379,22 +430,25 @@ def main():
     commands = parser.add_subparsers(dest="operation", required=True)
     resolve_parser = commands.add_parser("resolve")
     resolve_parser.add_argument("--tag", required=True)
+    resolve_parser.add_argument("--preparation-scope", choices=("full", "macos-only"), default="full")
     contract_parser = commands.add_parser("contract")
     contract_parser.add_argument("--version", required=True)
     contract_parser.add_argument("--commit", required=True)
+    contract_parser.add_argument("--preparation-scope", choices=("full", "macos-only"), default="full")
     latest_parser = commands.add_parser("latest")
     latest_parser.add_argument("--product", required=True)
     latest_parser.add_argument("--channel", choices=("stable", "preview"), required=True)
+    latest_parser.add_argument("--platform", choices=("macos", "linux", "windows"))
     for name in ("bundle-plans", "download-packages", "draft"):
         commands.add_parser(name)
     arguments = parser.parse_args()
     try:
         if arguments.operation == "resolve":
-            resolve(arguments.tag)
+            resolve(arguments.tag, arguments.preparation_scope)
         elif arguments.operation == "contract":
-            contract(arguments.version, arguments.commit)
+            contract(arguments.version, arguments.commit, arguments.preparation_scope)
         elif arguments.operation == "latest":
-            latest(arguments.product, arguments.channel)
+            latest(arguments.product, arguments.channel, arguments.platform)
         elif arguments.operation == "bundle-plans":
             bundle_plans()
         elif arguments.operation == "download-packages":

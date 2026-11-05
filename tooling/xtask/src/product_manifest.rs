@@ -23,6 +23,8 @@ pub struct Product {
     pub status: ProductStatus,
     pub release_tag_prefix: String,
     pub release_gate_variable: String,
+    #[serde(default)]
+    pub macos_release_gate_variable: Option<String>,
     pub required_ci_workflows: Vec<String>,
     pub display_name: String,
     pub initial_version: Option<String>,
@@ -256,6 +258,16 @@ impl Product {
             !self.required_ci_workflows.is_empty(),
             "product requires exact-commit CI"
         );
+        if let Some(variable) = &self.macos_release_gate_variable {
+            ensure!(
+                !variable.is_empty()
+                    && variable != &self.release_gate_variable
+                    && variable.bytes().all(|byte| byte.is_ascii_uppercase()
+                        || byte == b'_'
+                        || byte.is_ascii_digit()),
+                "macOS release gate must be valid and distinct from full-platform qualification"
+            );
+        }
         for workflow in &self.required_ci_workflows {
             ensure!(
                 workflow.ends_with(".yml")
