@@ -597,7 +597,8 @@ fn application_builds(
     let job = Job::default()
         .needs([prepare.name.clone(), licenses.name.clone()])
         .runs_on("${{ matrix.runner }}")
-        .timeout_minutes(180u32)
+        // A cold ARM64 application build took 178 minutes before artifact upload.
+        .timeout_minutes(360u32)
         .permissions(Permissions::default().contents(Level::Read))
         .add_env(("RELEASE_VERSION", prepared.version.to_string()))
         .strategy(

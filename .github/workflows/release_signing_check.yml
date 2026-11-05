@@ -372,7 +372,7 @@ jobs:
             throw "sccache --stop-server failed with exit code $LASTEXITCODE"
         }
       shell: pwsh
-    timeout-minutes: 180
+    timeout-minutes: 360
   remote_server_builds:
     needs:
     - prepare_release
