@@ -125,6 +125,71 @@ esac
             self.assertTrue((root / "deleted").is_file())
             self.assertFalse(list(root.glob("copper-signing.*")))
 
+    def test_mac_search_list_is_available_to_codesign_and_restored_on_every_exit(self):
+        for failure, expected_status in (("", 0), ("sign", 41), ("register", 1), ("identity", 1)):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                original = ["/fixture/Login Keychain.keychain-db", '/fixture/quoted "name".keychain-db']
+                (root / "search-list.json").write_text(json.dumps(original))
+                security = root / "security"
+                security.write_text('''#!/usr/bin/env python3
+import json, os, shlex, sys
+from pathlib import Path
+root = Path(os.environ["SIGNING_TEST_ROOT"])
+state = root / "search-list.json"
+command, *arguments = sys.argv[1:]
+failure = os.environ["SIGNING_TEST_FAILURE"]
+if command == "create-keychain":
+    Path(arguments[-1]).touch()
+elif command == "list-keychains":
+    if "-s" in arguments:
+        keychains = arguments[arguments.index("-s") + 1:]
+        state.write_text(json.dumps(keychains))
+        if failure == "register" and any("copper-signing." in path for path in keychains):
+            sys.exit(29)
+    else:
+        print("\\n".join(shlex.quote(path) for path in json.loads(state.read_text())))
+elif command == "find-identity":
+    if failure == "identity":
+        sys.exit(45)
+    print('1) fixture-hash "fixture"')
+elif command == "delete-keychain":
+    if any("copper-signing." in path for path in json.loads(state.read_text())):
+        sys.exit(46)
+    Path(arguments[-1]).unlink()
+    (root / "deleted").touch()
+elif command == "default-keychain":
+    sys.exit(99)
+''')
+                security.chmod(0o755)
+                codesign = root / "codesign"
+                codesign.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+root = Path(os.environ["SIGNING_TEST_ROOT"])
+keychain = sys.argv[sys.argv.index("--keychain") + 1]
+if keychain not in json.loads((root / "search-list.json").read_text()):
+    sys.exit(44)
+(root / "codesign-called").touch()
+sys.exit(41 if os.environ["SIGNING_TEST_FAILURE"] == "sign" else 0)
+''')
+                codesign.chmod(0o755)
+                environment = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
+                                   TMPDIR=str(root), SIGNING_TEST_ROOT=str(root), SIGNING_TEST_FAILURE=failure,
+                                   MACOS_CERTIFICATE="Zml4dHVyZQ==", MACOS_CERTIFICATE_PASSWORD="fixture",
+                                   APPLE_NOTARIZATION_KEY="fixture")
+                result = subprocess.run(("bash", "-c", '''set -euo pipefail
+source script/lib/macos-signing.sh
+IDENTITY=fixture
+setup_production_signing
+codesign --sign "$IDENTITY" "${signing_keychain_arguments[@]}" fixture
+'''), env=environment, capture_output=True)
+                self.assertEqual(result.returncode, expected_status, result.stderr)
+                self.assertEqual(json.loads((root / "search-list.json").read_text()), original)
+                self.assertTrue((root / "deleted").is_file())
+                self.assertEqual((root / "codesign-called").exists(), failure in ("", "sign"))
+                self.assertFalse(list(root.glob("copper-signing.*")))
+
 
 @unittest.skipUnless(shutil.which("gpg") and shutil.which("gpgconf"), "GnuPG is unavailable on this host; real Linux CI is required")
 class LinuxSignature(unittest.TestCase):

@@ -3,10 +3,25 @@ set +x
 signing_keychain_arguments=()
 signing_temporary_directory=""
 signing_keychain=""
+signing_search_list_snapshot=""
 
 cleanup_signing() {
     local status=$?
     trap - EXIT
+    if [[ -n "$signing_search_list_snapshot" && -f "$signing_search_list_snapshot" ]]; then
+        if ! python3 - "$signing_search_list_snapshot" <<'RESTORE_KEYCHAINS'
+import json
+from pathlib import Path
+import subprocess
+import sys
+keychains = json.loads(Path(sys.argv[1]).read_text())
+subprocess.run(["security", "list-keychains", "-d", "user", "-s", *keychains], check=True)
+RESTORE_KEYCHAINS
+        then
+            echo "Failed to restore the previous keychain search list" >&2
+            status=1
+        fi
+    fi
     if [[ -n "$signing_keychain" && -f "$signing_keychain" ]]; then
         if ! security delete-keychain "$signing_keychain"; then
             echo "Failed to delete the temporary signing keychain" >&2
@@ -46,6 +61,21 @@ PY
     security import "$signing_temporary_directory/certificate.p12" -k "$signing_keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign >/dev/null
     rm "$signing_temporary_directory/certificate.p12"
     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$signing_keychain" >/dev/null
+    # codesign still requires search-list membership for identity/chain resolution
+    # when --keychain restricts identity selection (see codesign(1)).
+    signing_search_list_snapshot="$signing_temporary_directory/search-list.json"
+    python3 - "$signing_search_list_snapshot" "$signing_keychain" <<'REGISTER_KEYCHAIN'
+import json
+from pathlib import Path
+import shlex
+import subprocess
+import sys
+snapshot, signing_keychain = sys.argv[1:]
+result = subprocess.run(["security", "list-keychains", "-d", "user"], capture_output=True, text=True, check=True)
+keychains = shlex.split(result.stdout)
+Path(snapshot).write_text(json.dumps(keychains))
+subprocess.run(["security", "list-keychains", "-d", "user", "-s", *keychains, signing_keychain], check=True)
+REGISTER_KEYCHAIN
     signing_keychain_arguments=(--keychain "$signing_keychain")
     security find-identity -v -p codesigning "$signing_keychain" | grep -F -- "$IDENTITY" >/dev/null || {
         echo "The imported keychain does not contain MACOS_SIGNING_IDENTITY" >&2
