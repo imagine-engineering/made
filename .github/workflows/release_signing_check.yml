@@ -30,6 +30,10 @@ on:
         description: Contact Apple/Azure and build signed packages; requires approval and production credentials
         type: boolean
         default: 'false'
+      preparation_scope:
+        description: full (all catalog targets, default) or macos-only (Copper macOS only; explicitly limited draft)
+        type: string
+        default: full
 permissions:
   contents: read
 jobs:
@@ -54,15 +58,17 @@ jobs:
       run: |
         python3 - <<'PYVERSION'
         import os
-        import re
-        if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", os.environ["VERSION"]):
-            raise SystemExit("version must be exactly X.Y.Z")
+        import sys
+        sys.path.insert(0, "script")
+        from product_release import semver_key
+        semver_key(os.environ["VERSION"])
         PYVERSION
         target/debug/xtask release-version --help >/dev/null
-        python3 script/product_release.py contract --version "$VERSION" --commit "$COMMIT_SHA"
+        python3 script/product_release.py contract --version "$VERSION" --commit "$COMMIT_SHA" --preparation-scope "$PREPARATION_SCOPE"
       env:
         VERSION: ${{ inputs.version || '0.1.0' }}
         COMMIT_SHA: ${{ github.sha }}
+        PREPARATION_SCOPE: ${{ inputs.preparation_scope || 'full' }}
     - name: release::release_signing_check
       run: python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && python3 -m unittest discover -s script -p test_product_release.py && cargo test -p xtask --locked
     - name: release::generate_release_bundle_plans
@@ -83,6 +89,7 @@ jobs:
       product_id: ${{ steps.resolve-signing-check.outputs.product_id }}
       channel: ${{ steps.resolve-signing-check.outputs.channel }}
       matrix: ${{ steps.resolve-signing-check.outputs.matrix }}
+      preparation_scope: ${{ steps.resolve-signing-check.outputs.preparation_scope }}
     timeout-minutes: 20
   signing_preflight:
     needs:
@@ -200,6 +207,7 @@ jobs:
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
       RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      RELEASE_PREPARATION_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
       ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
@@ -391,6 +399,7 @@ jobs:
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
       RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      RELEASE_PREPARATION_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
       ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
@@ -539,6 +548,7 @@ jobs:
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
       RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      RELEASE_PREPARATION_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
       ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}

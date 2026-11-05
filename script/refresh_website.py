@@ -4,7 +4,7 @@
 import argparse
 from pathlib import Path
 import tomllib
-from product_release import semver_key
+from product_release import published_scope, semver_key
 import json
 import os
 import re
@@ -113,6 +113,8 @@ def published_release(tag, opener, token="", sleep=time.sleep):
         sleep(wait)
     try:
         release = json.loads(body)
+        if published_scope(release) != "full":
+            raise RefreshError("macOS-only releases are excluded from the full-platform website refresh; no webhook was sent.")
         published = datetime.fromisoformat(release["published_at"].replace("Z", "+00:00"))
         assets = release["assets"]
         urls = {asset["browser_download_url"] for asset in assets if asset["state"] == "uploaded"}

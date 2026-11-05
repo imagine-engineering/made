@@ -9,17 +9,24 @@ from urllib.request import Request
 import refresh_website as refresh
 
 
-TAG = "rust-v1.16.6"
+TAG = "copper-v1.16.6"
 WEBHOOK = "https://webhooks.amplify.eu-west-2.amazonaws.com/prod/webhooks?id=example&token=private-token&operation=startbuild"
-URL = "https://github.com/imagine-engineering/made/releases/download/rust-v1.16.6/actual-asset.dmg"
+URL = "https://github.com/imagine-engineering/made/releases/download/copper-v1.16.6/actual-asset.dmg"
 RELEASE = {"tag_name": TAG, "draft": False, "published_at": "2026-09-05T12:00:00Z", "assets": [{"state": "uploaded", "browser_download_url": URL}]}
-HTML = '<article id="rust-v1.16.6"><span>Copper 1.16.6</span><time datetime="2026-09-05T12:00:00.000Z"></time><a href="' + URL + '">Download</a></article>'
+HTML = '<article id="copper-v1.16.6"><span>Copper 1.16.6</span><time datetime="2026-09-05T12:00:00.000Z"></time><a href="' + URL + '">Download</a></article>'
 API = (200, {}, json.dumps(RELEASE).encode())
 CURRENT = (200, {}, HTML.encode())
 STALE = (200, {}, b'<meta name="simtropolis-build" content="unchanged-commit">')
 
 
 class RefreshTests(unittest.TestCase):
+    def test_macos_only_release_never_sends_full_platform_website_webhook(self):
+        release = dict(RELEASE, body='<!-- made-product-release {"preparation_scope":"macos-only"} -->')
+        result, posts, _, _ = self.run_refresh([(200, {}, json.dumps(release).encode())])
+        self.assertIsInstance(result, refresh.RefreshError)
+        self.assertIn("macOS-only", str(result))
+        self.assertEqual(posts, [])
+
     def run_refresh(self, responses, **options):
         elapsed = [0]
         waits = []
@@ -137,7 +144,7 @@ class RefreshTests(unittest.TestCase):
 
     def test_version_date_and_actual_links_must_match_inside_release_article(self):
         expected = {"tag": TAG, "version": "1.16.6", "published": "2026-09-05T12:00:00.000Z", "urls": {URL}, "all_urls": {URL}}
-        for html in [HTML.replace(URL, URL + "-invented"), HTML.replace(TAG, "rust-v1.16.5", 1), HTML.replace("Copper 1.16.6", "Copper 1.16.5"), HTML.replace("2026-09-05", "2026-09-04"), HTML.replace("href=", "data-href="), HTML.replace("</article>", '<a href="' + URL + '-removed">Extra</a></article>'), HTML + HTML, '<script>' + HTML + '</script>']:
+        for html in [HTML.replace(URL, URL + "-invented"), HTML.replace(TAG, "copper-v1.16.5", 1), HTML.replace("Copper 1.16.6", "Copper 1.16.5"), HTML.replace("2026-09-05", "2026-09-04"), HTML.replace("href=", "data-href="), HTML.replace("</article>", '<a href="' + URL + '-removed">Extra</a></article>'), HTML + HTML, '<script>' + HTML + '</script>']:
             with self.subTest(html=html), patch.object(refresh, "request", return_value=(200, {}, html.encode())):
                 self.assertFalse(refresh.page_is_current(expected, object()))
         with patch.object(refresh, "request", return_value=CURRENT):

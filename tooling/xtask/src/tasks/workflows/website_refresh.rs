@@ -32,7 +32,7 @@ pub(crate) fn refresh_job(tag: String) -> Job {
 
 pub(crate) fn website_refresh() -> Workflow {
     let tag = WorkflowInput::string("release_tag", None).description(
-        "Existing published Copper tag (rust-vX.Y.Z); never builds or publishes Copper",
+        "Existing published Copper tag (copper-vX.Y.Z); never builds or publishes Copper",
     );
     named::workflow()
         .with_minimal_permissions()
@@ -42,7 +42,7 @@ pub(crate) fn website_refresh() -> Workflow {
         .add_job(
             "refresh_website",
             refresh_job("${{ github.event.release.tag_name || inputs.release_tag }}".to_owned())
-                .cond(Expression::new("(github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')")),
+                .cond(Expression::new("(github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false && !contains(github.event.release.body, '\"preparation_scope\":\"macos-only\"')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')")),
         )
 }
 

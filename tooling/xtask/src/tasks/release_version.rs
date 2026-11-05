@@ -6,7 +6,7 @@
 use std::process::Command;
 
 use anyhow::{Context as _, Result, ensure};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use semver::Version;
 use serde::Serialize;
 
@@ -20,6 +20,16 @@ pub struct ReleaseVersionArgs {
     /// Print the catalog plan without resolving Git history (non-publishing validation only).
     #[arg(long)]
     plan_only: bool,
+    /// Full catalog release or explicitly limited Copper macOS preparation.
+    #[arg(long, value_enum, default_value = "full")]
+    preparation_scope: PreparationScope,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum PreparationScope {
+    Full,
+    MacosOnly,
 }
 
 #[derive(Debug, Serialize)]
@@ -34,12 +44,13 @@ pub struct ReleaseDecision {
     pub prerelease: bool,
     pub release_gate_variable: String,
     pub required_ci_workflows: Vec<String>,
+    pub preparation_scope: PreparationScope,
     pub matrix: serde_json::Value,
 }
 
 pub fn run(args: ReleaseVersionArgs) -> Result<()> {
     let manifest = ProductManifest::load()?;
-    let mut decision = resolve_tag(&manifest, &args.tag)?;
+    let mut decision = resolve_tag_for_scope(&manifest, &args.tag, args.preparation_scope)?;
     if args.plan_only {
         println!("{}", serde_json::to_string(&decision)?);
         return Ok(());
@@ -64,7 +75,8 @@ pub fn run(args: ReleaseVersionArgs) -> Result<()> {
             .all(|target| current_product.targets.contains(target)),
         "tagged product requires a platform that is no longer qualified"
     );
-    let mut tagged_decision = resolve_tag(&tagged_manifest, &args.tag)?;
+    let mut tagged_decision =
+        resolve_tag_for_scope(&tagged_manifest, &args.tag, args.preparation_scope)?;
     ensure!(
         tagged_decision.product_id == decision.product_id,
         "tag product mapping changed"
@@ -81,7 +93,16 @@ pub fn run(args: ReleaseVersionArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn resolve_tag(manifest: &ProductManifest, tag: &str) -> Result<ReleaseDecision> {
+#[cfg(test)]
+fn resolve_tag(manifest: &ProductManifest, tag: &str) -> Result<ReleaseDecision> {
+    resolve_tag_for_scope(manifest, tag, PreparationScope::Full)
+}
+
+pub fn resolve_tag_for_scope(
+    manifest: &ProductManifest,
+    tag: &str,
+    preparation_scope: PreparationScope,
+) -> Result<ReleaseDecision> {
     let matches = manifest
         .products
         .iter()
@@ -92,6 +113,10 @@ pub fn resolve_tag(manifest: &ProductManifest, tag: &str) -> Result<ReleaseDecis
         "unknown or ambiguous product release tag prefix: {tag}"
     );
     let product = matches.first().context("missing product")?;
+    ensure!(
+        preparation_scope == PreparationScope::Full || product.id == "rust",
+        "macos-only preparation is qualified only for Copper"
+    );
     ensure!(
         product.status == ProductStatus::Enabled && !product.targets.is_empty(),
         "product {} is not qualified for release",
@@ -120,6 +145,13 @@ pub fn resolve_tag(manifest: &ProductManifest, tag: &str) -> Result<ReleaseDecis
     package_product.windows_installer_id =
         super::bundle::channel_windows_installer_id(&product.windows_installer_id, channel)?;
     let mut rows = super::workflows::release::product_matrix(&package_product);
+    if preparation_scope == PreparationScope::MacosOnly {
+        rows.retain(|row| row["platform"] == "macos");
+    }
+    ensure!(
+        !rows.is_empty(),
+        "product has no targets for the selected scope"
+    );
     for row in &mut rows {
         let platform = row["platform"].as_str().context("platform")?.to_owned();
         let target = row["target"].as_str().context("target")?;
@@ -153,8 +185,15 @@ pub fn resolve_tag(manifest: &ProductManifest, tag: &str) -> Result<ReleaseDecis
         tag: tag.to_owned(),
         channel: channel.into(),
         prerelease,
-        release_gate_variable: product.release_gate_variable.clone(),
+        release_gate_variable: match preparation_scope {
+            PreparationScope::Full => product.release_gate_variable.clone(),
+            PreparationScope::MacosOnly => product
+                .macos_release_gate_variable
+                .clone()
+                .context("macOS-only release gate is not configured in the catalog")?,
+        },
         required_ci_workflows: product.required_ci_workflows.clone(),
+        preparation_scope,
         matrix: serde_json::json!({"include": rows}),
     })
 }
@@ -174,12 +213,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn macos_only_is_explicit_and_does_not_change_full_release_targets() -> Result<()> {
+        let mut manifest = ProductManifest::load()?;
+        let decision =
+            resolve_tag_for_scope(&manifest, "copper-v0.1.0", PreparationScope::MacosOnly)?;
+        let rows = decision.matrix["include"].as_array().context("matrix")?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["target"], "aarch64-apple-darwin");
+        assert_eq!(decision.preparation_scope, PreparationScope::MacosOnly);
+        assert_eq!(
+            decision.release_gate_variable,
+            "COPPER_MACOS_RELEASE_ENABLED"
+        );
+        assert_eq!(
+            resolve_tag(&manifest, "copper-v0.1.0")?.release_gate_variable,
+            "COPPER_RELEASE_ENABLED"
+        );
+        assert_eq!(
+            resolve_tag(&manifest, "copper-v0.1.0")?.matrix["include"]
+                .as_array()
+                .context("matrix")?
+                .len(),
+            3
+        );
+        let copper = manifest
+            .products
+            .iter_mut()
+            .find(|product| product.id == "rust")
+            .context("Copper")?;
+        copper
+            .targets
+            .retain(|target| !target.starts_with("macos-"));
+        assert!(
+            resolve_tag_for_scope(&manifest, "copper-v0.1.0", PreparationScope::MacosOnly).is_err()
+        );
+        assert!(
+            resolve_tag_for_scope(&manifest, "jvm-v0.1.0", PreparationScope::MacosOnly).is_err()
+        );
+        assert!(resolve_tag(&manifest, "rust-v0.1.0").is_err());
+        Ok(())
+    }
+
+    #[test]
     fn tag_controls_product_version_and_channel() -> Result<()> {
         let manifest = ProductManifest::load()?;
         for (tag, channel) in [
-            ("rust-v0.1.0", "stable"),
-            ("rust-v2.3.4-rc.2", "preview"),
-            ("rust-v2.3.4-beta.1+build.5", "preview"),
+            ("copper-v0.1.0", "stable"),
+            ("copper-v2.3.4-rc.2", "preview"),
+            ("copper-v2.3.4-beta.1+build.5", "preview"),
         ] {
             let decision = resolve_tag(&manifest, tag)?;
             assert_eq!(decision.product_id, "rust");
@@ -187,7 +268,7 @@ mod tests {
             assert_eq!(decision.channel, channel);
             assert_eq!(
                 decision.version.to_string(),
-                tag.trim_start_matches("rust-v")
+                tag.trim_start_matches("copper-v")
             );
             assert_eq!(
                 decision.matrix["include"]
@@ -209,7 +290,7 @@ mod tests {
             .find(|product| product.id == "rust")
             .context("Copper")?;
         product.artifact_name = "{product}-custom-{version}-{platform}-{arch}.{extension}".into();
-        let decision = resolve_tag(&manifest, "rust-v4.5.6-rc.1")?;
+        let decision = resolve_tag(&manifest, "copper-v4.5.6-rc.1")?;
         for row in decision.matrix["include"].as_array().context("matrix")? {
             assert!(
                 row["artifact_name"]
@@ -226,7 +307,7 @@ mod tests {
             .iter_mut()
             .find(|product| product.id == "jvm")
             .context("Groovy")?
-            .release_tag_prefix = "rust-v".into();
+            .release_tag_prefix = "copper-v".into();
         assert!(
             manifest
                 .validate(&crate::product_manifest::workspace_root())
@@ -240,18 +321,18 @@ mod tests {
         let mut manifest = ProductManifest::load()?;
         for tag in [
             "v0.1.0",
-            "rust-v01.2.3",
-            "rust-v1.2",
-            "rust-v1.2.3-01",
-            "rust-v1.2.3\n",
-            "rust-v65536.0.0",
+            "copper-v01.2.3",
+            "copper-v1.2",
+            "copper-v1.2.3-01",
+            "copper-v1.2.3\n",
+            "copper-v65536.0.0",
             "jvm-v1.0.0",
             "game-v1.0.0",
         ] {
             assert!(resolve_tag(&manifest, tag).is_err(), "accepted {tag}");
         }
         manifest.products.push(manifest.product("rust")?.clone());
-        assert!(resolve_tag(&manifest, "rust-v1.0.0").is_err());
+        assert!(resolve_tag(&manifest, "copper-v1.0.0").is_err());
         Ok(())
     }
 
@@ -276,7 +357,7 @@ mod tests {
                 .iter()
                 .all(|row| row["product"] == "jvm")
         );
-        assert_eq!(resolve_tag(&manifest, "rust-v0.1.0")?.product_id, "rust");
+        assert_eq!(resolve_tag(&manifest, "copper-v0.1.0")?.product_id, "rust");
         Ok(())
     }
 }

@@ -12,8 +12,9 @@ import product_release as release
 
 
 DECISION = {
+    "preparation_scope": "full",
     "product_id": "rust", "display_name": "Copper", "update_namespace": "rust",
-    "tag": "rust-v0.1.0-rc.1", "version": "0.1.0-rc.1", "channel": "preview", "prerelease": True,
+    "tag": "copper-v0.1.0-rc.1", "version": "0.1.0-rc.1", "channel": "preview", "prerelease": True,
     "commit_sha": "a" * 40, "release_gate_variable": "COPPER_RELEASE_ENABLED", "required_ci_workflows": ["run_tests.yml"],
 }
 
@@ -124,6 +125,10 @@ class DraftSafety(unittest.TestCase):
             row["artifact_name"] = filename
             plan = {**release.identity(decision), "platform": "macos", "target": row["target"], "signing": "required", "artifact_name": filename}
             receipt = {**release.identity(decision), "platform": "macos", "signing": "required", "artifact_name": filename, "signing_identity": "fixture identity"}
+            receipt["macos_verification"] = {
+                kind: {"stapled_ticket_validated": True, "gatekeeper_assessed": True,
+                       "signature": {"timestamp": "fixture"}, "nested_code": ["fixture"], "entitlements": {"fixture": True}}
+                for kind in ("application", "dmg")}
             (root / filename).write_bytes(b"package fixture, not signed")
             receipt["sha256"] = release.checksum(root / filename)
             receipt_path = root / "verification-rust-macos-aarch64.json"
@@ -139,6 +144,12 @@ class DraftSafety(unittest.TestCase):
                     read.side_effect = lambda path, *args, **kwargs: json.dumps(plan if path.name == row["plan_file"] else bad)
                     with self.subTest(key=key), self.assertRaises(ValueError):
                         release.package_inventory(decision, root)
+                for verification in ({}, {"application": receipt["macos_verification"]["application"]},
+                                     {**receipt["macos_verification"], "application": {"stapled_ticket_validated": False}}):
+                    bad = dict(receipt, macos_verification=verification)
+                    read.side_effect = lambda path, *args, **kwargs: json.dumps(plan if path.name == row["plan_file"] else bad)
+                    with self.subTest(verification=verification), self.assertRaises(ValueError):
+                        release.package_inventory(decision, root)
                 read.side_effect = text
                 (root / "unrelated.exe").write_bytes(b"extra")
                 with self.assertRaisesRegex(ValueError, "inventory"):
@@ -146,7 +157,7 @@ class DraftSafety(unittest.TestCase):
 
     def test_draft_operation_never_publishes_and_rechecks_before_upload(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "load_decision", return_value=DECISION), \
-                patch.dict(os.environ, EXPECTED_COMMIT=DECISION["commit_sha"], EXPECTED_PRODUCT="rust", EXPECTED_TAG=DECISION["tag"], GITHUB_RUN_ID="123"), \
+                patch.dict(os.environ, EXPECTED_COMMIT=DECISION["commit_sha"], EXPECTED_PRODUCT="rust", EXPECTED_TAG=DECISION["tag"], EXPECTED_SCOPE="full", GITHUB_RUN_ID="123"), \
                 patch.object(release, "guard", return_value=("owner/repo", [run()])) as guard, \
                 patch.object(release, "package_inventory", return_value=({"package": "digest"}, [])), \
                 patch.object(release, "release_notes", return_value="notes"), \
@@ -179,25 +190,48 @@ class DraftSafety(unittest.TestCase):
 
 
 class ProductIsolation(unittest.TestCase):
+    def test_macos_only_publication_never_becomes_a_windows_linux_or_generic_update(self):
+        partial = dict(DECISION, tag="copper-v0.2.0", version="0.2.0", channel="stable", prerelease=False,
+                       preparation_scope="macos-only", matrix={"include": [{"platform": "macos"}]})
+        published = {"tag_name": partial["tag"], "draft": False, "prerelease": False, "published_at": "date",
+                     "body": release.marker(partial), "assets": [{"name": "rust-0.2.0-macos-aarch64.dmg", "state": "uploaded"}]}
+        product = {"release_tag_prefix": "copper-v", "id": "rust", "targets": ["macos-aarch64", "windows-x86_64", "linux-x86_64"],
+                   "artifact_name": "{product}-{version}-{platform}-{arch}.{extension}"}
+        for platform in (None, "linux", "windows"):
+            self.assertIsNone(release.latest_release([published], product, "stable", platform))
+        self.assertEqual(release.latest_release([published], product, "stable", "macos"), published)
+        self.assertIsNone(release.latest_release([dict(published, draft=True)], product, "stable", "macos"))
+        self.assertIsNone(release.latest_release([dict(published, assets=[])], product, "stable", "macos"))
+        full_marker = release.marker(dict(partial, preparation_scope="full"))
+        self.assertIsNone(release.latest_release([dict(published, body=full_marker)], product, "stable"))
+        self.assertIsNone(release.latest_release([dict(published, body="<!-- made-product-release invalid -->")], product, "stable", "macos"))
+
+    def test_scope_is_bound_to_draft_ownership_and_cannot_expand_partial_matrix(self):
+        partial = dict(DECISION, preparation_scope="macos-only", matrix={"include": [{"platform": "windows"}]})
+        with self.assertRaisesRegex(ValueError, "only Copper macOS"):
+            release.guard(partial)
+        with self.assertRaisesRegex(ValueError, "different product, commit, version"):
+            release.check_draft(draft(), partial)
+
     def test_latest_is_semantic_product_and_channel_specific_and_excludes_drafts(self):
         def published(tag, prerelease=False, **changes):
             return {"tag_name": tag, "draft": False, "prerelease": prerelease, "published_at": "date", **changes}
-        releases = [published("jvm-v99.0.0"), published("rust-v0.9.0"), published("rust-v0.10.0"),
-                    published("rust-v0.11.0-rc.10", True), published("rust-v0.11.0-rc.2", True),
-                    published("rust-v9.0.0", draft=True), published("rust-v2.0.0", published_at=None),
-                    published("rust-v3.0.0-rc.1", False), published("rust-v01.1.0")]
-        copper = {"release_tag_prefix": "rust-v"}
+        releases = [published("jvm-v99.0.0"), published("copper-v0.9.0"), published("copper-v0.10.0"),
+                    published("copper-v0.11.0-rc.10", True), published("copper-v0.11.0-rc.2", True),
+                    published("copper-v9.0.0", draft=True), published("copper-v2.0.0", published_at=None),
+                    published("copper-v3.0.0-rc.1", False), published("copper-v01.1.0")]
+        copper = {"release_tag_prefix": "copper-v"}
         groovy = {"release_tag_prefix": "jvm-v"}
-        self.assertEqual(release.latest_release(releases, copper, "stable")["tag_name"], "rust-v0.10.0")
-        self.assertEqual(release.latest_release(releases, copper, "preview")["tag_name"], "rust-v0.11.0-rc.10")
+        self.assertEqual(release.latest_release(releases, copper, "stable")["tag_name"], "copper-v0.10.0")
+        self.assertEqual(release.latest_release(releases, copper, "preview")["tag_name"], "copper-v0.11.0-rc.10")
         self.assertEqual(release.latest_release(releases, groovy, "stable")["tag_name"], "jvm-v99.0.0")
         self.assertIsNone(release.latest_release(releases, groovy, "preview"))
 
     def test_catalog_rejects_ambiguous_product_prefixes_and_namespaces(self):
-        copper = {"id": "rust", "update_namespace": "rust", "release_tag_prefix": "rust-v"}
+        copper = {"id": "rust", "update_namespace": "rust", "release_tag_prefix": "copper-v"}
         groovy = {"id": "jvm", "update_namespace": "jvm", "release_tag_prefix": "jvm-v"}
         release.validate_catalog([copper, groovy])
-        for changes in ({"release_tag_prefix": "rust-v"}, {"release_tag_prefix": "rust-v-extra-v"},
+        for changes in ({"release_tag_prefix": "copper-v"}, {"release_tag_prefix": "copper-v-extra-v"},
                         {"update_namespace": "rust"}, {"id": "rust"}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 release.validate_catalog([copper, dict(groovy, **changes)])
@@ -213,12 +247,14 @@ class ProductIsolation(unittest.TestCase):
     def test_notes_use_product_baseline_without_copying_other_product_commit_messages(self):
         releases = [
             {"tag_name": "jvm-v99.0.0", "draft": False, "published_at": "date", "prerelease": False},
-            {"tag_name": "rust-v0.0.9", "draft": False, "published_at": "date", "prerelease": False},
-            {"tag_name": "rust-v0.1.0-rc.1", "draft": False, "published_at": "date", "prerelease": True},
+            {"tag_name": "copper-v0.0.9", "draft": False, "published_at": "date", "prerelease": False},
+            {"tag_name": "copper-v0.1.0-rc.1", "draft": False, "published_at": "date", "prerelease": True},
         ]
+        releases[1]["assets"] = [{"name": f"rust-0.0.9-{suffix}", "state": "uploaded"}
+                                 for suffix in ("macos-aarch64.dmg", "linux-x86_64.tar.gz", "windows-x86_64.exe")]
         with patch.object(release, "pages", return_value=releases), patch.object(release, "api") as api:
-            notes = release.release_notes(dict(DECISION, tag="rust-v0.1.0", version="0.1.0", channel="stable", prerelease=False), "owner/repo")
-            self.assertIn("rust-v0.0.9...rust-v0.1.0", notes)
+            notes = release.release_notes(dict(DECISION, tag="copper-v0.1.0", version="0.1.0", channel="stable", prerelease=False), "owner/repo")
+            self.assertIn("copper-v0.0.9...copper-v0.1.0", notes)
             self.assertNotIn("jvm", notes)
             self.assertNotIn("rc.1", notes)
             api.assert_not_called()

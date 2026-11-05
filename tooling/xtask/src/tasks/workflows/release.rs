@@ -55,7 +55,8 @@ fn retired_release_entry() -> Workflow {
 
 pub(crate) fn release_prepare() -> Workflow {
     let tag = WorkflowInput::string("release_tag", None)
-        .description("Existing catalog product tag, e.g. rust-v0.1.0 or rust-v0.2.0-rc.1");
+        .description("Existing catalog product tag, e.g. copper-v0.1.0 or copper-v0.2.0-rc.1");
+    let scope = preparation_scope_input();
     let (prepare, prepared) = prepare_release();
     let preflight = signing_preflight(&prepare, &prepared);
     let licenses = release_licenses(&prepare, &prepared);
@@ -71,8 +72,11 @@ pub(crate) fn release_prepare() -> Workflow {
     let draft = draft_product(&prepare, &prepared, &packages);
     named::workflow()
         .name("release_prepare")
-        .on(Event::default()
-            .workflow_dispatch(WorkflowDispatch::default().add_input(tag.name, tag.input())))
+        .on(Event::default().workflow_dispatch(
+            WorkflowDispatch::default()
+                .add_input(tag.name, tag.input())
+                .add_input(scope.name, scope.input()),
+        ))
         .concurrency(
             Concurrency::new(Expression::new("product-release-${{ inputs.release_tag }}"))
                 .cancel_in_progress(false),
@@ -102,25 +106,32 @@ pub(crate) fn release_signing_check() -> Workflow {
     let sign_artifacts = WorkflowInput::bool("sign_artifacts", Some(false)).description(
         "Contact Apple/Azure and build signed packages; requires approval and production credentials",
     );
+    let scope = preparation_scope_input();
     let resolve = named::bash(indoc::indoc! {r#"
         python3 - <<'PYVERSION'
         import os
-        import re
-        if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", os.environ["VERSION"]):
-            raise SystemExit("version must be exactly X.Y.Z")
+        import sys
+        sys.path.insert(0, "script")
+        from product_release import semver_key
+        semver_key(os.environ["VERSION"])
         PYVERSION
         target/debug/xtask release-version --help >/dev/null
-        python3 script/product_release.py contract --version "$VERSION" --commit "$COMMIT_SHA"
+        python3 script/product_release.py contract --version "$VERSION" --commit "$COMMIT_SHA" --preparation-scope "$PREPARATION_SCOPE"
     "#})
     .id("resolve-signing-check")
     .add_env(("VERSION", format!("${{{{ inputs.version || '{initial_version}' }}}}")))
     .add_env(("COMMIT_SHA", "${{ github.sha }}"));
+    let resolve = resolve.add_env((
+        "PREPARATION_SCOPE",
+        "${{ inputs.preparation_scope || 'full' }}",
+    ));
     let commit_sha = StepOutput::new_unchecked(&resolve, "commit_sha");
     let package_version = StepOutput::new_unchecked(&resolve, "version");
     let tag = StepOutput::new_unchecked(&resolve, "tag");
     let product = StepOutput::new_unchecked(&resolve, "product_id");
     let channel = StepOutput::new_unchecked(&resolve, "channel");
     let matrix = StepOutput::new_unchecked(&resolve, "matrix");
+    let preparation_scope = StepOutput::new_unchecked(&resolve, "preparation_scope");
     let prepare = NamedJob {
         name: "prepare_release".to_owned(),
         job: Job::default()
@@ -150,6 +161,7 @@ pub(crate) fn release_signing_check() -> Workflow {
                 (product.name.to_owned(), product.to_string()),
                 (channel.name.to_owned(), channel.to_string()),
                 (matrix.name.to_owned(), matrix.to_string()),
+                (preparation_scope.name.to_owned(), preparation_scope.to_string()),
             ]),
     };
     let prepared = PreparedRelease {
@@ -194,7 +206,8 @@ pub(crate) fn release_signing_check() -> Workflow {
         .on(Event::default().push(contract_push).workflow_dispatch(
             WorkflowDispatch::default()
                 .add_input(version.name, version.input())
-                .add_input(sign_artifacts.name, sign_artifacts.input()),
+                .add_input(sign_artifacts.name, sign_artifacts.input())
+                .add_input(scope.name, scope.input()),
         ))
         .concurrency(
             Concurrency::new(Expression::new("copper-signing-check")).cancel_in_progress(false),
@@ -206,6 +219,12 @@ pub(crate) fn release_signing_check() -> Workflow {
         .add_job(applications.name, applications.job)
         .add_job(remote_servers.name, remote_servers.job)
         .add_job(packages.name, packages.job)
+}
+
+fn preparation_scope_input() -> WorkflowInput {
+    WorkflowInput::string("preparation_scope", Some("full".to_owned())).description(
+        "full (all catalog targets, default) or macos-only (Copper macOS only; explicitly limited draft)",
+    )
 }
 
 fn setup_signing_python() -> Step<Use> {
@@ -283,9 +302,10 @@ struct PreparedRelease {
 }
 
 fn prepare_release() -> (NamedJob, PreparedRelease) {
-    let resolve = named::bash("python3 script/product_release.py resolve --tag \"$RELEASE_TAG\"")
+    let resolve = named::bash("python3 script/product_release.py resolve --tag \"$RELEASE_TAG\" --preparation-scope \"$PREPARATION_SCOPE\"")
         .id("resolve-release")
         .add_env(("RELEASE_TAG", "${{ inputs.release_tag }}"))
+        .add_env(("PREPARATION_SCOPE", "${{ inputs.preparation_scope || 'full' }}"))
         .add_env(("RELEASE_GATES", "${{ toJSON(vars) }}"))
         .add_env(("GH_TOKEN", vars::GITHUB_TOKEN));
     let commit_sha = StepOutput::new_unchecked(&resolve, "commit_sha");
@@ -294,6 +314,7 @@ fn prepare_release() -> (NamedJob, PreparedRelease) {
     let product = StepOutput::new_unchecked(&resolve, "product_id");
     let channel = StepOutput::new_unchecked(&resolve, "channel");
     let matrix = StepOutput::new_unchecked(&resolve, "matrix");
+    let preparation_scope = StepOutput::new_unchecked(&resolve, "preparation_scope");
     let job = named::job(
         Job::default()
             .runs_on("ubuntu-22.04")
@@ -337,6 +358,7 @@ fn prepare_release() -> (NamedJob, PreparedRelease) {
                 (product.name.to_owned(), product.to_string()),
                 (channel.name.to_owned(), channel.to_string()),
                 (matrix.name.to_owned(), matrix.to_string()),
+                (preparation_scope.name.to_owned(), preparation_scope.to_string()),
             ]),
     );
     let prepared = PreparedRelease {
@@ -473,6 +495,10 @@ fn release_bundle_environment(job: Job) -> Job {
             "${{ matrix.remote_features }}",
         ))
         .add_env(("RELEASE_TAG", "${{ needs.prepare_release.outputs.tag }}"))
+        .add_env((
+            "RELEASE_PREPARATION_SCOPE",
+            "${{ needs.prepare_release.outputs.preparation_scope }}",
+        ))
         .add_env((
             "ZED_RELEASE_CHANNEL",
             "${{ needs.prepare_release.outputs.channel }}",
@@ -1047,6 +1073,10 @@ fn draft_product(prepare: &NamedJob, prepared: &PreparedRelease, build: &NamedJo
                     .add_env(("EXPECTED_PRODUCT", prepared.product.to_string()))
                     .add_env(("EXPECTED_TAG", prepared.tag.to_string()))
                     .add_env((
+                        "EXPECTED_SCOPE",
+                        "${{ needs.prepare_release.outputs.preparation_scope }}",
+                    ))
+                    .add_env((
                         "LINUX_SIGNING_KEY_FINGERPRINT",
                         "${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}",
                     )),
@@ -1068,9 +1098,13 @@ mod release_workflow_tests {
                 .as_object()
                 .expect("inputs")
                 .len(),
-            1
+            2
         );
         assert!(events["workflow_dispatch"]["inputs"]["release_tag"].is_object());
+        assert_eq!(
+            events["workflow_dispatch"]["inputs"]["preparation_scope"]["default"],
+            "full"
+        );
         let jobs = &workflow["jobs"];
         assert_eq!(jobs.as_object().expect("jobs").len(), 7);
         assert_eq!(
@@ -1117,6 +1151,8 @@ mod release_workflow_tests {
         assert!(!check.contains("contents: write"));
         assert!(!check.contains("product_release.py draft"));
         assert!(check.contains("inputs.sign_artifacts == true"));
+        assert!(check.contains("inputs.preparation_scope || 'full'"));
+        assert!(check.contains("--preparation-scope"));
         Ok(())
     }
 }

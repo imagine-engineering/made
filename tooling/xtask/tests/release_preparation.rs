@@ -43,101 +43,128 @@ fn existing_annotated_and_lightweight_tags_require_main_ancestry() -> Result<()>
     git(root, &["commit", "-m", "Main fixture"])?;
     let main = git(root, &["rev-parse", "HEAD"])?;
     git(root, &["update-ref", "refs/remotes/origin/main", &main])?;
-    git(root, &["tag", "rust-v0.1.0"])?;
+    git(root, &["tag", "copper-v0.1.0"])?;
     git(
         root,
-        &["tag", "-a", "rust-v0.2.0-rc.1", "-m", "Prerelease fixture"],
+        &[
+            "tag",
+            "-a",
+            "copper-v0.2.0-rc.1",
+            "-m",
+            "Prerelease fixture",
+        ],
     )?;
-    for tag in ["rust-v0.1.0", "rust-v0.2.0-rc.1"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
-            .current_dir(root)
-            .args(["release-version", "--tag", tag])
-            .output()?;
-        ensure!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let decision: Value = serde_json::from_slice(&output.stdout)?;
-        assert_eq!(decision["commit_sha"], main);
-        assert_eq!(decision["tag"], tag);
-        assert_eq!(decision["product_id"], "rust");
-        assert_eq!(decision["display_name"], "Tagged Copper");
-        let plan = Command::new(env!("CARGO_BIN_EXE_xtask"))
-            .current_dir(root)
-            .env(
-                "RELEASE_VERSION",
-                decision["version"].as_str().context("version")?,
-            )
-            .args([
-                "bundle",
-                "--product",
-                "rust",
-                "--platform",
-                "macos",
-                "--target",
-                "aarch64-apple-darwin",
-                "--channel",
-                decision["channel"].as_str().context("channel")?,
-                "--catalog-commit",
-                &main,
-                "--dry-run",
-            ])
-            .output()?;
-        ensure!(
-            plan.status.success(),
-            "{}",
-            String::from_utf8_lossy(&plan.stderr)
-        );
-        let plan: Value = serde_json::from_slice(&plan.stdout)?;
-        assert!(
-            plan["display_name"]
-                .as_str()
-                .context("display name")?
-                .starts_with("Tagged Copper")
-        );
-        #[cfg(unix)]
-        {
-            fs::create_dir_all(root.join("target/debug"))?;
-            fs::copy(env!("CARGO_BIN_EXE_xtask"), root.join("target/debug/xtask"))?;
-            fs::create_dir_all(root.join("release-bundle-plans"))?;
-            fs::write(
-                root.join("release-bundle-plans/decision.json"),
-                serde_json::to_string(&decision)?,
-            )?;
-            let script =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../script/product_release.py");
-            let output = Command::new("python3")
+    for tag in ["copper-v0.1.0", "copper-v0.2.0-rc.1"] {
+        for scope in ["full", "macos-only"] {
+            let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
                 .current_dir(root)
-                .arg(script)
-                .arg("bundle-plans")
+                .args([
+                    "release-version",
+                    "--tag",
+                    tag,
+                    "--preparation-scope",
+                    scope,
+                ])
                 .output()?;
             ensure!(
                 output.status.success(),
                 "{}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            for row in decision["matrix"]["include"].as_array().context("matrix")? {
-                let plan: Value = serde_json::from_str(&fs::read_to_string(
-                    root.join("release-bundle-plans")
-                        .join(row["plan_file"].as_str().context("plan file")?),
-                )?)?;
-                assert_eq!(plan["artifact_name"], row["artifact_name"]);
-                assert_eq!(plan["version"], decision["version"]);
-                assert_eq!(plan["channel"], decision["channel"]);
-                assert!(
-                    plan["display_name"]
-                        .as_str()
-                        .context("display")?
-                        .starts_with("Tagged Copper")
+            let decision: Value = serde_json::from_slice(&output.stdout)?;
+            assert_eq!(decision["preparation_scope"], scope);
+            assert_eq!(
+                decision["matrix"]["include"]
+                    .as_array()
+                    .context("matrix")?
+                    .len(),
+                if scope == "full" { 3 } else { 1 }
+            );
+            assert_eq!(decision["commit_sha"], main);
+            assert_eq!(decision["tag"], tag);
+            assert_eq!(decision["product_id"], "rust");
+            assert_eq!(decision["display_name"], "Tagged Copper");
+            let plan = Command::new(env!("CARGO_BIN_EXE_xtask"))
+                .current_dir(root)
+                .env(
+                    "RELEASE_VERSION",
+                    decision["version"].as_str().context("version")?,
+                )
+                .args([
+                    "bundle",
+                    "--product",
+                    "rust",
+                    "--platform",
+                    "macos",
+                    "--target",
+                    "aarch64-apple-darwin",
+                    "--channel",
+                    decision["channel"].as_str().context("channel")?,
+                    "--catalog-commit",
+                    &main,
+                    "--dry-run",
+                ])
+                .output()?;
+            ensure!(
+                plan.status.success(),
+                "{}",
+                String::from_utf8_lossy(&plan.stderr)
+            );
+            let plan: Value = serde_json::from_slice(&plan.stdout)?;
+            assert!(
+                plan["display_name"]
+                    .as_str()
+                    .context("display name")?
+                    .starts_with("Tagged Copper")
+            );
+            #[cfg(unix)]
+            {
+                fs::create_dir_all(root.join("target/debug"))?;
+                fs::copy(env!("CARGO_BIN_EXE_xtask"), root.join("target/debug/xtask"))?;
+                fs::create_dir_all(root.join("release-bundle-plans"))?;
+                fs::write(
+                    root.join("release-bundle-plans/decision.json"),
+                    serde_json::to_string(&decision)?,
+                )?;
+                let script =
+                    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../script/product_release.py");
+                let output = Command::new("python3")
+                    .current_dir(root)
+                    .arg(script)
+                    .arg("bundle-plans")
+                    .output()?;
+                ensure!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
                 );
+                for row in decision["matrix"]["include"].as_array().context("matrix")? {
+                    let plan: Value = serde_json::from_str(&fs::read_to_string(
+                        root.join("release-bundle-plans")
+                            .join(row["plan_file"].as_str().context("plan file")?),
+                    )?)?;
+                    assert_eq!(plan["artifact_name"], row["artifact_name"]);
+                    assert_eq!(plan["version"], decision["version"]);
+                    assert_eq!(plan["channel"], decision["channel"]);
+                    assert!(
+                        plan["display_name"]
+                            .as_str()
+                            .context("display")?
+                            .starts_with("Tagged Copper")
+                    );
+                }
             }
         }
     }
     git(root, &["checkout", "-b", "not-main"])?;
     git(root, &["commit", "--allow-empty", "-m", "Unmerged fixture"])?;
-    git(root, &["tag", "rust-v9.0.0"])?;
-    for tag in ["rust-v9.0.0", "rust-v1.0.0", "jvm-v1.0.0", "unknown-v1.0.0"] {
+    git(root, &["tag", "copper-v9.0.0"])?;
+    for tag in [
+        "copper-v9.0.0",
+        "copper-v1.0.0",
+        "jvm-v1.0.0",
+        "unknown-v1.0.0",
+    ] {
         let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
             .current_dir(root)
             .args(["release-version", "--tag", tag])

@@ -28,6 +28,25 @@ def module(name, path):
 policy = module("signing_policy", "script/check-signing-environment")
 runtime = module("runtime_package", "script/bundle-managed-runtime")
 linux_signature = module("linux_signature", "script/sign-linux-archive")
+macos_signature = module("macos_signature", "script/verify-macos-signature")
+
+
+class MacosVerification(unittest.TestCase):
+    def test_developer_id_timestamp_runtime_and_team_are_required(self):
+        identity = "Developer ID Application: Fixture (A1B2C3D4E5)"
+        signature = f"Authority={identity}\nTeamIdentifier=A1B2C3D4E5\nTimestamp=fixture\nCodeDirectory v=20500 flags=0x10000(runtime)\n".encode()
+        with patch.dict(os.environ, MACOS_SIGNING_IDENTITY=identity):
+            with patch.object(macos_signature, "run", return_value=signature) as run:
+                self.assertEqual(macos_signature.verify_code(Path("fixture"))["team"], "A1B2C3D4E5")
+                self.assertTrue(any("anchor apple generic" in call.args for call in run.call_args_list))
+            for invalid in (signature.replace(b"Timestamp=fixture", b"Timestamp="),
+                            signature.replace(b"0x10000", b"0x0"),
+                            signature.replace(b"Developer ID Application:", b"Apple Development:"),
+                            signature + b"Signature=adhoc\n",
+                            signature.replace(b"TeamIdentifier=A1B2C3D4E5", b"TeamIdentifier=not set")):
+                with self.subTest(signature=invalid), patch.object(macos_signature, "run", return_value=invalid):
+                    with self.assertRaises(ValueError):
+                        macos_signature.verify_code(Path("fixture"))
 
 
 class SigningPolicy(unittest.TestCase):

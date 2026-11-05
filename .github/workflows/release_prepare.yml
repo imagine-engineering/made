@@ -8,9 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing catalog product tag, e.g. rust-v0.1.0 or rust-v0.2.0-rc.1
+        description: Existing catalog product tag, e.g. copper-v0.1.0 or copper-v0.2.0-rc.1
         required: true
         type: string
+      preparation_scope:
+        description: full (all catalog targets, default) or macos-only (Copper macOS only; explicitly limited draft)
+        type: string
+        default: full
 permissions:
   contents: read
 jobs:
@@ -43,9 +47,10 @@ jobs:
         CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
     - id: resolve-release
       name: release::prepare_release
-      run: python3 script/product_release.py resolve --tag "$RELEASE_TAG"
+      run: python3 script/product_release.py resolve --tag "$RELEASE_TAG" --preparation-scope "$PREPARATION_SCOPE"
       env:
         RELEASE_TAG: ${{ inputs.release_tag }}
+        PREPARATION_SCOPE: ${{ inputs.preparation_scope || 'full' }}
         RELEASE_GATES: ${{ toJSON(vars) }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: release::generate_release_bundle_plans
@@ -67,6 +72,7 @@ jobs:
       product_id: ${{ steps.resolve-release.outputs.product_id }}
       channel: ${{ steps.resolve-release.outputs.channel }}
       matrix: ${{ steps.resolve-release.outputs.matrix }}
+      preparation_scope: ${{ steps.resolve-release.outputs.preparation_scope }}
     timeout-minutes: 20
   signing_preflight:
     needs:
@@ -183,6 +189,7 @@ jobs:
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
       RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      RELEASE_PREPARATION_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
       ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
@@ -374,6 +381,7 @@ jobs:
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
       RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      RELEASE_PREPARATION_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
       ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
@@ -522,6 +530,7 @@ jobs:
       ZED_PRODUCT_APP_FEATURES: ${{ matrix.application_features }}
       ZED_PRODUCT_REMOTE_FEATURES: ${{ matrix.remote_features }}
       RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+      RELEASE_PREPARATION_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
       ZED_RELEASE_CHANNEL: ${{ needs.prepare_release.outputs.channel }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare_release.outputs.matrix) }}
@@ -789,6 +798,7 @@ jobs:
         EXPECTED_COMMIT: ${{ needs.prepare_release.outputs.commit_sha }}
         EXPECTED_PRODUCT: ${{ needs.prepare_release.outputs.product_id }}
         EXPECTED_TAG: ${{ needs.prepare_release.outputs.tag }}
+        EXPECTED_SCOPE: ${{ needs.prepare_release.outputs.preparation_scope }}
         LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
     timeout-minutes: 20
 concurrency:
