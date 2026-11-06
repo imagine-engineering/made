@@ -135,6 +135,17 @@ def main():
                 macos_verification = {"application": json.loads(app_evidence.read_text()),
                                       "dmg": json.loads(dmg_evidence.read_text())}
             run(["codesign", "--verify", "--deep", "--strict", str(application)])
+            git_launcher = application / "Contents/Resources/git/launch-git"
+            git_environment = dict(os.environ)
+            for name in ("GIT_EXEC_PATH", "GIT_TEMPLATE_DIR"):
+                git_environment.pop(name, None)
+            git_version = run([str(git_launcher), "--version"], env=git_environment, capture_output=True).stdout
+            if not git_version.startswith("git version "):
+                raise RuntimeError("Installed bundled Git did not report its version")
+            git_exec_path = run([str(git_launcher), "--exec-path"], env=git_environment, capture_output=True).stdout.strip()
+            if Path(git_exec_path).resolve() != (application / "Contents/Resources/git/libexec/git-core").resolve():
+                raise RuntimeError("Installed bundled Git helper path differs from its packaged runtime")
+            run([str(git_launcher), "init", "--bare", str(directory / "git-fixture.git")], env=git_environment, capture_output=True)
             check_launch(application / "Contents/MacOS/cli",
                          application / "Contents/MacOS" / executable, plan, version)
         else:

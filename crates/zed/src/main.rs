@@ -436,7 +436,8 @@ fn main() {
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let git_binary_path =
         if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
-            app.path_for_auxiliary_executable("git")
+            app.path_for_auxiliary_executable("cli")
+                .and_then(|executable| git::repository::bundled_git_binary_path(&executable))
                 .context("could not find git binary path")
                 .log_err()
         } else {
