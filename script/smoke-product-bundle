@@ -102,6 +102,9 @@ def main():
                 run(["hdiutil", "detach", str(mount)])
             with (application / "Contents/Info.plist").open("rb") as file:
                 metadata = plistlib.load(file)
+            minimum_system_version = plan.get("macos_minimum_system_version")
+            if minimum_system_version and metadata.get("LSMinimumSystemVersion") != minimum_system_version:
+                raise RuntimeError("Packaged minimum macOS version differs from the product catalog")
             icon_set = Path("assets/product_flavors") / arguments.product
             if (icon_set / "app-icon.icns").is_file():
                 if metadata.get("CFBundleIconFile") != "product-app-icon.icns":

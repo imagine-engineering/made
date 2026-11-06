@@ -70,13 +70,34 @@ def verify_code(path, team=None, runtime=True):
             "hardened_runtime_required": runtime}
 
 
+def macos_version(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", value):
+        raise ValueError(f"Invalid minimum macOS version: {value}")
+    components = tuple(int(component) for component in value.split("."))
+    return components + (0,) * (3 - len(components))
+
+
+def verify_deployment_target(path, minimum_system_version):
+    output = run("xcrun", "vtool", "-show-build", str(path)).decode()
+    versions = re.findall(r"^\s*minos\s+(\S+)\s*$", output, re.MULTILINE)
+    if not versions:
+        raise ValueError(f"Missing native macOS deployment target: {path}")
+    if any(macos_version(version) > macos_version(minimum_system_version) for version in versions):
+        raise ValueError(f"Native code requires macOS {', '.join(versions)} above package minimum {minimum_system_version}: {path}")
+    return versions
+
+
 def verify(path, entitlements=None, notarized=False):
     application = path.is_dir() and path.suffix == ".app"
     signature = verify_code(path, runtime=application)
     team = signature["team"]
     nested = []
     actual_entitlements = None
+    minimum_system_version = None
     if application:
+        metadata = plistlib.loads((path / "Contents/Info.plist").read_bytes())
+        minimum_system_version = metadata.get("LSMinimumSystemVersion")
+        macos_version(minimum_system_version)
         run("/usr/bin/codesign", "--verify", "--deep", "--strict", str(path))
         for entry in sorted(path.rglob("*")):
             if not entry.is_file() or entry.is_symlink():
@@ -84,7 +105,9 @@ def verify(path, entitlements=None, notarized=False):
             with entry.open("rb") as source:
                 native = source.read(4) in MACHO
             if native:
+                deployment_targets = verify_deployment_target(entry, minimum_system_version)
                 nested_signature = verify_code(entry, team)
+                nested_signature["minimum_macos_versions"] = deployment_targets
                 if entry.relative_to(path).as_posix() == "Contents/MacOS/native-cargo-runtime-observer":
                     actual_helper = code_entitlements(entry)
                     expected_helper = plistlib.loads(Path("crates/native_task_helper/resources/native-cargo-runtime-observer.entitlements").read_bytes())
@@ -109,6 +132,7 @@ def verify(path, entitlements=None, notarized=False):
             run("/usr/sbin/spctl", "--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=4", str(path))
     print(f"Verified production signature: {path}; Team={team}; nested native files={len(nested)}; notarized={notarized}")
     return {"signature": signature, "nested_code": nested, "entitlements": actual_entitlements,
+            "minimum_macos_version": minimum_system_version,
             "stapled_ticket_validated": notarized, "gatekeeper_assessed": notarized}
 
 
