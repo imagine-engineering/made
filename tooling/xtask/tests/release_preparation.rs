@@ -111,6 +111,7 @@ fn existing_annotated_and_lightweight_tags_require_main_ancestry() -> Result<()>
                 String::from_utf8_lossy(&plan.stderr)
             );
             let plan: Value = serde_json::from_slice(&plan.stdout)?;
+            assert_eq!(plan["macos_minimum_system_version"], "13.3");
             assert!(
                 plan["display_name"]
                     .as_str()

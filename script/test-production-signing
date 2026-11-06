@@ -34,6 +34,21 @@ macos_signature = module("macos_signature", "script/verify-macos-signature")
 
 
 class MacosVerification(unittest.TestCase):
+    def test_package_minimum_covers_every_native_deployment_target(self):
+        native = Path("Fixture.app/Contents/Resources/llama-cpp/llama-server")
+        output = b"platform MACOS\n    minos 13.3\n    sdk 26.0\n"
+        with patch.object(macos_signature, "run", return_value=output):
+            with self.assertRaisesRegex(ValueError, "above package minimum"):
+                macos_signature.verify_deployment_target(native, "10.15.7")
+            self.assertEqual(macos_signature.verify_deployment_target(native, "13.3"), ["13.3"])
+            self.assertEqual(macos_signature.verify_deployment_target(native, "13.3.1"), ["13.3"])
+        with patch.object(macos_signature, "run", return_value=b"missing target"):
+            with self.assertRaisesRegex(ValueError, "Missing native"):
+                macos_signature.verify_deployment_target(native, "13.3")
+        for invalid in [None, "", "13", "13.3-beta", "13.3.0.1"]:
+            with self.subTest(version=invalid), self.assertRaises(ValueError):
+                macos_signature.macos_version(invalid)
+
     def signing_paths(self, application):
         result = subprocess.run(("bash", "-c", 'source script/lib/macos-signing.sh; macos_nested_signing_paths "$1" copper', "fixture", str(application)),
                                 capture_output=True, check=True)

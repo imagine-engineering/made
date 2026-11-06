@@ -25,6 +25,8 @@ pub struct Product {
     pub release_gate_variable: String,
     #[serde(default)]
     pub macos_release_gate_variable: Option<String>,
+    #[serde(default)]
+    pub macos_minimum_system_version: Option<String>,
     pub required_ci_workflows: Vec<String>,
     pub display_name: String,
     pub initial_version: Option<String>,
@@ -268,6 +270,16 @@ impl Product {
                 "macOS release gate must be valid and distinct from full-platform qualification"
             );
         }
+        if let Some(version) = &self.macos_minimum_system_version {
+            let components: Vec<_> = version.split('.').collect();
+            ensure!(
+                (2..=3).contains(&components.len())
+                    && components.iter().all(|component| !component.is_empty()
+                        && component.bytes().all(|byte| byte.is_ascii_digit())
+                        && component.parse::<u32>().is_ok()),
+                "invalid minimum macOS version"
+            );
+        }
         for workflow in &self.required_ci_workflows {
             ensure!(
                 workflow.ends_with(".yml")
@@ -489,6 +501,37 @@ mod tests {
     #[test]
     fn repository_catalog_is_valid() {
         ProductManifest::load().expect("repository product catalog should be valid");
+    }
+
+    #[test]
+    fn macos_package_minimum_is_product_owned() -> Result<()> {
+        let manifest = ProductManifest::load()?;
+        let mut product = manifest.product("rust")?.clone();
+        assert_eq!(
+            product.macos_minimum_system_version.as_deref(),
+            Some("13.3")
+        );
+        assert!(
+            manifest
+                .product("jvm")?
+                .macos_minimum_system_version
+                .is_none()
+        );
+        for version in [
+            "",
+            "13",
+            "13..3",
+            "13.3-beta",
+            "13.3.0.0",
+            "999999999999999999999.0",
+        ] {
+            product.macos_minimum_system_version = Some(version.into());
+            assert!(
+                product.validate(&workspace_root(), true).is_err(),
+                "{version}"
+            );
+        }
+        Ok(())
     }
 
     #[test]

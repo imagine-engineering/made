@@ -83,6 +83,7 @@ struct BundlePlan<'a> {
     windows_installer_id: String,
     platform: Platform,
     target: &'a str,
+    macos_minimum_system_version: Option<&'a str>,
     channel: &'a str,
     application_features: &'a [String],
     remote_server_features: &'a [String],
@@ -196,6 +197,7 @@ pub fn run(args: BundleArgs) -> Result<()> {
         windows_installer_id: windows_installer_id.clone(),
         platform,
         target,
+        macos_minimum_system_version: product.macos_minimum_system_version.as_deref(),
         channel: &args.channel,
         application_features: &application_features,
         remote_server_features: &product.remote_server_features,
@@ -222,6 +224,9 @@ pub fn run(args: BundleArgs) -> Result<()> {
         });
     }
     command.current_dir(&root);
+    if let Some(version) = &product.macos_minimum_system_version {
+        command.env("ZED_PRODUCT_MACOS_MINIMUM_SYSTEM_VERSION", version);
+    }
     command.env("ZED_PRODUCT_ID", &product.id);
     command.env("ZED_PRODUCT_DISPLAY_NAME", display_name);
     command.env("ZED_PRODUCT_EXECUTABLE", &product.executable_name);
