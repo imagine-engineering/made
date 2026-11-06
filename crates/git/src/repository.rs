@@ -1302,6 +1302,16 @@ pub struct GitCommitTemplate {
     pub template: String,
 }
 
+pub fn bundled_git_binary_path(bundle_executable: &Path) -> Result<PathBuf> {
+    let contents = bundle_executable
+        .parent()
+        .and_then(Path::parent)
+        .context("Bundled executable has no Contents directory")?;
+    let launcher = contents.join("Resources/git/launch-git");
+    anyhow::ensure!(launcher.is_file(), "bundled Git launcher is missing");
+    Ok(launcher)
+}
+
 pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
     if cfg!(any(feature = "test-support", test)) {
         return GitCommitter {
@@ -1313,7 +1323,8 @@ pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
     let git_binary_path =
         if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
             cx.update(|cx| {
-                cx.path_for_auxiliary_executable("git")
+                cx.path_for_auxiliary_executable("cli")
+                    .and_then(|executable| bundled_git_binary_path(&executable))
                     .context("could not find git binary path")
                     .log_err()
             })

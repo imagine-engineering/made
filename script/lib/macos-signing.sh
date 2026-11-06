@@ -5,6 +5,22 @@ signing_temporary_directory=""
 signing_keychain=""
 signing_search_list_snapshot=""
 
+macos_nested_signing_paths() {
+    python3 - "$1" "$2" <<'NESTED_SIGNING_PATHS'
+import os
+from pathlib import Path
+import sys
+application = Path(sys.argv[1])
+main_executable = application / "Contents/MacOS" / sys.argv[2]
+if not main_executable.is_file():
+    raise SystemExit("Application main executable is missing before signing")
+paths = sorted(application.rglob("*"), key=lambda path: (-len(path.parts), str(path)))
+for path in paths:
+    if path.is_file() and not path.is_symlink() and path != main_executable:
+        sys.stdout.buffer.write(os.fsencode(path) + b"\0")
+NESTED_SIGNING_PATHS
+}
+
 cleanup_signing() {
     local status=$?
     trap - EXIT

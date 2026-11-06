@@ -340,8 +340,8 @@ craneLib.buildPackage (
           popd
 
           mkdir -p $out/Applications $out/bin
-          # Zed expects git next to its own binary
-          ln -s ${git}/bin/git "$app_path/Contents/MacOS/git"
+          mkdir -p "$app_path/Contents/Resources/git"
+          ln -s ${git}/bin/git "$app_path/Contents/Resources/git/launch-git"
           mv $TARGET_DIR/cli "$app_path/Contents/MacOS/cli"
           mv "$app_path" $out/Applications/
 

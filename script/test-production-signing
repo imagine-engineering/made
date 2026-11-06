@@ -8,8 +8,10 @@ import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -32,6 +34,69 @@ macos_signature = module("macos_signature", "script/verify-macos-signature")
 
 
 class MacosVerification(unittest.TestCase):
+    def signing_paths(self, application):
+        result = subprocess.run(("bash", "-c", 'source script/lib/macos-signing.sh; macos_nested_signing_paths "$1" copper', "fixture", str(application)),
+                                capture_output=True, check=True)
+        return [Path(os.fsdecode(path)) for path in result.stdout.split(b"\0") if path]
+
+    def test_nested_paths_exclude_outer_executable_and_sort_inside_out(self):
+        with tempfile.TemporaryDirectory() as directory:
+            application = Path(directory) / "Fixture With Spaces.app"
+            main = application / "Contents/MacOS/copper"
+            files = [main, application / "Contents/MacOS/cli",
+                     application / "Contents/Resources/llama-cpp/macos-aarch64/bin/llama-server"]
+            for path in files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fixture")
+            (application / "Contents/Resources/outside-link").symlink_to(main)
+            selected = self.signing_paths(application)
+            self.assertEqual(set(selected), set(files) - {main})
+            self.assertEqual([len(path.parts) for path in selected], sorted((len(path.parts) for path in selected), reverse=True))
+
+    @unittest.skipUnless(sys.platform == "darwin" and shutil.which("clang"), "macOS codesign/clang required for the credential-free layout fixture")
+    def test_real_macos_layout_rejects_scripts_and_metadata_in_code_slots(self):
+        with tempfile.TemporaryDirectory(prefix="copper signing layout ") as directory:
+            root = Path(directory)
+            application = root / "Fixture.app"
+            main = application / "Contents/MacOS/copper"
+            main.parent.mkdir(parents=True)
+            source = root / "fixture.c"
+            source.write_text("int main(void) { return 0; }\n")
+            subprocess.run(("clang", str(source), "-o", str(main)), capture_output=True, check=True)
+            (application / "Contents/Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": "invalid.copper.signing-fixture", "CFBundleName": "Fixture",
+                "CFBundleExecutable": "copper", "CFBundlePackageType": "APPL", "CFBundleVersion": "1",
+            }))
+            for relative in ("Contents/MacOS/cli", "Contents/Resources/git/bin/git",
+                             "Contents/Resources/llama-cpp/macos-aarch64/bin/llama-server"):
+                path = application / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(main, path)
+            receipt = application / "Contents/Resources/llama-cpp/.copper-bundled-runtime.json"
+            receipt.write_text("{}")
+            launcher = application / "Contents/MacOS/git"
+            launcher.write_text("#!/bin/sh\nexit 0\n")
+            launcher.chmod(0o755)
+            signing = ["/usr/bin/codesign", "--force", "--options", "runtime", "--timestamp=none", "--sign", "-"]
+            for path in self.signing_paths(application):
+                if path.read_bytes()[:4] in macos_signature.MACHO:
+                    subprocess.run([*signing, str(path)], capture_output=True, check=True)
+            original = subprocess.run([*signing, str(application)], capture_output=True)
+            self.assertNotEqual(original.returncode, 0)
+            self.assertIn(b"Contents/MacOS/git", original.stderr)
+            launcher.rename(application / "Contents/Resources/git/launch-git")
+            (application / "Contents/Frameworks").mkdir()
+            receipt.parent.rename(application / "Contents/Frameworks/llama-cpp")
+            mixed = subprocess.run([*signing, str(application)], capture_output=True)
+            self.assertNotEqual(mixed.returncode, 0)
+            self.assertIn(b".copper-bundled-runtime.json", mixed.stderr)
+            (application / "Contents/Frameworks/llama-cpp").rename(application / "Contents/Resources/llama-cpp")
+            subprocess.run([*signing, str(application)], capture_output=True, check=True)
+            subprocess.run(("/usr/bin/codesign", "--verify", "--deep", "--strict", str(application)), capture_output=True, check=True)
+            envelope = plistlib.loads((application / "Contents/_CodeSignature/CodeResources").read_bytes())
+            self.assertIn("Resources/git/launch-git", envelope["files2"])
+            self.assertIn("Resources/llama-cpp/.copper-bundled-runtime.json", envelope["files2"])
+
     def test_developer_id_timestamp_runtime_and_team_are_required(self):
         identity = "Developer ID Application: Fixture (A1B2C3D4E5)"
         signature = f"Authority={identity}\nTeamIdentifier=A1B2C3D4E5\nTimestamp=fixture\nCodeDirectory v=20500 flags=0x10000(runtime)\n".encode()
@@ -50,6 +115,49 @@ class MacosVerification(unittest.TestCase):
 
 
 class SigningPolicy(unittest.TestCase):
+    def test_resource_git_launcher_keeps_arguments_and_explicit_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            application = root / "Fixture With Spaces.app"
+            fake_git = root / "git-fixture"
+            fake_git.write_text('''#!/bin/sh
+case "$1" in
+--version) printf 'git version 0.0.1\\n' ;;
+--exec-path) printf '%s\\n' "$GIT_EXEC_PATH" ;;
+--template-path) printf '%s\\n' "$GIT_TEMPLATE_DIR" ;;
+*) printf '%s\\0' "$@" ;;
+esac
+''')
+            text = Path("script/bundle-mac").read_text()
+            function = text[text.index("function download_git() {"):text.index("function sign_git_runtime() {")]
+            script = '''set -euo pipefail
+app_path=$1
+GIT_RELEASE_TAG=fixture
+GIT_VERSION=v0.0.1
+GIT_VERSION_SHA=fixture
+GIT_MACOS_ARM64_SHA256=fixture
+download_and_unpack() {
+    mkdir -p "$2/bin" "$2/libexec/git-core" "$2/share/git-core/templates"
+    cp "$SIGNING_TEST_ROOT/git-fixture" "$2/bin/git"
+    chmod +x "$2/bin/git"
+}
+''' + function + '\ndownload_git aarch64-apple-darwin "$app_path/Contents/Resources/git/launch-git"\n'
+            environment = dict(os.environ, SIGNING_TEST_ROOT=str(root))
+            for name in ("GIT_EXEC_PATH", "GIT_TEMPLATE_DIR"):
+                environment.pop(name, None)
+            subprocess.run(("bash", "-c", script, "fixture", str(application)), env=environment, capture_output=True, check=True)
+            runtime = application / "Contents/Resources/git"
+            launcher = runtime / "launch-git"
+            def run(argument, **overrides):
+                return subprocess.run((str(launcher), argument), env=dict(environment, **overrides), capture_output=True, check=True).stdout.decode().strip()
+            self.assertEqual(run("--exec-path"), str(runtime / "libexec/git-core"))
+            self.assertEqual(run("--template-path"), str(runtime / "share/git-core/templates"))
+            self.assertEqual(run("--exec-path", GIT_EXEC_PATH="/explicit helpers"), "/explicit helpers")
+            self.assertEqual(run("--template-path", GIT_TEMPLATE_DIR="/explicit templates"), "/explicit templates")
+            arguments = ("argument with spaces", "literal;$(not-a-command)")
+            forwarded = subprocess.run((str(launcher), *arguments), env=environment, capture_output=True, check=True).stdout
+            self.assertEqual(forwarded.split(b"\0")[:-1], [argument.encode() for argument in arguments])
+
     def environment(self, platform):
         values = {name: "fixture-only" for name in policy.CREDENTIALS[platform]}
         if platform == "linux":

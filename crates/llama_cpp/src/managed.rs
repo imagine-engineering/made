@@ -907,7 +907,7 @@ fn bundled_runtime(
         parent
             .parent()
             .context("Application has no Contents directory")?
-            .join("Frameworks/llama-cpp")
+            .join("Resources/llama-cpp")
     } else {
         parent.join("llama-cpp")
     };
@@ -1272,7 +1272,7 @@ mod tests {
         let platform = host_platform()?;
         assert!(bundled_runtime(&catalog, platform, &application)?.is_none());
         let root = if cfg!(target_os = "macos") {
-            temporary.path().join("Contents/Frameworks/llama-cpp")
+            temporary.path().join("Contents/Resources/llama-cpp")
         } else {
             application
                 .parent()

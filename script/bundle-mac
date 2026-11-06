@@ -364,7 +364,7 @@ function download_git() {
     # The vendor binary has a fixed exec prefix; its HTTPS helpers need explicit paths.
     cat > "$target_binary" <<'GIT_LAUNCHER'
 #!/bin/sh
-git_runtime="$(CDPATH= cd -- "$(dirname -- "$0")/../Resources/git" && pwd)" || exit 1
+git_runtime="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" || exit 1
 export GIT_EXEC_PATH="${GIT_EXEC_PATH:-$git_runtime/libexec/git-core}"
 export GIT_TEMPLATE_DIR="${GIT_TEMPLATE_DIR:-$git_runtime/share/git-core/templates}"
 exec "$git_runtime/bin/git" "$@"
@@ -479,22 +479,24 @@ NATIVE_HELPER_POLICY
 }
 
 function sign_app_binaries() {
-    mkdir -p "${app_path}/Contents/Frameworks"
+    mkdir -p "${app_path}/Contents/Resources"
 
     if [[ ",${ZED_PRODUCT_APP_FEATURES}," == *,agentic-tools,* ]]; then
-        python3 script/bundle-managed-runtime --platform "macos-${arch_suffix}" --destination "${app_path}/Contents/Frameworks/llama-cpp"
+        python3 script/bundle-managed-runtime --platform "macos-${arch_suffix}" --destination "${app_path}/Contents/Resources/llama-cpp"
     fi
 
     echo "Downloading git binary"
-    download_git "${target_triple}" "${app_path}/Contents/MacOS/git"
+    download_git "${target_triple}" "${app_path}/Contents/Resources/git/launch-git"
 
     if [[ $can_code_sign = true ]]; then
         echo "Code signing binaries"
+        local nested_paths="${signing_temporary_directory}/nested-code-paths"
+        macos_nested_signing_paths "$app_path" "$ZED_PRODUCT_EXECUTABLE" > "$nested_paths"
         while IFS= read -r -d '' binary_path; do
             if [[ "$(/usr/bin/file -b "$binary_path")" == *Mach-O* ]]; then
                 /usr/bin/codesign --force --timestamp --options runtime --sign "$IDENTITY" "${signing_keychain_arguments[@]}" "$binary_path"
             fi
-        done < <(find "${app_path}" -type f -print0)
+        done < "$nested_paths"
         if [[ "$rust_tools" = true ]]; then
             sign_native_cargo_runtime_helper
         fi
