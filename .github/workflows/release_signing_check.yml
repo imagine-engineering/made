@@ -17,6 +17,7 @@ on:
     - script/test_product_release.py
     - script/check-signing-environment
     - script/test-production-signing
+    - script/verify-macos-signature
     - script/sign-linux-archive
     - script/lib/macos-signing.sh
     - crates/auto_update_helper/**
@@ -754,7 +755,7 @@ jobs:
       if: always() && matrix.platform == 'macos'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
-        name: ${{ matrix.artifact }}-signing-evidence
+        name: ${{ matrix.artifact }}-signing-evidence-attempt-${{ github.run_attempt }}
         path: target/products/${{ matrix.product }}/signing-evidence
     - name: release::product_builds
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
