@@ -103,7 +103,7 @@ class MacosVerification(unittest.TestCase):
         with patch.dict(os.environ, MACOS_SIGNING_IDENTITY=identity):
             with patch.object(macos_signature, "run", return_value=signature) as run:
                 self.assertEqual(macos_signature.verify_code(Path("fixture"))["team"], "A1B2C3D4E5")
-                self.assertTrue(any("anchor apple generic" in call.args for call in run.call_args_list))
+                self.assertTrue(any("=anchor apple generic" in call.args for call in run.call_args_list))
             for invalid in (signature.replace(b"Timestamp=fixture", b"Timestamp="),
                             signature.replace(b"0x10000", b"0x0"),
                             signature.replace(b"Developer ID Application:", b"Apple Development:"),
@@ -112,6 +112,26 @@ class MacosVerification(unittest.TestCase):
                 with self.subTest(signature=invalid), patch.object(macos_signature, "run", return_value=invalid):
                     with self.assertRaises(ValueError):
                         macos_signature.verify_code(Path("fixture"))
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS requirement parser required")
+    def test_apple_anchor_is_an_inline_requirement(self):
+        signature = b"Authority=Developer ID Application: Fixture (A1B2C3D4E5)\nTeamIdentifier=A1B2C3D4E5\nTimestamp=fixture\nCodeDirectory v=20500 flags=0x10000(runtime)\n"
+        with patch.dict(os.environ, MACOS_SIGNING_IDENTITY="Developer ID Application: Fixture (A1B2C3D4E5)"):
+            with patch.object(macos_signature, "run", return_value=signature) as run:
+                macos_signature.verify_code(Path("fixture"))
+        requirement_calls = [call.args for call in run.call_args_list if "-R" in call.args]
+        self.assertEqual(len(requirement_calls), 1)
+        arguments = requirement_calls[0]
+        requirement = arguments[arguments.index("-R") + 1]
+        result = subprocess.run(("/usr/bin/csreq", "-r", requirement, "-t"), capture_output=True, check=True)
+        self.assertEqual(result.stdout.strip(), b"anchor apple generic")
+
+    def test_failed_verification_reports_native_diagnostic(self):
+        failure = subprocess.CalledProcessError(1, ("codesign", "--verify"), stderr=b"invalid requirement specification\n")
+        with patch.object(sys, "argv", ["verify-macos-signature", "fixture.app"]), patch.object(macos_signature, "verify", side_effect=failure):
+            with patch("sys.stderr", new_callable=io.StringIO) as diagnostic:
+                self.assertEqual(macos_signature.main(), 1)
+        self.assertIn("invalid requirement specification", diagnostic.getvalue())
 
 
 class SigningPolicy(unittest.TestCase):

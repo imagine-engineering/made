@@ -39,7 +39,7 @@ def verify_code(path, team=None, runtime=True):
     authority = field(signature, "Authority")
     if not authority.startswith("Developer ID Application:") or "Signature=adhoc" in signature:
         raise ValueError(f"Production Developer ID Application signature required: {path}")
-    run("/usr/bin/codesign", "--verify", "--strict", "-R", "anchor apple generic", str(path))
+    run("/usr/bin/codesign", "--verify", "--strict", "-R", "=anchor apple generic", str(path))
     expected_identity = os.environ.get("MACOS_SIGNING_IDENTITY")
     if expected_identity and authority != expected_identity:
         raise ValueError(f"Signing identity differs from MACOS_SIGNING_IDENTITY: {path}")
@@ -111,6 +111,8 @@ def main():
             arguments.json_output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"Production signature verification failed: {error}", file=sys.stderr)
+        if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+            print(error.stderr.decode(errors="replace").strip(), file=sys.stderr)
         return 1
     return 0
 
