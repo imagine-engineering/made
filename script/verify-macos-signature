@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 MACHO = {bytes.fromhex(value) for value in (
     "feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca",
@@ -16,8 +17,21 @@ MACHO = {bytes.fromhex(value) for value in (
 
 
 def run(*arguments):
-    result = subprocess.run(arguments, capture_output=True, check=True)
-    return result.stdout + result.stderr
+    ticket_validation = arguments[:3] == ("xcrun", "stapler", "validate")
+    for attempt_number in range(3):
+        try:
+            result = subprocess.run(arguments, capture_output=True, check=True)
+            return result.stdout + result.stderr
+        except subprocess.CalledProcessError as error:
+            # Validation contacts Apple's ticket service even after stapling.
+            # EX_NOHOST can represent an unexpected service response.
+            if not ticket_validation or error.returncode != 68 or attempt_number == 2:
+                raise
+            print(f"Apple ticket validation returned 68; retrying ({attempt_number + 1}/3)", file=sys.stderr)
+            for output in (error.stdout, error.stderr):
+                if output:
+                    print(output.decode(errors="replace").strip(), file=sys.stderr)
+            time.sleep(5 * (attempt_number + 1))
 
 
 def field(text, name):
@@ -111,8 +125,10 @@ def main():
             arguments.json_output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"Production signature verification failed: {error}", file=sys.stderr)
-        if isinstance(error, subprocess.CalledProcessError) and error.stderr:
-            print(error.stderr.decode(errors="replace").strip(), file=sys.stderr)
+        if isinstance(error, subprocess.CalledProcessError):
+            for output in (error.stdout, error.stderr):
+                if output:
+                    print(output.decode(errors="replace").strip(), file=sys.stderr)
         return 1
     return 0
 

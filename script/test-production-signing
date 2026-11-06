@@ -127,11 +127,41 @@ class MacosVerification(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), b"anchor apple generic")
 
     def test_failed_verification_reports_native_diagnostic(self):
-        failure = subprocess.CalledProcessError(1, ("codesign", "--verify"), stderr=b"invalid requirement specification\n")
+        failure = subprocess.CalledProcessError(1, ("codesign", "--verify"), output=b"native stdout diagnostic\n", stderr=b"invalid requirement specification\n")
         with patch.object(sys, "argv", ["verify-macos-signature", "fixture.app"]), patch.object(macos_signature, "verify", side_effect=failure):
             with patch("sys.stderr", new_callable=io.StringIO) as diagnostic:
                 self.assertEqual(macos_signature.main(), 1)
         self.assertIn("invalid requirement specification", diagnostic.getvalue())
+        self.assertIn("native stdout diagnostic", diagnostic.getvalue())
+
+    def test_ticket_service_retry_requires_successful_validation(self):
+        command = ("xcrun", "stapler", "validate", "fixture.app")
+        failure = subprocess.CalledProcessError(68, command, output=b"ticket service unavailable\n")
+        success = subprocess.CompletedProcess(command, 0, stdout=b"validated\n", stderr=b"")
+        with patch.object(subprocess, "run", side_effect=[failure, success]) as run, patch("time.sleep") as sleep:
+            self.assertEqual(macos_signature.run(*command), b"validated\n")
+        self.assertEqual(run.call_count, 2)
+        sleep.assert_called_once_with(5)
+        with patch.object(subprocess, "run", side_effect=failure) as run, patch("time.sleep") as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                macos_signature.run(*command)
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_invalid_or_revoked_tickets_and_code_failures_are_not_retried(self):
+        for command, returncode in [
+            (("xcrun", "stapler", "validate", "fixture.app"), 65),
+            (("xcrun", "stapler", "validate", "fixture.app"), 66),
+            (("xcrun", "stapler", "validate", "fixture.app"), 77),
+            (("/usr/bin/codesign", "--verify", "fixture.app"), 68),
+        ]:
+            with self.subTest(command=command, returncode=returncode):
+                failure = subprocess.CalledProcessError(returncode, command)
+                with patch.object(subprocess, "run", side_effect=failure) as run, patch("time.sleep") as sleep:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        macos_signature.run(*command)
+                run.assert_called_once()
+                sleep.assert_not_called()
 
 
 class SigningPolicy(unittest.TestCase):

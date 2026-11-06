@@ -198,6 +198,7 @@ pub(crate) fn release_signing_check() -> Workflow {
         .add_path("script/test_product_release.py")
         .add_path("script/check-signing-environment")
         .add_path("script/test-production-signing")
+        .add_path("script/verify-macos-signature")
         .add_path("script/sign-linux-archive")
         .add_path("script/lib/macos-signing.sh")
         .add_path("crates/auto_update_helper/**");
@@ -1010,7 +1011,7 @@ fn product_builds(
                 .add_env(("COMMIT_SHA", prepared.commit_sha.to_string())),
         )
         .add_step(
-            steps::upload_artifact("${{ matrix.artifact }}-signing-evidence", "target/products/${{ matrix.product }}/signing-evidence")
+            steps::upload_artifact("${{ matrix.artifact }}-signing-evidence-attempt-${{ github.run_attempt }}", "target/products/${{ matrix.product }}/signing-evidence")
                 .if_condition(Expression::new("always() && matrix.platform == 'macos'")),
         )
         .add_step(
