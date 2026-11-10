@@ -1218,6 +1218,11 @@ impl ProfileView {
     }
 
     fn select_node(&mut self, index: usize) {
+        self.expand_node_ancestors(index);
+        self.host.select(LanguageToolNodeId(index.to_string()));
+    }
+
+    fn expand_node_ancestors(&mut self, index: usize) {
         let mut parent = self
             .result
             .as_ref()
@@ -1233,7 +1238,6 @@ impl ProfileView {
                 .and_then(|node| node.parent);
         }
         self.host.expand_nodes(ancestors);
-        self.host.select(LanguageToolNodeId(index.to_string()));
     }
 
     fn open_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2406,16 +2410,24 @@ mod tests {
         cx.simulate_resize(gpui::size(px(1600.0), px(720.0)));
         cx.run_until_parked();
         let started = std::time::Instant::now();
-        view.update(cx, |view, cx| {
-            view.select_node(MAX_PROFILE_NODES - 1);
+        let (expansion_elapsed, selection_elapsed) = view.update(cx, |view, cx| {
+            let expansion_started = std::time::Instant::now();
+            view.expand_node_ancestors(MAX_PROFILE_NODES - 1);
+            let expansion_elapsed = expansion_started.elapsed();
+            let selection_started = std::time::Instant::now();
+            view.host
+                .select(LanguageToolNodeId((MAX_PROFILE_NODES - 1).to_string()));
             view.host.reveal_selection(gpui::ScrollStrategy::Bottom);
             cx.notify();
+            (expansion_elapsed, selection_started.elapsed())
         });
+        let draw_started = std::time::Instant::now();
         cx.update(|window, cx| {
             window.refresh();
             window.draw(cx).clear(cx);
         });
         let elapsed = started.elapsed();
+        let draw_elapsed = draw_started.elapsed();
         view.update(cx, |view, _| {
             assert_eq!(view.host.visible_rows().len(), MAX_PROFILE_NODES);
             assert_eq!(
@@ -2432,7 +2444,10 @@ mod tests {
             assert!((scroll.base_handle.offset().y - bottom).abs() <= px(1.0));
         });
         eprintln!(
-            "native-profile-deep-selection nodes={MAX_PROFILE_NODES} foreground_us={}",
+            "native-profile-deep-selection nodes={MAX_PROFILE_NODES} expansion_us={} selection_reveal_us={} draw_us={} foreground_us={}",
+            expansion_elapsed.as_micros(),
+            selection_elapsed.as_micros(),
+            draw_elapsed.as_micros(),
             elapsed.as_micros()
         );
         assert!(

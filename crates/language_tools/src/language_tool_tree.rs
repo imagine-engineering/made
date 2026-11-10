@@ -79,8 +79,10 @@ pub enum LanguageToolTreeStatus {
     DisconnectedStale(String),
 }
 
+pub type VisibleLanguageToolRow = Arc<LanguageToolRow>;
+
 #[derive(Clone, Debug)]
-pub struct VisibleLanguageToolRow {
+pub struct LanguageToolRow {
     pub id: LanguageToolNodeId,
     pub parent_id: Option<LanguageToolNodeId>,
     pub level: usize,
@@ -104,7 +106,7 @@ impl From<UniformListScrollHandle> for LanguageToolTreeScrollHandle {
 }
 
 pub fn language_tool_tree(
-    rows: Arc<[VisibleLanguageToolRow]>,
+    rows: Arc<Vec<VisibleLanguageToolRow>>,
     selected: Option<LanguageToolNodeId>,
     status_message: Option<String>,
     scroll_handle: impl Into<LanguageToolTreeScrollHandle>,
@@ -276,7 +278,7 @@ pub struct LanguageToolTreeHost {
     refresh_task: Task<()>,
     debounce_task: Task<()>,
     snapshot: LanguageToolSnapshot,
-    visible_rows: Arc<[VisibleLanguageToolRow]>,
+    visible_rows: Arc<Vec<VisibleLanguageToolRow>>,
     visible_indices: HashMap<LanguageToolNodeId, usize>,
     expanded: HashSet<LanguageToolNodeId>,
     branches: HashSet<LanguageToolNodeId>,
@@ -348,7 +350,7 @@ impl LanguageToolTreeHost {
         &self.visible_rows
     }
 
-    pub fn visible_rows_snapshot(&self) -> Arc<[VisibleLanguageToolRow]> {
+    pub fn visible_rows_snapshot(&self) -> Arc<Vec<VisibleLanguageToolRow>> {
         self.visible_rows.clone()
     }
 
@@ -563,10 +565,11 @@ impl LanguageToolTreeHost {
         if !self.visible_indices.contains_key(id) || !self.branches.contains(id) {
             return;
         }
-        if !self.expanded.remove(id) {
-            self.expanded.insert(id.clone());
+        if self.expanded.remove(id) {
+            self.rebuild_visible_rows();
+        } else {
+            self.expand_nodes([id.clone()]);
         }
-        self.rebuild_visible_rows();
     }
 
     pub fn can_expand_all(&self) -> bool {
@@ -608,15 +611,95 @@ impl LanguageToolTreeHost {
     }
 
     pub fn expand_nodes(&mut self, ids: impl IntoIterator<Item = LanguageToolNodeId>) {
-        let mut changed = false;
+        let mut affected = Vec::new();
         for id in ids {
+            let visible_index = self.visible_indices.get(&id).copied();
             if self.branches.contains(&id) && self.expanded.insert(id) {
-                changed = true;
+                affected.extend(visible_index);
             }
         }
-        if changed {
+        if affected.is_empty() {
+            return;
+        }
+        // For a wide batch, one rebuild avoids shifting the same rows in many splices.
+        if affected.len() > 32 || self.visible_indices.len() != self.visible_rows.len() {
+            self.rebuild_visible_rows();
+            return;
+        }
+        affected.sort_unstable();
+        if !self.expand_visible_subtrees(&affected) {
             self.rebuild_visible_rows();
         }
+    }
+
+    fn expand_visible_subtrees(&mut self, indices: &[usize]) -> bool {
+        let mut insertions = Vec::with_capacity(indices.len());
+        for &index in indices.iter().rev() {
+            let Some(row) = self.visible_rows.get(index) else {
+                return false;
+            };
+            let Some(node) = self.source_node(row) else {
+                return false;
+            };
+            let mut children = Vec::new();
+            flatten_nodes(
+                &node.children,
+                Some(&node.id),
+                row.level + 1,
+                &self.expanded,
+                &mut children,
+            );
+            insertions.push((index, children));
+        }
+        let mut added_ids = HashSet::new();
+        if insertions
+            .iter()
+            .flat_map(|(_, rows)| rows)
+            .any(|row| self.visible_indices.contains_key(&row.id) || !added_ids.insert(&row.id))
+        {
+            return false;
+        }
+
+        // Retained frames share the old vector and rows. Only the expanded parents
+        // need new row data, and earlier positions are unaffected by the insertions.
+        let rows = Arc::make_mut(&mut self.visible_rows);
+        for (index, children) in insertions {
+            let Some(parent) = rows.get_mut(index) else {
+                return false;
+            };
+            Arc::make_mut(parent).is_expanded = true;
+            rows.splice(index + 1..index + 1, children);
+        }
+        if let Some(&first) = indices.first() {
+            for (index, row) in rows.iter().enumerate().skip(first + 1) {
+                if let Some(position) = self.visible_indices.get_mut(&row.id) {
+                    *position = index;
+                } else {
+                    self.visible_indices.insert(row.id.clone(), index);
+                }
+            }
+        }
+        true
+    }
+
+    fn source_node<'a>(&'a self, mut row: &'a LanguageToolRow) -> Option<&'a LanguageToolNode> {
+        let mut path = vec![&row.id];
+        while let Some(parent) = &row.parent_id {
+            let ancestor = self.visible_rows.get(*self.visible_indices.get(parent)?)?;
+            if ancestor.level + 1 != row.level {
+                return None;
+            }
+            row = ancestor;
+            path.push(&row.id);
+        }
+        let mut siblings = self.snapshot.roots.as_slice();
+        let mut source = None;
+        for id in path.into_iter().rev() {
+            let node = siblings.iter().find(|node| &node.id == id)?;
+            siblings = &node.children;
+            source = Some(node);
+        }
+        source
     }
 
     pub fn collapse_all(&mut self) {
@@ -645,16 +728,12 @@ impl LanguageToolTreeHost {
 
     fn rebuild_visible_rows(&mut self) {
         let mut rows = Vec::new();
+        flatten_nodes(&self.snapshot.roots, None, 1, &self.expanded, &mut rows);
         self.visible_indices.clear();
-        flatten_nodes(
-            &self.snapshot.roots,
-            None,
-            1,
-            &self.expanded,
-            &mut self.visible_indices,
-            &mut rows,
-        );
-        self.visible_rows = rows.into();
+        for (index, row) in rows.iter().enumerate() {
+            self.visible_indices.entry(row.id.clone()).or_insert(index);
+        }
+        self.visible_rows = Arc::new(rows);
     }
 }
 
@@ -663,14 +742,12 @@ fn flatten_nodes(
     parent_id: Option<&LanguageToolNodeId>,
     level: usize,
     expanded: &HashSet<LanguageToolNodeId>,
-    visible_indices: &mut HashMap<LanguageToolNodeId, usize>,
     rows: &mut Vec<VisibleLanguageToolRow>,
 ) {
     for node in nodes {
-        visible_indices.entry(node.id.clone()).or_insert(rows.len());
         let is_branch = !node.children.is_empty();
         let is_expanded = is_branch && expanded.contains(&node.id);
-        rows.push(VisibleLanguageToolRow {
+        rows.push(Arc::new(LanguageToolRow {
             id: node.id.clone(),
             parent_id: parent_id.cloned(),
             level,
@@ -680,16 +757,9 @@ fn flatten_nodes(
             secondary_label: node.secondary_label.clone(),
             icon: node.icon,
             accessibility_label: node.accessibility_label.clone(),
-        });
+        }));
         if is_expanded {
-            flatten_nodes(
-                &node.children,
-                Some(&node.id),
-                level + 1,
-                expanded,
-                visible_indices,
-                rows,
-            );
+            flatten_nodes(&node.children, Some(&node.id), level + 1, expanded, rows);
         }
     }
 }
@@ -756,7 +826,7 @@ mod tests {
     }
 
     struct RenderedTree {
-        rows: Arc<[VisibleLanguageToolRow]>,
+        rows: Arc<Vec<VisibleLanguageToolRow>>,
         scroll_handle: UniformListScrollHandle,
         status_message: Option<String>,
         focus: Option<gpui::FocusHandle>,
@@ -824,7 +894,7 @@ mod tests {
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
         struct Diagnostics {
-            rows: Arc<[VisibleLanguageToolRow]>,
+            rows: Arc<Vec<VisibleLanguageToolRow>>,
             state: gpui::ListState,
             font_size: Pixels,
         }
@@ -846,12 +916,12 @@ mod tests {
         }
         for width in [220., 340.] {
             for font_size in [16., 24.] {
-                let rows: Arc<[VisibleLanguageToolRow]> = (0..3).map(|index| VisibleLanguageToolRow {
+                let rows = Arc::new((0..3).map(|index| Arc::new(LanguageToolRow {
                     id: LanguageToolNodeId(format!("failure-{index}")), parent_id: None, level: 1,
                     is_branch: false, is_expanded: false, label: "Cargo metadata error".into(),
                     secondary_label: Some(format!("workspace-{index}/Cargo.toml\nfailed to download missing dependency\nCaused by:\nattempting to make an HTTP request, but --offline was specified\nReview intentional offline configuration, fetch the missing dependency, then Refresh.")),
                     icon: None, accessibility_label: format!("workspace {index} offline dependency failure; open manifest and Refresh"),
-                }).collect();
+                })).collect());
                 let state =
                     gpui::ListState::new(3, gpui::ListAlignment::Top, px(2000.)).measure_all();
                 let observed = state.clone();
@@ -1056,6 +1126,54 @@ mod tests {
             ["root", "branch", "leaf", "missing"].map(|id| LanguageToolNodeId(id.into())),
         );
         assert!(Arc::ptr_eq(&current, &host.visible_rows_snapshot()));
+    }
+
+    #[test]
+    fn revealing_small_subtree_reuses_unaffected_rows_in_large_tree() {
+        const ROW_COUNT: usize = 100_000;
+        let insertion = ROW_COUNT / 2;
+        let mut roots = (0..ROW_COUNT)
+            .map(|index| node(&index.to_string(), vec![]))
+            .collect::<Vec<_>>();
+        roots[insertion]
+            .children
+            .push(node("branch", vec![node("leaf", vec![])]));
+        let mut host = LanguageToolTreeHost::default();
+        host.replace_snapshot(LanguageToolSnapshot {
+            roots,
+            status: LanguageToolProviderStatus::Current,
+        });
+        host.select_last();
+        let previous = host.visible_rows_snapshot();
+        host.expand_nodes(
+            ["branch", &insertion.to_string()].map(|id| LanguageToolNodeId(id.into())),
+        );
+        let current = host.visible_rows();
+        assert_eq!(current.len(), ROW_COUNT + 2);
+        assert_eq!(previous.len(), ROW_COUNT);
+        assert!(!previous[insertion].is_expanded);
+        assert!(current[insertion].is_expanded);
+        assert_eq!(current[insertion + 1].id.0, "branch");
+        assert_eq!(current[insertion + 2].id.0, "leaf");
+        assert!(
+            previous[..insertion]
+                .iter()
+                .zip(&current[..insertion])
+                .chain(
+                    previous[insertion + 1..]
+                        .iter()
+                        .zip(&current[insertion + 3..])
+                )
+                .all(|(old, new)| Arc::ptr_eq(old, new)),
+            "a small reveal must reuse every unaffected row"
+        );
+        assert_eq!(host.selected_index(), Some(ROW_COUNT + 1));
+        host.select(LanguageToolNodeId("leaf".into()));
+        assert_eq!(host.selected_index(), Some(insertion + 2));
+        host.select_parent();
+        assert_eq!(host.selected_index(), Some(insertion + 1));
+        host.select_next();
+        assert_eq!(host.selected_index(), Some(insertion + 2));
     }
 
     #[test]
