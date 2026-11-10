@@ -54,27 +54,22 @@ matching timing tests to execute with one test thread.
 
 ### Product releases and website refresh
 
-Releases use **existing tag → manual preparation → draft review → human Publish**.
-The generated `release_prepare.yml` accepts only `release_tag` and runs from main.
-It derives product/version/platforms from `products/flavors.toml`, requires main
-ancestry and exact-SHA successful CI, then uses the existing signed bundling
-pipeline. It leaves a verified draft and never creates tags or publishes.
-`release.yml` and `release_promotion.yml` are inert historical workflow identities.
-There is no required release branch and no automatic release trigger.
+The generated `release_prepare.yml` shares one signed packaging pipeline
+across these entry points.
 
-See [Product release operation](../../docs/src/development/product-releases.md)
-for eligibility, version/prerelease handling, safe reruns, updater isolation,
-required secrets, administrator setup and operator commands. See
-[Copper signing](../../docs/src/development/copper-signing.md) for platform trust.
-Groovy remains planned and is rejected by release preparation.
+- A human publishes a Copper prerelease for an existing catalog tag. Actions
+  verifies eligibility and attaches the Apple Silicon package to that release ID.
+- A maintainer dispatches from main with `release_tag`. Actions builds the
+  selected platform scope and prepares a draft for human review and publication.
+- A maintainer dispatches without a tag for non-publishing qualification.
+  Signing-related pushes to main and `codex/**` run credential-free contracts.
 
-`website_refresh.yml` runs after explicit GitHub publication (`release: published`)
-or manual recovery for an already published Copper tag. It verifies the release
-is public before using `AMPLIFY_REBUILD_WEBHOOK`. A failed refresh is repaired by
-rerunning only this workflow; never republish or reprepare packages for a website
-failure. A matching public page avoids a duplicate rebuild. Verify the existing
-Amplify app/branch independently before provisioning the secret; no archived
-website or hosting configuration is modified by these workflow changes.
+The previous `release.yml` and `release_promotion.yml` placeholders are removed.
+The signing contract and qualification jobs from `release_signing_check.yml`
+now use `release_prepare.yml`. The separate collaboration candidate is unchanged.
+Website refresh is paused, including manual recovery. See
+[Product release operation](../../docs/src/development/product-releases.md)
+for eligibility, setup, retries, and updater selection.
 
 ## Multiplayer desktop profile validation
 

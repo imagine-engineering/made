@@ -5,12 +5,42 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: '1'
 on:
+  push:
+    branches:
+    - codex/**
+    - main
+    paths:
+    - .github/workflows/release_prepare.yml
+    - tooling/xtask/src/tasks/workflows/release.rs
+    - tooling/xtask/src/tasks/release_version.rs
+    - products/flavors.toml
+    - script/bundle-*
+    - script/smoke-product-bundle
+    - script/product_release.py
+    - script/test_product_release.py
+    - script/check-signing-environment
+    - script/test-production-signing
+    - script/verify-macos-signature
+    - script/sign-linux-archive
+    - script/lib/macos-signing.sh
+    - crates/auto_update_helper/**
+  release:
+    types:
+    - published
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing catalog product tag, e.g. copper-v0.1.0 or copper-v0.2.0-rc.1
-        required: true
+        description: Existing catalog tag for draft preparation; leave empty for qualification
         type: string
+        default: ''
+      version:
+        description: Exact package version for qualification without a tag
+        type: string
+        default: 0.1.0
+      sign_artifacts:
+        description: Sign qualification packages using production credentials; requires separate approval
+        type: boolean
+        default: 'false'
       preparation_scope:
         description: full (all catalog targets, default) or macos-only (Copper macOS only; explicitly limited draft)
         type: string
@@ -19,40 +49,50 @@ permissions:
   contents: read
 jobs:
   prepare_release:
+    if: github.event_name != 'release' || (github.event.action == 'published' && github.event.release.draft == false && github.event.release.prerelease == true && startsWith(github.event.release.tag_name, 'copper-v') && !startsWith(github.event.release.body || '', '<!-- made-product-release '))
     runs-on: ubuntu-22.04
     permissions:
       actions: read
       contents: read
     steps:
-    - name: release::prepare_release
-      run: |
-        if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ]]; then
-            echo "Release preparation must be manually dispatched from main" >&2
-            exit 1
-        fi
     - name: steps::checkout_repo
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
       with:
         clean: false
         fetch-depth: 0
         fetch-tags: true
-        ref: ${{ github.sha }}
+        ref: ${{ github.event_name == 'release' && 'refs/heads/main' || github.sha }}
+        persist-credentials: false
     - name: release::setup_signing_python
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
     - name: release::prepare_release
-      run: |-
-        git fetch origin main --tags
-        CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
+      run: CARGO_BUILD_JOBS=2 cargo build -p xtask --locked
     - id: resolve-release
       name: release::prepare_release
-      run: python3 script/product_release.py resolve --tag "$RELEASE_TAG" --preparation-scope "$PREPARATION_SCOPE"
+      run: |
+        if [[ "$GITHUB_EVENT_NAME" == release ]]; then
+            python3 script/product_release.py resolve-prerelease
+        elif [[ -n "$RELEASE_TAG" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ]]; then
+                echo "Draft preparation must be manually dispatched from main" >&2
+                exit 1
+            fi
+            python3 script/product_release.py resolve --tag "$RELEASE_TAG" --preparation-scope "$PREPARATION_SCOPE"
+        else
+            target/debug/xtask release-version --help >/dev/null
+            python3 script/product_release.py contract --version "$VERSION" --commit "$GITHUB_SHA" --preparation-scope "$PREPARATION_SCOPE"
+        fi
       env:
         RELEASE_TAG: ${{ inputs.release_tag }}
         PREPARATION_SCOPE: ${{ inputs.preparation_scope || 'full' }}
+        VERSION: ${{ inputs.version || '0.1.0' }}
         RELEASE_GATES: ${{ toJSON(vars) }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: release::prepare_release
+      if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
+      run: python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && python3 -m unittest discover -s script -p test_product_release.py && cargo test -p xtask --locked
     - name: release::generate_release_bundle_plans
       run: python3 script/product_release.py bundle-plans
       env:
@@ -73,10 +113,13 @@ jobs:
       channel: ${{ steps.resolve-release.outputs.channel }}
       matrix: ${{ steps.resolve-release.outputs.matrix }}
       preparation_scope: ${{ steps.resolve-release.outputs.preparation_scope }}
+      controller_sha: ${{ steps.resolve-release.outputs.controller_sha }}
+      release_id: ${{ steps.resolve-release.outputs.release_id }}
     timeout-minutes: 20
   signing_preflight:
     needs:
     - prepare_release
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.sign_artifacts == true))
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -761,10 +804,11 @@ jobs:
       if: always() && matrix.platform == 'macos'
       run: df -h . && du -sh target
     timeout-minutes: 90
-  draft_product:
+  upload_release:
     needs:
     - prepare_release
     - product_builds
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-22.04
     permissions:
       actions: read
@@ -774,25 +818,30 @@ jobs:
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
       with:
         clean: false
-        fetch-depth: 0
-        fetch-tags: true
-        ref: ${{ github.sha }}
+        ref: ${{ needs.prepare_release.outputs.controller_sha }}
+        persist-credentials: false
     - name: release::setup_signing_python
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
-    - name: release::draft_product
+    - name: release::upload_release
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:
         name: release-bundle-plans
         path: release-bundle-plans
-    - name: release::draft_product
+    - name: release::upload_release
       run: python3 script/product_release.py download-packages
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    - name: release::draft_product
-      run: python3 script/product_release.py draft
+    - name: release::upload_release
+      run: |
+        if [[ "$GITHUB_EVENT_NAME" == release ]]; then
+            python3 script/product_release.py attach-prerelease
+        else
+            python3 script/product_release.py draft
+        fi
       env:
+        EXPECTED_RELEASE_ID: ${{ needs.prepare_release.outputs.release_id }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_GATES: ${{ toJSON(vars) }}
         EXPECTED_COMMIT: ${{ needs.prepare_release.outputs.commit_sha }}
@@ -802,7 +851,7 @@ jobs:
         LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
     timeout-minutes: 20
 concurrency:
-  group: product-release-${{ inputs.release_tag }}
+  group: product-release-${{ github.event.release.tag_name || inputs.release_tag || 'qualification' }}
   cancel-in-progress: false
 defaults:
   run:

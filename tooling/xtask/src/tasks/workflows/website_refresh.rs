@@ -1,6 +1,5 @@
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Workflow,
-    WorkflowDispatch,
+    Concurrency, Event, Expression, Job, Level, Permissions, Workflow, WorkflowDispatch,
 };
 
 use super::{
@@ -37,12 +36,10 @@ pub(crate) fn website_refresh() -> Workflow {
     named::workflow()
         .with_minimal_permissions()
         .on(Event::default()
-            .workflow_dispatch(WorkflowDispatch::default().add_input(tag.name, tag.input()))
-            .release(Release::default().types(vec![ReleaseType::Published])))
+            .workflow_dispatch(WorkflowDispatch::default().add_input(tag.name, tag.input())))
         .add_job(
             "refresh_website",
-            refresh_job("${{ github.event.release.tag_name || inputs.release_tag }}".to_owned())
-                .cond(Expression::new("(github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false && !contains(github.event.release.body, '\"preparation_scope\":\"macos-only\"')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')")),
+            refresh_job("${{ inputs.release_tag }}".to_owned()).cond(Expression::new("false")),
         )
 }
 
@@ -51,16 +48,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn manual_recovery_only_refreshes_with_the_shared_implementation() -> anyhow::Result<()> {
+    fn website_refresh_is_paused_even_for_manual_dispatch() -> anyhow::Result<()> {
         let workflow = serde_json::to_value(website_refresh())?;
         assert_eq!(workflow["jobs"].as_object().expect("jobs").len(), 1);
         let job = &workflow["jobs"]["refresh_website"];
         assert_eq!(job["permissions"]["contents"], "read");
-        assert!(job["if"].as_str().expect("condition").contains("published"));
-        assert_eq!(
-            workflow["on"]["release"]["types"],
-            serde_json::json!(["published"])
-        );
+        assert_eq!(job["if"], "false");
+        assert!(workflow["on"]["release"].is_null());
         assert!(job.get("needs").is_none());
         assert_eq!(job["steps"].as_array().expect("steps").len(), 2);
         let script = job["steps"][1]["run"].as_str().expect("script");

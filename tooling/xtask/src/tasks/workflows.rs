@@ -221,10 +221,7 @@ fn workflow_files() -> impl IntoIterator<Item = WorkflowFile> {
         WorkflowFile::zed(hosted_collab_tests::hosted_collab_tests),
         WorkflowFile::zed(nix_build::nix_build),
         WorkflowFile::zed(publish_extension_cli::publish_extension_cli),
-        WorkflowFile::zed(release::release),
-        WorkflowFile::zed(release::release_promotion),
         WorkflowFile::zed(release::release_prepare),
-        WorkflowFile::zed(release::release_signing_check),
         WorkflowFile::zed(website_refresh::website_refresh),
         WorkflowFile::zed(release_nightly::release_nightly),
         WorkflowFile::zed(run_bundling::run_bundling),
@@ -345,10 +342,7 @@ mod tests {
             active_workflow_files,
             [
                 "hosted_collab_tests.yml",
-                "release.yml",
                 "release_prepare.yml",
-                "release_promotion.yml",
-                "release_signing_check.yml",
                 "run_tests.yml",
                 "website_refresh.yml"
             ]

@@ -177,42 +177,40 @@ fn existing_annotated_and_lightweight_tags_require_main_ancestry() -> Result<()>
 }
 
 #[test]
-fn active_workflow_contracts_are_generated_and_non_automatic() -> Result<()> {
+fn generated_release_workflow_preserves_permission_and_trigger_boundaries() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for name in ["release", "release_promotion"] {
-        let workflow: Value = serde_yaml::from_str(&fs::read_to_string(
-            root.join(format!(".github/workflows/{name}.yml")),
-        )?)?;
-        assert_eq!(workflow["jobs"]["retired"]["if"], "false");
-        assert_eq!(workflow["on"].as_object().context("events")?.len(), 1);
+    for name in ["release", "release_promotion", "release_signing_check"] {
+        assert!(!root.join(format!(".github/workflows/{name}.yml")).exists());
     }
     let workflow: Value = serde_yaml::from_str(&fs::read_to_string(
         root.join(".github/workflows/release_prepare.yml"),
     )?)?;
-    assert_eq!(workflow["on"].as_object().context("events")?.len(), 1);
-    assert!(workflow["on"]["workflow_dispatch"]["inputs"]["release_tag"].is_object());
     assert_eq!(
-        workflow["jobs"]["draft_product"]["permissions"]["contents"],
-        "write"
+        workflow["on"]["release"]["types"],
+        serde_json::json!(["published"])
     );
+    assert!(workflow["on"]["workflow_dispatch"]["inputs"]["release_tag"].is_object());
     for (name, job) in workflow["jobs"].as_object().context("jobs")? {
-        if name != "draft_product" {
-            assert_eq!(job["permissions"]["contents"], "read");
-        }
+        assert_eq!(
+            job["permissions"]["contents"],
+            if name == "upload_release" {
+                "write"
+            } else {
+                "read"
+            }
+        );
     }
     let website: Value = serde_yaml::from_str(&fs::read_to_string(
         root.join(".github/workflows/website_refresh.yml"),
     )?)?;
-    assert_eq!(
-        website["on"]["release"]["types"],
-        serde_json::json!(["published"])
-    );
+    assert_eq!(website["jobs"]["refresh_website"]["if"], "false");
+    assert!(website["on"]["release"].is_null());
     assert!(website["on"]["push"].is_null());
     Ok(())
 }
 
 #[test]
-fn only_manual_preparation_has_release_write_permissions() -> Result<()> {
+fn only_the_release_workflow_has_release_write_permissions() -> Result<()> {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows");
     for entry in fs::read_dir(directory)? {
         let path = entry?.path();

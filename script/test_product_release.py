@@ -56,6 +56,9 @@ class Eligibility(unittest.TestCase):
         with patch.object(release, "api", return_value={"object": {"type": "tree", "sha": "invalid"}}):
             with self.assertRaises(ValueError):
                 release.remote_commit("owner/repo", DECISION["tag"])
+        with patch.object(release, "api", return_value=None):
+            with self.assertRaisesRegex(ValueError, "tag is missing"):
+                release.remote_commit("owner/repo", DECISION["tag"])
 
     def test_guard_requires_gate_tag_main_and_exact_ci(self):
         with patch.object(release, "repository", return_value="owner/repo"), \
@@ -189,6 +192,191 @@ class DraftSafety(unittest.TestCase):
             release.check_draft(draft(draft=False), DECISION)
 
 
+class PublishedPrerelease(unittest.TestCase):
+    def setUp(self):
+        self.directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.root = Path(self.directory)
+        self.addCleanup(os.chdir, Path.cwd())
+        os.chdir(self.root)
+        self.row = {
+            "platform": "macos", "target": "aarch64-apple-darwin",
+            "artifact": "rust-macos-aarch64", "plan_file": "rust-macos-aarch64.json",
+            "artifact_name": "rust-0.1.0-rc.1-macos-aarch64.dmg",
+        }
+        self.decision = dict(DECISION, preparation_scope="macos-only",
+                             release_gate_variable="COPPER_MACOS_RELEASE_ENABLED",
+                             matrix={"include": [self.row]}, release_id=42, repository="owner/repo",
+                             published_at="2026-11-10T12:00:00Z")
+        self.live = draft(id=42, draft=False, published_at=self.decision["published_at"], body="My release notes",
+                          upload_url="https://uploads.github.com/repos/owner/repo/releases/42/assets{?name,label}")
+        self.event = {"action": "published", "repository": {"full_name": "owner/repo"}, "release": self.live.copy()}
+        self.event_path = self.root / "event.json"
+        self.event_path.write_text(json.dumps(self.event))
+        self.enterContext(patch.dict(
+            os.environ, GITHUB_EVENT_NAME="release", GITHUB_EVENT_PATH=str(self.event_path),
+            GITHUB_SHA=DECISION["commit_sha"], GITHUB_REF=f"refs/tags/{DECISION['tag']}",
+            RELEASE_GATES='{"COPPER_MACOS_RELEASE_ENABLED":"true"}',
+            EXPECTED_RELEASE_ID="42", EXPECTED_COMMIT=DECISION["commit_sha"],
+            EXPECTED_PRODUCT="rust", EXPECTED_TAG=DECISION["tag"], EXPECTED_SCOPE="macos-only",
+        ))
+        self.enterContext(patch.object(release, "repository", return_value="owner/repo"))
+        self.api = self.enterContext(patch.object(release, "api", side_effect=self.github))
+        self.ci = self.enterContext(patch.object(release, "pages", return_value=[run()]))
+        self.tag_sha = DECISION["commit_sha"]
+        self.uploaded = []
+        self.real_upload = release.upload_asset
+        self.upload = self.enterContext(patch.object(release, "upload_asset", side_effect=self.store_asset))
+
+    def github(self, path, **kwargs):
+        if path.endswith("/releases/42"):
+            return self.live.copy()
+        if "/git/ref/tags/" in path:
+            return {"object": {"type": "commit", "sha": self.tag_sha}} if self.tag_sha else None
+        if path.endswith("/commits/main"):
+            return {"sha": self.tag_sha}
+        if "/compare/" in path:
+            return {"status": "identical"}
+        self.fail(f"unexpected API request: {path}")
+
+    def store_asset(self, name, live, path):
+        self.assertEqual(name, "owner/repo")
+        self.assertEqual(live["id"], 42)
+        self.uploaded.append(path.name)
+        self.live["assets"].append({"name": path.name, "state": "uploaded",
+                                    "digest": "sha256:" + release.checksum(path)})
+
+    def prepare_files(self):
+        plans = Path("release-bundle-plans")
+        plans.mkdir(exist_ok=True)
+        (plans / "decision.json").write_text(json.dumps(self.decision))
+        plan = {**release.identity(self.decision), "platform": "macos", "target": self.row["target"],
+                "artifact_name": self.row["artifact_name"], "signing": "required"}
+        (plans / self.row["plan_file"]).write_text(json.dumps(plan))
+        packages = Path("release-artifacts")
+        packages.mkdir(exist_ok=True)
+        for file in packages.iterdir():
+            file.unlink()
+        package = packages / self.row["artifact_name"]
+        package.write_bytes(b"test fixture")
+        receipt = dict(plan, sha256=release.checksum(package), signing_identity="fixture",
+                       macos_verification={kind: {"stapled_ticket_validated": True, "gatekeeper_assessed": True,
+                                                  "signature": {"timestamp": "fixture"}, "nested_code": ["fixture"],
+                                                  "entitlements": {"fixture": True}}
+                                           for kind in ("application", "dmg")})
+        self.receipt_path = packages / "verification-rust-macos-aarch64.json"
+        self.receipt_path.write_text(json.dumps(receipt))
+
+    def test_resolve_selects_event_sha_release_id_and_apple_silicon(self):
+        decision = {key: value for key, value in self.decision.items()
+                    if key not in ("release_id", "published_at", "repository")}
+        decision["matrix"] = {"include": [self.row, dict(self.row, target="x86_64-apple-darwin")]}
+        with patch.object(release, "command", side_effect=[json.dumps(decision), "controller"]) as command, \
+                patch.object(release, "write_outputs") as output:
+            release.resolve_prerelease()
+            self.assertIn(self.decision["tag"], command.call_args_list[0].args)
+            result = output.call_args.args[0]
+            self.assertEqual(result["release_id"], 42)
+            self.assertEqual(result["matrix"]["include"], [self.row])
+            self.assertEqual(result["ci"][0]["head_sha"], DECISION["commit_sha"])
+
+    def test_stable_or_unpublished_event_is_rejected_before_planning(self):
+        for changes in ({"prerelease": False}, {"draft": True}, {"published_at": None}):
+            with self.subTest(changes=changes), patch.object(release, "command") as command:
+                self.event_path.write_text(json.dumps(dict(self.event, release=dict(self.live, **changes))))
+                with self.assertRaisesRegex(ValueError, "expected a published prerelease"):
+                    release.resolve_prerelease()
+                command.assert_not_called()
+
+    def test_stable_tag_masquerading_as_prerelease_is_rejected(self):
+        with patch.object(release, "command", return_value=json.dumps(dict(self.decision, channel="stable", prerelease=False))):
+            with self.assertRaisesRegex(ValueError, "catalog-valid Copper prerelease"):
+                release.resolve_prerelease()
+        self.ci.assert_not_called()
+
+    def test_release_gate_tag_ci_and_immutability_block_eligibility(self):
+        cases = [
+            ("tag is missing", None, run(), False),
+            ("tag changed", "b" * 40, run(), False),
+            ("CI is not successful", DECISION["commit_sha"], run(conclusion="failure"), False),
+            ("immutable", DECISION["commit_sha"], run(), True),
+        ]
+        for error, sha, ci, immutable in cases:
+            with self.subTest(error=error), patch.object(release, "write_outputs") as output:
+                self.tag_sha, self.ci.return_value, self.live["immutable"] = sha, [ci], immutable
+                with patch.object(release, "command", side_effect=[json.dumps(self.decision), "controller"]):
+                    with self.assertRaisesRegex(ValueError, error):
+                        release.resolve_prerelease()
+                output.assert_not_called()
+        with patch.dict(os.environ, RELEASE_GATES="{}"), self.assertRaisesRegex(ValueError, "COPPER_MACOS_RELEASE_ENABLED"):
+            release.guard(self.decision)
+        self.upload.assert_not_called()
+
+    def test_failed_signature_evidence_cannot_upload(self):
+        self.prepare_files()
+        receipt = json.loads(self.receipt_path.read_text())
+        receipt["macos_verification"]["dmg"]["stapled_ticket_validated"] = False
+        self.receipt_path.write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(ValueError, "ticket"):
+            release.attach_prerelease()
+        self.upload.assert_not_called()
+
+    def test_interrupted_upload_reuses_assets_and_completes_last(self):
+        self.prepare_files()
+        def interrupt(name, live, path):
+            if self.uploaded:
+                raise RuntimeError("simulated transport failure")
+            self.store_asset(name, live, path)
+        self.upload.side_effect = interrupt
+        with self.assertRaisesRegex(RuntimeError, "transport failure"):
+            release.attach_prerelease()
+        self.assertEqual(len(self.uploaded), 1)
+        self.prepare_files()
+        self.upload.side_effect = self.store_asset
+        release.attach_prerelease()
+        self.assertEqual(len(self.uploaded), 4)
+        self.assertEqual(len(set(self.uploaded)), 4)
+        self.assertEqual(self.uploaded[-1], "rust-0.1.0-rc.1-prerelease-verification.json")
+        self.assertEqual(self.live["body"], "My release notes")
+        self.prepare_files()
+        release.attach_prerelease()
+        self.assertEqual(len(self.uploaded), 4)
+
+    def test_moved_tag_stops_mid_upload(self):
+        self.prepare_files()
+        def move_tag(name, live, path):
+            self.store_asset(name, live, path)
+            self.tag_sha = "b" * 40
+        self.upload.side_effect = move_tag
+        with self.assertRaisesRegex(ValueError, "tag changed"):
+            release.attach_prerelease()
+        self.assertEqual(len(self.uploaded), 1)
+
+    def test_release_replacement_or_conflicting_assets_stop_upload(self):
+        self.prepare_files()
+        for changes in ({"id": 99}, {"prerelease": False}, {"tag_name": "copper-v0.2.0-rc.1"},
+                        {"assets": [{"name": self.row["artifact_name"], "state": "uploaded", "digest": "sha256:wrong"}]}):
+            with self.subTest(changes=changes), patch.dict(self.live, changes):
+                with self.assertRaises(ValueError):
+                    release.attach_prerelease()
+            self.prepare_files()
+        self.upload.assert_not_called()
+
+    def test_upload_transport_is_bound_to_the_release_id(self):
+        self.prepare_files()
+        path = Path("release-artifacts", self.row["artifact_name"])
+        with patch.object(release, "HTTPSConnection") as connection, patch.dict(os.environ, GH_TOKEN="test-token"):
+            connection.return_value.getresponse.return_value.status = 201
+            self.real_upload("owner/repo", self.live, path)
+            args = connection.return_value.request.call_args.args
+            self.assertEqual(args[:2], ("POST", f"/repos/owner/repo/releases/42/assets?name={path.name}"))
+            self.assertEqual(args[3]["Content-Length"], str(path.stat().st_size))
+            connection.return_value.getresponse.return_value.status = 403
+            with self.assertRaisesRegex(RuntimeError, "immutability"):
+                self.real_upload("owner/repo", self.live, path)
+            with self.assertRaisesRegex(ValueError, "endpoint does not match"):
+                self.real_upload("owner/repo", dict(self.live, upload_url="https://example.com/assets"), path)
+
+
 class ProductIsolation(unittest.TestCase):
     def test_macos_only_publication_never_becomes_a_windows_linux_or_generic_update(self):
         partial = dict(DECISION, tag="copper-v0.2.0", version="0.2.0", channel="stable", prerelease=False,
@@ -223,9 +411,41 @@ class ProductIsolation(unittest.TestCase):
         copper = {"release_tag_prefix": "copper-v"}
         groovy = {"release_tag_prefix": "jvm-v"}
         self.assertEqual(release.latest_release(releases, copper, "stable")["tag_name"], "copper-v0.10.0")
-        self.assertEqual(release.latest_release(releases, copper, "preview")["tag_name"], "copper-v0.11.0-rc.10")
         self.assertEqual(release.latest_release(releases, groovy, "stable")["tag_name"], "jvm-v99.0.0")
         self.assertIsNone(release.latest_release(releases, groovy, "preview"))
+
+    def test_preview_feed_waits_for_verified_assets_and_isolates_automatic_scope(self):
+        copper = next(product for product in release.catalog_products() if product["id"] == "rust")
+
+        def assets(version, automatic):
+            names = list(release.verification_asset_names("rust", version, automatic))
+            names += [f"rust-{version}-macos-aarch64.dmg", "verification-rust-macos-aarch64.json"]
+            if not automatic:
+                linux = f"rust-{version}-linux-x86_64.tar.gz"
+                names += [linux, linux + ".asc", linux + ".pub", "verification-rust-linux-x86_64.json",
+                          f"rust-{version}-windows-x86_64.exe", "verification-rust-windows-x86_64.json"]
+            return [{"name": name, "state": "uploaded", "digest": "sha256:" + "a" * 64} for name in names]
+
+        def published(version, automatic):
+            decision = dict(DECISION, tag=f"copper-v{version}", version=version)
+            return draft(tag_name=decision["tag"], draft=False, published_at="date",
+                         body="Operator notes" if automatic else release.marker(decision),
+                         assets=assets(version, automatic))
+
+        fallback = published("0.1.0-rc.1", False)
+        complete = published("0.1.0-rc.10", True)
+        older = published("0.1.0-rc.2", True)
+        for missing in complete["assets"]:
+            partial = dict(complete, assets=[asset for asset in complete["assets"] if asset != missing])
+            with self.subTest(missing=missing["name"]):
+                self.assertEqual(release.latest_release([fallback, partial], copper, "preview", "macos"), fallback)
+        for state in ("starter", "new"):
+            incomplete = dict(complete, assets=[dict(complete["assets"][0], state=state), *complete["assets"][1:]])
+            self.assertIsNone(release.latest_release([incomplete], copper, "preview", "macos"))
+        self.assertEqual(release.latest_release([fallback, complete, older], copper, "preview", "macos"), complete)
+        for platform in (None, "windows", "linux"):
+            self.assertEqual(release.latest_release([fallback, complete], copper, "preview", platform), fallback)
+        self.assertIsNone(release.latest_release([complete], copper, "stable", "macos"))
 
     def test_catalog_rejects_ambiguous_product_prefixes_and_namespaces(self):
         copper = {"id": "rust", "update_namespace": "rust", "release_tag_prefix": "copper-v"}

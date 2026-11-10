@@ -147,10 +147,9 @@ Production Linux tar archives require `LINUX_SIGNING_KEY`,
 `LINUX_SIGNING_KEY_PASSWORD`, and `LINUX_SIGNING_KEY_FINGERPRINT` for detached GPG
 archive signing. This is separate from OS application signing and DEB/RPM signing.
 
-The guarded release jobs explicitly require signing. The separate
-`release_signing_check.yml` workflow reuses them without a publisher job. See
-[production signing operations](./copper-signing.md) for exact jobs, secrets,
-verification, provisioning, renewal, failure recovery and qualification limits.
+The guarded release jobs explicitly require signing. Manual qualification
+without a release tag uses the same jobs in `release_prepare.yml`. See
+[product releases](./product-releases.md) for setup, verification and recovery.
 
 Credential values remain in the environment and GitHub secrets. Do not add
 them to the product catalog.
@@ -183,9 +182,10 @@ catalog-prefixed tag such as `copper-vX.Y.Z`; it does not choose or increment a
 version automatically. A manual run from `main` requires main-history ancestry,
 successful exact-commit CI and the product's release qualification gate, then
 builds and verifies signed packages and leaves a draft for human review.
-Main pushes, tag pushes and successful CI do not prepare or publish releases.
-See [product releases](./product-releases.md) for the operator sequence and
-[production signing](./copper-signing.md) for credentials and qualification.
+For an Apple Silicon prerelease, publishing an existing Copper prerelease tag
+starts the build and attaches verified assets to that release. See
+[product releases](./product-releases.md) for both operator sequences and
+qualification.
 
 ## Repository owners
 

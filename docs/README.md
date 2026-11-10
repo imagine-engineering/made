@@ -8,8 +8,7 @@ Start with the Copper-specific pages:
 - [Managed local models](src/ai/use-a-local-model.md#copper-managed-local-models)
   for Copper's native-agent setup and model qualification limits.
 - [Rust](src/languages/rust.md) for language-server and toolchain configuration.
-- [Product releases](src/development/product-releases.md) and
-  [Copper signing](src/development/copper-signing.md) for maintainer operations.
+- [Product releases](src/development/product-releases.md) for maintainer operations.
 - [CI scope](../.github/workflows/README.md) for required and deferred checks.
 
 The [full contents](src/SUMMARY.md) includes upstream editor reference. Pages that

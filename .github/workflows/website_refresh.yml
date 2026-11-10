@@ -2,9 +2,6 @@
 # Rebuild with `cargo xtask workflows`.
 name: website_refresh
 on:
-  release:
-    types:
-    - published
   workflow_dispatch:
     inputs:
       release_tag:
@@ -15,7 +12,7 @@ permissions:
   contents: read
 jobs:
   refresh_website:
-    if: (github.event_name == 'release' && github.event.action == 'published' && github.event.release.draft == false && !contains(github.event.release.body, '"preparation_scope":"macos-only"')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: 'false'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -29,7 +26,7 @@ jobs:
       run: python3 script/refresh_website.py
       shell: bash -euo pipefail {0}
       env:
-        COPPER_RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        COPPER_RELEASE_TAG: ${{ inputs.release_tag }}
         GH_TOKEN: ${{ github.token }}
         AMPLIFY_REBUILD_WEBHOOK: ${{ secrets.AMPLIFY_REBUILD_WEBHOOK }}
     concurrency:
