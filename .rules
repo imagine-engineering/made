@@ -194,3 +194,11 @@ Rules emerge from validated patterns, not one-off observations. The workflow is:
 * Retain a legacy name only for a concrete, user-approved requirement identifying the affected consumer or persisted/wire format. Record that requirement and the exact exception in the change's evidence.
 * Treat first-party compiled components as rebuildable outputs: rename their WIT interfaces and canonical type IDs, rebuild from owning sources, and update manifests, hashes, fixtures, and validation expectations. Missing source/tooling is a blocker; old binary contents alone do not justify retaining wire names.
 * Before declaring a rename complete, audit all remaining old-name references and explain each exception. Preserve legitimate third-party names and historical provenance.
+
+# Commit, upload, and release authorization
+
+* Implementation, validation, and release qualification do not authorize commits, uploads, branch creation, workflow dispatches, or release operations. Obtain explicit authorization for those operations; do not infer it from the implementation scope.
+* Before any commit or push, show the exact files, including new documentation, and the proposed commit message. Identify the destination repository and branch. Obtain the user's explicit approval for that file list, destination, and operation before proceeding. Earlier approvals for unrelated work do not carry forward; changes to the approved scope require renewed approval.
+* Exclude signing-operation documentation, local evidence, and internal reports from commits and uploads unless the user explicitly approves their inclusion.
+* Do not create or push temporary or qualification branches without explicit approval. Do not treat permission to run qualification as permission to dispatch workflows or upload source.
+* Investigate unwanted uploads read-only first. Present the affected commits and refs and the smallest cleanup preserving unrelated work. Explain the exact history rewrite, force-push, or branch deletion required, and wait for explicit approval before executing it. A deletion commit does not remove a document from history.
