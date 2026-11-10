@@ -277,7 +277,7 @@ pub struct LanguageToolTreeHost {
     debounce_task: Task<()>,
     snapshot: LanguageToolSnapshot,
     visible_rows: Arc<[VisibleLanguageToolRow]>,
-    parent_by_id: HashMap<LanguageToolNodeId, LanguageToolNodeId>,
+    visible_indices: HashMap<LanguageToolNodeId, usize>,
     expanded: HashSet<LanguageToolNodeId>,
     branches: HashSet<LanguageToolNodeId>,
     selected: Option<LanguageToolNodeId>,
@@ -295,7 +295,7 @@ impl Default for LanguageToolTreeHost {
             debounce_task: Task::ready(()),
             snapshot: LanguageToolSnapshot::default(),
             visible_rows: Arc::default(),
-            parent_by_id: HashMap::new(),
+            visible_indices: HashMap::new(),
             expanded: HashSet::new(),
             branches: HashSet::new(),
             selected: None,
@@ -451,22 +451,18 @@ impl LanguageToolTreeHost {
     }
 
     pub fn replace_snapshot(&mut self, snapshot: LanguageToolSnapshot) {
-        let previous_rows = self
-            .visible_rows
-            .iter()
-            .map(|row| row.id.clone())
-            .collect::<Vec<_>>();
-        let previous_selected = self.selected.clone();
-        let previous_parent_by_id = self.parent_by_id.clone();
+        let previous_rows = self.visible_rows.clone();
+        let previous_indices = std::mem::take(&mut self.visible_indices);
         self.snapshot = snapshot;
         self.branches = branch_ids(&self.snapshot.roots);
         self.expanded.retain(|id| self.branches.contains(id));
         self.rebuild_visible_rows();
         self.selected = reconcile_selection(
-            previous_selected,
+            self.selected.take(),
             &previous_rows,
-            &previous_parent_by_id,
+            &previous_indices,
             &self.visible_rows,
+            &self.visible_indices,
         );
         self.status = match &self.snapshot.status {
             LanguageToolProviderStatus::Loading => LanguageToolTreeStatus::Loading,
@@ -513,7 +509,7 @@ impl LanguageToolTreeHost {
     }
 
     pub fn select(&mut self, id: LanguageToolNodeId) {
-        if self.visible_rows.iter().any(|row| row.id == id) {
+        if self.visible_indices.contains_key(&id) {
             self.selected = Some(id);
         }
     }
@@ -535,10 +531,11 @@ impl LanguageToolTreeHost {
     }
 
     pub fn select_parent(&mut self) {
-        let Some(selected) = self.selected.as_ref() else {
-            return;
-        };
-        if let Some(parent) = self.parent_by_id.get(selected) {
+        if let Some(parent) = self
+            .selected_index()
+            .and_then(|index| self.visible_rows.get(index))
+            .and_then(|row| row.parent_id.as_ref())
+        {
             self.selected = Some(parent.clone());
         }
     }
@@ -563,11 +560,7 @@ impl LanguageToolTreeHost {
     }
 
     pub fn toggle(&mut self, id: &LanguageToolNodeId) {
-        if !self
-            .visible_rows
-            .iter()
-            .any(|row| row.id == *id && row.is_branch)
-        {
+        if !self.visible_indices.contains_key(id) || !self.branches.contains(id) {
             return;
         }
         if !self.expanded.remove(id) {
@@ -647,19 +640,18 @@ impl LanguageToolTreeHost {
     }
 
     pub fn selected_index(&self) -> Option<usize> {
-        let selected = self.selected.as_ref()?;
-        self.visible_rows.iter().position(|row| &row.id == selected)
+        self.visible_indices.get(self.selected.as_ref()?).copied()
     }
 
     fn rebuild_visible_rows(&mut self) {
         let mut rows = Vec::new();
-        self.parent_by_id.clear();
+        self.visible_indices.clear();
         flatten_nodes(
             &self.snapshot.roots,
             None,
             1,
             &self.expanded,
-            &mut self.parent_by_id,
+            &mut self.visible_indices,
             &mut rows,
         );
         self.visible_rows = rows.into();
@@ -671,13 +663,11 @@ fn flatten_nodes(
     parent_id: Option<&LanguageToolNodeId>,
     level: usize,
     expanded: &HashSet<LanguageToolNodeId>,
-    parent_by_id: &mut HashMap<LanguageToolNodeId, LanguageToolNodeId>,
+    visible_indices: &mut HashMap<LanguageToolNodeId, usize>,
     rows: &mut Vec<VisibleLanguageToolRow>,
 ) {
     for node in nodes {
-        if let Some(parent_id) = parent_id {
-            parent_by_id.insert(node.id.clone(), parent_id.clone());
-        }
+        visible_indices.entry(node.id.clone()).or_insert(rows.len());
         let is_branch = !node.children.is_empty();
         let is_expanded = is_branch && expanded.contains(&node.id);
         rows.push(VisibleLanguageToolRow {
@@ -697,7 +687,7 @@ fn flatten_nodes(
                 Some(&node.id),
                 level + 1,
                 expanded,
-                parent_by_id,
+                visible_indices,
                 rows,
             );
         }
@@ -720,25 +710,26 @@ fn branch_ids(nodes: &[LanguageToolNode]) -> HashSet<LanguageToolNodeId> {
 
 fn reconcile_selection(
     selected: Option<LanguageToolNodeId>,
-    previous_rows: &[LanguageToolNodeId],
-    previous_parent_by_id: &HashMap<LanguageToolNodeId, LanguageToolNodeId>,
+    previous_rows: &[VisibleLanguageToolRow],
+    previous_indices: &HashMap<LanguageToolNodeId, usize>,
     rows: &[VisibleLanguageToolRow],
+    visible_indices: &HashMap<LanguageToolNodeId, usize>,
 ) -> Option<LanguageToolNodeId> {
-    let available: HashSet<&LanguageToolNodeId> = rows.iter().map(|row| &row.id).collect();
     let mut candidate = selected?;
-    if available.contains(&candidate) {
+    if visible_indices.contains_key(&candidate) {
         return Some(candidate);
     }
-    while let Some(parent) = previous_parent_by_id.get(&candidate) {
-        if available.contains(parent) {
+    while let Some(parent) = previous_indices
+        .get(&candidate)
+        .and_then(|&index| previous_rows.get(index))
+        .and_then(|row| row.parent_id.as_ref())
+    {
+        if visible_indices.contains_key(parent) {
             return Some(parent.clone());
         }
         candidate = parent.clone();
     }
-    let previous_index = previous_rows
-        .iter()
-        .position(|id| id == &candidate)
-        .unwrap_or(0);
+    let previous_index = previous_indices.get(&candidate).copied().unwrap_or(0);
     rows.get(previous_index.min(rows.len().saturating_sub(1)))
         .map(|row| row.id.clone())
 }
