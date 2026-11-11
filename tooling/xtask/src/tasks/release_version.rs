@@ -42,7 +42,8 @@ pub struct ReleaseDecision {
     pub tag: String,
     pub channel: String,
     pub prerelease: bool,
-    pub release_gate_variable: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_gate_variable: Option<String>,
     pub required_ci_workflows: Vec<String>,
     pub preparation_scope: PreparationScope,
     pub matrix: serde_json::Value,
@@ -185,13 +186,7 @@ pub fn resolve_tag_for_scope(
         tag: tag.to_owned(),
         channel: channel.into(),
         prerelease,
-        release_gate_variable: match preparation_scope {
-            PreparationScope::Full => product.release_gate_variable.clone(),
-            PreparationScope::MacosOnly => product
-                .macos_release_gate_variable
-                .clone()
-                .context("macOS-only release gate is not configured in the catalog")?,
-        },
+        release_gate_variable: product.release_gate_variable.clone(),
         required_ci_workflows: product.required_ci_workflows.clone(),
         preparation_scope,
         matrix: serde_json::json!({"include": rows}),
@@ -221,13 +216,11 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["target"], "aarch64-apple-darwin");
         assert_eq!(decision.preparation_scope, PreparationScope::MacosOnly);
-        assert_eq!(
-            decision.release_gate_variable,
-            "COPPER_MACOS_RELEASE_ENABLED"
-        );
-        assert_eq!(
-            resolve_tag(&manifest, "copper-v0.1.0")?.release_gate_variable,
-            "COPPER_RELEASE_ENABLED"
+        assert!(decision.release_gate_variable.is_none());
+        assert!(
+            resolve_tag(&manifest, "copper-v0.1.0")?
+                .release_gate_variable
+                .is_none()
         );
         assert_eq!(
             resolve_tag(&manifest, "copper-v0.1.0")?.matrix["include"]

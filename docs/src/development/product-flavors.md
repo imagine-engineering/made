@@ -147,8 +147,9 @@ Production Linux tar archives require `LINUX_SIGNING_KEY`,
 `LINUX_SIGNING_KEY_PASSWORD`, and `LINUX_SIGNING_KEY_FINGERPRINT` for detached GPG
 archive signing. This is separate from OS application signing and DEB/RPM signing.
 
-The guarded release jobs explicitly require signing. Manual qualification
-without a release tag uses the same jobs in `release_prepare.yml`. See
+Production release jobs explicitly require signing. Manual qualification
+without a release tag uses the same jobs in `release_prepare.yml`; unsigned
+qualification produces labelled development CI artifacts only. See
 [product releases](./product-releases.md) for setup, verification and recovery.
 
 Credential values remain in the environment and GitHub secrets. Do not add
@@ -179,13 +180,13 @@ release in the app and platform metadata. `cargo xtask bundle --product rust`
 defaults to the catalog version, including package filenames and installer metadata.
 Release preparation derives the product and exact version from an existing
 catalog-prefixed tag such as `copper-vX.Y.Z`; it does not choose or increment a
-version automatically. A manual run from `main` requires main-history ancestry,
-successful exact-commit CI and the product's release qualification gate, then
-builds and verifies signed packages and leaves a draft for human review.
-For an Apple Silicon prerelease, publishing an existing Copper prerelease tag
-starts the build and attaches verified assets to that release. See
-[product releases](./product-releases.md) for both operator sequences and
-qualification.
+version automatically. Pushing a valid Copper tag starts Apple Silicon macOS-only
+preparation, requiring main-history ancestry and successful exact-commit CI before
+production signing. The result is a verified draft for human review and publication.
+Manual recovery and full-platform preparation remain available; every selected
+production platform must pass signing and final artifact verification. Publication
+does not start another build. See [product releases](./product-releases.md) for
+setup, platform selection and safe recovery.
 
 ## Repository owners
 

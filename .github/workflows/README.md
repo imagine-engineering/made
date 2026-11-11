@@ -54,15 +54,20 @@ matching timing tests to execute with one test thread.
 
 ### Product releases and website refresh
 
-The generated `release_prepare.yml` shares one signed packaging pipeline
-across these entry points.
+The generated `release_prepare.yml` shares one product-aware packaging pipeline:
 
-- A human publishes a Copper prerelease for an existing catalog tag. Actions
-  verifies eligibility and attaches the Apple Silicon package to that release ID.
-- A maintainer dispatches from main with `release_tag`. Actions builds the
-  selected platform scope and prepares a draft for human review and publication.
-- A maintainer dispatches without a tag for non-publishing qualification.
-  Signing-related pushes to main and `codex/**` run credential-free contracts.
+- A pushed catalog-valid Copper tag (stable or prerelease) prepares a signed
+  **Apple Silicon macOS-only draft**, after exact-commit main ancestry and CI checks.
+- A manual run from main with `release_tag` recovers preparation or selects
+  the full platform matrix; every selected platform requires production signing.
+- A manual run without a tag qualifies packages. `sign_artifacts=true` uses
+  production signing; false produces labelled `UNSIGNED-DEVELOPMENT-*` Actions
+  artifacts only, with no release upload permission or updater eligibility.
+- Signing-related branch pushes run credential-free contracts, not preparation.
+
+Only `upload_release` has release-write permissions. It verifies package receipts,
+checksums, tag identity and draft ownership before each upload. Published releases
+are never overwritten; publication events do not build or attach packages.
 
 The previous `release.yml` and `release_promotion.yml` placeholders are removed.
 The signing contract and qualification jobs from `release_signing_check.yml`

@@ -72,6 +72,7 @@ fn existing_annotated_and_lightweight_tags_require_main_ancestry() -> Result<()>
                 String::from_utf8_lossy(&output.stderr)
             );
             let decision: Value = serde_json::from_slice(&output.stdout)?;
+            assert!(decision.get("release_gate_variable").is_none());
             assert_eq!(decision["preparation_scope"], scope);
             assert_eq!(
                 decision["matrix"]["include"]
@@ -131,7 +132,7 @@ fn existing_annotated_and_lightweight_tags_require_main_ancestry() -> Result<()>
                     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../script/product_release.py");
                 let output = Command::new("python3")
                     .current_dir(root)
-                    .arg(script)
+                    .arg(&script)
                     .arg("bundle-plans")
                     .output()?;
                 ensure!(
@@ -153,6 +154,69 @@ fn existing_annotated_and_lightweight_tags_require_main_ancestry() -> Result<()>
                             .context("display")?
                             .starts_with("Tagged Copper")
                     );
+                }
+                let output = Command::new("python3")
+                    .current_dir(root)
+                    .env("GITHUB_OUTPUT", root.join("qualification-output"))
+                    .arg(&script)
+                    .args([
+                        "contract",
+                        "--development",
+                        "--version",
+                        decision["version"].as_str().context("version")?,
+                        "--commit",
+                        &main,
+                        "--preparation-scope",
+                        scope,
+                    ])
+                    .output()?;
+                ensure!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                let development: Value = serde_json::from_str(&fs::read_to_string(
+                    root.join("release-bundle-plans/decision.json"),
+                )?)?;
+                assert_eq!(development["tag"], "");
+                assert_eq!(development["signing"], "off");
+                let rows = development["matrix"]["include"]
+                    .as_array()
+                    .context("matrix")?;
+                let tagged_rows = decision["matrix"]["include"].as_array().context("matrix")?;
+                assert_eq!(rows.len(), tagged_rows.len());
+                for (row, tagged_row) in rows.iter().zip(tagged_rows) {
+                    for key in [
+                        "target",
+                        "platform",
+                        "artifact_name",
+                        "application_features",
+                        "remote_features",
+                    ] {
+                        assert_eq!(row[key], tagged_row[key]);
+                    }
+                }
+                let output = Command::new("python3")
+                    .current_dir(root)
+                    .arg(&script)
+                    .arg("bundle-plans")
+                    .output()?;
+                ensure!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                for row in development["matrix"]["include"]
+                    .as_array()
+                    .context("matrix")?
+                {
+                    let plan: Value = serde_json::from_str(&fs::read_to_string(
+                        root.join("release-bundle-plans")
+                            .join(row["plan_file"].as_str().context("plan file")?),
+                    )?)?;
+                    assert_eq!(plan["signing"], "off");
+                    assert_eq!(plan["version"], development["version"]);
+                    assert_eq!(plan["artifact_name"], row["artifact_name"]);
                 }
             }
         }
@@ -185,9 +249,10 @@ fn generated_release_workflow_preserves_permission_and_trigger_boundaries() -> R
     let workflow: Value = serde_yaml::from_str(&fs::read_to_string(
         root.join(".github/workflows/release_prepare.yml"),
     )?)?;
+    assert!(workflow["on"]["release"].is_null());
     assert_eq!(
-        workflow["on"]["release"]["types"],
-        serde_json::json!(["published"])
+        workflow["on"]["push"]["tags"],
+        serde_json::json!(["copper-v*"])
     );
     assert!(workflow["on"]["workflow_dispatch"]["inputs"]["release_tag"].is_object());
     for (name, job) in workflow["jobs"].as_object().context("jobs")? {

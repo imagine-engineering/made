@@ -24,9 +24,8 @@ on:
     - script/sign-linux-archive
     - script/lib/macos-signing.sh
     - crates/auto_update_helper/**
-  release:
-    types:
-    - published
+    tags:
+    - copper-v*
   workflow_dispatch:
     inputs:
       release_tag:
@@ -38,7 +37,7 @@ on:
         type: string
         default: 0.1.0
       sign_artifacts:
-        description: Sign qualification packages using production credentials; requires separate approval
+        description: Sign qualification packages; false builds labelled unsigned CI artifacts only
         type: boolean
         default: 'false'
       preparation_scope:
@@ -49,7 +48,6 @@ permissions:
   contents: read
 jobs:
   prepare_release:
-    if: github.event_name != 'release' || (github.event.action == 'published' && github.event.release.draft == false && github.event.release.prerelease == true && startsWith(github.event.release.tag_name, 'copper-v') && !startsWith(github.event.release.body || '', '<!-- made-product-release '))
     runs-on: ubuntu-22.04
     permissions:
       actions: read
@@ -61,7 +59,7 @@ jobs:
         clean: false
         fetch-depth: 0
         fetch-tags: true
-        ref: ${{ github.event_name == 'release' && 'refs/heads/main' || github.sha }}
+        ref: ${{ github.event_name == 'push' && github.ref_type == 'tag' && 'refs/heads/main' || github.sha }}
         persist-credentials: false
     - name: release::setup_signing_python
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -72,8 +70,8 @@ jobs:
     - id: resolve-release
       name: release::prepare_release
       run: |
-        if [[ "$GITHUB_EVENT_NAME" == release ]]; then
-            python3 script/product_release.py resolve-prerelease
+        if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_TYPE" == tag ]]; then
+            python3 script/product_release.py resolve-tag-push
         elif [[ -n "$RELEASE_TAG" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ]]; then
                 echo "Draft preparation must be manually dispatched from main" >&2
@@ -82,16 +80,21 @@ jobs:
             python3 script/product_release.py resolve --tag "$RELEASE_TAG" --preparation-scope "$PREPARATION_SCOPE"
         else
             target/debug/xtask release-version --help >/dev/null
-            python3 script/product_release.py contract --version "$VERSION" --commit "$GITHUB_SHA" --preparation-scope "$PREPARATION_SCOPE"
+            options=()
+            if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$SIGN_ARTIFACTS" != true ]]; then
+                options+=(--development)
+            fi
+            python3 script/product_release.py contract --version "$VERSION" --commit "$GITHUB_SHA" --preparation-scope "$PREPARATION_SCOPE" "${options[@]}"
         fi
       env:
         RELEASE_TAG: ${{ inputs.release_tag }}
+        SIGN_ARTIFACTS: ${{ inputs.sign_artifacts }}
         PREPARATION_SCOPE: ${{ inputs.preparation_scope || 'full' }}
         VERSION: ${{ inputs.version || '0.1.0' }}
         RELEASE_GATES: ${{ toJSON(vars) }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: release::prepare_release
-      if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
+      if: (github.event_name == 'push' && github.ref_type == 'branch') || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
       run: python3 script/check-repository-inputs && python3 script/test-repository-inputs.py && python3 script/test-production-signing && python3 -m unittest discover -s script -p test_product_release.py && cargo test -p xtask --locked
     - name: release::generate_release_bundle_plans
       run: python3 script/product_release.py bundle-plans
@@ -114,12 +117,12 @@ jobs:
       matrix: ${{ steps.resolve-release.outputs.matrix }}
       preparation_scope: ${{ steps.resolve-release.outputs.preparation_scope }}
       controller_sha: ${{ steps.resolve-release.outputs.controller_sha }}
-      release_id: ${{ steps.resolve-release.outputs.release_id }}
+      signing: ${{ steps.resolve-release.outputs.signing }}
     timeout-minutes: 20
   signing_preflight:
     needs:
     - prepare_release
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.sign_artifacts == true))
+    if: (github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -130,7 +133,7 @@ jobs:
         clean: false
         ref: ${{ needs.prepare_release.outputs.commit_sha }}
     - name: release::signing_preflight
-      if: contains(needs.prepare_release.outputs.matrix, '"platform":"macos"')
+      if: needs.prepare_release.outputs.signing == 'required' && contains(needs.prepare_release.outputs.matrix, '"platform":"macos"')
       run: python3 script/check-signing-environment --platform macos --policy required
       env:
         MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -140,7 +143,7 @@ jobs:
         APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
         APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
     - name: release::signing_preflight
-      if: contains(needs.prepare_release.outputs.matrix, '"platform":"windows"')
+      if: needs.prepare_release.outputs.signing == 'required' && contains(needs.prepare_release.outputs.matrix, '"platform":"windows"')
       run: python3 script/check-signing-environment --platform windows --policy required
       env:
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -154,7 +157,7 @@ jobs:
         TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
         TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
     - name: release::signing_preflight
-      if: contains(needs.prepare_release.outputs.matrix, '"platform":"linux"')
+      if: needs.prepare_release.outputs.signing == 'required' && contains(needs.prepare_release.outputs.matrix, '"platform":"linux"')
       run: python3 script/check-signing-environment --platform linux --policy required
       env:
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
@@ -558,7 +561,7 @@ jobs:
       contents: read
     env:
       RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}
-      ZED_PRODUCT_SIGNING: required
+      ZED_PRODUCT_SIGNING: ${{ needs.prepare_release.outputs.signing }}
       CARGO_TARGET_DIR: target/products/${{ matrix.product }}
       ZED_PRODUCT_ID: ${{ matrix.product }}
       ZED_PRODUCT_ARTIFACT_NAME: ${{ matrix.artifact_name }}
@@ -701,45 +704,45 @@ jobs:
     - name: release::product_builds
       if: matrix.platform == 'linux'
       run: |
-        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform linux --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing required
+        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform linux --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing "$ZED_PRODUCT_SIGNING"
       env:
         TARGET: ${{ matrix.target }}
         CC: clang
         CXX: clang++
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
-        LINUX_SIGNING_KEY_PASSWORD: ${{ secrets.LINUX_SIGNING_KEY_PASSWORD }}
-        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+        LINUX_SIGNING_KEY: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY || '' }}
+        LINUX_SIGNING_KEY_PASSWORD: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY_PASSWORD || '' }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY_FINGERPRINT || '' }}
     - name: release::product_builds
       if: matrix.platform == 'macos'
       run: |
-        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform macos --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing required
+        cargo xtask bundle --product "$ZED_PRODUCT_ID" --platform macos --target "$TARGET" --channel "$ZED_RELEASE_CHANNEL" --phase package --signing "$ZED_PRODUCT_SIGNING"
       env:
         ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
         TARGET: ${{ matrix.target }}
-        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
-        APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
-        APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+        MACOS_SIGNING_IDENTITY: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_SIGNING_IDENTITY || '' }}
+        MACOS_CERTIFICATE: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_CERTIFICATE || '' }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
+        APPLE_NOTARIZATION_KEY: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.APPLE_NOTARIZATION_KEY || '' }}
+        APPLE_NOTARIZATION_KEY_ID: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.APPLE_NOTARIZATION_KEY_ID || '' }}
+        APPLE_NOTARIZATION_ISSUER_ID: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.APPLE_NOTARIZATION_ISSUER_ID || '' }}
     - name: release::product_builds
       if: matrix.platform == 'windows'
       run: |
-        cargo xtask bundle --product $env:ZED_PRODUCT_ID --platform windows --target $env:TARGET --channel $env:ZED_RELEASE_CHANNEL --phase package --signing required
+        cargo xtask bundle --product $env:ZED_PRODUCT_ID --platform windows --target $env:TARGET --channel $env:ZED_RELEASE_CHANNEL --phase package --signing $env:ZED_PRODUCT_SIGNING
         if ($LASTEXITCODE -ne 0) { throw "Product-aware Windows bundling failed" }
       shell: pwsh
       env:
         TARGET: ${{ matrix.target }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        ACCOUNT_NAME: ${{ secrets.ACCOUNT_NAME }}
-        CERT_PROFILE_NAME: ${{ secrets.CERT_PROFILE_NAME }}
-        ENDPOINT: ${{ secrets.ENDPOINT }}
-        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
-        FILE_DIGEST: ${{ secrets.FILE_DIGEST }}
-        TIMESTAMP_DIGEST: ${{ secrets.TIMESTAMP_DIGEST }}
-        TIMESTAMP_SERVER: ${{ secrets.TIMESTAMP_SERVER }}
+        AZURE_TENANT_ID: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.AZURE_TENANT_ID || '' }}
+        AZURE_CLIENT_ID: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.AZURE_CLIENT_ID || '' }}
+        AZURE_CLIENT_SECRET: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.AZURE_CLIENT_SECRET || '' }}
+        ACCOUNT_NAME: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.ACCOUNT_NAME || '' }}
+        CERT_PROFILE_NAME: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.CERT_PROFILE_NAME || '' }}
+        ENDPOINT: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.ENDPOINT || '' }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.WINDOWS_SIGNING_PUBLISHER || '' }}
+        FILE_DIGEST: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.FILE_DIGEST || '' }}
+        TIMESTAMP_DIGEST: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.TIMESTAMP_DIGEST || '' }}
+        TIMESTAMP_SERVER: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.TIMESTAMP_SERVER || '' }}
     - name: release::product_builds
       if: matrix.platform != 'windows'
       run: |
@@ -755,8 +758,8 @@ jobs:
         TARGET: ${{ matrix.target }}
         PLAN_FILE: ${{ matrix.plan_file }}
         ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
-        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-        LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
+        MACOS_SIGNING_IDENTITY: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_SIGNING_IDENTITY || '' }}
+        LINUX_SIGNING_KEY_FINGERPRINT: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY_FINGERPRINT || '' }}
         COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
     - name: release::product_builds
       if: matrix.platform == 'windows'
@@ -773,7 +776,7 @@ jobs:
         TARGET: ${{ matrix.target }}
         PLAN_FILE: ${{ matrix.plan_file }}
         ARTIFACT_SUFFIX: ${{ matrix.artifact_suffix }}
-        WINDOWS_SIGNING_PUBLISHER: ${{ secrets.WINDOWS_SIGNING_PUBLISHER }}
+        WINDOWS_SIGNING_PUBLISHER: ${{ needs.prepare_release.outputs.signing == 'required' && secrets.WINDOWS_SIGNING_PUBLISHER || '' }}
         COMMIT_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
     - name: release::product_builds
       if: always() && matrix.platform == 'macos'
@@ -784,7 +787,7 @@ jobs:
     - name: release::product_builds
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
-        name: ${{ matrix.artifact }}
+        name: ${{ needs.prepare_release.outputs.signing == 'off' && 'UNSIGNED-DEVELOPMENT-' || '' }}${{ matrix.artifact }}
         path: |-
           ${{ matrix.artifact_path }}
           target/products/${{ matrix.product }}/release/verification-*.json
@@ -808,7 +811,7 @@ jobs:
     needs:
     - prepare_release
     - product_builds
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-22.04
     permissions:
       actions: read
@@ -834,14 +837,8 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: release::upload_release
-      run: |
-        if [[ "$GITHUB_EVENT_NAME" == release ]]; then
-            python3 script/product_release.py attach-prerelease
-        else
-            python3 script/product_release.py draft
-        fi
+      run: python3 script/product_release.py draft
       env:
-        EXPECTED_RELEASE_ID: ${{ needs.prepare_release.outputs.release_id }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_GATES: ${{ toJSON(vars) }}
         EXPECTED_COMMIT: ${{ needs.prepare_release.outputs.commit_sha }}
@@ -851,7 +848,7 @@ jobs:
         LINUX_SIGNING_KEY_FINGERPRINT: ${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}
     timeout-minutes: 20
 concurrency:
-  group: product-release-${{ github.event.release.tag_name || inputs.release_tag || 'qualification' }}
+  group: product-release-${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag || 'qualification' }}
   cancel-in-progress: false
 defaults:
   run:

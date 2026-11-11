@@ -22,9 +22,8 @@ pub struct Product {
     pub id: String,
     pub status: ProductStatus,
     pub release_tag_prefix: String,
-    pub release_gate_variable: String,
-    #[serde(default)]
-    pub macos_release_gate_variable: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_gate_variable: Option<String>,
     #[serde(default)]
     pub macos_minimum_system_version: Option<String>,
     pub required_ci_workflows: Vec<String>,
@@ -248,28 +247,28 @@ impl Product {
                 && is_slug(self.release_tag_prefix.trim_end_matches("-v")),
             "invalid release tag prefix"
         );
-        ensure!(
-            !self.release_gate_variable.is_empty()
-                && self
-                    .release_gate_variable
-                    .bytes()
-                    .all(|byte| byte.is_ascii_uppercase() || byte == b'_' || byte.is_ascii_digit()),
-            "invalid release gate variable"
-        );
+        if self.id == "rust" {
+            ensure!(
+                self.release_gate_variable.is_none(),
+                "Copper release eligibility does not use an enablement variable"
+            );
+        } else {
+            let variable = self
+                .release_gate_variable
+                .as_ref()
+                .context("product requires its release gate variable")?;
+            ensure!(
+                !variable.is_empty()
+                    && variable.bytes().all(|byte| byte.is_ascii_uppercase()
+                        || byte == b'_'
+                        || byte.is_ascii_digit()),
+                "invalid release gate variable"
+            );
+        }
         ensure!(
             !self.required_ci_workflows.is_empty(),
             "product requires exact-commit CI"
         );
-        if let Some(variable) = &self.macos_release_gate_variable {
-            ensure!(
-                !variable.is_empty()
-                    && variable != &self.release_gate_variable
-                    && variable.bytes().all(|byte| byte.is_ascii_uppercase()
-                        || byte == b'_'
-                        || byte.is_ascii_digit()),
-                "macOS release gate must be valid and distinct from full-platform qualification"
-            );
-        }
         if let Some(version) = &self.macos_minimum_system_version {
             let components: Vec<_> = version.split('.').collect();
             ensure!(
@@ -501,6 +500,30 @@ mod tests {
     #[test]
     fn repository_catalog_is_valid() {
         ProductManifest::load().expect("repository product catalog should be valid");
+    }
+
+    #[test]
+    fn copper_has_no_enablement_variable_and_other_products_keep_their_controls() -> Result<()> {
+        let manifest = ProductManifest::load()?;
+        let mut copper = manifest.product("rust")?.clone();
+        assert!(copper.release_gate_variable.is_none());
+        assert!(
+            serde_json::to_value(&copper)?
+                .get("release_gate_variable")
+                .is_none()
+        );
+        copper.release_gate_variable = Some("UNAPPROVED_SWITCH".into());
+        assert!(copper.validate(&workspace_root(), true).is_err());
+        for (id, variable) in [
+            ("jvm", "GROOVY_RELEASE_ENABLED"),
+            ("game", "FORGE_RELEASE_ENABLED"),
+        ] {
+            let mut product = manifest.product(id)?.clone();
+            assert_eq!(product.release_gate_variable.as_deref(), Some(variable));
+            product.release_gate_variable = None;
+            assert!(product.validate(&workspace_root(), true).is_err());
+        }
+        Ok(())
     }
 
     #[test]

@@ -95,7 +95,12 @@ fn audit_phase_one_consumers() -> Result<()> {
     );
     ensure!(
         release.contains("cargo xtask bundle --product")
-            && release.contains("--phase package --signing required")
+            && release.contains("--phase package --signing \"$ZED_PRODUCT_SIGNING\"")
+            && release
+                .contains("ZED_PRODUCT_SIGNING: ${{ needs.prepare_release.outputs.signing }}")
+            && release.contains("needs.prepare_release.outputs.signing == 'required'")
+            && release.contains("product_release.py resolve-tag-push")
+            && release.contains("UNSIGNED-DEVELOPMENT-")
             && release.contains("needs:\n    - prepare_release\n    - product_builds")
             && release.contains("workflow_dispatch:")
             && !release.contains("workflow_run:")

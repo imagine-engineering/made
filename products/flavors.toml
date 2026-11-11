@@ -3,8 +3,6 @@ schema_version = 1
 [[products]]
 id = "rust"
 release_tag_prefix = "copper-v"
-release_gate_variable = "COPPER_RELEASE_ENABLED"
-macos_release_gate_variable = "COPPER_MACOS_RELEASE_ENABLED"
 macos_minimum_system_version = "13.3"
 required_ci_workflows = ["run_tests.yml"]
 status = "enabled"

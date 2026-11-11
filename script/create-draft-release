@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' 'Retired. Create an existing catalog product tag, then manually run release_prepare.yml from main. Review the draft and click Publish release in GitHub.' >&2
+printf '%s\n' 'Retired. Push a catalog-valid Copper tag to prepare an Apple Silicon macOS draft automatically. Use release_prepare.yml from main for manual recovery or full-platform preparation. Review the draft, then click Publish release in GitHub.' >&2
 exit 1
