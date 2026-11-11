@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import pathlib
 import re
@@ -10,7 +11,7 @@ import sys
 DIRECTORY = pathlib.Path(__file__).resolve().parent
 REPOSITORY = DIRECTORY.parents[2]
 DASHBOARDS = DIRECTORY / "dashboards"
-LIMITS = REPOSITORY / "docs/collaboration/operational-limits.md"
+LIMITS = REPOSITORY / ".agents/local/collaboration/operational-limits.md"
 PRIVATE_FIXTURE = REPOSITORY / "crates/collaboration_domain/test_fixtures/compatibility/protocol/events.json"
 REQUIRED_SIGNALS = {
     "STOP-CROSS-TENANT",
@@ -90,7 +91,13 @@ def verify_artifacts(dashboards: str, artifacts: str, signals: list[dict], rules
 
 
 def main() -> None:
-    subprocess.run([sys.executable, str(DIRECTORY / "render.py"), "--check"], check=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--private-docs", action="store_true", help="also verify against the local operational limits"
+    )
+    arguments = parser.parse_args()
+    if arguments.private_docs:
+        subprocess.run([sys.executable, str(DIRECTORY / "render.py"), "--check"], check=True)
     dashboard_paths = sorted(DASHBOARDS.glob("*.json"))
     require(len(dashboard_paths) == 4, "exactly four dashboards are required")
     dashboards = [json.loads(path.read_text()) for path in dashboard_paths]
@@ -114,11 +121,13 @@ def main() -> None:
         REQUIRED_METRICS <= set(re.findall(r"[a-z][a-z0-9_]+", dashboard_text)),
         "required metric missing",
     )
-    limit_ids = set(re.findall(r"\| (OL-[A-Z]+-[0-9]+) \|", LIMITS.read_text()))
-    require(
-        limit_ids <= set(re.findall(r"OL-[A-Z]+-[0-9]+", dashboard_text)),
-        "limit missing from dashboards",
-    )
+    if arguments.private_docs:
+        limit_ids = set(re.findall(r"\| (OL-[A-Z]+-[0-9]+) \|", LIMITS.read_text()))
+        require(
+            limit_ids <= set(re.findall(r"OL-[A-Z]+-[0-9]+", dashboard_text)),
+            "limit missing from dashboards",
+        )
+        print(f"Local operational limits verified: {len(limit_ids)}")
 
     signals = json.loads((DIRECTORY / "stop-signals.json").read_text())["signals"]
     rules = (DIRECTORY / "prometheus-rules.yaml").read_text()
@@ -151,8 +160,7 @@ def main() -> None:
     else:
         raise AssertionError("private-content checker bite was accepted")
     print(
-        f"observability checks passed: dashboards={len(dashboards)} "
-        f"limits={len(limit_ids)} stop_signals={len(signals)}"
+        f"observability checks passed: dashboards={len(dashboards)} stop_signals={len(signals)}"
     )
 
 

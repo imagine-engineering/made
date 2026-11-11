@@ -41369,7 +41369,7 @@
   },
   "scope_transfers": {
     "corex_enablement": {
-      "destination_spec": "docs/sim/corex-enablement",
+      "destination_spec": ".agents/local/corex-enablement",
       "moved_task_ids": [
         "comfy-parity-certify-device-iluvatar-corex-ixuca-comfy-model-0020",
         "comfy-parity-device-foundation-iluvatar-corex-ixuca-comfy-model-0020",

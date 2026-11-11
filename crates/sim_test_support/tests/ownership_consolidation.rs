@@ -651,6 +651,26 @@ fn file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
 }
 
+const MOVED_COREX_TASKS: [&str; 5] = [
+    "comfy-parity-device-foundation-iluvatar-corex-ixuca-comfy-model-0020",
+    "comfy-parity-native-device-iluvatar-corex-ixuca-comfy-model-0020",
+    "comfy-parity-provision-native-ffi-contracts-iluvatar-corex-ixuca-comfy-model-0020",
+    "comfy-parity-integrate-device-iluvatar-corex-ixuca-comfy-model-0020",
+    "comfy-parity-certify-device-iluvatar-corex-ixuca-comfy-model-0020",
+];
+
+#[test]
+#[ignore = "requires the local CoreX enablement task plan"]
+fn moved_corex_tasks_remain_open_in_the_local_plan() -> Result<(), Box<dyn std::error::Error>> {
+    let tasks =
+        fs::read_to_string(repository_root()?.join(".agents/local/corex-enablement/tasks.md"))?;
+    let statuses = task_completion_statuses(&tasks)?;
+    for task in MOVED_COREX_TASKS {
+        assert_eq!(statuses.get(task), Some(&false), "{task}");
+    }
+    Ok(())
+}
+
 fn task_completion_statuses(tasks: &str) -> Result<BTreeMap<String, bool>, String> {
     let mut statuses = BTreeMap::new();
     let mut current_complete = None;
@@ -3235,8 +3255,6 @@ fn run_ownership_validation(
     let native_spec_mapping: serde_json::Value = serde_json::from_str(&fs::read_to_string(
         root.join("crates/sim_test_support/parity/catalogs/native-spec-mapping.json"),
     )?)?;
-    let corex_future_task_source =
-        fs::read_to_string(root.join("docs/sim/corex-enablement/tasks.md"))?;
     let tensor_external_kernel_part_one =
         fs::read_to_string(root.join("crates/sim_tensor/src/ops/external_tensor_kernel_01.rs"))?;
     let tensor_external_kernel_part_two =
@@ -6259,7 +6277,6 @@ fn run_ownership_validation(
                     })
             });
     let task_statuses = task_completion_statuses(&task_source)?;
-    let corex_future_task_statuses = task_completion_statuses(&corex_future_task_source)?;
     let accounted_pending_ownership_rows =
         accounted_pending_ownership_rows(&ownership_catalog, policy_concerns, &task_statuses);
     let ownership_catalog_has_only_accounted_pending_rows =
@@ -8578,18 +8595,11 @@ fn run_ownership_validation(
             && !backend_npu_packager.contains("NativeFfiRegistry::")
             && !backend_npu_packager.contains("ed25519_dalek");
 
-    let moved_corex_tasks = [
-        "comfy-parity-device-foundation-iluvatar-corex-ixuca-comfy-model-0020",
-        "comfy-parity-native-device-iluvatar-corex-ixuca-comfy-model-0020",
-        "comfy-parity-provision-native-ffi-contracts-iluvatar-corex-ixuca-comfy-model-0020",
-        "comfy-parity-integrate-device-iluvatar-corex-ixuca-comfy-model-0020",
-        "comfy-parity-certify-device-iluvatar-corex-ixuca-comfy-model-0020",
-    ];
     let corex_scope_transfer = native_spec_mapping
         .pointer("/scope_transfers/corex_enablement")
         .is_some_and(|transfer| {
             transfer.get("destination_spec").and_then(serde_json::Value::as_str)
-                == Some("docs/sim/corex-enablement")
+                == Some(".agents/local/corex-enablement")
                 && transfer
                     .get("retained_task_id")
                     .and_then(serde_json::Value::as_str)
@@ -8604,11 +8614,10 @@ fn run_ownership_validation(
                     .get("moved_task_ids")
                     .and_then(serde_json::Value::as_array)
                     .is_some_and(|tasks| {
-                        tasks.len() == moved_corex_tasks.len()
-                            && moved_corex_tasks.iter().all(|required| {
+                        tasks.len() == MOVED_COREX_TASKS.len()
+                            && MOVED_COREX_TASKS.iter().all(|required| {
                                 tasks.iter().any(|task| task.as_str() == Some(required))
                                     && !task_statuses.contains_key(*required)
-                                    && corex_future_task_statuses.get(*required) == Some(&false)
                             })
                     })
         });

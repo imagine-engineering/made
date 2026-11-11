@@ -144,13 +144,6 @@ fn shared_clippy() -> NamedJob {
             .add_step(steps::cargo_fmt())
             .add_step(named::bash("./script/clippy"))
             .add_step(setup_inventory_python())
-            .add_step(named::bash(indoc::indoc! {r#"
-                if git cat-file -e HEAD:projects/buzz/Cargo.toml 2>/dev/null; then
-                  ./script/check-collaborative-workspace-inventory --catalog all
-                else
-                  echo '::notice::Collaborative workspace source is absent; full inventory audit deferred'
-                fi
-            "#}))
             .add_step(named::bash(
                 "python3 script/test-collaborative-workspace-inventory.py",
             ))
@@ -1235,12 +1228,7 @@ mod tests {
                 step.get("run")
                     .and_then(Value::as_str)
                     .is_some_and(|command| {
-                        command
-                            .contains("git cat-file -e HEAD:projects/buzz/Cargo.toml 2>/dev/null")
-                            && command.contains(
-                                "./script/check-collaborative-workspace-inventory --catalog all",
-                            )
-                            && command.contains("full inventory audit deferred")
+                        command == "python3 script/test-collaborative-workspace-inventory.py"
                     })
             })
             .expect("inventory validation should run");

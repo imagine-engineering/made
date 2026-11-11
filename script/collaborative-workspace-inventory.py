@@ -107,7 +107,7 @@ class Catalog:
 class InventoryChecker:
     def __init__(self, repository_root: Path, selected_catalog: str) -> None:
         self.repository_root = repository_root
-        self.spec_root = repository_root / "docs/collaboration/collaborative-workspace"
+        self.spec_root = repository_root / ".agents/local/collaboration/collaborative-workspace"
         self.buzz_root = repository_root / "projects/buzz"
         self.selected_catalog = selected_catalog
         self.errors: list[str] = []
@@ -1032,6 +1032,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     checker = InventoryChecker(repository_root(), args.catalog)
+    if not checker.spec_root.is_dir():
+        print(f"Local collaboration spec is required: {checker.spec_root}", file=sys.stderr)
+        return 1
     passed = checker.run(args.fixture_source)
     if not passed:
         print(f"Inventory check failed ({len(checker.errors)} error(s)):", file=sys.stderr)

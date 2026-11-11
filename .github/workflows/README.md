@@ -66,7 +66,11 @@ across these entry points.
 
 The previous `release.yml` and `release_promotion.yml` placeholders are removed.
 The signing contract and qualification jobs from `release_signing_check.yml`
-now use `release_prepare.yml`. The separate collaboration candidate is unchanged.
+now use `release_prepare.yml`. The collaboration candidate requires a public
+compatibility contract before it can package and upload from GitHub Actions.
+Maintainers can exercise the existing contract locally with
+`script/collaboration-release-contract --dry-run` and the compatibility policy
+under `.agents/local/collaboration/`.
 Website refresh is paused, including manual recovery. See
 [Product release operation](../../docs/src/development/product-releases.md)
 for eligibility, setup, retries, and updater selection.
@@ -81,6 +85,12 @@ The harness checks each application configuration, the closed capability boundar
 unfiltered Workspace/Git/Sidebar/Agent UI owner suites, warning-denied
 `./script/clippy`, package dry runs and Standard dependency denial. Local and
 remote executions must be reported separately; job presence is not a passing run.
+
+With the private collaboration spec available locally, run
+`python3 script/validate-spec.py .agents/local/collaboration/collaborative-workspace`.
+Run `script/check-collaborative-workspace-inventory --catalog all` in a local
+checkout that also has the Buzz sources. CI runs the inventory checker's
+synthetic tests using tracked inputs.
 
 This validation does not enable `multiplayer-tools` in the shipped Rust product,
 change its product-manifest features, or certify authenticated collaboration.

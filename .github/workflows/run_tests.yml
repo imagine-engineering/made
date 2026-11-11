@@ -59,13 +59,6 @@ jobs:
       with:
         python-version: '3.12'
     - name: run_tests::shared_clippy
-      run: |
-        if git cat-file -e HEAD:projects/buzz/Cargo.toml 2>/dev/null; then
-          ./script/check-collaborative-workspace-inventory --catalog all
-        else
-          echo '::notice::Collaborative workspace source is absent; full inventory audit deferred'
-        fi
-    - name: run_tests::shared_clippy
       run: python3 script/test-collaborative-workspace-inventory.py
     - name: steps::cleanup_cargo_config
       if: always()

@@ -9,7 +9,7 @@ import sys
 
 DIRECTORY = pathlib.Path(__file__).resolve().parent
 REPOSITORY = DIRECTORY.parents[2]
-LIMITS = REPOSITORY / "docs/collaboration/operational-limits.md"
+LIMITS = REPOSITORY / ".agents/local/collaboration/operational-limits.md"
 DASHBOARD_DIRECTORY = DIRECTORY / "dashboards"
 RULES = DIRECTORY / "prometheus-rules.yaml"
 DASHBOARD_BY_PREFIX = {
@@ -144,6 +144,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()
+    if not LIMITS.is_file():
+        parser.error(f"local operational limits are required: {LIMITS}")
     failures = []
     for path, content in outputs().items():
         if arguments.check:

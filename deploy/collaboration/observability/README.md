@@ -21,15 +21,18 @@ community/user/job/event labels. Tenant diagnosis belongs in separately
 authorized, retention-bound log and trace tooling using a pseudonymous
 correlation hash.
 
-Regenerate and validate from the repository root:
+Run `python3 deploy/collaboration/observability/check.py` to validate the
+tracked artifacts. To regenerate them and check their coverage against the local
+operational limits in `.agents/local/collaboration/`, run:
 
 ```sh
 python3 deploy/collaboration/observability/render.py
-python3 deploy/collaboration/observability/check.py
+python3 deploy/collaboration/observability/check.py --private-docs
 ```
 
-The checker rejects render drift, an uncovered `OL-*` row, a missing
-stop/rollback signal, a public metrics listener, an open log field/action, client
+The local coverage check rejects render drift or an uncovered `OL-*` row.
+Both modes reject a missing stop/rollback signal, a public metrics listener, an
+open log field/action, client
 telemetry while disabled, or any private content copied from the frozen protocol
 fixture. It also mutates the in-memory inputs to prove the missing-signal and
 private-content checks fail independently.

@@ -21,7 +21,7 @@ from unittest import mock
 
 REPOSITORY = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_WORKFLOW = REPOSITORY / ".github/workflows/collaboration-release.yml"
-COMPATIBILITY = REPOSITORY / "docs/collaboration/compatibility.md"
+COMPATIBILITY = REPOSITORY / ".agents/local/collaboration/compatibility.md"
 CLIENT_FIXTURES = (
     REPOSITORY / "crates/collaboration_domain/test_fixtures/frozen-clients.json"
 )
@@ -921,6 +921,8 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     try:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            fail("the collaboration candidate embeds a private matrix; use the local release contract")
         if arguments.dry_run:
             if arguments.command is not None:
                 fail("--dry-run cannot be combined with a subcommand")

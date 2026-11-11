@@ -161,10 +161,12 @@ fn collaborative_owner_guard_rejects_a_synthetic_store() {
 }
 
 #[test]
-fn reuse_matrix_covers_every_declared_collaborative_type() {
-    let matrix = include_str!(
-        "../../../docs/collaboration/collaborative-workspace/reuse-ownership-matrix.md"
-    );
+#[ignore = "requires the local collaboration ownership matrix"]
+fn reuse_matrix_covers_every_declared_collaborative_type() -> std::io::Result<()> {
+    let matrix = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.agents/local/collaboration/collaborative-workspace/reuse-ownership-matrix.md"
+    ))?;
     for (source_name, source) in COLLABORATIVE_SOURCES {
         for type_name in declared_collaborative_types(source) {
             assert!(
@@ -173,6 +175,7 @@ fn reuse_matrix_covers_every_declared_collaborative_type() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]

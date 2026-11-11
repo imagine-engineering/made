@@ -320,7 +320,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     root = repository_root()
-    catalog_path = root / "docs/collaboration/collaborative-workspace/catalogs/protocol.csv"
+    catalog_path = root / ".agents/local/collaboration/collaborative-workspace/catalogs/protocol.csv"
     source_path = root / "projects/buzz/crates/buzz-core/src/kind.rs"
     output_path = root / "crates/nostr_compat/src/generated_kinds.rs"
     try:
@@ -338,7 +338,7 @@ def main() -> int:
             else:
                 raise ValueError("unclassified-kind guard accepted a missing catalog row")
         rendered = format_rust(render_registry(event_kinds, ranges, privacy))
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         print(f"kind registry error: {error}", file=sys.stderr)
         return 1
 

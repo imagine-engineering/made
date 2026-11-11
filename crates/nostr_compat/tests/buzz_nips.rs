@@ -20,11 +20,6 @@ const WIRE_TRACES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../crates/collaboration_domain/test_fixtures/compatibility/protocol/wire-traces.json"
 ));
-const PROTOCOL_CATALOG: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../docs/collaboration/collaborative-workspace/catalogs/protocol.csv"
-));
-
 struct NipFixture {
     id: &'static str,
     document_file: &'static str,
@@ -186,7 +181,7 @@ const NIP_FIXTURES: &[NipFixture] = &[
 ];
 
 #[test]
-fn buzz_nips_catalog_registers_every_document_and_vector_pair() {
+fn buzz_nips_registers_every_vector_pair() {
     let expected = BTreeSet::from([
         "NIP-AA", "NIP-AE", "NIP-AM", "NIP-AO", "NIP-AP", "NIP-CW", "NIP-DV", "NIP-ER", "NIP-GS",
         "NIP-IA", "NIP-MP", "NIP-OA", "NIP-PL", "NIP-PMA", "NIP-RS", "NIP-WP",
@@ -198,17 +193,6 @@ fn buzz_nips_catalog_registers_every_document_and_vector_pair() {
     assert_eq!(registered, expected);
 
     for fixture in NIP_FIXTURES {
-        let document_prefix = format!(
-            "DOC-{}-MD,custom_nip_document,{},,{},projects/buzz/docs/nips/{},",
-            fixture.id, fixture.document_file, fixture.id, fixture.document_file
-        );
-        assert!(
-            PROTOCOL_CATALOG
-                .lines()
-                .any(|line| line.starts_with(&document_prefix)),
-            "{} has no pinned protocol document entry",
-            fixture.id
-        );
         for (class, test_name) in [
             ("golden", fixture.golden_test),
             ("malformed", fixture.malformed_test),
@@ -220,6 +204,29 @@ fn buzz_nips_catalog_registers_every_document_and_vector_pair() {
             );
         }
     }
+}
+
+#[test]
+#[ignore = "requires the local collaboration protocol catalog"]
+fn buzz_nips_catalog_registers_every_document() -> std::io::Result<()> {
+    let protocol_catalog = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.agents/local/collaboration/collaborative-workspace/catalogs/protocol.csv"
+    ))?;
+    for fixture in NIP_FIXTURES {
+        let document_prefix = format!(
+            "DOC-{}-MD,custom_nip_document,{},,{},projects/buzz/docs/nips/{},",
+            fixture.id, fixture.document_file, fixture.id, fixture.document_file
+        );
+        assert!(
+            protocol_catalog
+                .lines()
+                .any(|line| line.starts_with(&document_prefix)),
+            "{} has no pinned protocol document entry",
+            fixture.id
+        );
+    }
+    Ok(())
 }
 
 #[test]

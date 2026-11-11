@@ -7866,7 +7866,7 @@
         "VAL-NATIVE-BOUNDARY-001",
         "VAL-OWNERSHIP-001"
       ],
-      "decision_reason": "comfy_backend_corex is the sole focused owner of the verified public-source provenance record, ordered discovery observations, typed missing-evidence state, and structural package assembly. It deliberately owns no vendor ABI, symbol resolution, unsafe vendor call, runtime resource, or availability transition; those capabilities may be added only after the separate `docs/sim/corex-enablement/` specification lawfully reviews and validates exact headers. NativeFfiRegistry alone could certify exact images, NativeBackendBindingStatus alone carries binding state, and comfy_tensor remains the semantic capability and TensorBackend owner."
+      "decision_reason": "comfy_backend_corex is the sole focused owner of the verified public-source provenance record, ordered discovery observations, typed missing-evidence state, and structural package assembly. It deliberately owns no vendor ABI, symbol resolution, unsafe vendor call, runtime resource, or availability transition; those capabilities may be added only after the separate `.agents/local/corex-enablement/` specification lawfully reviews and validates exact headers. NativeFfiRegistry alone could certify exact images, NativeBackendBindingStatus alone carries binding state, and comfy_tensor remains the semantic capability and TensorBackend owner."
     },
     {
       "concern": "native_ffi_cuda_abi_and_package_foundation",
