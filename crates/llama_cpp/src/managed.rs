@@ -1550,7 +1550,7 @@ mod tests {
     #[test]
     fn catalog_pins_real_artifacts_and_does_not_claim_qualification() -> Result<()> {
         let catalog = catalog()?;
-        assert_eq!(catalog.models.len(), 6);
+        assert_eq!(catalog.models.len(), 7);
         assert!(
             catalog
                 .models

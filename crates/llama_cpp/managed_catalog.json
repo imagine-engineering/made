@@ -193,6 +193,31 @@
       "chat_template_sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
       "gguf_architecture": "qwen35",
       "runtime_template_sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+    },
+    {
+      "id": "underdog-saluki-27b-1-0-iq2-mix",
+      "name": "Underdog Saluki 27B 1.0 (IQ2-mix)",
+      "family": "Qwen",
+      "repository": "ConwayResearch/Underdog-Saluki-27B-1.0",
+      "revision": "442e28ec9d89d9e732ddea2f0b9e017db20730a8",
+      "filename": "Underdog-Saluki-27B-1.0-IQ2-mix.gguf",
+      "quantization": "IQ2-mix",
+      "bytes": 7898369152,
+      "sha256": "4a673518b11b1c4445f9b9a9d3c40356f5ba39f6a6260dcb25f3fbfd475d9efb",
+      "license": "CC BY-NC 4.0 public terms (separate terms apply to commercial use)",
+      "license_url": "https://huggingface.co/ConwayResearch/Underdog-Saluki-27B-1.0/blob/442e28ec9d89d9e732ddea2f0b9e017db20730a8/README.md#credits-and-license",
+      "attribution": "Copyright 2026 Underdog (ConwayResearch). Based on work by the Qwen team at Alibaba Cloud and ISTA-DASLab.",
+      "training_context": 262144,
+      "context_tokens": 16384,
+      "kv_layers": 16,
+      "kv_heads": 4,
+      "kv_head_dimension": 256,
+      "chat_template": "Embedded Qwen3.8 Jinja template (tokenizer.chat_template)",
+      "tool_support": "The embedded template defines tool calls. Runtime and Copper native-agent qualification are pending.",
+      "qualified": false,
+      "chat_template_sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
+      "gguf_architecture": "qwen35",
+      "runtime_template_sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
     }
   ]
 }
