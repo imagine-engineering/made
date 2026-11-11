@@ -25,6 +25,23 @@ Capacity recommendations include full weights, the displayed context's FP16 KV c
 
 The manually managed server path below remains available through **Use my existing server**.
 
+### JetBrains Qwen3.8–3.6–27B Blend
+
+Copper lists the publisher's Q4_K_M and lower-memory IQ3_S GGUFs as optional text models. Both use a 16,384-token context with an estimated 1.00 GiB FP16 attention KV cache. Q4_K_M requires a 15.66 GiB download and an estimated 20.57 GiB at runtime. IQ3_S requires an 11.74 GiB download and an estimated 15.67 GiB at runtime. Copper budgets a further 1 GiB of system memory for either model. The runtime estimate includes the weights and overhead for recurrent state and other runtime buffers. Native-agent qualification is pending. [JetBrains model card and attribution](https://huggingface.co/JetBrains/Qwen3.8-3.6-27B-blend-GGUF/blob/e5d856b7430523bc465cbd07c78ac4bc0913a8c3/README.md#license-and-attribution)
+
+### Test a user-supplied GGUF in Copper
+
+Underdog Saluki 27B 1.0 is available from ConwayResearch under CC BY-NC 4.0. Commercial use requires a separate license from the publisher. Copper's managed catalog is intended for general use and excludes Saluki. The publisher's license and notice apply to the released file, whose GGUF metadata still describes its Apache-licensed upstream model. [Publisher license](https://huggingface.co/ConwayResearch/Underdog-Saluki-27B-1.0/blob/442e28ec9d89d9e732ddea2f0b9e017db20730a8/LICENSE) · [Attribution and commercial licensing contact](https://huggingface.co/ConwayResearch/Underdog-Saluki-27B-1.0/blob/442e28ec9d89d9e732ddea2f0b9e017db20730a8/NOTICE)
+
+For permitted noncommercial testing, obtain the publisher's [Underdog-Saluki-27B-1.0-IQ2-mix.gguf](https://huggingface.co/ConwayResearch/Underdog-Saluki-27B-1.0/blob/442e28ec9d89d9e732ddea2f0b9e017db20730a8/Underdog-Saluki-27B-1.0-IQ2-mix.gguf). Check free disk and memory first. The file is 7,898,369,152 bytes with SHA-256 `4a673518b11b1c4445f9b9a9d3c40356f5ba39f6a6260dcb25f3fbfd475d9efb`. Start your own loopback llama.cpp server with the local file and its embedded chat template.
+
+```sh
+llama-server --host 127.0.0.1 --port 8080 --offline --jinja \
+  --ctx-size 16384 --parallel 1 --model /path/to/Underdog-Saluki-27B-1.0-IQ2-mix.gguf
+```
+
+In Copper's llama.cpp provider, select **Use my existing server** and use `http://127.0.0.1:8080` as the API URL. Select the discovered model in the native agent's model picker. Copper's managed download, integrity verification and removal apply only to catalog entries. Saluki's inference and tool use with Copper remain unverified.
+
 ## llama.cpp {#llama-cpp}
 
 Use [llama.cpp](https://llama.app) and its built-in server for local models with Zed Agent, Inline Assistant, and similar model-backed Zed AI features.

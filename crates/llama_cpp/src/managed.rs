@@ -57,6 +57,8 @@ pub struct ModelArtifact {
     pub sha256: String,
     pub license: String,
     pub license_url: String,
+    #[serde(default)]
+    pub attribution: Option<String>,
     pub training_context: u64,
     pub context_tokens: u64,
     pub kv_layers: u64,
@@ -84,6 +86,12 @@ pub fn catalog() -> Result<Catalog> {
         ensure!(
             model.sha256.len() == 64 && is_hex(&model.sha256),
             "Model digest must be SHA-256"
+        );
+        ensure!(
+            [&model.chat_template_sha256, &model.runtime_template_sha256]
+                .into_iter()
+                .all(|digest| digest.len() == 64 && is_hex(digest)),
+            "Embedded and served chat template digests must be SHA-256"
         );
         ensure!(
             model.context_tokens <= model.training_context,
@@ -1542,7 +1550,7 @@ mod tests {
     #[test]
     fn catalog_pins_real_artifacts_and_does_not_claim_qualification() -> Result<()> {
         let catalog = catalog()?;
-        assert_eq!(catalog.models.len(), 4);
+        assert_eq!(catalog.models.len(), 6);
         assert!(
             catalog
                 .models
@@ -1556,6 +1564,32 @@ mod tests {
                 .all(|asset| asset.sha256.len() == 64
                     && asset.url.contains(&catalog.runtime_version))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn qwen_blend_variants_share_kv_cache_size() -> Result<()> {
+        let catalog = catalog()?;
+        let variant = |quantization| {
+            catalog
+                .models
+                .iter()
+                .find(|model| {
+                    model.repository == "JetBrains/Qwen3.8-3.6-27B-blend-GGUF"
+                        && model.quantization == quantization
+                })
+                .context("Missing Qwen blend variant")
+        };
+        let primary = variant("Q4_K_M")?;
+        let smaller = variant("IQ3_S")?;
+        assert_eq!(primary.context_tokens, 16_384);
+        assert_eq!(smaller.context_tokens, primary.context_tokens);
+        assert_eq!(primary.kv_cache_bytes(), GIB);
+        assert_eq!(smaller.kv_cache_bytes(), GIB);
+        assert_eq!(primary.chat_template_sha256, smaller.chat_template_sha256);
+        assert!(primary.attribution.is_some() && smaller.attribution.is_some());
+        assert!(smaller.bytes < primary.bytes);
+        assert!(smaller.estimated_memory_bytes() < primary.estimated_memory_bytes());
         Ok(())
     }
 

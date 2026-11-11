@@ -785,6 +785,9 @@ impl Render for ManagedModels {
                                 model.context_tokens, model.training_context, gib(model.bytes), gib(model.kv_cache_bytes()), gib(model.runtime_overhead_bytes())
                             )).size(LabelSize::Small))
                             .child(Label::new(format!("Publisher: {} · revision {} · license {}", model.repository, model.revision, model.license)).size(LabelSize::Small))
+                            .when_some(model.attribution.clone(), |details, attribution| {
+                                details.child(Label::new(attribution).size(LabelSize::Small))
+                            })
                             .child(Label::new(format!("SHA-256: {}", model.sha256)).size(LabelSize::Small))
                             .child(Label::new(format!("Template: {}. Tool support: {}. A healthy loaded runtime does not qualify native-agent tool reliability.", model.chat_template, model.tool_support)).size(LabelSize::Small))
                             .child(Button::new(("license-local", index), "Publisher and license")
