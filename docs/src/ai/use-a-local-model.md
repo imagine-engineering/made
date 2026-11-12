@@ -35,6 +35,17 @@ Choose **Download** next to **Underdog Saluki 27B 1.0 (IQ2-mix)** to obtain the 
 
 The publisher offers the weights under CC BY-NC 4.0. Commercial use is subject to separate terms from ConwayResearch. The embedded GGUF metadata describes the Apache-licensed upstream model. [Publisher license and attribution](https://huggingface.co/ConwayResearch/Underdog-Saluki-27B-1.0/blob/442e28ec9d89d9e732ddea2f0b9e017db20730a8/README.md#credits-and-license)
 
+### Unsloth Qwen3.8-27B
+
+Copper offers Unsloth's UD-Q4_K_M and lower-memory UD-IQ3_S text GGUFs at 16,384 tokens. The estimates below use Copper's standard decoding mode. Each runtime estimate includes the weights, 1.00 GiB of FP16 attention KV cache, and runtime overhead.
+
+| Variant | Download | Estimated runtime | Available memory required with 1 GiB reserve |
+| --- | ---: | ---: | ---: |
+| UD-Q4_K_M | 15.43 GiB | 20.28 GiB | 21.28 GiB |
+| UD-IQ3_S | 11.21 GiB | 15.02 GiB | 16.02 GiB |
+
+Both files contain an embedded Multi-Token Prediction (MTP) head. Copper offers standard decoding while MTP and native-agent qualification are pending. [Unsloth model card and license](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/blob/4af51b3542f775b0a8e4b310bfb3f17e01c306c9/README.md)
+
 ## llama.cpp {#llama-cpp}
 
 Use [llama.cpp](https://llama.app) and its built-in server for local models with Zed Agent, Inline Assistant, and similar model-backed Zed AI features.

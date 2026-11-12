@@ -1550,7 +1550,7 @@ mod tests {
     #[test]
     fn catalog_pins_real_artifacts_and_does_not_claim_qualification() -> Result<()> {
         let catalog = catalog()?;
-        assert_eq!(catalog.models.len(), 7);
+        assert_eq!(catalog.models.len(), 9);
         assert!(
             catalog
                 .models
@@ -1589,6 +1589,28 @@ mod tests {
         assert_eq!(primary.chat_template_sha256, smaller.chat_template_sha256);
         assert!(primary.attribution.is_some() && smaller.attribution.is_some());
         assert!(smaller.bytes < primary.bytes);
+        assert!(smaller.estimated_memory_bytes() < primary.estimated_memory_bytes());
+        Ok(())
+    }
+
+    #[test]
+    fn unsloth_qwen_variants_use_distinct_model_ids_and_a_16k_context() -> Result<()> {
+        let catalog = catalog()?;
+        let variant = |id| {
+            catalog
+                .models
+                .iter()
+                .find(|model| model.id == id)
+                .context("Missing Unsloth Qwen variant")
+        };
+        let primary = variant("unsloth-qwen3-8-27b-ud-q4-k-m")?;
+        let smaller = variant("unsloth-qwen3-8-27b-ud-iq3-s")?;
+        for model in [primary, smaller] {
+            assert!(model.name.starts_with("Unsloth Qwen3.8-27B"));
+            assert_eq!(model.repository, "unsloth/Qwen3.8-27B-GGUF");
+            assert_eq!(model.context_tokens, 16_384);
+            assert_eq!(model.kv_cache_bytes(), GIB);
+        }
         assert!(smaller.estimated_memory_bytes() < primary.estimated_memory_bytes());
         Ok(())
     }
