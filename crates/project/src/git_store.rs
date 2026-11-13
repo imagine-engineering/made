@@ -48,8 +48,8 @@ use git::{
     },
 };
 use gpui::{
-    App, AppContext, AsyncApp, BackgroundExecutor, Context, Entity, EventEmitter, SharedString,
-    Subscription, Task, TaskExt, WeakEntity,
+    App, AppContext, AsyncApp, BackgroundExecutor, Context, Entity, EventEmitter, FutureExt as _,
+    SharedString, Subscription, Task, TaskExt, WeakEntity,
 };
 use language::{
     Anchor, Buffer, BufferEvent, Capability, Language, LanguageRegistry,
@@ -825,6 +825,7 @@ impl GitStore {
         client.add_entity_request_handler(Self::handle_diff_checkpoints);
         client.add_entity_request_handler(Self::handle_load_commit_diff);
         client.add_entity_request_handler(Self::handle_checkout_files);
+        client.add_entity_request_handler(Self::handle_restore_index_files);
         client.add_entity_request_handler(Self::handle_add_path_to_gitignore);
         client.add_entity_request_handler(Self::handle_add_path_to_git_info_exclude);
         client.add_entity_request_handler(Self::handle_open_commit_message_buffer);
@@ -4010,6 +4011,30 @@ impl GitStore {
         Ok(proto::Ack {})
     }
 
+    async fn handle_restore_index_files(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::GitRestoreIndexFiles>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        let repository = Self::repository_for_request(
+            &this,
+            RepositoryId::from_proto(envelope.payload.repository_id),
+            &mut cx,
+        )?;
+        let paths = envelope
+            .payload
+            .paths
+            .iter()
+            .map(|path| RepoPath::from_proto(path))
+            .collect::<Result<Vec<_>>>()?;
+        repository
+            .update(&mut cx, |repository, cx| {
+                repository.restore_worktree_from_index(paths, cx)
+            })
+            .await?;
+        Ok(proto::Ack {})
+    }
+
     async fn handle_add_path_to_gitignore(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::GitAddPathToGitignore>,
@@ -6416,6 +6441,52 @@ impl Repository {
                 .await?
             },
         )
+    }
+
+    pub fn restore_worktree_from_index(
+        &mut self,
+        paths: Vec<RepoPath>,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        if paths.is_empty() {
+            return Task::ready(Ok(()));
+        }
+        let id = self.id;
+        let receiver = self.send_job(
+            "restore_worktree_from_index",
+            Some("git checkout-index".into()),
+            move |state, cx| async move {
+                match state {
+                    RepositoryState::Local(LocalRepositoryState {
+                        backend,
+                        environment,
+                        ..
+                    }) => backend.restore_worktree_from_index(paths, environment).await,
+                    RepositoryState::Remote(RemoteRepositoryState {
+                        project_id,
+                        client,
+                    }) => {
+                        // An older peer can drop an unknown envelope without replying.
+                        client
+                            .request(proto::GitRestoreIndexFiles {
+                                project_id: project_id.0,
+                                repository_id: id.to_proto(),
+                                paths: paths
+                                    .into_iter()
+                                    .map(|path| path.as_unix_str().to_owned())
+                                    .collect(),
+                            })
+                            .with_timeout(Duration::from_secs(15), cx.background_executor())
+                            .await
+                            .context(
+                                "The remote host did not confirm discard. Check the host version, connection, and file before retrying.",
+                            )??;
+                        Ok(())
+                    }
+                }
+            },
+        );
+        cx.spawn(async move |_, _| receiver.await?)
     }
 
     pub fn reset(

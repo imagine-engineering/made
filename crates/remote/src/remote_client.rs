@@ -2808,6 +2808,44 @@ mod tests {
         });
     }
 
+    #[gpui::test]
+    async fn test_channel_client_index_restore_is_not_replayed_for_an_old_peer(
+        cx: &mut TestAppContext,
+    ) {
+        let (incoming_tx, incoming_rx) = mpsc::unbounded();
+        let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded();
+        let client = cx
+            .update(|cx| ChannelClient::new(incoming_rx, outgoing_tx, cx, "index-restore", false));
+        cx.run_until_parked();
+        while outgoing_rx.next().now_or_never().flatten().is_some() {}
+        let request = client.request(proto::GitRestoreIndexFiles {
+            project_id: 1,
+            repository_id: 2,
+            paths: vec!["mixed.txt".into()],
+        });
+        let envelope = outgoing_rx.next().await.expect("index restore request");
+        assert!(matches!(
+            envelope.payload,
+            Some(proto::envelope::Payload::GitRestoreIndexFiles(_))
+        ));
+        assert!(client.buffer.lock().is_empty());
+
+        // Decoding an unknown oneof variant on a legacy peer leaves the payload unset.
+        incoming_tx
+            .unbounded_send(proto::Envelope {
+                id: 1,
+                ..Default::default()
+            })
+            .expect("envelope with unknown payload");
+        let timeout = Duration::from_millis(10);
+        let request = request.with_timeout(timeout, &cx.executor());
+        cx.executor().advance_clock(timeout * 2);
+        assert!(request.await.is_err());
+        assert!(client.response_channels.lock().is_empty());
+        assert!(client.buffer.lock().is_empty());
+        assert!(outgoing_rx.next().now_or_never().is_none());
+    }
+
     fn jvm_intent_for_channel_test(
         generation: u64,
         include_root: bool,
@@ -3994,6 +4032,9 @@ impl ChannelClient {
         !matches!(
             envelope.payload.as_ref(),
             Some(proto::envelope::Payload::SetJvmProjectConsumers(_))
+        ) && !matches!(
+            envelope.payload.as_ref(),
+            Some(proto::envelope::Payload::GitRestoreIndexFiles(_))
         ) && !matches!(
             envelope.payload.as_ref(),
             Some(proto::envelope::Payload::RestartLanguageServers(request)) if request.all

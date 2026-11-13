@@ -890,6 +890,14 @@ pub trait GitRepository: Send + Sync {
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>>;
 
+    fn restore_worktree_from_index(
+        &self,
+        _paths: Vec<RepoPath>,
+        _env: Arc<HashMap<String, String>>,
+    ) -> BoxFuture<'_, Result<()>> {
+        async { bail!("This Git backend does not support restoring files from the index") }.boxed()
+    }
+
     fn show(&self, commit: String) -> BoxFuture<'_, Result<CommitDetails>>;
 
     fn load_commit(&self, commit: String, cx: AsyncApp) -> BoxFuture<'_, Result<CommitDiff>>;
@@ -1576,6 +1584,35 @@ impl GitRepository for RealGitRepository {
             anyhow::ensure!(
                 output.status.success(),
                 "Failed to checkout files:\n{}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            Ok(())
+        }
+        .boxed()
+    }
+
+    fn restore_worktree_from_index(
+        &self,
+        paths: Vec<RepoPath>,
+        env: Arc<HashMap<String, String>>,
+    ) -> BoxFuture<'_, Result<()>> {
+        let git = self.git_binary_in_worktree();
+        async move {
+            let git = git?;
+            if paths.is_empty() {
+                return Ok(());
+            }
+
+            // Unlike checkout and restore, checkout-index does not refresh the index by default.
+            let output = git
+                .build_command(&["checkout-index", "--force", "--"])
+                .envs(env.iter())
+                .args(paths.iter().map(|path| path.as_unix_str()))
+                .output()
+                .await?;
+            anyhow::ensure!(
+                output.status.success(),
+                "Failed to restore files from the index:\n{}",
                 String::from_utf8_lossy(&output.stderr),
             );
             Ok(())
@@ -4321,6 +4358,52 @@ mod tests {
         assert_eq!(
             fs::canonicalize(left.as_ref()).unwrap(),
             fs::canonicalize(right.as_ref()).unwrap()
+        );
+    }
+
+    #[gpui::test]
+    async fn test_index_restore_preserves_staged_bytes(cx: &mut TestAppContext) {
+        disable_git_global_config();
+        cx.executor().allow_parking();
+
+        let directory = tempfile::tempdir().expect("temporary Git repository");
+        let worktree = directory.path();
+        let file = worktree.join("file.txt");
+        let index = worktree.join(".git/index");
+        git_init_repo(worktree);
+        fs::write(&file, b"committed\n").expect("write committed contents");
+        git_command(worktree, ["add", "file.txt"]);
+        git_command(worktree, ["commit", "-m", "Initial commit"]);
+        fs::write(&file, b"staged\n").expect("write staged contents");
+        git_command(worktree, ["add", "file.txt"]);
+        fs::write(&file, b"unstaged\n").expect("write unstaged contents");
+        let staged_index = fs::read(&index).expect("read original index");
+
+        let repository = RealGitRepository::new(
+            &worktree.join(".git"),
+            None,
+            Some("git".into()),
+            cx.executor(),
+        )
+        .expect("open Git repository");
+        let paths = vec![RepoPath::new("file.txt").expect("valid repository path")];
+        let environment = Arc::new(HashMap::default());
+
+        repository
+            .restore_worktree_from_index(paths.clone(), environment.clone())
+            .await
+            .expect("restore worktree");
+        assert_eq!(fs::read(&file).expect("read worktree"), b"staged\n");
+        assert_eq!(fs::read(&index).expect("read index"), staged_index);
+
+        repository
+            .checkout_files("HEAD".into(), paths, environment)
+            .await
+            .expect("restore from HEAD");
+        assert_eq!(fs::read(&file).expect("read worktree"), b"committed\n");
+        assert_eq!(
+            git_command_output(worktree, ["show", ":file.txt"]),
+            "committed"
         );
     }
 

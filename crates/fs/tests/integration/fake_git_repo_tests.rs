@@ -5,6 +5,33 @@ use std::path::{Path, PathBuf};
 use util::path;
 
 #[gpui::test]
+async fn test_fake_index_restore_preserves_staged_contents(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor);
+    let worktree = Path::new(path!("/repo"));
+    let dot_git = worktree.join(".git");
+    let file = worktree.join("file.txt");
+    fs.create_dir(&dot_git).await.expect("create repository");
+    fs.set_head_and_index_for_repo(&dot_git, &[("file.txt", "committed".into())]);
+    fs.set_index_for_repo(&dot_git, &[("file.txt", "staged".into())]);
+    fs.write(&file, b"unstaged").await.expect("write worktree");
+    let repository = fs.open_repo(&dot_git, None).expect("open repository");
+    let path = git::repository::RepoPath::new("file.txt").expect("valid path");
+    repository
+        .restore_worktree_from_index(vec![path.clone()], Default::default())
+        .await
+        .expect("restore from index");
+    assert_eq!(fs.load(&file).await.expect("read worktree"), "staged");
+    assert_eq!(
+        repository.load_index_text(path.clone()).await.as_deref(),
+        Some("staged")
+    );
+    assert_eq!(
+        repository.load_committed_text(path).await.as_deref(),
+        Some("committed")
+    );
+}
+
+#[gpui::test]
 async fn test_fake_worktree_lifecycle(cx: &mut TestAppContext) {
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree("/project", json!({".git": {}, "file.txt": "content"}))

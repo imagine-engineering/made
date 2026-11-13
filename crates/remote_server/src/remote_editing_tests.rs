@@ -10523,6 +10523,65 @@ async fn test_remote_git_branches(cx: &mut TestAppContext, server_cx: &mut TestA
 }
 
 #[gpui::test]
+async fn test_remote_git_discard_preserves_staged_contents(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    let root = path!("/remote-git-discard");
+    let dot_git = Path::new(path!("/remote-git-discard/.git"));
+    let file = Path::new(path!("/remote-git-discard/file.txt"));
+    fs.insert_tree(root, json!({".git": {}, "file.txt": "unstaged"}))
+        .await;
+    fs.set_head_and_index_for_repo(dot_git, &[("file.txt", "committed".into())]);
+    fs.set_index_for_repo(dot_git, &[("file.txt", "staged".into())]);
+
+    let (project, _headless) = init_test(&fs, cx, server_cx).await;
+    project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(root, true, cx)
+        })
+        .await
+        .expect("open remote worktree");
+    cx.run_until_parked();
+    let repository = project
+        .read_with(cx, |project, cx| project.active_repository(cx))
+        .expect("remote repository");
+    let path = RepoPath::new("file.txt").expect("valid path");
+    let backend = fs.open_repo(dot_git, None).expect("host backend");
+    repository
+        .update(cx, |repository, cx| {
+            repository.restore_worktree_from_index(vec![path.clone()], cx)
+        })
+        .await
+        .expect("restore unstaged contents on the host");
+    assert_eq!(fs.load(file).await.expect("host worktree"), "staged");
+    assert_eq!(
+        backend.load_index_text(path.clone()).await.as_deref(),
+        Some("staged")
+    );
+
+    let missing = RepoPath::new("missing.txt").expect("valid path");
+    repository
+        .update(cx, |repository, cx| {
+            repository.restore_worktree_from_index(vec![missing], cx)
+        })
+        .await
+        .expect_err("host failure must reach the client");
+    repository
+        .update(cx, |repository, cx| {
+            repository.checkout_files("HEAD", vec![path.clone()], cx)
+        })
+        .await
+        .expect("existing explicit commit route");
+    assert_eq!(fs.load(file).await.expect("host worktree"), "committed");
+    assert_eq!(
+        backend.load_index_text(path).await.as_deref(),
+        Some("committed")
+    );
+}
+
+#[gpui::test]
 async fn test_remote_git_checkpoints(cx: &mut TestAppContext, server_cx: &mut TestAppContext) {
     let fs = FakeFs::new(server_cx.executor());
     fs.insert_tree(
