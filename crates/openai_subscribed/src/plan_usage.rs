@@ -2,7 +2,7 @@ use super::{PROVIDER_ID, PROVIDER_NAME};
 use anyhow::{Context as _, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
-use gpui::{App, AsyncApp, Context, Entity, SharedString, Task, WeakEntity};
+use gpui::{App, AsyncApp, BackgroundExecutor, Context, Entity, SharedString, Task, WeakEntity};
 use http_client::{AsyncBody, CustomHeaders, HttpClient, Method, Request as HttpRequest};
 use language_model::{
     LanguageModel, LanguageModelCompletionError, LanguageModelCompletionEvent, LanguageModelId,
@@ -774,7 +774,13 @@ impl State {
                     result
                 })?;
                 let revoked = if let Some(tokens) = tokens {
-                    revoke_session(http.as_ref(), &client_id, &tokens.refresh_token).await
+                    revoke_session(
+                        http.as_ref(),
+                        &client_id,
+                        &tokens.refresh_token,
+                        cx.background_executor(),
+                    )
+                    .await
                 } else {
                     Ok(())
                 };
@@ -869,7 +875,12 @@ struct OpenIdConfiguration {
     revocation_endpoint: url::Url,
 }
 
-async fn revoke_session(http: &dyn HttpClient, client_id: &str, token: &str) -> Result<()> {
+async fn revoke_session(
+    http: &dyn HttpClient,
+    client_id: &str,
+    token: &str,
+    executor: &BackgroundExecutor,
+) -> Result<()> {
     let result = async {
         let configuration: OpenIdConfiguration =
             read_json(http, get_request(DISCOVERY)?, "ChatGPT sign-out discovery").await?;
@@ -882,7 +893,7 @@ async fn revoke_session(http: &dyn HttpClient, client_id: &str, token: &str) -> 
         );
         for attempt in 0..2 {
             if attempt > 0 {
-                smol::Timer::after(Duration::from_millis(350)).await;
+                executor.timer(Duration::from_millis(350)).await;
             }
             let response = http
                 .send(form_request(
