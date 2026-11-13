@@ -251,9 +251,9 @@ impl RecipeStore {
     ) -> Task<Result<String>> {
         let parsed = (|| {
             let words = crate::split_shell_words(arguments)?;
-            let operation = words.first().map(String::as_str).unwrap_or("list");
+            let operation = words.first().map(String::as_str).unwrap_or("manage");
             if matches!(operation, "create" | "manage") {
-                ensure!(words.len() == 1, "Usage: /schedules create");
+                ensure!(words.len() <= 1, "Usage: /schedules [create]");
                 self.request_management(project, None, cx);
                 return Ok(Task::ready(Ok(
                     "Opened recipe and schedule management.".to_owned()

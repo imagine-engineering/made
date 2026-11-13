@@ -103,6 +103,7 @@ fn rust_workspace_comprehensive_runs_the_now_stack_without_real_tools() {
         input_fingerprint: 17,
         workspaces: workspaces.clone(),
         failures,
+        omitted: Default::default(),
         completeness: CargoSnapshotCompleteness::Partial,
     };
     let package_id = workspaces[0].members[0].id.clone();

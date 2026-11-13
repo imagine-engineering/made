@@ -21,6 +21,9 @@ message CargoWorkspaceResponse {
   repeated CargoCandidateFailure failures = 4;
   bool partial = 5;
   uint64 input_fingerprint = 6;
+  uint32 omitted_candidates = 7;
+  uint32 omitted_workspaces = 8;
+  uint32 omitted_failures = 9;
 }
 
 message CargoWorkspace {

@@ -4760,8 +4760,8 @@ impl AgentPanel {
         // Revealing the panel can focus an input absent from the current dispatch tree.
         window.on_next_frame(|window, cx| {
             window.dispatch_action(
-                Box::new(zed_actions::OpenSettingsPage {
-                    page: "AI".to_string(),
+                Box::new(zed_actions::OpenSettingsAt {
+                    path: "llm_providers".into(),
                     target: None,
                 }),
                 cx,
@@ -6075,6 +6075,7 @@ impl AgentPanel {
                 // Revealing the editor inspects dock panels, including this subscriber.
                 window.defer(cx, move |window, cx| {
                     let result = workspace.update(cx, |workspace, cx| {
+                        anyhow::ensure!(cx.has_flag::<feature_flags::CopperDoctor>(), "Copper Doctor is disabled");
                         anyhow::ensure!(workspace.project() == &request.project, "Doctor project scope changed");
                         anyhow::ensure!(
                             !request.project.read(cx).is_isolated_recipe_test(),
@@ -18147,8 +18148,8 @@ mod tests {
             let settings_requests = settings_requests.clone();
             workspace
                 .register_action(AgentPanel::open_settings)
-                .register_action(move |_, action: &zed_actions::OpenSettingsPage, _, _| {
-                    assert_eq!(action.page, "AI");
+                .register_action(move |_, action: &zed_actions::OpenSettingsAt, _, _| {
+                    assert_eq!(action.path, "llm_providers");
                     assert!(action.target.is_none());
                     settings_requests.set(settings_requests.get() + 1);
                 });
@@ -18200,8 +18201,8 @@ mod tests {
                 .register_action(AgentPanel::focus)
                 .register_action(AgentPanel::toggle)
                 .register_action(AgentPanel::open_settings)
-                .register_action(move |_, action: &zed_actions::OpenSettingsPage, _, _| {
-                    assert_eq!(action.page, "AI");
+                .register_action(move |_, action: &zed_actions::OpenSettingsAt, _, _| {
+                    assert_eq!(action.path, "llm_providers");
                     assert!(action.target.is_none());
                     settings_requests.set(settings_requests.get() + 1);
                 });
@@ -20132,6 +20133,17 @@ mod tests {
         diagnostics::doctor::DoctorHistoryStore,
     ) {
         let (workspace, panel, mut visual) = setup_workspace_panel(cx).await;
+        visual.update(|_, cx| {
+            feature_flags::FeatureFlagStore::init(cx);
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |content| {
+                    content
+                        .feature_flags
+                        .get_or_insert_default()
+                        .insert("copper-doctor".into(), "on".into());
+                });
+            });
+        });
         #[cfg(feature = "doctor-dependency-test")]
         {
             let store = workspace.read_with(&visual, |workspace, cx| {
@@ -22219,6 +22231,17 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (workspace, panel, mut visual) = setup_workspace_panel(cx).await;
+        visual.update(|_, cx| {
+            feature_flags::FeatureFlagStore::init(cx);
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |content| {
+                    content
+                        .feature_flags
+                        .get_or_insert_default()
+                        .insert("copper-doctor".into(), "on".into());
+                });
+            });
+        });
         visual.run_until_parked();
         panel.update_in(&mut visual, |panel, window, cx| {
             panel.external_thread(

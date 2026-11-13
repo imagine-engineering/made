@@ -19,12 +19,14 @@ mod diagnostics_tests;
 use anyhow::Result;
 use buffer_diagnostics::BufferDiagnosticsEditor;
 use collections::{BTreeSet, HashMap, HashSet};
+use command_palette_hooks::CommandPaletteFilter;
 use diagnostic_renderer::DiagnosticBlock;
 use editor::{
     Anchor, Editor, EditorEvent, ExcerptRange, MultiBuffer, PathKey,
     display_map::{BlockPlacement, BlockProperties, BlockStyle, CustomBlockId},
     multibuffer_context_lines,
 };
+use feature_flags::{CopperDoctor, FeatureFlagAppExt as _};
 use gpui::{
     AnyElement, App, AsyncApp, Context, Entity, EventEmitter, FocusHandle, FocusOutEvent,
     Focusable, Global, InteractiveElement, IntoElement, ParentElement, Render, SharedString,
@@ -80,6 +82,20 @@ impl Global for IncludeWarnings {}
 pub fn init(cx: &mut App) {
     editor::set_diagnostic_renderer(diagnostic_renderer::DiagnosticRenderer {}, cx);
     cx.observe_new(ProjectDiagnosticsEditor::register).detach();
+    fn update_doctor_action(cx: &mut App) {
+        let enabled = cx.has_flag::<CopperDoctor>();
+        CommandPaletteFilter::update_global(cx, |filter, _| {
+            let action = TypeId::of::<Doctor>();
+            if enabled {
+                filter.show_action_types([&action]);
+            } else {
+                filter.hide_action_types([&action]);
+            }
+        });
+    }
+    update_doctor_action(cx);
+    cx.observe_flag::<CopperDoctor, _>(|_, cx| update_doctor_action(cx))
+        .detach();
     cx.observe_new(doctor_view::DoctorView::register).detach();
     cx.observe_new(BufferDiagnosticsEditor::register).detach();
 }

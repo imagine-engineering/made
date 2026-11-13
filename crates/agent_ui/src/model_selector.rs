@@ -16,7 +16,7 @@ use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use picker::{Picker, PickerDelegate};
 use settings::SettingsStore;
-use ui::{DocumentationAside, IntoElement, prelude::*};
+use ui::{Callout, DocumentationAside, IntoElement, Severity, SpinnerLabel, prelude::*};
 use util::ResultExt;
 use zed_actions::agent::OpenSettings;
 
@@ -384,13 +384,61 @@ impl PickerDelegate for ModelPickerDelegate {
             return None;
         }
 
+        use language_model::ModelDiscoveryStatus;
+
+        let retry = || {
+            Button::new("retry-chatgpt-discovery", "Retry")
+                .size(ButtonSize::Compact)
+                .on_click(cx.listener(|picker, _, _, cx| {
+                    picker.delegate.selector.retry_model_discovery(cx);
+                }))
+        };
+        let status = self.selector.model_discovery_status(cx);
+        let discovery = match status {
+            Some(ModelDiscoveryStatus::Loading) => Some(
+                h_flex()
+                    .gap_2()
+                    .child(SpinnerLabel::new())
+                    .child(Label::new("Loading ChatGPT Subscription models…").color(Color::Muted))
+                    .into_any_element(),
+            ),
+            Some(ModelDiscoveryStatus::Empty) => Some(
+                v_flex()
+                    .gap_1()
+                    .child(Label::new("ChatGPT Subscription"))
+                    .child(
+                        Label::new("No models are available for this account.").color(Color::Muted),
+                    )
+                    .child(retry())
+                    .into_any_element(),
+            ),
+            Some(ModelDiscoveryStatus::Failed { message, can_retry }) => Some(
+                Callout::new()
+                    .severity(Severity::Error)
+                    .icon(IconName::XCircleFilled)
+                    .title("ChatGPT Subscription models unavailable")
+                    .description(message)
+                    .actions_slot(div().when(can_retry, |this| this.child(retry())))
+                    .into_any_element(),
+            ),
+            Some(ModelDiscoveryStatus::SignIn) => Some(
+                Label::new("Connect or reconnect ChatGPT Subscription in Configure.")
+                    .color(Color::Muted)
+                    .into_any_element(),
+            ),
+            None => None,
+        };
         Some(
-            ModelSelectorFooter::new(
-                OpenSettings.boxed_clone(),
-                focus_handle,
-                cx.listener(|picker, _, window, cx| picker.dismiss(window, cx)),
-            )
-            .into_any_element(),
+            v_flex()
+                .when_some(discovery, |this, discovery| {
+                    this.child(div().px_2().py_1().child(discovery))
+                })
+                .child(ModelSelectorFooter::new(
+                    OpenSettings.boxed_clone(),
+                    focus_handle,
+                    cx.listener(|picker, _, window, cx| picker.dismiss(window, cx)),
+                ))
+                .into_any_element(),
         )
     }
 }

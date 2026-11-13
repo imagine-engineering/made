@@ -136,6 +136,7 @@ mod server {
     pub struct OAuthCallbackParams {
         pub code: String,
         pub state: String,
+        pub client_id: Option<String>,
     }
 
     /// Configuration for the loopback OAuth callback server.
@@ -171,13 +172,19 @@ mod server {
         /// Parse the query string from a callback URL like
         /// `http://127.0.0.1:<port>/callback?code=...&state=...`.
         pub fn parse_query(query: &str) -> Result<Self> {
+            Self::parse_query_with_state(query, None)
+        }
+
+        fn parse_query_with_state(query: &str, expected_state: Option<&str>) -> Result<Self> {
             let mut code: Option<String> = None;
             let mut state: Option<String> = None;
+            let mut client_id = None;
             let mut error: Option<String> = None;
             let mut error_description: Option<String> = None;
 
             for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
                 match key.as_ref() {
+                    "client_id" if !value.is_empty() => client_id = Some(value.into_owned()),
                     "code" => {
                         if !value.is_empty() {
                             code = Some(value.into_owned());
@@ -202,6 +209,13 @@ mod server {
                 }
             }
 
+            if let Some(expected) = expected_state {
+                anyhow::ensure!(state.as_deref() == Some(expected), "OAuth state mismatch");
+                if error.is_some() {
+                    anyhow::bail!("ChatGPT authorization was declined or could not be completed");
+                }
+            }
+
             if let Some(error_code) = error {
                 anyhow::bail!(
                     "OAuth authorization failed: {} ({})",
@@ -214,7 +228,11 @@ mod server {
             let state =
                 state.ok_or_else(|| anyhow!("missing 'state' parameter in OAuth callback"))?;
 
-            Ok(Self { code, state })
+            Ok(Self {
+                code,
+                state,
+                client_id,
+            })
         }
     }
 
@@ -240,6 +258,26 @@ mod server {
     /// default ephemeral-port `http://127.0.0.1:<port>/callback` doesn't match.
     pub fn start_oauth_callback_server_with_config(
         config: OAuthCallbackServerConfig,
+    ) -> Result<(
+        String,
+        futures::channel::oneshot::Receiver<Result<OAuthCallbackParams>>,
+    )> {
+        start_server(config, None)
+    }
+
+    pub fn start_oauth_callback_server_with_state(
+        config: OAuthCallbackServerConfig,
+        expected_state: String,
+    ) -> Result<(
+        String,
+        futures::channel::oneshot::Receiver<Result<OAuthCallbackParams>>,
+    )> {
+        start_server(config, Some(expected_state))
+    }
+
+    fn start_server(
+        config: OAuthCallbackServerConfig,
+        expected_state: Option<String>,
     ) -> Result<(
         String,
         futures::channel::oneshot::Receiver<Result<OAuthCallbackParams>>,
@@ -281,7 +319,7 @@ mod server {
 
                 let raw_url = request.url().to_string();
                 let raw_path = raw_url.split('?').next().unwrap_or(&raw_url);
-                if raw_path == CANCEL_PATH {
+                if raw_path == CANCEL_PATH && expected_state.is_none() {
                     let response = tiny_http::Response::from_string("Cancelled")
                         .with_status_code(200)
                         .with_header(
@@ -301,7 +339,28 @@ mod server {
                     return;
                 }
 
-                let result = handle_oauth_callback_request(&request, expected_path);
+                if expected_state.is_some()
+                    && (request.method() != &tiny_http::Method::Get
+                        || raw_path != expected_path
+                        || !Url::parse(&format!("http://127.0.0.1{raw_url}"))
+                            .ok()
+                            .is_some_and(|url| {
+                                url.query_pairs().any(|(key, value)| {
+                                    key == "state"
+                                        && Some(value.as_ref()) == expected_state.as_deref()
+                                })
+                            }))
+                {
+                    if let Err(error) = request.respond(tiny_http::Response::empty(400)) {
+                        log::debug!("Failed to reject unrelated OAuth callback: {error}");
+                    }
+                    continue;
+                }
+                let result = handle_oauth_callback_request(
+                    &request,
+                    expected_path,
+                    expected_state.as_deref(),
+                );
 
                 let (status_code, body) = match &result {
                     Ok(_) => (
@@ -328,6 +387,14 @@ mod server {
                 let response = tiny_http::Response::from_string(body)
                     .with_status_code(status_code)
                     .with_header(
+                        tiny_http::Header::from_str("Cache-Control: no-store")
+                            .expect("static header"),
+                    )
+                    .with_header(
+                        tiny_http::Header::from_str("Referrer-Policy: no-referrer")
+                            .expect("static header"),
+                    )
+                    .with_header(
                         tiny_http::Header::from_str("Content-Type: text/html")
                             .expect("failed to construct response header"),
                     )
@@ -350,6 +417,7 @@ mod server {
     fn handle_oauth_callback_request(
         request: &tiny_http::Request,
         expected_path: &str,
+        expected_state: Option<&str>,
     ) -> Result<OAuthCallbackParams> {
         let url = Url::parse(&format!("http://localhost{}", request.url()))
             .context("malformed callback request URL")?;
@@ -361,7 +429,10 @@ mod server {
         let query = url
             .query()
             .ok_or_else(|| anyhow!("OAuth callback has no query string"))?;
-        OAuthCallbackParams::parse_query(query)
+        match expected_state {
+            Some(state) => OAuthCallbackParams::parse_query_with_state(query, Some(state)),
+            None => OAuthCallbackParams::parse_query(query),
+        }
     }
 
     /// Callback path reserved for evicting a previously-running OAuth callback
@@ -489,5 +560,5 @@ mod server {
 #[cfg(not(target_family = "wasm"))]
 pub use server::{
     OAuthCallbackParams, OAuthCallbackServerConfig, start_oauth_callback_server,
-    start_oauth_callback_server_with_config,
+    start_oauth_callback_server_with_config, start_oauth_callback_server_with_state,
 };

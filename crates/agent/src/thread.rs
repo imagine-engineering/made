@@ -56,7 +56,10 @@ use settings::{
     LanguageModelSelection, Settings, SettingsStore, ToolPermissionMode, update_settings_file,
 };
 use std::fmt::Write;
-use std::{cell::RefCell, ops::ControlFlow};
+use std::{
+    cell::{Cell, RefCell},
+    ops::ControlFlow,
+};
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
@@ -1216,11 +1219,15 @@ fn ensure_tool_call_authorization_not_interrupted(
     outcome: &acp_thread::SelectedPermissionOutcome,
 ) -> Result<()> {
     if outcome.option_id.0.as_ref() == FOLLOW_UP_PERMISSION_DENIED_OPTION_ID {
-        Err(anyhow!(TOOL_CALL_INTERRUPTED_BY_FOLLOW_UP_MESSAGE))
+        Err(ToolPermissionDenied(TOOL_CALL_INTERRUPTED_BY_FOLLOW_UP_MESSAGE.to_owned()).into())
     } else {
         Ok(())
     }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct ToolPermissionDenied(String);
 
 fn auto_resolve_permission_outcome(
     options: &acp_thread::PermissionOptions,
@@ -2112,6 +2119,32 @@ impl Thread {
 
     pub fn thread_model(&self) -> &ThreadModel {
         &self.model
+    }
+
+    pub(crate) fn refresh_subscription_model(&mut self, cx: &mut Context<Self>) {
+        let Some(model) = self.model() else {
+            return;
+        };
+        let provider = language_models::provider::openai_subscribed::PROVIDER_ID;
+        if model.provider_id() != provider {
+            return;
+        }
+        let selection = SelectedModel {
+            provider,
+            model: model.id(),
+        };
+        let resolved = LanguageModelRegistry::global(cx)
+            .update(cx, |registry, cx| registry.select_model(&selection, cx));
+        if let Some(resolved) = resolved {
+            self.set_model(resolved.model, cx);
+        } else {
+            self.model = ThreadModel::Unresolved(selection);
+            self.prompt_capabilities_tx
+                .send(Self::prompt_capabilities(None))
+                .log_err();
+            cx.emit(ModelChanged);
+            cx.notify();
+        }
     }
 
     pub(crate) fn ensure_model(
@@ -3221,6 +3254,7 @@ impl Thread {
             let mut early_tool_results: Vec<(usize, LanguageModelToolResult)> = Vec::new();
             let mut cancelled = false;
             let mut had_refusal = false;
+            let mut terminal_completion_error = None;
             loop {
                 // Race between getting the first event, tool completion, and cancellation.
                 let first_event = futures::select! {
@@ -3311,7 +3345,10 @@ impl Thread {
                         had_refusal = true;
                         break;
                     }
-                    error = Some(err.downcast()?);
+                    match err.downcast() {
+                        Ok(provider_error) => error = Some(provider_error),
+                        Err(other) => terminal_completion_error = Some(other),
+                    }
                     break;
                 }
             }
@@ -3326,13 +3363,29 @@ impl Thread {
             // Drop streaming tool input senders that never received their final input.
             // This prevents deadlock when the LLM stream ends (e.g. because of an error)
             // before sending a tool use with `is_input_complete: true`.
+            let interrupted = this.update(cx, |this, _cx| {
+                let Some(turn) = this.running_turn.as_mut() else {
+                    return Vec::new();
+                };
+                turn.streaming_tool_inputs.clear();
+                let partial_tool_uses = std::mem::take(&mut turn.partial_tool_uses);
+                partial_tool_uses
+                    .into_values()
+                    .map(|(message_ix, tool_use)| {
+                        this.reject_tool_input(
+                            tool_use,
+                            message_ix,
+                            event_stream,
+                            "Input stream interrupted before the final arguments arrived".into(),
+                            Some((None, None)),
+                        )
+                    })
+                    .collect()
+            })?;
+            tool_results.extend(interrupted);
             this.update(cx, |this, _cx| {
-                if let Some(running_turn) = this.running_turn.as_mut() {
-                    if running_turn.streaming_tool_inputs.is_empty() {
-                        return;
-                    }
-                    log::warn!("Dropping partial tool inputs because the stream ended");
-                    running_turn.streaming_tool_inputs.drain();
+                if let Some(turn) = this.running_turn.as_mut() {
+                    turn.finish_tool_round(event_stream);
                 }
             })?;
 
@@ -3467,6 +3520,10 @@ impl Thread {
             if stop_for_grind_tool_failure {
                 log::debug!("Grind turn stopped after a tool failure");
                 return Ok(());
+            }
+
+            if let Some(error) = terminal_completion_error {
+                return Err(error);
             }
 
             if let Some(error) = error {
@@ -3815,8 +3872,6 @@ impl Thread {
                     raw_input,
                     json_parse_error,
                     event_stream,
-                    cancellation_rx,
-                    cx,
                 ));
             }
             UsageUpdate(usage) => {
@@ -3911,6 +3966,15 @@ impl Thread {
             kind = tool.kind();
         }
 
+        if let Some(turn) = self.running_turn.as_mut() {
+            if turn.finalized_tool_uses.contains(&tool_use.id) {
+                return None;
+            }
+            if tool_use.is_input_complete {
+                turn.partial_tool_uses.remove(&tool_use.id);
+                turn.finalized_tool_uses.insert(tool_use.id.clone());
+            }
+        }
         self.send_or_update_tool_use(&tool_use, title, kind, owning_message_ix, event_stream);
 
         let Some(tool) = tool else {
@@ -3958,8 +4022,8 @@ impl Thread {
         };
 
         if !tool_use.is_input_complete {
-            if tool.supports_input_streaming() {
-                let running_turn = self.running_turn.as_mut()?;
+            let running_turn = self.running_turn.as_mut()?;
+            if tool.supports_input_streaming() && !running_turn.is_correction_round {
                 if let Some(sender) = running_turn.streaming_tool_inputs.get_mut(&tool_use.id) {
                     sender.send_partial(input);
                     return None;
@@ -3970,6 +4034,9 @@ impl Thread {
                 running_turn
                     .streaming_tool_inputs
                     .insert(tool_use.id.clone(), sender);
+                running_turn
+                    .dispatched_tools
+                    .push((tool_use.name.clone(), None));
 
                 let tool = tool.clone();
                 log::debug!("Running streaming tool {}", tool_use.name);
@@ -3984,20 +4051,72 @@ impl Thread {
                     cx,
                 ));
             } else {
+                running_turn
+                    .partial_tool_uses
+                    .insert(tool_use.id.clone(), (owning_message_ix, tool_use));
                 return None;
             }
         }
 
+        let validation = tool.validate_input(&input);
         if let Some(mut sender) = self
             .running_turn
             .as_mut()?
             .streaming_tool_inputs
             .remove(&tool_use.id)
         {
-            sender.send_full(input);
+            match validation {
+                Ok(()) => sender.send_full(input),
+                Err(error) => sender.send_error(anyhow!(
+                    "Invalid arguments for `{}`: {}",
+                    tool_use.name,
+                    error.detail
+                )),
+            }
             return None;
         }
 
+        if let Some(turn) = self.running_turn.as_mut()
+            && turn.is_correction_round
+        {
+            let correction = turn
+                .corrections
+                .iter()
+                .position(|correction| correction.matches(&tool_use.name, &input));
+            if let Some(index) = correction
+                && !turn.was_dispatched_before_correction(&tool_use.name, &input)
+                && !turn
+                    .dispatched_tools
+                    .iter()
+                    .any(|(name, args)| name == &tool_use.name && args.as_ref() == Some(&input))
+            {
+                turn.corrections
+                    .remove(index)
+                    .update(event_stream, "Correction call received.");
+            } else {
+                return Some(self.reject_tool_input(
+                    tool_use,
+                    owning_message_ix,
+                    event_stream,
+                    "Call is outside the scope of the offered correction".into(),
+                    None,
+                ));
+            }
+        }
+        if let Err(error) = validation {
+            let detail = format!("Invalid arguments: {}", error.detail);
+            return Some(self.reject_tool_input(
+                tool_use,
+                owning_message_ix,
+                event_stream,
+                detail,
+                Some((Some(input), error.field)),
+            ));
+        }
+        if let Some(turn) = self.running_turn.as_mut() {
+            turn.dispatched_tools
+                .push((tool_use.name.clone(), Some(input.clone())));
+        }
         log::debug!("Running tool {}", tool_use.name);
         let tool_input = ToolInput::ready(input);
         Some(self.run_tool(
@@ -4009,6 +4128,57 @@ impl Thread {
             event_stream,
             cancellation_rx,
             cx,
+        ))
+    }
+
+    fn reject_tool_input(
+        &mut self,
+        tool_use: LanguageModelToolUse,
+        owning_message_ix: usize,
+        event_stream: &ThreadEventStream,
+        detail: String,
+        correction: Option<(Option<serde_json::Value>, Option<String>)>,
+    ) -> Task<(usize, LanguageModelToolResult)> {
+        let mut message = format!(
+            "`{}` input rejected. {detail}. Execution did not start.",
+            tool_use.name
+        );
+        let id = scoped_tool_call_id(owning_message_ix, &tool_use.id);
+        if let Some((input, field)) = correction
+            && let Some(turn) = self.running_turn.as_mut()
+            && !turn.is_correction_round
+            && turn
+                .offered_input_corrections
+                .insert((tool_use.name.clone(), input.clone()))
+        {
+            message.push_str(" Send one new tool call for this rejected call only. Correct the input and preserve the other arguments. Do not repeat other calls or respond with a promise to retry.");
+            turn.offered_corrections.push(ToolCorrection {
+                id: id.clone(),
+                name: tool_use.name.clone(),
+                input,
+                field,
+                message: message.clone(),
+            });
+        } else {
+            message.push_str(" No automatic correction is available.");
+        }
+        event_stream.update_tool_call_fields(
+            &id,
+            acp::ToolCallUpdateFields::new()
+                .kind(acp::ToolKind::Other)
+                .title(format!("{} · Rejected input", tool_use.name))
+                .content(vec![acp::ToolCallContent::from(message.clone())]),
+            None,
+        );
+        Task::ready((
+            owning_message_ix,
+            LanguageModelToolResult {
+                content: vec![message.clone().into()],
+                tool_use_id: tool_use.id,
+                tool_name: tool_use.name,
+                is_error: true,
+                output: Some(message.into()),
+            },
         ))
     }
 
@@ -4117,13 +4287,17 @@ impl Thread {
             self.sandbox_grants.clone(),
             Some(cx.weak_entity()),
         );
-        tool_event_stream.update_fields(
-            acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::InProgress),
-        );
+        if tool.reports_execution_start() {
+            tool_event_stream.execution.set(ToolExecution::NotStarted);
+        } else {
+            tool_event_stream.update_fields(
+                acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::InProgress),
+            );
+        }
         let supports_images = self.model().is_some_and(|model| model.supports_images());
-        let tool_result = tool.run(tool_input, tool_event_stream, cx);
+        let tool_result = tool.run(tool_input, tool_event_stream.clone(), cx);
         cx.foreground_executor().spawn(async move {
-            let (is_error, output) = match tool_result.await {
+            let (is_error, mut output) = match tool_result.await {
                 Ok(mut output) => {
                     let contains_image = output
                         .llm_output
@@ -4165,6 +4339,22 @@ impl Thread {
                 }
                 Err(output) => (true, output),
             };
+            if is_error {
+                let failure = if tool_event_stream.was_cancelled_by_user() {
+                    "Cancelled"
+                } else {
+                    tool_event_stream.failure.get().unwrap_or("Failed")
+                };
+                let execution = match tool_event_stream.execution.get() {
+                    ToolExecution::NotStarted => "Execution did not start.",
+                    ToolExecution::Started => "Execution started.",
+                    ToolExecution::Unconfirmed => "Execution start could not be confirmed.",
+                };
+                let summary = format!(
+                    "`{tool_name}` {failure}. {execution} No automatic correction is available.\n\n"
+                );
+                output.llm_output.insert(0, summary.into());
+            }
 
             (
                 owning_message_ix,
@@ -4186,10 +4376,14 @@ impl Thread {
         raw_input: Arc<str>,
         json_parse_error: String,
         event_stream: &ThreadEventStream,
-        cancellation_rx: watch::Receiver<bool>,
-        cx: &mut Context<Self>,
     ) -> Option<Task<(usize, LanguageModelToolResult)>> {
         let owning_message_ix = self.messages.len();
+        if let Some(turn) = self.running_turn.as_mut() {
+            if !turn.finalized_tool_uses.insert(tool_use_id.clone()) {
+                return None;
+            }
+            turn.partial_tool_uses.remove(&tool_use_id);
+        }
         let tool_use = LanguageModelToolUse {
             id: tool_use_id,
             name: tool_name,
@@ -4198,54 +4392,33 @@ impl Thread {
             is_input_complete: true,
             thought_signature: None,
         };
+        let tool = self.tool(tool_use.name.as_ref());
         self.send_or_update_tool_use(
             &tool_use,
             SharedString::from(&tool_use.name),
-            acp::ToolKind::Other,
+            tool.as_ref()
+                .map_or(acp::ToolKind::Other, |tool| tool.kind()),
             owning_message_ix,
             event_stream,
         );
 
-        let tool = self.tool(tool_use.name.as_ref());
-
-        let Some(tool) = tool else {
-            let content = format!("No tool named {} exists", tool_use.name);
-            return Some(Task::ready((
-                owning_message_ix,
-                LanguageModelToolResult {
-                    content: vec![LanguageModelToolResultContent::Text(Arc::from(content))],
-                    tool_use_id: tool_use.id,
-                    tool_name: tool_use.name,
-                    is_error: true,
-                    output: None,
-                },
-            )));
-        };
-
         let error_message = format!("Error parsing input JSON: {json_parse_error}");
 
-        if tool.supports_input_streaming()
-            && let Some(mut sender) = self
-                .running_turn
-                .as_mut()?
-                .streaming_tool_inputs
-                .remove(&tool_use.id)
+        if let Some(mut sender) = self
+            .running_turn
+            .as_mut()
+            .and_then(|turn| turn.streaming_tool_inputs.remove(&tool_use.id))
         {
             sender.send_invalid_json(error_message);
             return None;
         }
 
-        log::debug!("Running tool {}. Received invalid JSON", tool_use.name);
-        let tool_input = ToolInput::invalid_json(error_message);
-        Some(self.run_tool(
-            tool,
-            tool_input,
-            tool_use.id,
-            tool_use.name,
+        Some(self.reject_tool_input(
+            tool_use,
             owning_message_ix,
             event_stream,
-            cancellation_rx,
-            cx,
+            error_message,
+            tool.is_some().then_some((None, None)),
         ))
     }
 
@@ -5318,6 +5491,51 @@ struct RunningTurn {
     /// Senders for tools that support input streaming and have already been
     /// started but are still receiving input from the LLM.
     streaming_tool_inputs: HashMap<LanguageModelToolUseId, ToolInputSender>,
+    partial_tool_uses: HashMap<LanguageModelToolUseId, (usize, LanguageModelToolUse)>,
+    finalized_tool_uses: HashSet<LanguageModelToolUseId>,
+    offered_input_corrections: HashSet<(Arc<str>, Option<serde_json::Value>)>,
+    offered_corrections: Vec<ToolCorrection>,
+    corrections: Vec<ToolCorrection>,
+    is_correction_round: bool,
+    dispatched_tools: Vec<(Arc<str>, Option<serde_json::Value>)>,
+    protected_tool_inputs: Vec<(Arc<str>, Option<serde_json::Value>)>,
+}
+
+struct ToolCorrection {
+    id: acp::ToolCallId,
+    name: Arc<str>,
+    input: Option<serde_json::Value>,
+    field: Option<String>,
+    message: String,
+}
+
+impl ToolCorrection {
+    fn matches(&self, name: &str, corrected_input: &serde_json::Value) -> bool {
+        if self.name.as_ref() != name {
+            return false;
+        }
+        let Some(original) = self.input.as_ref().and_then(serde_json::Value::as_object) else {
+            return true;
+        };
+        original.iter().all(|(field, value)| {
+            Some(field) == self.field.as_ref() || corrected_input.get(field) == Some(value)
+        })
+    }
+
+    fn overlaps(&self, name: &str, dispatched_input: Option<&serde_json::Value>) -> bool {
+        self.name.as_ref() == name && dispatched_input.is_none_or(|input| self.matches(name, input))
+    }
+
+    fn update(&self, stream: &ThreadEventStream, outcome: &str) {
+        let content = format!("{}\n\n{outcome}", self.message);
+        stream.update_tool_call_fields(
+            &self.id,
+            acp::ToolCallUpdateFields::new()
+                .title(format!("{} · Rejected input · {outcome}", self.name))
+                .content(vec![acp::ToolCallContent::from(content)]),
+            None,
+        );
+    }
 }
 
 impl RunningTurn {
@@ -5333,7 +5551,51 @@ impl RunningTurn {
             tools,
             cancellation_tx,
             streaming_tool_inputs: HashMap::default(),
+            partial_tool_uses: HashMap::default(),
+            finalized_tool_uses: HashSet::default(),
+            offered_input_corrections: HashSet::default(),
+            offered_corrections: Vec::new(),
+            corrections: Vec::new(),
+            is_correction_round: false,
+            dispatched_tools: Vec::new(),
+            protected_tool_inputs: Vec::new(),
         }
+    }
+
+    fn was_dispatched_before_correction(&self, name: &str, input: &serde_json::Value) -> bool {
+        self.protected_tool_inputs
+            .iter()
+            .any(|(previous_name, previous_input)| {
+                previous_name.as_ref() == name
+                    && previous_input
+                        .as_ref()
+                        .is_none_or(|previous_input| previous_input == input)
+            })
+    }
+
+    fn finish_tool_round(&mut self, stream: &ThreadEventStream) {
+        for correction in self.corrections.drain(..) {
+            correction.update(
+                stream,
+                "No retry occurred. The model did not send a matching correction call.",
+            );
+        }
+        self.protected_tool_inputs = std::mem::take(&mut self.dispatched_tools);
+        self.offered_corrections.retain(|correction| {
+            let ambiguous = self.protected_tool_inputs.iter().any(|(name, input)| {
+                correction.overlaps(name, input.as_ref())
+            });
+            if ambiguous {
+                correction.update(stream, "No retry occurred. Another call to this tool may have executed in the same batch.");
+            }
+            !ambiguous
+        });
+        self.corrections = std::mem::take(&mut self.offered_corrections);
+        self.is_correction_round = !self.corrections.is_empty();
+        if !self.is_correction_round {
+            self.protected_tool_inputs.clear();
+        }
+        self.finalized_tool_uses.clear();
     }
 
     fn cancel(mut self) -> Task<()> {
@@ -5486,7 +5748,7 @@ impl EventEmitter<ModelChanged> for Thread {}
 /// For streaming tools, partial JSON snapshots arrive via `.recv_partial()` as the LLM streams
 /// them, followed by the final complete input available through `.recv()`.
 pub struct ToolInput<T> {
-    rx: mpsc::UnboundedReceiver<ToolInputPayload<serde_json::Value>>,
+    rx: mpsc::UnboundedReceiver<Result<ToolInputPayload<serde_json::Value>>>,
     _phantom: PhantomData<T>,
 }
 
@@ -5499,7 +5761,7 @@ impl<T: DeserializeOwned> ToolInput<T> {
 
     pub fn ready(value: serde_json::Value) -> Self {
         let (tx, rx) = mpsc::unbounded();
-        tx.unbounded_send(ToolInputPayload::Full(value)).ok();
+        tx.unbounded_send(Ok(ToolInputPayload::Full(value))).ok();
         Self {
             rx,
             _phantom: PhantomData,
@@ -5508,7 +5770,7 @@ impl<T: DeserializeOwned> ToolInput<T> {
 
     pub fn invalid_json(error_message: String) -> Self {
         let (tx, rx) = mpsc::unbounded();
-        tx.unbounded_send(ToolInputPayload::InvalidJson { error_message })
+        tx.unbounded_send(Ok(ToolInputPayload::InvalidJson { error_message }))
             .ok();
         Self {
             rx,
@@ -5525,8 +5787,8 @@ impl<T: DeserializeOwned> ToolInput<T> {
     /// Wait for the final deserialized input, ignoring all partial updates.
     /// Non-streaming tools can use this to wait until the whole input is available.
     pub async fn recv(mut self) -> Result<T> {
-        while let Ok(value) = self.next().await {
-            match value {
+        loop {
+            match self.next().await? {
                 ToolInputPayload::Full(value) => return Ok(value),
                 ToolInputPayload::Partial(_) => {}
                 ToolInputPayload::InvalidJson { error_message } => {
@@ -5534,15 +5796,12 @@ impl<T: DeserializeOwned> ToolInput<T> {
                 }
             }
         }
-        Err(anyhow!("tool input was not fully received"))
     }
 
     pub async fn next(&mut self) -> Result<ToolInputPayload<T>> {
-        let value = self
-            .rx
-            .next()
-            .await
-            .ok_or_else(|| anyhow!("tool input was not fully received"))?;
+        let value = self.rx.next().await.ok_or_else(|| {
+            anyhow!("Input stream interrupted before the final arguments arrived")
+        })??;
 
         Ok(match value {
             ToolInputPayload::Partial(payload) => ToolInputPayload::Partial(payload),
@@ -5571,7 +5830,7 @@ pub enum ToolInputPayload<T> {
 
 pub struct ToolInputSender {
     has_received_final: bool,
-    tx: mpsc::UnboundedSender<ToolInputPayload<serde_json::Value>>,
+    tx: mpsc::UnboundedSender<Result<ToolInputPayload<serde_json::Value>>>,
 }
 
 impl ToolInputSender {
@@ -5594,21 +5853,96 @@ impl ToolInputSender {
 
     pub fn send_partial(&mut self, payload: serde_json::Value) {
         self.tx
-            .unbounded_send(ToolInputPayload::Partial(payload))
+            .unbounded_send(Ok(ToolInputPayload::Partial(payload)))
             .ok();
     }
 
     pub fn send_full(&mut self, payload: serde_json::Value) {
         self.has_received_final = true;
-        self.tx.unbounded_send(ToolInputPayload::Full(payload)).ok();
+        self.tx
+            .unbounded_send(Ok(ToolInputPayload::Full(payload)))
+            .ok();
     }
 
     pub fn send_invalid_json(&mut self, error_message: String) {
         self.has_received_final = true;
         self.tx
-            .unbounded_send(ToolInputPayload::InvalidJson { error_message })
+            .unbounded_send(Ok(ToolInputPayload::InvalidJson { error_message }))
             .ok();
     }
+
+    fn send_error(&mut self, error: anyhow::Error) {
+        self.has_received_final = true;
+        self.tx.unbounded_send(Err(error)).ok();
+    }
+}
+
+pub struct InvalidToolArguments {
+    field: Option<String>,
+    detail: String,
+}
+
+struct LocalToolSchemaReferences;
+
+impl jsonschema::Retrieve for LocalToolSchemaReferences {
+    fn retrieve(
+        &self,
+        uri: &jsonschema::Uri<String>,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        Err(format!("External tool schema reference {uri} is unavailable").into())
+    }
+}
+
+pub(crate) fn validate_tool_schema(
+    schema: &serde_json::Value,
+    input: &serde_json::Value,
+) -> Result<(), InvalidToolArguments> {
+    use jsonschema::error::ValidationErrorKind;
+    let validator = jsonschema::options()
+        .with_retriever(LocalToolSchemaReferences)
+        .build(schema)
+        .map_err(|error| InvalidToolArguments {
+            field: None,
+            detail: format!("Could not read the tool input schema ({error})"),
+        })?;
+    validator.validate(input).map_err(|error| {
+        let instance_path = error.instance_path().as_str();
+        let property = match error.kind() {
+            ValidationErrorKind::Required { property } => property.as_str(),
+            ValidationErrorKind::AdditionalProperties { unexpected } if unexpected.len() == 1 => {
+                unexpected.first().map(String::as_str)
+            }
+            _ => None,
+        };
+        let path = match property {
+            Some(property) => {
+                let escaped = property.replace('~', "~0").replace('/', "~1");
+                format!("{instance_path}/{escaped}")
+            }
+            None => instance_path.to_owned(),
+        };
+        let field = path
+            .strip_prefix('/')
+            .and_then(|path| path.split('/').next())
+            .map(|field| field.replace("~1", "/").replace("~0", "~"));
+        let hint = error
+            .schema_path()
+            .as_str()
+            .rsplit_once('/')
+            .and_then(|(parent, _)| schema.pointer(parent))
+            .and_then(|parent| match property {
+                Some(property) => parent.get("properties")?.get(property),
+                None => Some(parent),
+            })
+            .and_then(|property| property.get("description"))
+            .and_then(serde_json::Value::as_str);
+        let location = if path.is_empty() { "arguments" } else { &path };
+        let mut detail = format!("{location}: {error}");
+        if let Some(hint) = hint {
+            detail.push_str(&format!(". {hint}"));
+        }
+        InvalidToolArguments { field, detail }
+    })
 }
 
 pub trait AgentTool
@@ -5646,6 +5980,10 @@ where
 
     /// Returns whether the tool supports streaming of tool use parameters.
     fn supports_input_streaming() -> bool {
+        false
+    }
+
+    fn reports_execution_start() -> bool {
         false
     }
 
@@ -5724,7 +6062,19 @@ pub trait AnyAgentTool {
     fn kind(&self) -> acp::ToolKind;
     fn initial_title(&self, input: serde_json::Value, _cx: &mut App) -> SharedString;
     fn input_schema(&self, format: LanguageModelToolSchemaFormat) -> Result<serde_json::Value>;
+    fn validate_input(&self, input: &serde_json::Value) -> Result<(), InvalidToolArguments> {
+        let schema = self
+            .input_schema(LanguageModelToolSchemaFormat::JsonSchema)
+            .map_err(|error| InvalidToolArguments {
+                field: None,
+                detail: error.to_string(),
+            })?;
+        validate_tool_schema(&schema, input)
+    }
     fn supports_input_streaming(&self) -> bool {
+        false
+    }
+    fn reports_execution_start(&self) -> bool {
         false
     }
     fn supports_provider(&self, _provider: &LanguageModelProviderId) -> bool {
@@ -5772,6 +6122,10 @@ where
         T::supports_input_streaming()
     }
 
+    fn reports_execution_start(&self) -> bool {
+        T::reports_execution_start()
+    }
+
     fn initial_title(&self, input: serde_json::Value, _cx: &mut App) -> SharedString {
         let parsed_input = serde_json::from_value(input.clone()).map_err(|_| input);
         self.0.initial_title(parsed_input, _cx)
@@ -5781,6 +6135,26 @@ where
         let mut json = serde_json::to_value(T::input_schema(format))?;
         language_model::tool_schema::adapt_schema_to_format(&mut json, format)?;
         Ok(json)
+    }
+
+    fn validate_input(&self, input: &serde_json::Value) -> Result<(), InvalidToolArguments> {
+        let Err(error) = serde_path_to_error::deserialize::<_, T::Input>(input) else {
+            return Ok(());
+        };
+        if let Ok(schema) =
+            serde_json::to_value(T::input_schema(LanguageModelToolSchemaFormat::JsonSchema))
+            && let Err(schema_error) = validate_tool_schema(&schema, input)
+        {
+            return Err(schema_error);
+        }
+        let field = match error.path().iter().next() {
+            Some(serde_path_to_error::Segment::Map { key }) => Some(key.clone()),
+            _ => None,
+        };
+        Err(InvalidToolArguments {
+            field,
+            detail: error.to_string(),
+        })
     }
 
     fn supports_provider(&self, provider: &LanguageModelProviderId) -> bool {
@@ -6021,6 +6395,13 @@ pub(crate) enum SandboxFallbackDecision {
     Deny,
 }
 
+#[derive(Clone, Copy)]
+enum ToolExecution {
+    NotStarted,
+    Started,
+    Unconfirmed,
+}
+
 #[derive(Clone)]
 pub struct ToolCallEventStream {
     tool_use_id: LanguageModelToolUseId,
@@ -6030,6 +6411,9 @@ pub struct ToolCallEventStream {
     stream: ThreadEventStream,
     fs: Option<Arc<dyn Fs>>,
     cancellation_rx: watch::Receiver<bool>,
+    execution: Rc<Cell<ToolExecution>>,
+    failure: Rc<Cell<Option<&'static str>>>,
+    working_directory: Rc<RefCell<Option<String>>>,
     /// Shared, thread-scoped sandbox grants (see [`Thread::sandbox_grants`]).
     sandbox_grants: Rc<RefCell<ThreadSandboxGrants>>,
     /// The owning thread, used to trigger a save when a "for this thread"
@@ -6118,6 +6502,9 @@ impl ToolCallEventStream {
             stream,
             fs,
             cancellation_rx,
+            execution: Rc::new(Cell::new(ToolExecution::Unconfirmed)),
+            failure: Rc::new(Cell::new(None)),
+            working_directory: Rc::new(RefCell::new(None)),
             sandbox_grants,
             thread,
         }
@@ -6181,6 +6568,34 @@ impl ToolCallEventStream {
     /// The ACP-facing id for this tool call (see [`scoped_tool_call_id`]).
     pub fn tool_call_id(&self) -> &acp::ToolCallId {
         &self.tool_call_id
+    }
+
+    pub(crate) fn set_working_directory(&self, working_directory: Option<&Path>) {
+        *self.working_directory.borrow_mut() =
+            working_directory.map(|path| path.display().to_string());
+    }
+
+    fn with_working_directory(&self, mut meta: acp::Meta) -> acp::Meta {
+        if let Some(directory) = self.working_directory.borrow().as_ref() {
+            meta.insert(
+                acp_thread::TOOL_WORKING_DIRECTORY_META_KEY.into(),
+                directory.clone().into(),
+            );
+        }
+        meta
+    }
+
+    pub(crate) fn mark_execution_started(&self) {
+        self.execution.set(ToolExecution::Started);
+    }
+
+    pub(crate) fn report_failure(&self, failure: &'static str) {
+        self.failure.set(Some(failure));
+    }
+
+    pub(crate) fn report_launch_failure(&self) {
+        self.report_failure("Launch failed");
+        self.execution.set(ToolExecution::Unconfirmed);
     }
 
     pub fn update_fields(&self, fields: acp::ToolCallUpdateFields) {
@@ -6425,6 +6840,9 @@ impl ToolCallEventStream {
             Ok(outcome) => outcome,
             Err(error) => return Task::ready(Err(error)),
         };
+        let meta = self.with_working_directory(acp_thread::meta_with_sandbox_authorization(
+            sandbox_authorization_details,
+        ));
         cx.spawn(async move |cx| {
             let (response_tx, mut response_rx) = oneshot::channel();
             if let Err(error) = stream
@@ -6437,9 +6855,7 @@ impl ToolCallEventStream {
                             // showing the command (matching the fallback flow).
                             acp::ToolCallUpdateFields::new(),
                         )
-                        .meta(acp_thread::meta_with_sandbox_authorization(
-                            sandbox_authorization_details,
-                        )),
+                        .meta(meta),
                         options,
                         response: response_tx,
                         context: None,
@@ -6545,6 +6961,8 @@ impl ToolCallEventStream {
         // which tears down the stream and turns the prompt into a phantom
         // decline.
         let tool_call_id = self.tool_call_id.clone();
+        let meta =
+            self.with_working_directory(acp_thread::meta_with_sandbox_authorization(details));
         cx.spawn(async move |_cx| {
             let (response_tx, response_rx) = oneshot::channel();
             if let Err(error) = stream
@@ -6558,7 +6976,7 @@ impl ToolCallEventStream {
                             // flow).
                             acp::ToolCallUpdateFields::new(),
                         )
-                        .meta(acp_thread::meta_with_sandbox_authorization(details)),
+                        .meta(meta),
                         options,
                         response: response_tx,
                         context: None,
@@ -6820,6 +7238,9 @@ impl ToolCallEventStream {
         let tool_call_id = self.tool_call_id.clone();
         let sandbox_grants = self.sandbox_grants.clone();
         let thread = self.thread.clone();
+        let meta = self.with_working_directory(
+            acp_thread::meta_with_sandbox_fallback_authorization(details),
+        );
         cx.spawn(async move |cx| {
             let (response_tx, response_rx) = oneshot::channel();
             if let Err(error) = stream
@@ -6835,9 +7256,7 @@ impl ToolCallEventStream {
                             tool_call_id.clone(),
                             acp::ToolCallUpdateFields::new(),
                         )
-                        .meta(
-                            acp_thread::meta_with_sandbox_fallback_authorization(details),
-                        ),
+                        .meta(meta),
                         options,
                         response: response_tx,
                         context: None,
@@ -7139,8 +7558,16 @@ impl ToolCallEventStream {
             cx,
         );
         let stream = self.stream.clone();
+        let failure = self.failure.clone();
         cx.spawn(async move |_| {
             let result = operation.await;
+            if let Err(error) = &result {
+                failure.set(Some(if error.is::<ToolPermissionDenied>() {
+                    "Permission denied"
+                } else {
+                    "Permission check failed"
+                }));
+            }
             if let Err(error) = &result
                 && let Some(policy) = scan_policy
             {
@@ -7202,7 +7629,7 @@ impl ToolCallEventStream {
             match check(cx) {
                 ToolPermissionDecision::Allow => return Task::ready(Ok(())),
                 ToolPermissionDecision::Deny(reason) => {
-                    return Task::ready(Err(anyhow!(reason)));
+                    return Task::ready(Err(ToolPermissionDenied(reason).into()));
                 }
                 ToolPermissionDecision::Confirm => {}
             }
@@ -7211,6 +7638,7 @@ impl ToolCallEventStream {
         let fs = self.fs.clone();
         let stream = self.stream.clone();
         let tool_call_id = self.tool_call_id.clone();
+        let meta = self.with_working_directory(acp::Meta::default());
         let auto_resolution_outcomes = if check_settings.is_some() {
             match (
                 auto_resolve_permission_outcome(&options, true),
@@ -7224,14 +7652,18 @@ impl ToolCallEventStream {
         };
         cx.spawn(async move |cx| {
             let (response_tx, mut response_rx) = oneshot::channel();
+            let mut tool_call = acp::ToolCallUpdate::new(
+                tool_call_id.clone(),
+                acp::ToolCallUpdateFields::new().title(title),
+            );
+            if !meta.is_empty() {
+                tool_call = tool_call.meta(meta);
+            }
             if let Err(error) = stream
                 .0
                 .unbounded_send(Ok(ThreadEvent::ToolCallAuthorization(
                     ToolCallAuthorization {
-                        tool_call: acp::ToolCallUpdate::new(
-                            tool_call_id.clone(),
-                            acp::ToolCallUpdateFields::new().title(title),
-                        ),
+                        tool_call,
                         options,
                         response: response_tx,
                         context,
@@ -7280,7 +7712,7 @@ impl ToolCallEventStream {
                         if once_only
                             && let ToolPermissionDecision::Deny(reason) = cx.update(|cx| check_settings(cx))
                         {
-                            return Err(anyhow!(reason));
+                            return Err(ToolPermissionDenied(reason).into());
                         }
                         return Self::persist_permission_outcome(&outcome, fs.clone(), once_only, cx);
                     }
@@ -7305,7 +7737,7 @@ impl ToolCallEventStream {
                                     &tool_call_id,
                                     auto_deny_outcome.clone(),
                                 );
-                                return Err(anyhow!(reason));
+                                return Err(ToolPermissionDenied(reason).into());
                             }
                             ToolPermissionDecision::Confirm => continue,
                         }
@@ -7334,7 +7766,8 @@ impl ToolCallEventStream {
             return Ok(());
         }
 
-        let err = || Err(anyhow!("Permission to run tool denied by user"));
+        let err =
+            || Err(ToolPermissionDenied("Permission to run tool denied by user".into()).into());
 
         let always_permission = option_id
             .strip_prefix("always_allow:")
@@ -10835,11 +11268,9 @@ mod tests {
         let raw_input: Arc<str> = Arc::from("{invalid json");
         let json_parse_error = "expected value at line 1 column 1".to_string();
 
-        let (_cancellation_tx, cancellation_rx) = watch::channel(false);
-
         let (_owning_message_ix, result) = cx
             .update(|cx| {
-                thread.update(cx, |thread, cx| {
+                thread.update(cx, |thread, _cx| {
                     // Call the function under test
                     thread
                         .handle_tool_use_json_parse_error_event(
@@ -10848,8 +11279,6 @@ mod tests {
                             raw_input.clone(),
                             json_parse_error,
                             &event_stream,
-                            cancellation_rx,
-                            cx,
                         )
                         .unwrap()
                 })

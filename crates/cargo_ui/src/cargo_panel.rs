@@ -210,7 +210,40 @@ impl CargoTreeProvider {
                 activation_label: Some("Open Cargo.toml".to_owned()),
             });
         }
-        let status = if roots.is_empty() && snapshot.failures.is_empty() {
+        let status = if !snapshot.omitted.is_empty() {
+            use project::cargo_workspace::{
+                MAX_CARGO_DISCOVERY_CANDIDATES, MAX_CARGO_SNAPSHOT_ENTRIES,
+            };
+            let mut messages = Vec::new();
+            for (label, count, limit) in [
+                (
+                    "Manifest discovery",
+                    snapshot.omitted.candidates,
+                    MAX_CARGO_DISCOVERY_CANDIDATES,
+                ),
+                (
+                    "Workspace",
+                    snapshot.omitted.workspaces,
+                    MAX_CARGO_SNAPSHOT_ENTRIES,
+                ),
+                (
+                    "Failed manifest",
+                    snapshot.omitted.failures,
+                    MAX_CARGO_SNAPSHOT_ENTRIES,
+                ),
+            ] {
+                if count > 0 {
+                    messages.push(format!(
+                        "{label} limit ({limit}) reached. Omitted {count} entries."
+                    ));
+                }
+            }
+            messages.push(
+                "Open a smaller project folder or exclude generated directories, then refresh."
+                    .to_string(),
+            );
+            LanguageToolProviderStatus::Partial(messages.join(" "))
+        } else if roots.is_empty() && snapshot.failures.is_empty() {
             LanguageToolProviderStatus::Empty(
                 "No Cargo.toml files were found in visible worktrees.".to_string(),
             )
@@ -2443,6 +2476,7 @@ mod tests {
         CargoWorkspaceSnapshot {
             revision: 1,
             input_fingerprint: 1,
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Complete,
             failures: Vec::new(),
             workspaces: vec![CargoWorkspaceModel {
@@ -4131,6 +4165,7 @@ mod tests {
         let mut current = CargoWorkspaceSnapshot {
             revision: 2,
             input_fingerprint: 2,
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Partial,
             workspaces: Vec::new(),
             failures: vec![CargoCandidateFailure {
@@ -4149,6 +4184,7 @@ mod tests {
             CargoWorkspaceSnapshot {
                 revision: 3,
                 input_fingerprint: 3,
+                omitted: Default::default(),
                 completeness: CargoSnapshotCompleteness::Complete,
                 workspaces: Vec::new(),
                 failures: Vec::new(),

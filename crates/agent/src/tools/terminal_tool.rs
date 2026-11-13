@@ -53,7 +53,7 @@ pub struct TerminalToolInput {
     ///
     /// REMINDER: read-only git commands (`git log`, `git diff`, `git show`, `git blame`) MUST include `--no-pager` (e.g. `git --no-pager log`). Prefer `git --no-optional-locks status` over `git status` to avoid optional metadata writes. Git commands that may open an editor (`git rebase`, `git commit`, `git merge`, `git tag`) MUST be prefixed with `GIT_EDITOR=true ` (e.g. `GIT_EDITOR=true git rebase origin/main`). Otherwise the terminal will hang.
     pub command: String,
-    /// Working directory: a project root directory or any subdirectory of one, given by name or absolute path. E.g. `my-project/src`, `/home/user/my-project`, or on Windows `my-project\src` or `C:\Users\me\my-project`.
+    /// Working directory. Use `.` for the project root, or give a project root or subdirectory by name or absolute path.
     pub cd: String,
     /// Optional maximum runtime (in milliseconds). If exceeded, the running terminal task is killed.
     pub timeout_ms: Option<u64>,
@@ -95,7 +95,7 @@ pub struct SandboxedTerminalToolInput {
     ///
     /// REMINDER: read-only git commands (`git log`, `git diff`, `git show`, `git blame`) MUST include `--no-pager` (e.g. `git --no-pager log`). Prefer `git --no-optional-locks status` over `git status` to avoid optional metadata writes. Git commands that may open an editor (`git rebase`, `git commit`, `git merge`, `git tag`) MUST be prefixed with `GIT_EDITOR=true ` (e.g. `GIT_EDITOR=true git rebase origin/main`). Otherwise the terminal will hang.
     pub command: String,
-    /// Working directory: a project root directory or any subdirectory of one, given by name or absolute path. E.g. `my-project/src`, `/home/user/my-project`, or on Windows `my-project\src` or `C:\Users\me\my-project`.
+    /// Working directory. Use `.` for the project root, or give a project root or subdirectory by name or absolute path.
     pub cd: String,
     /// Optional maximum runtime (in milliseconds). If exceeded, the running terminal task is killed.
     pub timeout_ms: Option<u64>,
@@ -296,6 +296,10 @@ impl AgentTool for TerminalTool {
 
     const NAME: &'static str = "terminal";
 
+    fn reports_execution_start() -> bool {
+        true
+    }
+
     fn allow_in_recipe_scan() -> bool {
         true
     }
@@ -341,6 +345,10 @@ impl AgentTool for SandboxedTerminalTool {
     type Output = String;
 
     const NAME: &'static str = "sandboxed_terminal";
+
+    fn reports_execution_start() -> bool {
+        true
+    }
 
     fn kind() -> acp::ToolKind {
         acp::ToolKind::Execute
@@ -432,8 +440,11 @@ async fn run_terminal_tool(
             event_stream
                 .check_recipe_scan_project(&project, cx)
                 .map_err(|error| error.to_string())?;
-            let working_dir =
-                working_dir(&input.cd, &project, cx).map_err(|err| err.to_string())?;
+            let working_dir = working_dir(&input.cd, &project, cx).map_err(|error| {
+                event_stream.report_failure("Invalid working directory");
+                error.to_string()
+            })?;
+            event_stream.set_working_directory(working_dir.as_deref());
             let context =
                 crate::ToolPermissionContext::new(TerminalTool::NAME, vec![input.command.clone()]);
             let authorize =
@@ -675,7 +686,8 @@ async fn run_terminal_tool(
         {
             // Carry the underlying error so a prompt-delivery failure is
             // distinguishable from a genuine user abort.
-            return Ok(format!(
+            event_stream.report_failure("Permission denied");
+            return Err(format!(
                 "Command cancelled: the user declined to run a command whose sandbox writes to a Windows drive ({error})."
             ));
         }
@@ -697,12 +709,13 @@ async fn run_terminal_tool(
         let approve =
             cx.update(|cx| event_stream.authorize_sandbox(request.clone(), reason.to_string(), cx));
         if let Err(error) = approve.await {
+            event_stream.report_failure("Permission denied");
             if want_unsandboxed {
-                return Ok(format!(
+                return Err(format!(
                     "Command cancelled: user denied permission to run outside the sandbox ({error})."
                 ));
             }
-            return Ok(format!(
+            return Err(format!(
                 "Command cancelled: user denied the requested sandbox permissions ({error})."
             ));
         }
@@ -808,7 +821,8 @@ async fn run_terminal_tool(
                             break None;
                         }
                         Ok(SandboxFallbackDecision::Deny) | Err(_) => {
-                            return Ok(format!(
+                            event_stream.report_failure("Sandbox approval declined");
+                            return Err(format!(
                                 "Command cancelled: the sandbox could not be created ({}) and \
                                  the user declined to run it without one.",
                                 error.user_facing_message()
@@ -867,6 +881,9 @@ async fn run_terminal_tool(
         let mut retries = 0usize;
         let mut effective_wrap = sandbox_wrap.clone();
         loop {
+            if event_stream.was_cancelled_by_user() {
+                return Err("Command cancelled before launch.".into());
+            }
             let error = match environment
                 .create_terminal(
                     input.command.clone(),
@@ -894,6 +911,7 @@ async fn run_terminal_tool(
                         _ => None,
                     })
             }) else {
+                event_stream.report_launch_failure();
                 return Err(format!("{error:#}"));
             };
             let sandbox_error = acp_thread::LinuxWslSandboxError::Other(message);
@@ -923,7 +941,8 @@ async fn run_terminal_tool(
                     effective_wrap = None;
                 }
                 Ok(SandboxFallbackDecision::Deny) | Err(_) => {
-                    return Ok(format!(
+                    event_stream.report_failure("Sandbox approval declined");
+                    return Err(format!(
                         "Command cancelled: the sandbox could not be created ({}) and the \
                          user declined to run it without one.",
                         sandbox_error.user_facing_message()
@@ -933,17 +952,26 @@ async fn run_terminal_tool(
         }
     };
     #[cfg(not(target_os = "windows"))]
-    let terminal = environment
-        .create_terminal(
-            input.command.clone(),
-            extra_env,
-            working_dir.clone(),
-            output_byte_limit,
-            sandbox_wrap.clone(),
-            cx,
-        )
-        .await
-        .map_err(|e| format!("{e:#}"))?;
+    let terminal = {
+        if event_stream.was_cancelled_by_user() {
+            return Err("Command cancelled before launch.".into());
+        }
+        environment
+            .create_terminal(
+                input.command.clone(),
+                extra_env,
+                working_dir.clone(),
+                output_byte_limit,
+                sandbox_wrap.clone(),
+                cx,
+            )
+            .await
+            .map_err(|error| {
+                event_stream.report_launch_failure();
+                format!("{error:#}")
+            })?
+    };
+    event_stream.mark_execution_started();
 
     // When sandboxing was active but the command ran without a sandbox (a
     // settings opt-out, a thread grant, or a sandbox-creation failure the user
@@ -988,9 +1016,11 @@ async fn run_terminal_tool(
     });
 
     let terminal_id = terminal.id(cx).map_err(|e| e.to_string())?;
-    let fields = acp::ToolCallUpdateFields::new().content(vec![acp::ToolCallContent::Terminal(
-        acp::Terminal::new(terminal_id),
-    )]);
+    let fields = acp::ToolCallUpdateFields::new()
+        .status(acp::ToolCallStatus::InProgress)
+        .content(vec![acp::ToolCallContent::Terminal(acp::Terminal::new(
+            terminal_id,
+        ))]);
     if let Some(reason) = &sandbox_not_applied {
         event_stream.update_fields_with_meta(
             fields,
@@ -1006,31 +1036,31 @@ async fn run_terminal_tool(
     let mut user_stopped_via_signal = false;
     let wait_for_exit = terminal.wait_for_exit(cx).map_err(|e| e.to_string())?;
 
-    match timeout {
+    let exit_status = match timeout {
         Some(timeout) => {
             let timeout_task = cx.background_executor().timer(timeout);
 
             futures::select! {
-                _ = wait_for_exit.clone().fuse() => {},
+                status = wait_for_exit.clone().fuse() => status,
                 _ = timeout_task.fuse() => {
                     timed_out = true;
                     terminal.kill(cx).map_err(|e| e.to_string())?;
-                    wait_for_exit.await;
+                    wait_for_exit.await
                 }
                 _ = event_stream.cancelled_by_user().fuse() => {
                     user_stopped_via_signal = true;
                     terminal.kill(cx).map_err(|e| e.to_string())?;
-                    wait_for_exit.await;
+                    wait_for_exit.await
                 }
             }
         }
         None => {
             futures::select! {
-                _ = wait_for_exit.clone().fuse() => {},
+                status = wait_for_exit.clone().fuse() => status,
                 _ = event_stream.cancelled_by_user().fuse() => {
                     user_stopped_via_signal = true;
                     terminal.kill(cx).map_err(|e| e.to_string())?;
-                    wait_for_exit.await;
+                    wait_for_exit.await
                 }
             }
         }
@@ -1040,7 +1070,12 @@ async fn run_terminal_tool(
     let user_stopped_via_terminal = terminal.was_stopped_by_user(cx).unwrap_or(false);
     let user_stopped = user_stopped_via_signal || user_stopped_via_terminal;
 
-    let output = terminal.current_output(cx).map_err(|e| e.to_string())?;
+    let mut output = terminal.current_output(cx).map_err(|e| e.to_string())?;
+    if output.exit_status.is_none()
+        && (exit_status.exit_code.is_some() || exit_status.signal.is_some())
+    {
+        output.exit_status = Some(exit_status);
+    }
 
     let failed = timed_out
         || user_stopped
@@ -1064,15 +1099,21 @@ async fn run_terminal_tool(
         .map_err(|error| error.to_string())?;
     }
     let result = process_content(output, &input.command, timed_out, user_stopped, selection);
-    if isolated && failed {
-        return Err(result);
-    }
-    let notes = sandbox_note.into_iter().collect::<Vec<_>>();
-    Ok(if notes.is_empty() {
+    let result = if failed {
         result
     } else {
-        format!("{}\n\n{result}", notes.join("\n\n"))
-    })
+        format!("Command exited with code 0.\n\n{result}")
+    };
+    let result = match sandbox_note {
+        Some(note) => format!("{note}\n\n{result}"),
+        None => result,
+    };
+    if user_stopped {
+        event_stream.report_failure("Cancelled");
+    } else if timed_out {
+        event_stream.report_failure("Timed out");
+    }
+    if failed { Err(result) } else { Ok(result) }
 }
 
 /// Resolve model-requested write paths into absolute paths.
@@ -1355,13 +1396,21 @@ fn process_content(
                 }
             }
             None => {
-                if is_empty {
-                    "Command terminated unexpectedly. No output was captured.".to_string()
+                let reason = if let Some(signal) = output
+                    .exit_status
+                    .as_ref()
+                    .and_then(|status| status.signal.as_deref())
+                {
+                    format!("Command terminated by signal {signal} without an exit code.")
+                } else if output.exit_status.is_none() {
+                    "The terminal ended without reporting an exit status.".to_string()
                 } else {
-                    format!(
-                        "Command terminated unexpectedly. Output captured:\n\n{}",
-                        content
-                    )
+                    "The terminal reported neither an exit code nor a signal.".to_string()
+                };
+                if is_empty {
+                    format!("{reason} No output was captured.")
+                } else {
+                    format!("{reason} Output captured:\n\n{content}")
                 }
             }
         }
@@ -2115,8 +2164,8 @@ mod tests {
         );
 
         assert!(
-            result.contains("terminated unexpectedly"),
-            "Expected 'terminated unexpectedly' message, got: {}",
+            result.contains("ended without reporting an exit status"),
+            "Expected 'ended without reporting an exit status' message, got: {}",
             result
         );
         assert!(
@@ -2139,8 +2188,8 @@ mod tests {
         );
 
         assert!(
-            result.contains("terminated unexpectedly"),
-            "Expected 'terminated unexpectedly' message, got: {}",
+            result.contains("ended without reporting an exit status"),
+            "Expected 'ended without reporting an exit status' message, got: {}",
             result
         );
         assert!(
@@ -2468,7 +2517,10 @@ mod tests {
         );
 
         let result = task.await.expect("terminal command should succeed");
-        assert_eq!(result, "```\none\n\nfive\n```");
+        assert_eq!(
+            result,
+            "Command exited with code 0.\n\n```\none\n\nfive\n```"
+        );
         assert_eq!(environment.terminal_output_limits(), vec![None]);
     }
 
@@ -2517,7 +2569,10 @@ mod tests {
 
         rx.expect_update_fields().await;
         let result = task.await.expect("terminal command should succeed");
-        assert_eq!(result, "```\ncommand output\n```");
+        assert_eq!(
+            result,
+            "Command exited with code 0.\n\n```\ncommand output\n```"
+        );
         assert_eq!(
             environment.terminal_output_limits(),
             vec![Some(COMMAND_OUTPUT_LIMIT)]
@@ -3379,7 +3434,7 @@ mod tests {
 
         let result = task
             .await
-            .expect("denied sandbox request returns model-readable output");
+            .expect_err("denied sandbox request returns model-readable error");
         assert!(result.contains("user denied the requested sandbox permissions"));
         assert_eq!(environment.terminal_creation_count(), 0);
     }
@@ -3476,7 +3531,7 @@ mod tests {
 
         let result = task
             .await
-            .expect("denied sandbox request returns model-readable output");
+            .expect_err("denied sandbox request returns model-readable error");
         assert!(result.contains("user denied permission to run outside the sandbox"));
         assert_eq!(environment.terminal_creation_count(), 0);
     }
@@ -3601,7 +3656,7 @@ mod tests {
             .expect("authorization response should send");
         let result = task2
             .await
-            .expect("denied sandbox request returns model-readable output");
+            .expect_err("denied sandbox request returns model-readable error");
         assert!(result.contains("user denied the requested sandbox permissions"));
         assert_eq!(environment2.terminal_creation_count(), 0);
     }

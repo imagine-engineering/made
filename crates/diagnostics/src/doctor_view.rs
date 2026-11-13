@@ -2887,6 +2887,9 @@ impl DoctorView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
+        if !feature_flags::FeatureFlagAppExt::has_flag::<feature_flags::CopperDoctor>(&**cx) {
+            return;
+        }
         workspace.reveal_center_pane(window, cx);
         let view = if let Some(view) = workspace.item_of_type::<Self>(cx) {
             workspace.activate_item(&view, true, true, window, cx);
@@ -8502,7 +8505,7 @@ mod tests {
         }
     }
     use super::*;
-    use gpui::{TestAppContext, VisualTestContext};
+    use gpui::{TestAppContext, UpdateGlobal as _, VisualTestContext};
 
     #[cfg(all(feature = "agentic", feature = "rust-tools", feature = "jvm-tools"))]
     #[gpui::test]
@@ -8524,6 +8527,15 @@ mod tests {
             cx.update(|cx| {
                 editor::init(cx);
                 crate::init(cx);
+                feature_flags::FeatureFlagStore::init(cx);
+                settings::SettingsStore::update_global(cx, |store, cx| {
+                    store.update_user_settings(cx, |content| {
+                        content
+                            .feature_flags
+                            .get_or_insert_default()
+                            .insert("copper-doctor".into(), "on".into());
+                    });
+                });
                 cx.set_global(history.clone());
             });
             let workspace = window
@@ -9405,6 +9417,15 @@ mod tests {
         cx.update(|cx| {
             editor::init(cx);
             crate::init(cx);
+            feature_flags::FeatureFlagStore::init(cx);
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |content| {
+                    content
+                        .feature_flags
+                        .get_or_insert_default()
+                        .insert("copper-doctor".into(), "on".into());
+                });
+            });
             cx.set_global(history.clone());
         });
         let workspace = window

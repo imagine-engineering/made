@@ -76,6 +76,7 @@ use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Utc};
 use collections::{HashMap, HashSet, IndexMap};
 
+use feature_flags::FeatureFlagAppExt as _;
 use fs::Fs;
 use futures::channel::{mpsc, oneshot};
 use futures::future::Shared;
@@ -964,6 +965,24 @@ impl NativeAgent {
                 })
                 .unwrap_or_default();
             let subscriptions = vec![
+                {
+                    let mut enabled = (
+                        cx.has_flag::<feature_flags::CopperDoctor>(),
+                        cx.has_flag::<feature_flags::CopperSchedules>(),
+                    );
+                    cx.observe_global::<settings::SettingsStore>(move |this: &mut Self, cx| {
+                        let current = (
+                            cx.has_flag::<feature_flags::CopperDoctor>(),
+                            cx.has_flag::<feature_flags::CopperSchedules>(),
+                        );
+                        if current != enabled {
+                            enabled = current;
+                            for project_id in this.projects.keys().copied() {
+                                this.update_available_commands_for_project(project_id, cx);
+                            }
+                        }
+                    })
+                },
                 cx.observe_global::<SkillIndex>(move |this: &mut Self, cx| {
                     let current_paths = cx
                         .global::<SkillIndex>()
@@ -1838,9 +1857,14 @@ impl NativeAgent {
         let registry = LanguageModelRegistry::read_global(cx);
         let default_model = registry.default_model().map(|m| m.model);
         let summarization_model = registry.thread_summary_model(cx).map(|m| m.model);
+        let subscription_changed = matches!(event, language_model::Event::ProviderStateChanged(id)
+            if id == &language_models::provider::openai_subscribed::PROVIDER_ID);
 
         for session in self.sessions.values_mut() {
             session.thread.update(cx, |thread, cx| {
+                if subscription_changed {
+                    thread.refresh_subscription_model(cx);
+                }
                 thread.ensure_model(default_model.as_ref(), cx);
 
                 if let Some(model) = summarization_model.clone() {
@@ -1973,18 +1997,26 @@ impl NativeAgent {
         let Some(state) = project_state else {
             return Vec::new();
         };
-        let native_commands = NATIVE_COMMANDS.iter().map(|definition| {
-            let command = acp::AvailableCommand::new(definition.name, definition.description).meta(
-                acp_thread::meta_with_command_category(acp_thread::CommandCategory::Native),
-            );
-            if let Some(input_hint) = definition.input_hint {
-                command.input(acp::AvailableCommandInput::Unstructured(
-                    acp::UnstructuredCommandInput::new(input_hint),
-                ))
-            } else {
-                command
-            }
-        });
+        let native_commands = NATIVE_COMMANDS
+            .iter()
+            .filter(|definition| match definition.name {
+                "doctor" => cx.has_flag::<feature_flags::CopperDoctor>(),
+                "schedules" => cx.has_flag::<feature_flags::CopperSchedules>(),
+                _ => true,
+            })
+            .map(|definition| {
+                let command = acp::AvailableCommand::new(definition.name, definition.description)
+                    .meta(acp_thread::meta_with_command_category(
+                        acp_thread::CommandCategory::Native,
+                    ));
+                if let Some(input_hint) = definition.input_hint {
+                    command.input(acp::AvailableCommandInput::Unstructured(
+                        acp::UnstructuredCommandInput::new(input_hint),
+                    ))
+                } else {
+                    command
+                }
+            });
 
         let registry = state.context_server_registry.read(cx);
 
@@ -3787,6 +3819,20 @@ impl acp_thread::AgentModelSelector for NativeAgentModelSelector {
     fn should_render_footer(&self) -> bool {
         true
     }
+
+    fn model_discovery_status(&self, cx: &App) -> Option<language_model::ModelDiscoveryStatus> {
+        LanguageModelRegistry::read_global(cx)
+            .provider(&language_models::provider::openai_subscribed::PROVIDER_ID)?
+            .model_discovery_status(cx)
+    }
+
+    fn retry_model_discovery(&self, cx: &mut App) {
+        if let Some(provider) = LanguageModelRegistry::read_global(cx)
+            .provider(&language_models::provider::openai_subscribed::PROVIDER_ID)
+        {
+            provider.refresh_models(cx);
+        }
+    }
 }
 
 fn model_id_to_selection(model_id: &AgentModelId, cx: &App) -> LanguageModelSelection {
@@ -4060,6 +4106,11 @@ impl acp_thread::AgentSessionClientUserMessageIds for NativeAgentConnection {
                 )));
             }
             if parsed_command.is_unqualified("doctor") {
+                if !cx.has_flag::<feature_flags::CopperDoctor>() {
+                    return Task::ready(Err(anyhow!(
+                        "/doctor is disabled. Enable the copper-doctor feature flag to use it."
+                    )));
+                }
                 if !parsed_command.arg_value.trim().is_empty() {
                     return Task::ready(Err(anyhow!("Usage: /doctor")));
                 }
@@ -4090,6 +4141,11 @@ impl acp_thread::AgentSessionClientUserMessageIds for NativeAgentConnection {
                 });
             }
             if parsed_command.is_unqualified("schedules") {
+                if !cx.has_flag::<feature_flags::CopperSchedules>() {
+                    return Task::ready(Err(anyhow!(
+                        "/schedules is disabled. Enable the copper-schedules feature flag to use it."
+                    )));
+                }
                 let Some(store) = recipes::RecipeStore::try_global(cx) else {
                     return Task::ready(Err(anyhow!("Schedule management is unavailable")));
                 };
@@ -5178,9 +5234,9 @@ mod internal_tests {
     use agent_settings::COMPACTION_PROMPT;
     use context_server::test::FakeTransport;
     use context_server::{ContextServer, types as mcp};
-    use feature_flags::{AcpBetaFeatureFlag, FeatureFlag as _, FeatureFlagAppExt as _};
+    use feature_flags::{AcpBetaFeatureFlag, FeatureFlag as _};
     use fs::FakeFs;
-    use gpui::{BorrowAppContext as _, TestAppContext};
+    use gpui::{BorrowAppContext as _, TestAppContext, UpdateGlobal as _};
     use indoc::formatdoc;
     use language_model::fake_provider::{FakeLanguageModel, FakeLanguageModelProvider};
     use language_model::{
@@ -5509,6 +5565,13 @@ mod internal_tests {
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
+        cx.update(|cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store
+                    .set_user_settings(r#"{"feature_flags":{"copper-doctor":"on"}}"#, cx)
+                    .expect("enable Doctor");
+            });
+        });
         let (connection, agent, project, restricted) = setup_native_agent_session(cx).await;
         let session_id = restricted.read_with(cx, |thread, _| thread.session_id().clone());
         let ordinary = cx
@@ -5768,6 +5831,13 @@ mod internal_tests {
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
+        cx.update(|cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store
+                    .set_user_settings(r#"{"feature_flags":{"copper-doctor":"on"}}"#, cx)
+                    .expect("enable Doctor");
+            });
+        });
         let (connection, agent, project, thread) = setup_native_agent_session(cx).await;
         let session = thread.read_with(cx, |thread, _| thread.session_id().clone());
         let model = Arc::new(FakeLanguageModel::default());
@@ -5889,6 +5959,13 @@ mod internal_tests {
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
+        cx.update(|cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store
+                    .set_user_settings(r#"{"feature_flags":{"copper-doctor":"on"}}"#, cx)
+                    .expect("enable Doctor");
+            });
+        });
         let (connection, agent, _, thread) = setup_native_agent_session(cx).await;
         let session = thread.read_with(cx, |thread, _| thread.session_id().clone());
         assert!(
@@ -5925,6 +6002,13 @@ mod internal_tests {
         cx: &mut TestAppContext,
     ) {
         init_test(cx);
+        cx.update(|cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store
+                    .set_user_settings(r#"{"feature_flags":{"copper-doctor":"on"}}"#, cx)
+                    .expect("enable Doctor");
+            });
+        });
         let (connection, agent, _, thread) = setup_native_agent_session(cx).await;
         let session = thread.read_with(cx, |thread, _| thread.session_id().clone());
         cx.run_until_parked();
@@ -5967,6 +6051,75 @@ mod internal_tests {
     }
 
     #[gpui::test]
+    async fn copper_opt_in_commands_are_hidden_and_reject_direct_invocation(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        let (connection, agent, project, thread) = setup_native_agent_session(cx).await;
+        let session = thread.read_with(cx, |thread, _| thread.session_id().clone());
+        let _doctor = cx.update(|cx| {
+            cx.subscribe(&agent, |_, request: &DoctorOpenRequest, _| {
+                request.complete(Ok(()))
+            })
+        });
+        cx.run_until_parked();
+        for command in ["/doctor", "/schedules", "/schedules create"] {
+            let error = send_native_command_for_test(&connection, &session, command, cx)
+                .await
+                .expect_err("disabled native command should be rejected");
+            assert!(error.to_string().contains("is disabled"), "{error}");
+        }
+        assert!(thread.read_with(cx, |thread, _| {
+            thread
+                .available_commands()
+                .iter()
+                .all(|command| !matches!(command.name.as_str(), "doctor" | "schedules"))
+        }));
+
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store
+                    .set_user_settings(
+                        r#"{"feature_flags":{"copper-doctor":"on","copper-schedules":"on"}}"#,
+                        cx,
+                    )
+                    .expect("enable Copper commands");
+            });
+            recipes::RecipeStore::init_global(cx);
+        });
+        let store = cx.update(|cx| recipes::RecipeStore::try_global(cx).expect("recipe store"));
+        let opened = Rc::new(std::cell::Cell::new(false));
+        let _schedules = cx.update(|cx| {
+            let opened = opened.clone();
+            cx.subscribe(&store, move |_, event, _| {
+                if let recipes::RecipeStoreEvent::Manage {
+                    project: requested, ..
+                } = event
+                {
+                    assert_eq!(requested, &project);
+                    opened.set(true);
+                }
+            })
+        });
+        cx.run_until_parked();
+        assert!(
+            thread.read_with(cx, |thread, _| ["doctor", "schedules"].iter().all(|name| {
+                thread
+                    .available_commands()
+                    .iter()
+                    .any(|command| command.name.as_str() == *name)
+            }))
+        );
+        send_native_command_for_test(&connection, &session, "/doctor", cx)
+            .await
+            .expect("Doctor opens");
+        send_native_command_for_test(&connection, &session, "/schedules", cx)
+            .await
+            .expect("Schedules opens");
+        assert!(opened.get());
+    }
+
+    #[gpui::test]
     async fn test_native_commands_are_available(cx: &mut TestAppContext) {
         init_test(cx);
         let fs = FakeFs::new(cx.executor());
@@ -6001,8 +6154,6 @@ mod internal_tests {
             assert_eq!(
                 native_commands,
                 vec![
-                    "doctor",
-                    "schedules",
                     "recipes",
                     "compact",
                     "clear",
@@ -13484,6 +13635,13 @@ mod internal_tests {
                 recipe_schedule::RecipeRunStatus::Cancelled
             );
         });
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store
+                    .set_user_settings(r#"{"feature_flags":{"copper-schedules":"on"}}"#, cx)
+                    .expect("enable schedule commands");
+            });
+        });
         let command_session_id =
             command_session.read_with(cx, |session, _| session.session_id().clone());
         model.end_completion_stream(&cancelled_request);
@@ -13582,6 +13740,7 @@ mod internal_tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            feature_flags::FeatureFlagStore::init(cx);
 
             LanguageModelRegistry::test(cx);
         });
