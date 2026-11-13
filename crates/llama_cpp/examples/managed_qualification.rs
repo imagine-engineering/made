@@ -1,7 +1,9 @@
 use anyhow::{Context as _, Result, ensure};
 use futures::{AsyncReadExt as _, FutureExt as _};
 use http_client::{AsyncBody, HttpClient as _, Method, Request};
-use llama_cpp::managed::{Hardware, ManagedRuntime, ManagedStore, catalog};
+use llama_cpp::managed::{
+    DecodingMode, Hardware, LoadOptions, ManagedRuntime, ManagedStore, catalog,
+};
 use std::{
     path::PathBuf,
     sync::{
@@ -73,7 +75,10 @@ fn main() -> Result<()> {
             model,
             &store.model_path(model)?,
             store.root(),
-            action == "infer-cpu",
+            LoadOptions {
+                cpu_only: action == "infer-cpu",
+                decoding: DecodingMode::Standard,
+            },
         )?;
         let local_http = reqwest_client::ReqwestClient::loopback()?;
         runtime.wait_ready(&local_http, qualification_timer).await?;

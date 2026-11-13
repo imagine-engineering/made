@@ -25,6 +25,37 @@ Capacity recommendations include full weights, the displayed context's FP16 KV c
 
 The manually managed server path below remains available through **Use my existing server**.
 
+### JetBrains Qwen3.8–3.6–27B Blend
+
+Copper lists the publisher's Q4_K_M and lower-memory IQ3_S GGUFs as optional text models. Both use a 16,384-token context with an estimated 1.00 GiB FP16 attention KV cache. Q4_K_M requires a 15.66 GiB download and an estimated 20.57 GiB at runtime. IQ3_S requires an 11.74 GiB download and an estimated 15.67 GiB at runtime. Copper budgets a further 1 GiB of system memory for either model. The runtime estimate includes the weights and overhead for recurrent state and other runtime buffers. Native-agent qualification is pending. [JetBrains model card and attribution](https://huggingface.co/JetBrains/Qwen3.8-3.6-27B-blend-GGUF/blob/e5d856b7430523bc465cbd07c78ac4bc0913a8c3/README.md#license-and-attribution)
+
+### Underdog Saluki 27B 1.0
+
+Choose **Download** next to **Underdog Saluki 27B 1.0 (IQ2-mix)** to obtain the publisher's text GGUF. The download is 7.36 GiB. Copper estimates 10.19 GiB at runtime, including a 1.00 GiB FP16 attention KV cache at 16,384 tokens. Copper budgets a further 1 GiB of system memory. Native-agent qualification is pending.
+
+The publisher offers the weights under CC BY-NC 4.0. Commercial use is subject to separate terms from ConwayResearch. The embedded GGUF metadata describes the Apache-licensed upstream model. [Publisher license and attribution](https://huggingface.co/ConwayResearch/Underdog-Saluki-27B-1.0/blob/442e28ec9d89d9e732ddea2f0b9e017db20730a8/README.md#credits-and-license)
+
+### Unsloth Qwen3.8-27B
+
+Copper offers Unsloth's UD-Q4_K_M and lower-memory UD-IQ3_S text GGUFs at 16,384 tokens. The estimates below use Copper's standard decoding mode. Each runtime estimate includes the weights, 1.00 GiB of FP16 attention KV cache, and runtime overhead.
+
+| Variant | Download | Estimated runtime | Available memory required with 1 GiB reserve |
+| --- | ---: | ---: | ---: |
+| UD-Q4_K_M | 15.43 GiB | 20.28 GiB | 21.28 GiB |
+| UD-IQ3_S | 11.21 GiB | 15.02 GiB | 16.02 GiB |
+
+Both files contain an embedded Multi-Token Prediction (MTP) head. In **Local Models**, toggle **Experimental MTP · Live inference unverified** for the variant you want to try. The toggle applies on the next load or reload and starts off each session, including when Copper restores a saved default. The setup summary shows which decoding mode is running. If an MTP load fails, **Retry with standard decoding** turns off MTP for that model and retries. MTP uses the same GGUF download. [Unsloth model card and license](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/blob/4af51b3542f775b0a8e4b310bfb3f17e01c306c9/README.md)
+
+Copper adds a 1 GiB MTP allowance on top of the standard estimate and keeps the separate 1 GiB system reserve. That brings estimated available memory required to 22.28 GiB for UD-Q4_K_M and 17.02 GiB for UD-IQ3_S. Allocation-free Metal probes on a 32 GiB Apple M5 initialized both embedded draft contexts on b11669 and estimated roughly 606 MiB of additional buffers per model. The 1 GiB allowance rounds that estimate up for unmeasured runtime variation and counts the GGUF weights once. Full-weight inference, draft-token acceptance, and native-agent behavior are unverified.
+
+#### Qualify standard decoding and MTP
+
+1. On a machine that clears the estimate and disk check, download one variant through Copper. Record its catalog SHA-256, the bundled runtime's `--version` output (expected build b11669, revision `620d2225cc436ab0b001e3200e590e3b286ef9ab`), hardware, backend, and available memory. Use the same verified file and backend for both modes.
+2. For the benchmark, start the bundled `llama-server` on a private loopback port with `--host 127.0.0.1 --port <port> --offline --jinja --parallel 1 --ctx-size 16384 --reasoning off --reasoning-budget 0 --slots --metrics --model <verified-gguf>`. Set a temporary `LLAMA_API_KEY` and use it as a bearer token in requests. For standard decoding add `--spec-type none`. For MTP add `--spec-type draft-mtp --spec-draft-n-max 2`. On the MTP run, confirm `GET /slots` shows `speculative: true` and `n_ctx: 16384` on slot 0. Compare `GET /props`'s `chat_template` SHA-256 with the catalog's `runtime_template_sha256`.
+3. In each mode, send the same text prompts to `POST /v1/chat/completions` with `stream: true`, `cache_prompt: false`, and fixed sampling settings and output limits. For example, use temperature 0, seed 42, and a 256-token limit for a code explanation and a code generation prompt. Alternate modes across at least three runs, restarting the server for equivalent cache state. Measure time from request start to the first SSE event with generated text. Record generation tokens per second from the runtime timing summary and peak process memory (on macOS, wrap the server in `/usr/bin/time -l` and record peak memory footprint after shutdown). Keep measured memory distinct from the preflight estimate.
+4. Record the before/after deltas from `GET /metrics` for `llamacpp:spec_decode_num_draft_tokens_total` and `llamacpp:spec_decode_num_accepted_tokens_total`. Record accepted divided by drafted for MTP and verify accepted is greater than zero. Report the median latency and generation speed for each mode.
+5. In Copper, use **Load** or **Reload with selected decoding** and confirm the running mode. For each mode, start a fresh native-agent conversation in a disposable copy of the same project. Ask the agent to search for a known symbol, read its file, and fix a deliberately failing test. Deny one proposed tool call and verify it has no effect. Approve the edit and test run, then verify the diff and test output. Check that responses stream, cancel a separate long response after text appears, and confirm a new request succeeds. With external networking disconnected, restart Copper and repeat inference using the downloaded model. Re-enable Experimental MTP for the offline MTP run.
+
 ## llama.cpp {#llama-cpp}
 
 Use [llama.cpp](https://llama.app) and its built-in server for local models with Zed Agent, Inline Assistant, and similar model-backed Zed AI features.
