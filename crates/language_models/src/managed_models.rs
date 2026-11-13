@@ -4,7 +4,8 @@ use futures::FutureExt as _;
 use gpui::{App, AppContext as _, Context, Entity, Global, Render, Task};
 use http_client::HttpClient;
 use llama_cpp::managed::{
-    Catalog, Hardware, ManagedRuntime, ManagedStore, ModelArtifact, ModelState, catalog, gib,
+    Catalog, DecodingMode, Hardware, LoadOptions, ManagedRuntime, ManagedStore, ModelArtifact,
+    ModelState, catalog, gib,
 };
 use settings::{LanguageModelSelection, Settings, update_settings_file};
 use std::{
@@ -38,6 +39,7 @@ pub struct ManagedModels {
     polling: Option<Task<()>>,
     busy_model: Option<String>,
     cpu_only: bool,
+    decoding: ModelDecoding,
     selected_model: Option<String>,
     expanded_models: BTreeSet<String>,
     hardware_details: bool,
@@ -79,6 +81,7 @@ pub fn init(http: Arc<dyn HttpClient>, cx: &mut App) {
             polling: None,
             busy_model: None,
             cpu_only: !cfg!(all(target_os = "macos", target_arch = "aarch64")),
+            decoding: ModelDecoding::default(),
             selected_model: None,
             expanded_models: BTreeSet::new(),
             hardware_details: false,
@@ -86,6 +89,82 @@ pub fn init(http: Arc<dyn HttpClient>, cx: &mut App) {
     });
     cx.set_global(ManagedModelsGlobal(entity.clone()));
     entity.update(cx, |this, cx| this.initialize(cx));
+}
+
+#[derive(Default)]
+struct ModelDecoding {
+    mtp_enabled: BTreeSet<String>,
+    failed_mtp_loads: BTreeMap<String, bool>,
+}
+
+impl ModelDecoding {
+    fn next(&self, model: &ModelArtifact) -> DecodingMode {
+        if model.experimental_mtp_memory_mib.is_some() && self.mtp_enabled.contains(&model.id) {
+            DecodingMode::ExperimentalMtp
+        } else {
+            DecodingMode::Standard
+        }
+    }
+
+    fn toggle(&mut self, model: &ModelArtifact) {
+        match self.next(model) {
+            DecodingMode::ExperimentalMtp => {
+                self.mtp_enabled.remove(&model.id);
+            }
+            DecodingMode::Standard if model.experimental_mtp_memory_mib.is_some() => {
+                self.mtp_enabled.insert(model.id.clone());
+            }
+            DecodingMode::Standard => {}
+        }
+        self.failed_mtp_loads.remove(&model.id);
+    }
+
+    fn retry_standard(&mut self, model_id: &str) -> Option<bool> {
+        let select_default = self.failed_mtp_loads.remove(model_id)?;
+        self.mtp_enabled.remove(model_id);
+        Some(select_default)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Context as _;
+
+    #[test]
+    fn saved_model_starts_in_standard_and_retry_clears_only_its_mtp_opt_in() -> anyhow::Result<()> {
+        let catalog = catalog()?;
+        let model = |id| {
+            catalog
+                .models
+                .iter()
+                .find(|model| model.id == id)
+                .context("Missing test model")
+        };
+        let first = model("unsloth-qwen3-8-27b-ud-q4-k-m")?;
+        let second = model("unsloth-qwen3-8-27b-ud-iq3-s")?;
+        let other = model("qwen3-4b-q4-k-m")?;
+        let saved_model_id = first.id.clone();
+
+        let mut decoding = ModelDecoding::default();
+        assert_eq!(
+            decoding.next(model(&saved_model_id)?),
+            DecodingMode::Standard
+        );
+        decoding.toggle(first);
+        assert_eq!(decoding.next(second), DecodingMode::Standard);
+        decoding.toggle(second);
+        decoding.toggle(other);
+        assert_eq!(decoding.next(other), DecodingMode::Standard);
+
+        decoding.failed_mtp_loads.insert(first.id.clone(), true);
+        assert_eq!(decoding.retry_standard(&first.id), Some(true));
+        assert_eq!(decoding.next(first), DecodingMode::Standard);
+        assert_eq!(decoding.next(second), DecodingMode::ExperimentalMtp);
+        assert_eq!(decoding.retry_standard(&first.id), None);
+        assert_eq!(ModelDecoding::default().next(first), DecodingMode::Standard);
+        Ok(())
+    }
 }
 
 pub fn global(cx: &App) -> Entity<ManagedModels> {
@@ -343,11 +422,12 @@ impl ManagedModels {
             return;
         }
         self.selected_model = Some(model.id.clone());
+        let decoding = self.decoding.next(&model);
         if select_default
             && self
                 .runtime
                 .as_ref()
-                .is_some_and(|runtime| runtime.model_id == model.id)
+                .is_some_and(|runtime| runtime.model_id == model.id && runtime.decoding == decoding)
             && self.endpoint.is_some()
         {
             Self::persist_default(model.id, cx);
@@ -358,7 +438,10 @@ impl ManagedModels {
             return;
         };
         let http = self.http.clone();
-        let cpu_only = self.cpu_only;
+        let options = LoadOptions {
+            cpu_only: self.cpu_only,
+            decoding,
+        };
         let Some(local_http) = self.local_http.clone() else {
             self.error = Some("Direct local inference transport is unavailable. Restart Copper and retry; no proxy fallback was used.".into());
             cx.notify();
@@ -372,6 +455,7 @@ impl ManagedModels {
         self.cancelled = Arc::new(AtomicBool::new(false));
         let cancelled = self.cancelled.clone();
         self.busy_model = Some(model.id.clone());
+        self.decoding.failed_mtp_loads.remove(&model.id);
         self.states.insert(model.id.clone(), ModelState::Loading);
         let id = model.id.clone();
         let executor = cx.background_executor().clone();
@@ -382,7 +466,7 @@ impl ManagedModels {
                     &model,
                     http.as_ref(),
                     local_http.as_ref(),
-                    cpu_only,
+                    options,
                     cancelled,
                     move |duration| executor.timer(duration).boxed(),
                 )
@@ -419,8 +503,14 @@ impl ManagedModels {
                         }
                     }
                     Err(error) => {
+                        if decoding == DecodingMode::ExperimentalMtp {
+                            this.decoding
+                                .failed_mtp_loads
+                                .insert(id.clone(), select_default);
+                        }
                         this.states
                             .insert(id, ModelState::Failed(format!("{error:#}")));
+                        this.refresh_hardware(cx);
                     }
                 }
                 cx.notify();
@@ -428,6 +518,14 @@ impl ManagedModels {
             .log_err();
         }));
         cx.notify();
+    }
+
+    fn retry_standard(&mut self, model: ModelArtifact, cx: &mut Context<Self>) {
+        if self.operation.is_none()
+            && let Some(select_default) = self.decoding.retry_standard(&model.id)
+        {
+            self.load(model, select_default, cx);
+        }
     }
 
     fn remove(&mut self, model: ModelArtifact, cx: &mut Context<Self>) {
@@ -456,6 +554,7 @@ impl ManagedModels {
                 match result {
                     Ok(()) => {
                         this.downloaded.remove(&id);
+                        this.decoding.failed_mtp_loads.remove(&id);
                         this.states.insert(id, ModelState::NotDownloaded);
                     }
                     Err(error) => {
@@ -494,7 +593,8 @@ impl Render for ManagedModels {
         let loaded = self
             .runtime
             .as_ref()
-            .map(|runtime| runtime.model_id.clone());
+            .map(|runtime| runtime.model_id.as_str());
+        let running_decoding = self.runtime.as_ref().map(|runtime| runtime.decoding);
         let name_for = |id: Option<&str>| {
             self.catalog
                 .as_ref()
@@ -513,17 +613,23 @@ impl Render for ManagedModels {
                     .models
                     .iter()
                     .filter(|model| {
+                        let decoding = self.decoding.next(model);
+                        let is_loaded = loaded == Some(model.id.as_str());
+                        if is_loaded && running_decoding != Some(decoding) {
+                            return false;
+                        }
                         hardware
                             .recommendation(
                                 model,
                                 !self.downloaded.contains(&model.id),
-                                loaded.as_deref() == Some(&model.id),
+                                is_loaded,
                                 self.cpu_only,
+                                decoding,
                             )
                             .level
                             == RecommendationLevel::Recommended
                     })
-                    .min_by_key(|model| model.estimated_memory_bytes())
+                    .min_by_key(|model| model.estimated_memory_for(self.decoding.next(model)))
                     .map(|model| model.name.clone())
             })
         });
@@ -542,7 +648,9 @@ impl Render for ManagedModels {
                     .get(&model.id)
                     .cloned()
                     .unwrap_or(ModelState::NotDownloaded);
-                let is_loaded = loaded.as_deref() == Some(model.id.as_str());
+                let is_loaded = loaded == Some(model.id.as_str());
+                let decoding = self.decoding.next(&model);
+                let reload_for_decoding = is_loaded && running_decoding != Some(decoding);
                 let is_default = saved_default.as_deref() == Some(model.id.as_str());
                 let is_selected = self.selected_model.as_deref() == Some(model.id.as_str());
                 let downloaded = self.downloaded.contains(&model.id);
@@ -589,7 +697,9 @@ impl Render for ManagedModels {
                     actions = actions.child(
                         Button::new(
                             ("load-local", index),
-                            if is_loaded {
+                            if reload_for_decoding {
+                                "Reload with selected decoding"
+                            } else if is_loaded {
                                 "Loaded"
                             } else if matches!(state, ModelState::Failed(_)) {
                                 "Retry load"
@@ -598,7 +708,7 @@ impl Render for ManagedModels {
                             },
                         )
                         .style(ButtonStyle::Outlined)
-                        .disabled(busy || is_loaded)
+                        .disabled(busy || (is_loaded && !reload_for_decoding))
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.load(load.clone(), false, cx)),
                         ),
@@ -621,6 +731,20 @@ impl Render for ManagedModels {
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.load(select.clone(), true, cx)),
                         ),
+                    );
+                }
+                if downloaded
+                    && matches!(state, ModelState::Failed(_))
+                    && self.decoding.failed_mtp_loads.contains_key(&model.id)
+                {
+                    let retry = model.clone();
+                    actions = actions.child(
+                        Button::new(("retry-standard", index), "Retry with standard decoding")
+                            .style(ButtonStyle::Outlined)
+                            .disabled(busy)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.retry_standard(retry.clone(), cx);
+                            })),
                     );
                 }
                 if matches!(state, ModelState::Ready | ModelState::Active) {
@@ -655,9 +779,19 @@ impl Render for ManagedModels {
                             .on_click(cx.listener(|this, _, _, cx| this.cancel(cx))),
                     );
                 }
-                let recommendation = self.hardware.as_ref().map(|hardware| {
-                    hardware.recommendation(&model, !downloaded, is_loaded, self.cpu_only)
-                });
+                let recommendation =
+                    self.hardware
+                        .as_ref()
+                        .filter(|_| !reload_for_decoding)
+                        .map(|hardware| {
+                            hardware.recommendation(
+                                &model,
+                                !downloaded,
+                                is_loaded,
+                                self.cpu_only,
+                                decoding,
+                            )
+                        });
                 let expanded = self.expanded_models.contains(&model.id);
                 let detail_id = model.id.clone();
                 let selected_id = model.id.clone();
@@ -699,7 +833,7 @@ impl Render for ManagedModels {
                                             "{} · {:.2} GiB download · ~{:.1} GiB runtime",
                                             model.quantization,
                                             gib(model.bytes),
-                                            gib(model.estimated_memory_bytes())
+                                            gib(model.estimated_memory_for(decoding))
                                         ))
                                         .size(LabelSize::Small)
                                         .color(Color::Muted),
@@ -735,6 +869,45 @@ impl Render for ManagedModels {
                                     ),
                             ),
                     )
+                    .when(model.experimental_mtp_memory_mib.is_some(), |row| {
+                        let model = model.clone();
+                        row.child(
+                            h_flex()
+                                .gap_2()
+                                .flex_wrap()
+                                .child(
+                                    Button::new(
+                                        ("experimental-mtp", index),
+                                        "Experimental MTP · Live inference unverified",
+                                    )
+                                    .style(ButtonStyle::Outlined)
+                                    .toggle_state(decoding == DecodingMode::ExperimentalMtp)
+                                    .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                                    .disabled(busy)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.decoding.toggle(&model);
+                                            cx.notify();
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    Label::new(format!(
+                                        "Next load (this session): {}",
+                                        decoding.label()
+                                    ))
+                                    .size(LabelSize::Small),
+                                ),
+                        )
+                    })
+                    .when(reload_for_decoding, |row| {
+                        row.child(
+                            Label::new(
+                                "Copper checks available memory after unloading the current model.",
+                            )
+                            .size(LabelSize::Small),
+                        )
+                    })
                     .when_some(recommendation, |row, recommendation| {
                         row.child(
                             Label::new(format!(
@@ -781,9 +954,12 @@ impl Render for ManagedModels {
                         v_flex().gap_1().p_2().bg(cx.theme().colors().element_background)
                             .child(Label::new(format!("{} · {} bytes", model.filename, model.bytes)).size(LabelSize::Small))
                             .child(Label::new(format!(
-                                "Context: {} tokens (model limit {}). Estimated memory: {:.2} GiB weights + {:.2} GiB FP16 KV cache + {:.2} GiB runtime overhead. The 1 GiB system reserve is additional.",
+                                "Context: {} tokens (model limit {}). Standard runtime estimate: {:.2} GiB weights + {:.2} GiB FP16 KV cache + {:.2} GiB runtime overhead. The 1 GiB system reserve is additional.",
                                 model.context_tokens, model.training_context, gib(model.bytes), gib(model.kv_cache_bytes()), gib(model.runtime_overhead_bytes())
                             )).size(LabelSize::Small))
+                            .when(model.experimental_mtp_memory_mib.is_some(), |details| {
+                                details.child(Label::new(format!("Experimental MTP adds an estimated {:.2} GiB of memory and uses the embedded draft head.", gib(model.mtp_memory_bytes()))).size(LabelSize::Small))
+                            })
                             .child(Label::new(format!("Publisher: {} · revision {} · license {}", model.repository, model.revision, model.license)).size(LabelSize::Small))
                             .when_some(model.attribution.clone(), |details, attribution| {
                                 details.child(Label::new(attribution).size(LabelSize::Small))
@@ -812,7 +988,7 @@ impl Render for ManagedModels {
         let summary = v_flex().gap_1().p_3().border_1().rounded_md()
             .border_color(cx.theme().colors().border_variant)
             .child(Label::new(format!("Selected backend preference (this session): {backend}")))
-            .child(Label::new(format!("Loaded: {} · Runtime mode: {runtime_backend} · Persisted local default: {}", name_for(loaded.as_deref()), name_for(saved_default.as_deref()))).size(LabelSize::Small))
+            .child(Label::new(format!("Loaded: {} · Runtime backend: {runtime_backend} · Running decoding: {} · Persisted local default: {}", name_for(loaded), running_decoding.map_or("None", DecodingMode::label), name_for(saved_default.as_deref()))).size(LabelSize::Small))
             .child(Label::new(format!("Native-agent default: {native_default_display} · Suggested starting model: {}", suggested.unwrap_or_else(|| "No model has comfortable estimated capacity; review warnings below".to_owned()))).size(LabelSize::Small))
             .when_some(self.hardware.as_ref(), |view, hardware| view.child(Label::new(hardware.summary()).size(LabelSize::Small)))
             .child(h_flex().gap_2().flex_wrap()

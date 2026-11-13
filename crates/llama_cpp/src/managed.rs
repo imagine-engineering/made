@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    io::Read as _,
+    io::{Read as _, Seek as _, SeekFrom},
     net::TcpListener,
     path::{Path, PathBuf},
     sync::{
@@ -53,6 +53,8 @@ pub struct ModelArtifact {
     pub revision: String,
     pub filename: String,
     pub quantization: String,
+    #[serde(default)]
+    pub experimental_mtp_memory_mib: Option<std::num::NonZeroU64>,
     pub bytes: u64,
     pub sha256: String,
     pub license: String,
@@ -154,6 +156,60 @@ impl ModelArtifact {
             .saturating_add(self.kv_cache_bytes())
             .saturating_add(self.runtime_overhead_bytes())
     }
+
+    pub fn mtp_memory_bytes(&self) -> u64 {
+        self.experimental_mtp_memory_mib
+            .map_or(0, |mib| mib.get().saturating_mul(1024 * 1024))
+    }
+
+    pub fn estimated_memory_for(&self, decoding: DecodingMode) -> u64 {
+        let allowance = match decoding {
+            DecodingMode::Standard => 0,
+            DecodingMode::ExperimentalMtp => self.mtp_memory_bytes(),
+        };
+        self.estimated_memory_bytes().saturating_add(allowance)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DecodingMode {
+    #[default]
+    Standard,
+    ExperimentalMtp,
+}
+
+impl DecodingMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "Standard decoding",
+            Self::ExperimentalMtp => "Experimental MTP",
+        }
+    }
+
+    fn arguments(self, model: &ModelArtifact) -> Result<&'static [&'static str]> {
+        match self {
+            Self::Standard => Ok(&["--spec-type", "none"]),
+            Self::ExperimentalMtp => {
+                ensure!(
+                    model.experimental_mtp_memory_mib.is_some(),
+                    "Experimental MTP is unavailable for this model"
+                );
+                Ok(&[
+                    "--spec-type",
+                    "draft-mtp",
+                    "--spec-draft-n-max",
+                    "2",
+                    "--slots",
+                ])
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct LoadOptions {
+    pub cpu_only: bool,
+    pub decoding: DecodingMode,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,6 +317,7 @@ impl Hardware {
         needs_download: bool,
         loaded: bool,
         cpu_only: bool,
+        decoding: DecodingMode,
     ) -> ModelRecommendation {
         let result = |level, reason| ModelRecommendation { level, reason };
         if let Some(warning) = &self.runtime_warning {
@@ -278,10 +335,11 @@ impl Hardware {
         }
         // A running model has already allocated its memory; charging its weights again
         // against the remaining available memory would report a false load failure.
+        let estimated = model.estimated_memory_for(decoding);
         let required = if loaded {
             GIB
         } else {
-            model.estimated_memory_bytes().saturating_add(GIB)
+            estimated.saturating_add(GIB)
         };
         if required > self.available_memory {
             return result(
@@ -311,7 +369,7 @@ impl Hardware {
             && !cpu_only
             && !self.unified_memory
             && let Some(free) = self.gpu_memory
-            && model.estimated_memory_bytes() > free
+            && estimated > free
         {
             return result(
                 RecommendationLevel::LimitedHeadroom,
@@ -322,7 +380,7 @@ impl Hardware {
             );
         }
         let headroom = self.available_memory.saturating_sub(required);
-        let level = if headroom < GIB.max(model.estimated_memory_bytes() / 5) {
+        let level = if headroom < GIB.max(estimated / 5) {
             RecommendationLevel::LimitedHeadroom
         } else {
             RecommendationLevel::Recommended
@@ -348,12 +406,15 @@ impl Hardware {
         )
     }
 
-    pub fn ensure_memory(&self, model: &ModelArtifact) -> Result<()> {
+    pub fn ensure_memory(&self, model: &ModelArtifact, decoding: DecodingMode) -> Result<()> {
+        let required = model.estimated_memory_for(decoding).saturating_add(GIB);
         ensure!(
-            model.estimated_memory_bytes().saturating_add(GIB) <= self.available_memory,
-            "Not enough available memory for this model at {} tokens. Choose a smaller model or close applications; estimated {:.1} GiB plus 1 GiB system reserve is required.",
+            required <= self.available_memory,
+            "{} at {} tokens requires an estimated {:.2} GiB including the 1 GiB system reserve. {:.2} GiB is currently available.",
+            decoding.label(),
             model.context_tokens,
-            gib(model.estimated_memory_bytes())
+            gib(required),
+            gib(self.available_memory),
         );
         Ok(())
     }
@@ -640,11 +701,13 @@ impl ManagedStore {
         model: &ModelArtifact,
         http: &dyn HttpClient,
         local_http: &dyn HttpClient,
-        cpu_only: bool,
+        options: LoadOptions,
         cancelled: Arc<AtomicBool>,
         timer: impl Fn(Duration) -> futures::future::BoxFuture<'static, ()>,
     ) -> Result<(ManagedRuntime, Hardware, Option<String>)> {
         ensure_host_runtime_compatibility()?;
+        options.decoding.arguments(model)?;
+        Hardware::detect(&self.root)?.ensure_memory(model, options.decoding)?;
         self.check_receipt(model)?;
         verify_file_cancellable(
             &self.model_path(model)?,
@@ -653,14 +716,15 @@ impl ManagedStore {
             true,
             Some(&cancelled),
         )?;
-        Hardware::detect(&self.root)?.ensure_memory(model)?;
         let mut warning = None;
-        let attempts = if cpu_only {
-            vec![true]
+        let attempts: &[bool] = if options.cpu_only {
+            &[true]
+        } else if options.decoding == DecodingMode::ExperimentalMtp {
+            &[false]
         } else {
-            vec![false, true]
+            &[false, true]
         };
-        for cpu_only in attempts {
+        for &cpu_only in attempts {
             ensure!(
                 !cancelled.load(Ordering::Relaxed),
                 "Model loading cancelled"
@@ -686,7 +750,10 @@ impl ManagedStore {
                     model,
                     &self.model_path(model)?,
                     &self.root,
-                    cpu_only,
+                    LoadOptions {
+                        cpu_only,
+                        ..options
+                    },
                 )?;
                 runtime.wait_ready(local_http, &timer).await?;
                 let current_capacity = Hardware::detect(&self.root)?;
@@ -697,14 +764,15 @@ impl ManagedStore {
             .await;
             match attempt {
                 Ok((runtime, hardware)) => return Ok((runtime, hardware, warning)),
-                Err(error) if !cpu_only => {
+                Err(error) if !cpu_only && options.decoding == DecodingMode::Standard => {
                     warning = Some(format!(
                         "Acceleration could not load this model; using the reviewed CPU fallback. Details: {error:#}"
                     ))
                 }
                 Err(error) => {
-                    return Err(error
-                        .context(warning.unwrap_or_else(|| "Local model could not load".into())));
+                    return Err(error.context(warning.unwrap_or_else(|| {
+                        format!("Could not load with {}", options.decoding.label())
+                    })));
                 }
             }
         }
@@ -1067,8 +1135,10 @@ pub struct ManagedRuntime {
     pub api_key: Arc<str>,
     pub model_id: String,
     pub cpu_only: bool,
+    pub decoding: DecodingMode,
     template_sha256: String,
     context_tokens: u64,
+    log_path: PathBuf,
 }
 
 impl ManagedRuntime {
@@ -1101,10 +1171,11 @@ impl ManagedRuntime {
         model: &ModelArtifact,
         model_path: &Path,
         root: &Path,
-        cpu_only: bool,
+        options: LoadOptions,
     ) -> Result<Self> {
         ensure_host_runtime_compatibility()?;
-        Hardware::detect(root)?.ensure_memory(model)?;
+        let decoding_arguments = options.decoding.arguments(model)?;
+        Hardware::detect(root)?.ensure_memory(model, options.decoding)?;
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
         let port = listener.local_addr()?.port();
         drop(listener);
@@ -1146,8 +1217,9 @@ impl ManagedRuntime {
                 "off",
                 "--reasoning-budget",
                 "0",
-            ]);
-        if cpu_only {
+            ])
+            .args(decoding_arguments);
+        if options.cpu_only {
             command.args(["--n-gpu-layers", "0"]);
         }
         command.current_dir(
@@ -1169,7 +1241,7 @@ impl ManagedRuntime {
             .create(true)
             .truncate(true)
             .write(true)
-            .open(log_path)?;
+            .open(&log_path)?;
         command.stderr(stderr);
         let child = command
             .spawn()
@@ -1179,10 +1251,12 @@ impl ManagedRuntime {
             endpoint: format!("http://127.0.0.1:{port}"),
             api_key,
             model_id: model.id.clone(),
-            cpu_only,
+            cpu_only: options.cpu_only,
+            decoding: options.decoding,
             // llama.cpp's Jinja lexer removes surrounding whitespace from its served template.
             template_sha256: model.runtime_template_sha256.clone(),
             context_tokens: model.context_tokens,
+            log_path,
         })
     }
 
@@ -1196,10 +1270,22 @@ impl ManagedRuntime {
         timer: impl Fn(Duration) -> futures::future::BoxFuture<'static, ()>,
     ) -> Result<()> {
         for _ in 0..240 {
-            ensure!(
-                self.is_running()?,
-                "Local runtime exited while loading. Inspect runtime.log and try CPU fallback or a smaller model"
-            );
+            if let Some(status) = self.child.try_status()? {
+                if self.decoding == DecodingMode::ExperimentalMtp {
+                    match mtp_startup_error(&self.log_path) {
+                        Ok(Some(reason)) => {
+                            bail!("Local runtime exited while loading ({status}): {reason}")
+                        }
+                        Ok(None) => {}
+                        Err(error) => bail!(
+                            "Local runtime exited while loading ({status}). Could not read runtime.log: {error:#}"
+                        ),
+                    }
+                }
+                bail!(
+                    "Local runtime exited while loading ({status}). Inspect runtime.log for the startup error"
+                );
+            }
             let probe = async {
                 let response = match http
                     .get(
@@ -1249,6 +1335,18 @@ impl ManagedRuntime {
                     props.context_length() == Some(self.context_tokens),
                     "Runtime context differs from the reviewed memory estimate"
                 );
+                if self.decoding == DecodingMode::ExperimentalMtp
+                    && let Err(error) =
+                        confirm_mtp(http, &self.endpoint, &self.api_key, self.context_tokens).await
+                {
+                    return match mtp_startup_error(&self.log_path) {
+                        Ok(Some(reason)) => Err(error.context(reason)),
+                        Ok(None) => Err(error),
+                        Err(log_error) => {
+                            Err(error.context(format!("Could not read runtime.log: {log_error:#}")))
+                        }
+                    };
+                }
                 Ok::<_, anyhow::Error>(true)
             }
             .boxed();
@@ -1262,14 +1360,190 @@ impl ManagedRuntime {
             timer(Duration::from_millis(500)).await;
         }
         bail!(
-            "Timed out waiting for local inference health and tool support. Check runtime.log, memory, and CPU fallback"
+            "Timed out waiting for {} readiness. Check runtime.log for the startup error",
+            self.decoding.label()
         )
     }
+}
+
+fn mtp_startup_error(path: &Path) -> Result<Option<String>> {
+    const LOG_TAIL_BYTES: u64 = 16 * 1024;
+    let mut log = std::fs::File::open(path)?;
+    log.seek(SeekFrom::Start(
+        log.metadata()?.len().saturating_sub(LOG_TAIL_BYTES),
+    ))?;
+    let mut tail = Vec::new();
+    log.take(LOG_TAIL_BYTES).read_to_end(&mut tail)?;
+    Ok(String::from_utf8_lossy(&tail)
+        .lines()
+        .rev()
+        .find(|line| {
+            line.contains("failed to create MTP context")
+                || line.contains("failed to initialize speculative decoding context")
+                || line.contains("error loading model")
+        })
+        .map(str::to_owned))
+}
+
+async fn confirm_mtp(
+    http: &dyn HttpClient,
+    endpoint: &str,
+    api_key: &str,
+    context_tokens: u64,
+) -> Result<()> {
+    #[derive(Deserialize)]
+    struct Slot {
+        id: u64,
+        n_ctx: u64,
+        speculative: bool,
+    }
+
+    let request = Request::get(format!("{endpoint}/slots"))
+        .header("Authorization", format!("Bearer {api_key}"))
+        .body(AsyncBody::empty())?;
+    let mut response = http
+        .send(request)
+        .await
+        .context("Could not query MTP initialization via /slots")?;
+    ensure!(
+        response.status().is_success(),
+        "Could not confirm MTP initialization: /slots returned HTTP {}",
+        response.status()
+    );
+    let mut body = String::new();
+    response.body_mut().read_to_string(&mut body).await?;
+    let slots: Vec<Slot> =
+        serde_json::from_str(&body).context("Runtime /slots did not report speculation status")?;
+    let [slot] = slots.as_slice() else {
+        bail!("Could not confirm MTP initialization: expected one runtime slot");
+    };
+    // b11669 sets this flag from the initialized engine. Copper enables only draft-mtp.
+    ensure!(
+        slot.id == 0 && slot.n_ctx == context_tokens && slot.speculative,
+        "Runtime did not confirm MTP on slot 0 at {context_tokens} tokens (/slots: id {}, context {}, speculative {}). Inspect runtime.log",
+        slot.id,
+        slot.n_ctx,
+        slot.speculative
+    );
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_reviewed_unsloth_variants_can_launch_embedded_mtp() -> Result<()> {
+        let catalog = catalog()?;
+        assert_eq!(catalog.runtime_version, "b11669");
+        assert_eq!(
+            catalog.runtime_revision,
+            "620d2225cc436ab0b001e3200e590e3b286ef9ab"
+        );
+        let eligible: Vec<_> = catalog
+            .models
+            .iter()
+            .filter(|model| model.experimental_mtp_memory_mib.is_some())
+            .map(|model| model.id.as_str())
+            .collect();
+        assert_eq!(
+            eligible,
+            [
+                "unsloth-qwen3-8-27b-ud-q4-k-m",
+                "unsloth-qwen3-8-27b-ud-iq3-s"
+            ]
+        );
+        for model in &catalog.models {
+            assert_eq!(
+                LoadOptions::default().decoding.arguments(model)?,
+                ["--spec-type", "none"]
+            );
+            let arguments = DecodingMode::ExperimentalMtp.arguments(model);
+            if eligible.contains(&model.id.as_str()) {
+                assert!(!model.qualified);
+                assert_eq!(
+                    arguments?,
+                    [
+                        "--spec-type",
+                        "draft-mtp",
+                        "--spec-draft-n-max",
+                        "2",
+                        "--slots"
+                    ]
+                );
+            } else {
+                assert!(arguments.is_err());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn mtp_preflight_rejects_a_host_that_can_run_standard_decoding() -> Result<()> {
+        let model = catalog()?
+            .models
+            .into_iter()
+            .find(|model| model.id == "unsloth-qwen3-8-27b-ud-iq3-s")
+            .context("Missing Unsloth candidate")?;
+        let mut hardware = Hardware {
+            architecture: "aarch64".into(),
+            total_memory: 32 * GIB,
+            available_memory: 16 * GIB + GIB / 2,
+            free_disk: 32 * GIB,
+            backend: "Metal".into(),
+            unified_memory: true,
+            gpu_memory: Some(GIB),
+            runtime_warning: None,
+        };
+        hardware.ensure_memory(&model, DecodingMode::Standard)?;
+        let error = hardware
+            .ensure_memory(&model, DecodingMode::ExperimentalMtp)
+            .expect_err("MTP must reserve more memory");
+        assert!(error.to_string().contains("17.02 GiB"));
+        assert!(
+            error
+                .to_string()
+                .contains("16.50 GiB is currently available")
+        );
+        assert_eq!(
+            hardware
+                .recommendation(&model, false, false, false, DecodingMode::ExperimentalMtp)
+                .level,
+            RecommendationLevel::InsufficientCapacity,
+        );
+        hardware.available_memory = model.estimated_memory_bytes() + 2 * GIB;
+        hardware.ensure_memory(&model, DecodingMode::ExperimentalMtp)?;
+        Ok(())
+    }
+
+    #[test]
+    fn mtp_confirmation_requires_an_initialized_slot_from_the_private_endpoint() {
+        smol::block_on(async {
+            for (status, body, confirmed) in [
+                (200, r#"[{"id":0,"n_ctx":16384,"speculative":true}]"#, true),
+                (
+                    200,
+                    r#"[{"id":0,"n_ctx":16384,"speculative":false}]"#,
+                    false,
+                ),
+                (200, r#"[{"id":0,"n_ctx":16384}]"#, false),
+                (200, r#"[{"id":0,"n_ctx":8192,"speculative":true}]"#, false),
+                (200, "[]", false),
+                (503, "", false),
+            ] {
+                let http = http_client::FakeHttpClient::create(move |request| async move {
+                    assert_eq!(request.uri().path(), "/slots");
+                    assert_eq!(request.headers()["authorization"], "Bearer fixture");
+                    Ok(http_client::Response::builder()
+                        .status(status)
+                        .body(AsyncBody::from(body))?)
+                });
+                let result =
+                    confirm_mtp(http.as_ref(), "http://127.0.0.1:1", "fixture", 16_384).await;
+                assert_eq!(result.is_ok(), confirmed, "{result:?}");
+            }
+        });
+    }
 
     #[test]
     fn bundled_runtime_requires_exact_catalog_receipt_and_preserves_missing_files() -> Result<()> {
@@ -1375,7 +1649,9 @@ mod tests {
             .next()
             .context("Missing model")?;
         assert!(
-            hardware.recommendation(&model, true, false, true).level
+            hardware
+                .recommendation(&model, true, false, true, DecodingMode::Standard)
+                .level
                 == RecommendationLevel::InsufficientCapacity
         );
         Ok(())
@@ -1635,10 +1911,14 @@ mod tests {
             gpu_memory: None,
             runtime_warning: None,
         };
-        assert!(hardware.ensure_memory(&model).is_err());
         assert!(
             hardware
-                .recommendation(&model, true, false, true)
+                .ensure_memory(&model, DecodingMode::Standard)
+                .is_err()
+        );
+        assert!(
+            hardware
+                .recommendation(&model, true, false, true, DecodingMode::Standard)
                 .reason
                 .contains("disk")
         );
@@ -1671,33 +1951,45 @@ mod tests {
             runtime_warning: None,
         };
         assert_eq!(
-            hardware.recommendation(&model, true, false, false).level,
+            hardware
+                .recommendation(&model, true, false, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::InsufficientCapacity
         );
         assert_eq!(
-            hardware.recommendation(&model, false, false, false).level,
+            hardware
+                .recommendation(&model, false, false, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::Recommended,
             "Downloaded weights do not need duplicate disk allocation"
         );
         hardware.available_memory = required + GIB / 2;
         assert_eq!(
-            hardware.recommendation(&model, false, false, false).level,
+            hardware
+                .recommendation(&model, false, false, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::LimitedHeadroom
         );
         hardware.available_memory = required - 1;
         assert_eq!(
-            hardware.recommendation(&model, false, false, false).level,
+            hardware
+                .recommendation(&model, false, false, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::InsufficientCapacity
         );
         hardware.available_memory = 4 * GIB;
         assert_eq!(
-            hardware.recommendation(&model, false, true, false).level,
+            hardware
+                .recommendation(&model, false, true, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::Recommended,
             "Resident model memory is not charged twice"
         );
         hardware.available_memory = GIB / 2;
         assert_eq!(
-            hardware.recommendation(&model, false, true, false).level,
+            hardware
+                .recommendation(&model, false, true, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::LimitedHeadroom
         );
         assert!(
@@ -1715,7 +2007,9 @@ mod tests {
         hardware.available_memory = GIB;
         hardware.gpu_memory = Some(64 * GIB);
         assert_eq!(
-            hardware.recommendation(&model, false, false, false).level,
+            hardware
+                .recommendation(&model, false, false, false, DecodingMode::Standard)
+                .level,
             RecommendationLevel::InsufficientCapacity,
             "Shared GPU capacity cannot be added to available RAM"
         );

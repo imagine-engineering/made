@@ -222,6 +222,7 @@
     {
       "id": "unsloth-qwen3-8-27b-ud-q4-k-m",
       "name": "Unsloth Qwen3.8-27B (UD-Q4_K_M)",
+      "experimental_mtp_memory_mib": 1024,
       "family": "Qwen",
       "repository": "unsloth/Qwen3.8-27B-GGUF",
       "revision": "4af51b3542f775b0a8e4b310bfb3f17e01c306c9",
@@ -247,6 +248,7 @@
     {
       "id": "unsloth-qwen3-8-27b-ud-iq3-s",
       "name": "Unsloth Qwen3.8-27B (UD-IQ3_S)",
+      "experimental_mtp_memory_mib": 1024,
       "family": "Qwen",
       "repository": "unsloth/Qwen3.8-27B-GGUF",
       "revision": "4af51b3542f775b0a8e4b310bfb3f17e01c306c9",
