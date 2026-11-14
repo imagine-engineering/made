@@ -817,6 +817,7 @@ pub(crate) fn default_maven_import_inputs(
 ) -> Result<Vec<ProjectPath>> {
     // Gradle selection and errors must not change Maven's candidate intent.
     let settings = settings::JvmBuildSettingsContent {
+        reload: None,
         maven: None,
         gradle: Some(settings::GradleBuildSettingsContent {
             selected_build_files: Some(Vec::new()),
@@ -843,6 +844,7 @@ pub(crate) fn default_gradle_import_inputs(
     worktree_id: WorktreeId,
 ) -> Result<Vec<ProjectPath>> {
     let settings = settings::JvmBuildSettingsContent {
+        reload: None,
         maven: Some(settings::MavenBuildSettingsContent {
             selected_poms: Some(Vec::new()),
             ..Default::default()
@@ -5651,13 +5653,29 @@ pub fn is_project_input(path: &RelPath) -> bool {
     );
     let version_catalog = path.extension() == Some("toml")
         && path.components().any(|component| component == "gradle");
+    let wrapper_support = path.parent().is_some_and(|parent| {
+        parent.file_name() == Some("wrapper")
+            && matches!(
+                (
+                    parent.parent().and_then(RelPath::file_name),
+                    path.file_name()
+                ),
+                (Some("gradle"), Some("gradle-wrapper.jar"))
+                    | (
+                        Some(".mvn"),
+                        Some("maven-wrapper.jar" | "MavenWrapperDownloader.java")
+                    )
+            )
+    });
+    let daemon_criteria = path.file_name() == Some("gradle-daemon-jvm.properties")
+        && path.parent().and_then(RelPath::file_name) == Some("gradle");
     let build_source = path
         .components()
         .collect::<Vec<_>>()
         .windows(2)
         .any(|components| components == ["buildSrc", "src"])
         && matches!(path.extension(), Some("java" | "kt" | "groovy"));
-    build_configuration || version_catalog || build_source
+    build_configuration || version_catalog || wrapper_support || daemon_criteria || build_source
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -5687,6 +5705,7 @@ impl ImportedOwnershipCoverage {
 pub(crate) struct JdtlsProjectQuery {
     pub projects: Vec<(String, JdtlsProjectSettings)>,
     pub ownership: ImportedOwnershipCoverage,
+    pub partial: bool,
 }
 
 fn imported_ownership_scope_folders(
@@ -5722,6 +5741,7 @@ pub(crate) async fn query_jdtls_projects(
     server: Arc<LanguageServer>,
     request_timeout: Duration,
     background_executor: BackgroundExecutor,
+    worktree_root: &Path,
     maven_root: Option<PathBuf>,
     imported_build_root: Option<PathBuf>,
 ) -> Result<JdtlsProjectQuery> {
@@ -5740,7 +5760,7 @@ pub(crate) async fn query_jdtls_projects(
         .into_response()
         .context("query JDTLS projects")?
         .context("JDTLS returned no project list")?;
-    let project_uris = imported_project_uris(projects)?;
+    let (project_uris, mut partial) = worktree_imported_project_uris(projects, worktree_root)?;
     let resources = server
         .request::<lsp::request::ExecuteCommand>(
             lsp::ExecuteCommandParams {
@@ -5755,7 +5775,11 @@ pub(crate) async fn query_jdtls_projects(
         .await
         .into_response();
     let resources = match resources {
-        Ok(Some(resources)) => Some(imported_project_uris(resources)?),
+        Ok(Some(resources)) => {
+            let (resources, omitted) = worktree_imported_project_uris(resources, worktree_root)?;
+            partial |= omitted;
+            Some(resources)
+        }
         Ok(None) => {
             log::warn!(
                 "JDTLS imported resource enumeration unavailable; refresh or check provider setup"
@@ -5931,6 +5955,7 @@ pub(crate) async fn query_jdtls_projects(
     Ok(JdtlsProjectQuery {
         projects,
         ownership,
+        partial,
     })
 }
 
@@ -6164,6 +6189,29 @@ fn imported_project_uris(value: serde_json::Value) -> Result<Vec<String>> {
         );
     }
     Ok(uris)
+}
+
+fn worktree_imported_project_uris(
+    value: Value,
+    worktree_root: &Path,
+) -> Result<(Vec<String>, bool)> {
+    let uris = imported_project_uris(value)?;
+    let mut projects = Vec::with_capacity(uris.len());
+    let mut omitted = false;
+    for uri in uris {
+        let path = file_uri_path(&uri)?;
+        if path.starts_with(worktree_root)
+            && !path
+                .components()
+                .any(|part| part == std::path::Component::ParentDir)
+        {
+            projects.push(uri);
+        } else {
+            // JDTLS enumerates its own workspace resources alongside user projects.
+            omitted = true;
+        }
+    }
+    Ok((projects, omitted))
 }
 
 pub async fn query_gradle_project_metadata(
@@ -8155,6 +8203,7 @@ impl ScopedGradleImports {
         }
         gradle.ignored_projects = None;
         let settings = settings::JvmBuildSettingsContent {
+            reload: None,
             maven: Some(settings::MavenBuildSettingsContent {
                 selected_poms: Some(Vec::new()),
                 ..Default::default()
@@ -8493,6 +8542,75 @@ const MAVEN_DEFAULT_IMPORT_STATE: &str = "groovy.maven.defaultImportRoots.v2";
 const GRADLE_DEFAULT_IMPORT_ROOTS: &str = "groovy.gradle.defaultImportRoots";
 const GRADLE_DEFAULT_IMPORT_STATE: &str = "groovy.gradle.defaultImportRoots.v2";
 const JAVA_PLAIN_STARTUP_IMPORT: &str = "groovy.java.importPlainProjects";
+const JAVA_LOOSE_STARTUP_SOURCE: &str = "groovy.java.addLooseSource";
+
+pub(crate) fn supports_loose_java_source_registration(server: &LanguageServer) -> bool {
+    advertises_jdtls_command(server, JAVA_LOOSE_STARTUP_SOURCE)
+}
+
+pub(crate) async fn add_loose_java_startup_source(
+    server: &LanguageServer,
+    root: &Path,
+    source: &Path,
+    request_timeout: Duration,
+) -> Result<bool> {
+    let response = server
+        .request::<lsp::request::ExecuteCommand>(
+            lsp::ExecuteCommandParams {
+                command: JAVA_LOOSE_STARTUP_SOURCE.into(),
+                arguments: vec![json!({
+                    "rootUri": selected_import_uri(root, true)?,
+                    "sourceUri": selected_import_uri(source, false)?,
+                })],
+                ..Default::default()
+            },
+            request_timeout,
+        )
+        .await
+        .into_response()
+        .map_err(|_| {
+            anyhow::anyhow!("Could not register loose Java sources; check the provider and refresh")
+        })?
+        .context("Java provider returned no loose source result")?;
+    let roots = response
+        .get("sourceRoots")
+        .and_then(Value::as_array)
+        .context("Java provider returned an invalid loose source result")?;
+    let valid = response.get("version").and_then(Value::as_u64) == Some(1)
+        && roots.len() <= 1
+        && roots.iter().all(|uri| {
+            uri.as_str()
+                .and_then(|text| imported_build_identity_path(text).ok())
+                .is_some_and(|directory| {
+                    directory != root
+                        && directory.starts_with(root)
+                        && source.starts_with(directory)
+                })
+        });
+    ensure!(
+        valid,
+        "Java provider returned an invalid loose source result"
+    );
+    Ok(!roots.is_empty())
+}
+
+pub(crate) fn loose_java_startup_entry(
+    snapshot: &Snapshot,
+    path: &RelPath,
+) -> Option<worktree::Entry> {
+    let entry = snapshot.entry_for_path(path)?;
+    (path.extension() == Some("java")
+        && entry.is_file()
+        && remote_path_is_visible(path, snapshot)
+        && path.ancestors().all(|ancestor| {
+            snapshot.entry_for_path(ancestor).is_some_and(|entry| {
+                entry.canonical_path.is_none()
+                    && !entry.is_ignored
+                    && (ancestor == path || entry.is_dir())
+            })
+        }))
+    .then(|| entry.clone())
+}
 
 pub(crate) struct PlainJavaStartupImport {
     worktree_root: PathBuf,
@@ -13331,6 +13449,7 @@ mod tests {
             JvmBuildSelectionIntent::default()
         );
         let mut settings = JvmBuildSettingsContent {
+            reload: None,
             maven: Some(MavenBuildSettingsContent {
                 selected_poms: Some(vec!["pom.xml".into(), "application/pom.xml".into()]),
                 ignored_projects: Some(vec![String::new(), "library".into()]),
@@ -17771,7 +17890,11 @@ mod tests {
     fn changed_build_inputs_invalidate_pending_provider_facts() {
         for input in [
             "gradle/wrapper/gradle-wrapper.properties",
+            "included/gradle/gradle-daemon-jvm.properties",
+            "included/gradle/wrapper/gradle-wrapper.jar",
             ".mvn/wrapper/maven-wrapper.properties",
+            ".mvn/wrapper/maven-wrapper.jar",
+            ".mvn/wrapper/MavenWrapperDownloader.java",
             ".mvn/maven.config",
             ".mvn/jvm.config",
             "gradle/libs.versions.toml",
@@ -17795,6 +17918,9 @@ mod tests {
             "library/src/main/kotlin/Greeting.kt",
             "buildSrc/build/classes/Conventions.class",
             "application/build/generated/Greeting.kt",
+            "application/lib/gradle-wrapper.jar",
+            "application/gradle-daemon-jvm.properties",
+            "application/src/main/java/MavenWrapperDownloader.java",
             "Cargo.toml",
         ] {
             assert!(!is_project_input(
@@ -17877,6 +18003,77 @@ mod tests {
                 },
             ),
         ]
+    }
+
+    #[gpui::test]
+    async fn jdtls_skips_settings_for_out_of_worktree_resources(cx: &mut gpui::TestAppContext) {
+        let root = Path::new(util::path!("/fixture"));
+        let module = selected_import_uri(&root.join("application"), true)
+            .expect("module URI")
+            .to_string();
+        let private_root = Path::new(util::path!("/jdtls-data/fixture_a1b2c3"));
+        let private = selected_import_uri(private_root, true)
+            .expect("private resource URI")
+            .to_string();
+        let (server, fake) = lsp::FakeLanguageServer::new(
+            LanguageServerId(0),
+            LanguageServerBinary {
+                path: "unused-fake-jdtls".into(),
+                arguments: vec![],
+                env: None,
+            },
+            "jdtls".into(),
+            lsp::ServerCapabilities::default(),
+            &mut cx.to_async(),
+        );
+        fake.set_request_handler::<lsp::request::ExecuteCommand, _, _>({
+            let module = module.clone();
+            move |parameters, _| {
+                let module = module.clone();
+                let private = private.clone();
+                async move {
+                    match parameters.command.as_str() {
+                        "java.project.getAll" => Ok(Some(json!([module, private]))),
+                        "java.project.getSettings" => {
+                            assert_eq!(parameters.arguments.first(), Some(&json!(module)));
+                            Ok(Some(json!({})))
+                        }
+                        _ => anyhow::bail!("Unexpected JDTLS command"),
+                    }
+                }
+            }
+        });
+        let server = cx
+            .update(|cx| {
+                let parameters = server.default_initialize_params(false, false, cx);
+                server.initialize(
+                    parameters,
+                    Arc::new(lsp::DidChangeConfigurationParams {
+                        settings: json!({}),
+                    }),
+                    Duration::from_secs(10),
+                    cx,
+                )
+            })
+            .await
+            .expect("initialized fake");
+        let query = query_jdtls_projects(
+            server,
+            Duration::from_secs(10),
+            cx.background_executor.clone(),
+            root,
+            None,
+            None,
+        )
+        .await
+        .expect("worktree query");
+        assert!(query.partial);
+        assert_eq!(query.projects.len(), 1);
+        assert_eq!(query.projects[0].0, module);
+        assert_eq!(
+            query.projects[0].1.membership,
+            JdtlsProjectMembership::ImportedJava
+        );
     }
 
     fn imported_kind_reply(records: Value) -> Value {

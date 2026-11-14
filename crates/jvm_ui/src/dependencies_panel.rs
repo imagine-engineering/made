@@ -64,6 +64,14 @@ enum BuildToolView {
     Maven,
 }
 
+#[derive(Clone, Copy)]
+enum BuildImport {
+    SavedMaven,
+    GradleSelection,
+    ReloadMaven,
+    ReloadAll,
+}
+
 impl BuildToolView {
     fn label(self) -> &'static str {
         match self {
@@ -2316,6 +2324,15 @@ impl DependenciesPanel {
     }
 
     fn apply_saved_build_selection(&mut self, maven: bool, cx: &mut Context<Self>) {
+        let action = if maven {
+            BuildImport::SavedMaven
+        } else {
+            BuildImport::GradleSelection
+        };
+        self.run_build_import(action, cx);
+    }
+
+    fn run_build_import(&mut self, action: BuildImport, cx: &mut Context<Self>) {
         if self.build_phase_token.is_some() {
             self.build_phase_notice = Some("This panel is waiting for its selected import. Cancel that import or wait before applying another selection.".into());
             cx.notify();
@@ -2329,14 +2346,28 @@ impl DependenciesPanel {
             }
         };
         let result = self.project.read(cx).lsp_store().update(cx, |store, cx| {
-            let waiter = if maven { store.apply_saved_local_maven_selection(worktree_id, cx)? } else { store.import_selected_local_gradle_project(worktree_id, cx)? };
-            let token = store.jdtls_project_import_token(worktree_id).ok_or_else(|| anyhow::anyhow!("Selected import lost its phase receipt; refresh and restart its provider before retrying"))?;
+            let waiter = match action {
+                BuildImport::ReloadMaven => store.reload_local_maven_projects(worktree_id, cx)?,
+                BuildImport::SavedMaven => {
+                    store.apply_saved_local_maven_selection(worktree_id, cx)?
+                }
+                BuildImport::GradleSelection => {
+                    store.import_selected_local_gradle_project(worktree_id, cx)?
+                }
+                BuildImport::ReloadAll => store.reload_local_jvm_builds(worktree_id, cx)?,
+            };
+            let token = store.jdtls_project_import_token(worktree_id);
             anyhow::Ok((token, waiter))
         });
         match result {
-            Ok((token, waiter)) => {
+            Ok((Some(token), waiter)) => {
                 self.build_phase_token = Some(token);
-                self.build_phase_notice = Some(if maven { "Applying saved Maven roots and exclusions; full synchronization remains unverified." } else { "Importing the effective Gradle selection; full synchronization remains unverified." }.into());
+                self.build_phase_notice = Some(match action {
+                    BuildImport::ReloadMaven => "Reloading the effective Maven roots.",
+                    BuildImport::SavedMaven => "Applying saved Maven roots and exclusions; full synchronization remains unverified.",
+                    BuildImport::GradleSelection => "Importing the effective Gradle selection; full synchronization remains unverified.",
+                    BuildImport::ReloadAll => "Reloading the effective Maven and Gradle roots in this project folder.",
+                }.into());
                 self.build_phase_waiter = Some(cx.spawn(async move |panel, cx| {
                     let result = waiter.await;
                     if let Err(error) = panel.update(cx, |panel, cx| {
@@ -2350,6 +2381,10 @@ impl DependenciesPanel {
                         panel.rebuild(cx);
                     }) { log::debug!("Groovy panel closed before selected build-phase completion: {error:#}"); }
                 }));
+            }
+            Ok((None, waiter)) => {
+                waiter.detach_and_log_err(cx);
+                self.build_phase_notice = Some("No build roots are selected for import.".into());
             }
             Err(_) => self.show_build_phase_error(cx),
         }
@@ -4521,6 +4556,18 @@ impl Render for DependenciesPanel {
                             .aria_label(if self.project.read(cx).is_remote() { "Saved Maven selection unavailable for remote projects" } else { "Apply saved Maven roots and exclusions for the selected local project folder; executes trusted build configuration" })
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(true, cx)))
+                    ))
+                    .when(self.view == BuildToolView::Maven, |header| header.child(
+                        Button::new("groovy-reload-maven-projects", "Reload Maven projects")
+                            .aria_label("Reload selected or provider-default Maven projects on the local host")
+                            .disabled(!can_apply_build_selection).tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadMaven, cx)))
+                    ))
+                    .when(self.view == BuildToolView::Dependencies, |header| header.child(
+                        Button::new("groovy-reload-all-builds", "Reload all builds")
+                            .aria_label("Reload effective Maven and Gradle roots in the selected local project folder")
+                            .disabled(!can_apply_build_selection).tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadAll, cx)))
                     ))
                     .when(self.view != BuildToolView::Maven, |header| header.child(
                         Button::new("groovy-import-gradle-selection", "Import Gradle selection")

@@ -99,6 +99,19 @@ pub struct ProjectSettingsContent {
 pub struct JvmBuildSettingsContent {
     pub maven: Option<MavenBuildSettingsContent>,
     pub gradle: Option<GradleBuildSettingsContent>,
+    /// When to reload builds on the trusted project host. Defaults to manual.
+    pub reload: Option<JvmBuildReload>,
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum JvmBuildReload {
+    #[default]
+    Manual,
+    ExternalChanges,
+    AllChanges,
 }
 
 #[with_fallible_options]

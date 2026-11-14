@@ -3345,6 +3345,8 @@ impl LocalLspStore {
         };
         let initial_snapshot = buffer.text_snapshot();
         let worktree_id = file.worktree_id(cx);
+        #[cfg(feature = "jvm-tools")]
+        let source_path = file.path().clone();
 
         let Some(language) = buffer.language().cloned() else {
             return;
@@ -3485,6 +3487,26 @@ impl LocalLspStore {
                 .or_default()
                 .insert(server.server_id());
             if registered {
+                #[cfg(feature = "jvm-tools")]
+                if language_name.as_ref() == "Java"
+                    && server.name() == LanguageServerName::new_static("jdtls")
+                    && jvm_project::supports_loose_java_source_registration(&server)
+                {
+                    let source = ProjectPath {
+                        worktree_id,
+                        path: source_path.clone(),
+                    };
+                    let server = server.clone();
+                    let store = cx.weak_entity();
+                    cx.defer(move |cx| {
+                        let Some(store) = store.upgrade() else {
+                            return;
+                        };
+                        store.update(cx, |store, cx| {
+                            store.register_open_loose_java_source(source, server, None, cx)
+                        });
+                    });
+                }
                 cx.emit(LspStoreEvent::LanguageServerUpdate {
                     language_server_id: server.server_id(),
                     name: None,
@@ -4779,6 +4801,8 @@ pub struct LspStore {
     pub language_server_statuses: BTreeMap<LanguageServerId, LanguageServerStatus>,
     #[cfg(feature = "jvm-tools")]
     jdtls_projects: HashMap<WorktreeId, JdtlsProjectState>,
+    #[cfg(feature = "jvm-tools")]
+    jdtls_project_settings: HashMap<WorktreeId, Option<LspSettings>>,
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
     jdtls_snapshot_reply_gate: Option<JdtlsSnapshotReplyGate>,
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
@@ -4787,6 +4811,8 @@ pub struct LspStore {
     reviewed_jvm_dependencies: HashMap<(ProjectPath, String), ReviewedJvmDependencySnapshot>,
     #[cfg(feature = "jvm-tools")]
     jdtls_refresh_tasks: HashMap<WorktreeId, Task<()>>,
+    #[cfg(feature = "jvm-tools")]
+    pending_jvm_reloads: HashMap<WorktreeId, PendingJvmReload>,
     #[cfg(feature = "jvm-tools")]
     kotlin_workspace_projects: HashMap<WorktreeId, KotlinWorkspaceState>,
     #[cfg(feature = "jvm-tools")]
@@ -4878,6 +4904,7 @@ fn language_server_startup_status_error(
     #[cfg(feature = "jvm-tools")]
     if let Some(message) = jvm_download_capability_error(_name, error, stderr)
         .or_else(|| jdtls_startup_error(_name, error, stderr))
+        .or_else(|| kotlin_lsp_startup_error(_name, error, stderr))
     {
         return message.to_owned();
     }
@@ -4917,6 +4944,20 @@ fn jvm_download_capability_error(
         ),
         _ => None,
     }
+}
+
+#[cfg(feature = "jvm-tools")]
+fn kotlin_lsp_startup_error(
+    name: &LanguageServerName,
+    error: &str,
+    stderr: &str,
+) -> Option<&'static str> {
+    const EXPIRED: &str = "This build of kotlin-server has expired.";
+    (name == &LanguageServerName::new_static("kotlin-lsp")
+        && (error.contains(EXPIRED) || stderr.contains(EXPIRED)))
+    .then_some(
+        "The Kotlin LSP build on the project host has expired. Configure a compatible replacement with lsp.kotlin-lsp.binary.path and restart the language server, or explicitly select kotlin-language-server in Kotlin language settings.",
+    )
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -5270,17 +5311,21 @@ impl LspStore {
                         .any(|path| matches!(path, PathTrust::AbsPath(_)))
                     {
                         this.jdtls_projects.clear();
+                        this.jdtls_project_settings.clear();
                         this.reviewed_jvm_dependencies.clear();
                         this.jdtls_refresh_tasks.clear();
+                        this.pending_jvm_reloads.clear();
                         this.kotlin_workspace_projects.clear();
                         this.kotlin_workspace_refresh_tasks.clear();
                     } else {
                         for path in paths {
                             if let PathTrust::Worktree(worktree_id) = path {
                                 this.jdtls_projects.remove(worktree_id);
+                                this.jdtls_project_settings.remove(worktree_id);
                                 this.reviewed_jvm_dependencies
                                     .retain(|(root, _), _| root.worktree_id != *worktree_id);
                                 this.jdtls_refresh_tasks.remove(worktree_id);
+                                this.pending_jvm_reloads.remove(worktree_id);
                                 this.kotlin_workspace_projects.remove(worktree_id);
                                 this.kotlin_workspace_refresh_tasks.remove(worktree_id);
                             }
@@ -5535,6 +5580,8 @@ impl LspStore {
             language_server_statuses: Default::default(),
             #[cfg(feature = "jvm-tools")]
             jdtls_projects: Default::default(),
+            #[cfg(feature = "jvm-tools")]
+            jdtls_project_settings: Default::default(),
             #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
             jdtls_snapshot_reply_gate: None,
             #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
@@ -5543,6 +5590,8 @@ impl LspStore {
             reviewed_jvm_dependencies: Default::default(),
             #[cfg(feature = "jvm-tools")]
             jdtls_refresh_tasks: Default::default(),
+            #[cfg(feature = "jvm-tools")]
+            pending_jvm_reloads: Default::default(),
             #[cfg(feature = "jvm-tools")]
             kotlin_workspace_projects: Default::default(),
             #[cfg(feature = "jvm-tools")]
@@ -5653,6 +5702,8 @@ impl LspStore {
             language_server_statuses: Default::default(),
             #[cfg(feature = "jvm-tools")]
             jdtls_projects: Default::default(),
+            #[cfg(feature = "jvm-tools")]
+            jdtls_project_settings: Default::default(),
             #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
             jdtls_snapshot_reply_gate: None,
             #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
@@ -5661,6 +5712,8 @@ impl LspStore {
             reviewed_jvm_dependencies: Default::default(),
             #[cfg(feature = "jvm-tools")]
             jdtls_refresh_tasks: Default::default(),
+            #[cfg(feature = "jvm-tools")]
+            pending_jvm_reloads: Default::default(),
             #[cfg(feature = "jvm-tools")]
             kotlin_workspace_projects: Default::default(),
             #[cfg(feature = "jvm-tools")]
@@ -5810,7 +5863,8 @@ impl LspStore {
                     if let Some(state) = self.jdtls_projects.get_mut(worktree_id) {
                         // JDTLS writes these descriptors during import, while its project data is already stale.
                         // Semantic build inputs still invalidate the operation; SDK phases recheck descriptor ownership.
-                        let metadata_during_import = state.import_operation().is_some()
+                        let import = state.import_operation();
+                        let metadata_during_import = import.is_some()
                             && changes
                                 .iter()
                                 .filter(|(path, _, _)| jvm_project::is_project_input(path.as_ref()))
@@ -5818,8 +5872,19 @@ impl LspStore {
                                     matches!(path.file_name(), Some(".project" | ".classpath"))
                                 });
                         if !metadata_during_import {
-                            if let Err(error) = state.mark_stale() {
+                            let failed_server = import
+                                .map(|import| import.server_id())
+                                .or_else(|| state.failed_import());
+                            let result = if let Some(server_id) = failed_server {
+                                state.mark_import_failed(server_id)
+                            } else {
+                                state.mark_stale()
+                            };
+                            if let Err(error) = result {
                                 log::warn!("Could not invalidate JDTLS project state: {error:#}");
+                            }
+                            if let Some(import) = import {
+                                self.clear_pending_jvm_startup(import.server_id(), None);
                             }
                             self.jdtls_refresh_tasks.remove(worktree_id);
                         }
@@ -5832,6 +5897,7 @@ impl LspStore {
                         self.kotlin_workspace_refresh_tasks.remove(worktree_id);
                         cx.notify();
                     }
+                    self.schedule_jvm_reload(*worktree_id, changes, cx);
                 }
             }
             WorktreeStoreEvent::WorktreeReleased(..)
@@ -6748,35 +6814,56 @@ impl LspStore {
 
         #[cfg(feature = "jvm-tools")]
         if self.as_local().is_some() {
+            let mut invalidated_imports = Vec::new();
             for (worktree_id, state) in &mut self.jdtls_projects {
                 let location = SettingsLocation {
                     worktree_id: *worktree_id,
                     path: RelPath::empty(),
                 };
                 let settings = ProjectSettings::get(Some(location), cx);
-                if state
-                    .snapshot()
-                    .and_then(|snapshot| snapshot.metadata.as_ref())
-                    .is_some_and(|facts| {
-                        match facts.matches_settings(
-                            settings
-                                .jvm_builds
-                                .as_ref()
-                                .and_then(|settings| settings.maven.as_ref()),
-                        ) {
-                            Ok(current) => !current,
-                            Err(error) => {
-                                log::warn!(
-                                    "Could not validate Maven selection settings: {error:#}"
-                                );
-                                true
-                            }
+                let provider_settings = settings.lsp.get(&LanguageServerName::new_static("jdtls"));
+                let provider_changed = self
+                    .jdtls_project_settings
+                    .get_mut(worktree_id)
+                    .is_some_and(|previous| {
+                        if previous.as_ref() == provider_settings {
+                            return false;
                         }
-                    })
+                        *previous = provider_settings.cloned();
+                        true
+                    });
+                if provider_changed
+                    || state
+                        .snapshot()
+                        .and_then(|snapshot| snapshot.metadata.as_ref())
+                        .is_some_and(|facts| {
+                            match facts.matches_settings(
+                                settings
+                                    .jvm_builds
+                                    .as_ref()
+                                    .and_then(|settings| settings.maven.as_ref()),
+                            ) {
+                                Ok(current) => !current,
+                                Err(error) => {
+                                    log::warn!(
+                                        "Could not validate Maven selection settings: {error:#}"
+                                    );
+                                    true
+                                }
+                            }
+                        })
                 {
-                    state.mark_stale().log_err();
+                    if let Some(import) = state.import_operation().filter(|_| provider_changed) {
+                        invalidated_imports.push(import.server_id());
+                        state.mark_import_failed(import.server_id()).log_err();
+                    } else {
+                        state.mark_stale().log_err();
+                    }
                     self.jdtls_refresh_tasks.remove(worktree_id);
                 }
+            }
+            for server_id in invalidated_imports {
+                self.clear_pending_jvm_startup(server_id, None);
             }
         }
         self.request_workspace_config_refresh();
@@ -11391,6 +11478,14 @@ impl LspStore {
     ) -> Option<()> {
         let file = File::from_dyn(buffer.read(cx).file())?;
         let worktree_id = file.worktree_id(cx);
+        #[cfg(feature = "jvm-tools")]
+        if let Some(pending) = self.pending_jvm_reloads.get_mut(&worktree_id)
+            && let Some(change) = pending.changed.get_mut(file.path())
+            && let Some(saved_mtime) = buffer.read(cx).saved_mtime()
+            && change.mtime == Some(saved_mtime)
+        {
+            change.saved_in_editor = true;
+        }
         let abs_path = file.as_local()?.abs_path(cx);
         let text_document = lsp::TextDocumentIdentifier {
             uri: file_path_to_lsp_url(&abs_path).log_err()?,
@@ -11592,9 +11687,11 @@ impl LspStore {
         #[cfg(feature = "jvm-tools")]
         {
             self.jdtls_projects.remove(&id_to_remove);
+            self.jdtls_project_settings.remove(&id_to_remove);
             self.reviewed_jvm_dependencies
                 .retain(|(root, _), _| root.worktree_id != id_to_remove);
             self.jdtls_refresh_tasks.remove(&id_to_remove);
+            self.pending_jvm_reloads.remove(&id_to_remove);
             self.kotlin_workspace_projects.remove(&id_to_remove);
             self.kotlin_workspace_refresh_tasks.remove(&id_to_remove);
         }
@@ -11698,6 +11795,7 @@ impl LspStore {
         #[cfg(feature = "jvm-tools")]
         {
             self.jdtls_projects.clear();
+            self.jdtls_project_settings.clear();
             self.reviewed_jvm_dependencies.clear();
             self.jdtls_refresh_tasks.clear();
             self.kotlin_workspace_projects.clear();
@@ -13814,25 +13912,27 @@ impl LspStore {
             });
         }
         let background_executor = cx.background_executor().clone();
-        let (maven_root, imported_build_root) = this.read_with(&cx, |_, cx| {
+        let (worktree_root, maven_root, imported_build_root) = this.read_with(&cx, |_, cx| {
             let worktree = worktree.read(cx);
+            let worktree_root = worktree.abs_path().as_ref().to_path_buf();
             let maven_root = (request.protocol_version >= 2)
                 .then(|| jvm_build_provider_roots(worktree).1)
                 .flatten();
             let imported_build_root =
-                (request.protocol_version >= 4).then(|| worktree.abs_path().as_ref().to_path_buf());
-            (maven_root, imported_build_root)
+                (request.protocol_version >= 4).then(|| worktree_root.clone());
+            (worktree_root, maven_root, imported_build_root)
         });
-        let raw_projects = match jvm_project::query_jdtls_projects(
+        let query = match jvm_project::query_jdtls_projects(
             server,
             request_timeout,
             background_executor,
+            &worktree_root,
             maven_root,
             imported_build_root,
         )
         .await
         {
-            Ok(query) => query.projects,
+            Ok(query) => query,
             Err(error) => {
                 log::warn!("Host JDTLS project query failed: {error:#}");
                 return Err(anyhow!("Could not read host Java project data"));
@@ -13858,7 +13958,7 @@ impl LspStore {
             let worktree = worktree.read(cx);
             let snapshot = worktree.snapshot();
             let (projects, partial) = jvm_project::projects_from_provider(
-                raw_projects,
+                query.projects,
                 &worktree.abs_path(),
                 worktree_id,
                 worktree.path_style(),
@@ -13876,7 +13976,7 @@ impl LspStore {
                         jvm_project::project_to_proto_for_version(project, request.protocol_version)
                     })
                     .collect::<Result<Vec<_>>>()?,
-                partial,
+                partial: partial || query.partial,
                 maven_selection: None,
             };
             ensure!(
@@ -14797,6 +14897,28 @@ impl LspStore {
             .language_server_for_id(server_id)
             .context("Java language server is unavailable; check extension setup")?;
         let mut selection = match target {
+            SelectedJdtlsPhaseTarget::ReloadBuilds { maven, gradle, .. } => {
+                let maven = maven
+                    .as_ref()
+                    .map(|target| {
+                        self.selected_jdtls_phase_provider(worktree_id, target, phase, cx)
+                            .map(|(_, _, _, prepared)| Box::new(prepared))
+                    })
+                    .transpose()?;
+                let gradle = gradle
+                    .as_ref()
+                    .map(|target| {
+                        self.selected_jdtls_phase_provider(worktree_id, target, phase, cx)
+                            .map(|(_, _, _, prepared)| Box::new(prepared))
+                    })
+                    .transpose()?;
+                return Ok((
+                    server_id,
+                    server,
+                    worktree,
+                    PreparedJdtlsPhase::ReloadBuilds { maven, gradle },
+                ));
+            }
             SelectedJdtlsPhaseTarget::StartupDefault(provider) => {
                 let location = SettingsLocation {
                     worktree_id,
@@ -14943,14 +15065,31 @@ impl LspStore {
                 };
                 PreparedJdtlsPhase::MavenReactor(selection)
             }
-            SelectedJdtlsPhaseTarget::SavedMaven(intent) => {
-                let pom_masks = intent.ignored_pom_patterns.clone();
+            SelectedJdtlsPhaseTarget::SavedMaven {
+                intent,
+                reload_defaults,
+            } => {
                 ensure!(
-                    &self.effective_saved_maven_selection(worktree_id, cx)? == intent,
+                    self.effective_maven_selection(worktree_id, cx)?.as_ref() == intent.as_ref(),
                     "Saved Maven selection changed during application; import may be partial, review settings and refresh before retrying"
                 );
+                let mut content = intent.clone().unwrap_or_default();
+                let pom_masks = content.ignored_pom_patterns.clone();
+                let entries = worktree.read(cx).snapshot();
+                let reload_inputs = (*reload_defaults && content.selected_poms.is_none())
+                    .then(|| jvm_project::default_maven_import_inputs(&entries, worktree_id))
+                    .transpose()?;
+                if let Some(inputs) = &reload_inputs {
+                    content.selected_poms = Some(
+                        inputs
+                            .iter()
+                            .map(|pom| pom.path.as_unix_str().to_owned())
+                            .collect(),
+                    );
+                }
                 let content = settings::JvmBuildSettingsContent {
-                    maven: Some(intent.clone()),
+                    reload: None,
+                    maven: Some(content),
                     gradle: None,
                 };
                 let settings = jvm_project::JvmBuildSelectionIntent::from_settings(Some(&content))?;
@@ -14978,7 +15117,6 @@ impl LspStore {
                         "Current complete Maven ownership is unavailable; refresh before applying ignored projects"
                     );
                 }
-                let entries = worktree.read(cx).snapshot();
                 let default_inputs = (intent.selected_poms.is_none()
                     && (!intent.ignored_projects.is_empty()
                         || !intent.ignored_pom_patterns.is_empty()))
@@ -15033,7 +15171,7 @@ impl LspStore {
                 }
                 PreparedJdtlsPhase::SavedMaven {
                     phases: prepared,
-                    default_inputs,
+                    default_inputs: reload_inputs.or(default_inputs),
                 }
             }
             SelectedJdtlsPhaseTarget::GradleGraph {
@@ -15374,7 +15512,7 @@ impl LspStore {
             "Gradle default-root discovery provider is unavailable; check extension setup or select explicit build files and refresh before retrying"
         );
         ensure!(
-            matches!(target, SelectedJdtlsPhaseTarget::SavedMaven(_))
+            matches!(target, SelectedJdtlsPhaseTarget::SavedMaven { .. })
                 || matches!(&selection, PreparedJdtlsPhase::StartupDefault(..))
                 || matches!(&selection, PreparedJdtlsPhase::GradleScoped(_))
                 || server
@@ -15577,6 +15715,178 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
+    fn register_open_loose_java_source(
+        &mut self,
+        source: ProjectPath,
+        server: Arc<LanguageServer>,
+        deferred: Option<LooseJavaSourceRegistration>,
+        cx: &mut Context<Self>,
+    ) {
+        let server_id = server.server_id();
+        let worktree_id = source.worktree_id;
+        let capture = move |store: &Self, source: &ProjectPath, cx: &mut Context<Self>| {
+            let worktree = store
+                .worktree_store
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)?;
+            let entries = worktree.read(cx).snapshot();
+            if !worktree.read(cx).is_local()
+                || !worktree.read(cx).is_visible()
+                || !store
+                    .language_server_statuses
+                    .get(&server_id)
+                    .is_some_and(|status| status.worktree == Some(worktree_id))
+                || !TrustedWorktrees::try_get_global(cx)?.update(cx, |trusted, cx| {
+                    trusted.can_trust(&store.worktree_store, worktree_id, cx)
+                })
+            {
+                return None;
+            }
+            let location = SettingsLocation {
+                worktree_id,
+                path: RelPath::empty(),
+            };
+            let settings = SettingsStore::global(cx);
+            ProjectSettings::get(Some(location), cx)
+                .jvm_build_selection_intent(settings, location)
+                .ok()?
+                .startup_import_controls()
+                .uncontrolled_default()?;
+            let buffer = store.buffer_store.read(cx).get_by_path(source)?;
+            let buffer_id = buffer.read(cx).remote_id();
+            store
+                .as_local()?
+                .buffer_snapshots
+                .get(&buffer_id)?
+                .get(&server_id)?;
+            Some((
+                worktree,
+                entries.abs_path().clone(),
+                LooseJavaSourceRegistration {
+                    entry: jvm_project::loose_java_startup_entry(&entries, &source.path)?,
+                    settings_revision: settings.observed_revision()?,
+                    buffer_id,
+                },
+            ))
+        };
+        let Some(authorization) = capture(self, &source, cx) else {
+            return;
+        };
+        if deferred.is_some_and(|deferred| deferred != authorization.2) {
+            return;
+        }
+        let current_generation = move |store: &Self| {
+            let state = store.jdtls_projects.get(&worktree_id)?;
+            (state.snapshot_is_current() && state.snapshot()?.server_id == server_id)
+                .then(|| state.generation())
+        };
+        let startup_pending = self
+            .as_local()
+            .and_then(|local| local.language_servers.get(&server_id))
+            .is_some_and(|state| match state {
+                LanguageServerState::Running {
+                    pending_startup_default,
+                    pending_maven_startup,
+                    pending_gradle_startup,
+                    ..
+                } => {
+                    pending_startup_default.is_some()
+                        || pending_maven_startup.is_some()
+                        || pending_gradle_startup.is_some()
+                }
+                LanguageServerState::Starting { .. } => false,
+            });
+        let generation = current_generation(self);
+        if startup_pending || generation.is_none() {
+            if self
+                .jdtls_projects
+                .get(&worktree_id)
+                .is_some_and(|state| state.failed_import() == Some(server_id))
+            {
+                return;
+            }
+            if let Some(LanguageServerState::Running {
+                deferred_loose_java_sources,
+                ..
+            }) = self
+                .as_local_mut()
+                .and_then(|local| local.language_servers.get_mut(&server_id))
+                && (deferred_loose_java_sources.len() < 128
+                    || deferred_loose_java_sources.contains_key(&source))
+            {
+                deferred_loose_java_sources.insert(source, authorization.2);
+            }
+            return;
+        }
+        let (_, root, registration) = &authorization;
+        let root = root.clone();
+        let buffer_id = registration.buffer_id;
+        let request_timeout = ProjectSettings::get_global(cx)
+            .global_lsp_settings
+            .get_request_timeout();
+        cx.spawn(async move |this, cx| {
+            if !this.update(cx, |store, cx| {
+                current_generation(store) == generation
+                    && capture(store, &source, cx).as_ref() == Some(&authorization)
+            })? {
+                return Ok(());
+            }
+            let registered = jvm_project::add_loose_java_startup_source(
+                &server,
+                &root,
+                &root.join(source.path.as_std_path()),
+                request_timeout,
+            )
+            .await?;
+            if registered {
+                this.update(cx, |store, cx| {
+                    if current_generation(store) != generation
+                        || capture(store, &source, cx).as_ref() != Some(&authorization)
+                    {
+                        return Ok(());
+                    }
+                    let Some(buffer) = store.buffer_store.read(cx).get_by_path(&source) else {
+                        return Ok(());
+                    };
+                    let snapshot = buffer.read(cx).text_snapshot();
+                    let Some(versions) = store
+                        .as_local_mut()
+                        .and_then(|local| local.buffer_snapshots.get_mut(&buffer_id))
+                        .and_then(|servers| servers.get_mut(&server_id))
+                    else {
+                        return Ok(());
+                    };
+                    let version = versions
+                        .last()
+                        .and_then(|previous| previous.version.checked_add(1))
+                        .context("Could not advance the Java document version")?;
+                    let uri = file_path_to_lsp_url(&root.join(source.path.as_std_path()))?;
+                    // The existing compilation unit can still point at the default project.
+                    server.notify::<lsp::notification::DidCloseTextDocument>(
+                        lsp::DidCloseTextDocumentParams {
+                            text_document: lsp::TextDocumentIdentifier::new(uri.clone()),
+                        },
+                    )?;
+                    server.notify::<lsp::notification::DidOpenTextDocument>(
+                        lsp::DidOpenTextDocumentParams {
+                            text_document: lsp::TextDocumentItem::new(
+                                uri,
+                                "java".to_owned(),
+                                version,
+                                snapshot.text(),
+                            ),
+                        },
+                    )?;
+                    versions.push(LspBufferSnapshot { version, snapshot });
+                    Ok::<_, anyhow::Error>(())
+                })??;
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .detach_and_log_err(cx);
+    }
+
+    #[cfg(feature = "jvm-tools")]
     fn clear_pending_jvm_startup(
         &mut self,
         server_id: LanguageServerId,
@@ -15586,17 +15896,22 @@ impl LspStore {
             pending_startup_default,
             pending_maven_startup,
             pending_gradle_startup,
+            deferred_loose_java_sources,
             ..
         }) = self
             .as_local_mut()
             .and_then(|local| local.language_servers.get_mut(&server_id))
         {
+            if target.is_none() {
+                deferred_loose_java_sources.clear();
+            }
             if target
                 .is_none_or(|target| matches!(target, SelectedJdtlsPhaseTarget::StartupDefault(_)))
             {
                 *pending_startup_default = None;
             }
-            if target.is_none_or(|target| matches!(target, SelectedJdtlsPhaseTarget::SavedMaven(_)))
+            if target
+                .is_none_or(|target| matches!(target, SelectedJdtlsPhaseTarget::SavedMaven { .. }))
             {
                 *pending_maven_startup = None;
             }
@@ -15647,9 +15962,12 @@ impl LspStore {
                     .take()
                     .map(|provider| Ok(SelectedJdtlsPhaseTarget::StartupDefault(provider)))
                     .or_else(|| {
-                        pending_maven_startup
-                            .take()
-                            .map(|intent| intent.map(SelectedJdtlsPhaseTarget::SavedMaven))
+                        pending_maven_startup.take().map(|intent| {
+                            intent.map(|intent| SelectedJdtlsPhaseTarget::SavedMaven {
+                                intent: Some(intent),
+                                reload_defaults: false,
+                            })
+                        })
                     })
                     .or_else(|| {
                         pending_gradle_startup.take().map(|intent| {
@@ -15660,6 +15978,25 @@ impl LspStore {
                 _ => None,
             };
             let Some(target) = target else {
+                if let Some(LanguageServerState::Running {
+                    server,
+                    deferred_loose_java_sources,
+                    ..
+                }) = self
+                    .as_local_mut()
+                    .and_then(|local| local.language_servers.get_mut(&server_id))
+                {
+                    let server = server.clone();
+                    let sources = std::mem::take(deferred_loose_java_sources);
+                    for (source, registration) in sources {
+                        self.register_open_loose_java_source(
+                            source,
+                            server.clone(),
+                            Some(registration),
+                            cx,
+                        );
+                    }
+                }
                 return;
             };
             let result = target.map_err(anyhow::Error::msg).and_then(|target| {
@@ -15686,17 +16023,26 @@ impl LspStore {
         worktree_id: WorktreeId,
         cx: &App,
     ) -> Result<settings::MavenBuildSettingsContent> {
+        self.effective_maven_selection(worktree_id, cx)?
+            .context("Saved Maven settings are absent; select build roots or use provider defaults")
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn effective_maven_selection(
+        &self,
+        worktree_id: WorktreeId,
+        cx: &App,
+    ) -> Result<Option<settings::MavenBuildSettingsContent>> {
         let location = SettingsLocation {
             worktree_id,
             path: RelPath::empty(),
         };
         let settings = ProjectSettings::get(Some(location), cx);
         settings.jvm_build_selection_intent(SettingsStore::global(cx), location)?;
-        settings
+        Ok(settings
             .jvm_builds
             .as_ref()
-            .and_then(|settings| settings.maven.clone())
-            .context("Saved Maven settings are absent; select build roots or use provider defaults")
+            .and_then(|settings| settings.maven.clone()))
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -15726,7 +16072,226 @@ impl LspStore {
         let intent = self.effective_saved_maven_selection(worktree_id, cx)?;
         self.execute_selected_local_jdtls_phase(
             worktree_id,
-            SelectedJdtlsPhaseTarget::SavedMaven(intent),
+            SelectedJdtlsPhaseTarget::SavedMaven {
+                intent: Some(intent),
+                reload_defaults: false,
+            },
+            cx,
+        )
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn reload_local_maven_projects(
+        &mut self,
+        worktree_id: WorktreeId,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        let intent = self.effective_maven_selection(worktree_id, cx)?;
+        self.execute_selected_local_jdtls_phase(
+            worktree_id,
+            SelectedJdtlsPhaseTarget::SavedMaven {
+                intent,
+                reload_defaults: true,
+            },
+            cx,
+        )
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn reload_local_jvm_builds(
+        &mut self,
+        worktree_id: WorktreeId,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        self.reload_jvm_builds(worktree_id, false, cx)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn schedule_jvm_reload(
+        &mut self,
+        worktree_id: WorktreeId,
+        changes: &UpdatedEntriesSet,
+        cx: &mut Context<Self>,
+    ) {
+        use settings::JvmBuildReload;
+
+        let Some(state) = self.jdtls_projects.get(&worktree_id) else {
+            return;
+        };
+        let Some(snapshot) = state.snapshot() else {
+            return;
+        };
+        let server_id = snapshot.server_id;
+        if self.as_local().is_none() || state.failed_import().is_some() {
+            return;
+        }
+        let location = SettingsLocation {
+            worktree_id,
+            path: RelPath::empty(),
+        };
+        let policy = ProjectSettings::get(Some(location), cx)
+            .jvm_builds
+            .as_ref()
+            .and_then(|builds| builds.reload)
+            .unwrap_or_default();
+        if policy == JvmBuildReload::Manual {
+            return;
+        }
+        let Some(worktree) = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(worktree_id, cx)
+        else {
+            return;
+        };
+        if !worktree.read(cx).is_local() || !worktree.read(cx).is_visible() {
+            return;
+        }
+        let mut changed = self
+            .pending_jvm_reloads
+            .remove(&worktree_id)
+            .map(|pending| pending.changed)
+            .unwrap_or_default();
+        let worktree = worktree.read(cx);
+        for (path, _, change) in changes.iter() {
+            if *change == PathChange::Loaded
+                || matches!(path.file_name(), Some(".project" | ".classpath"))
+                || !jvm_project::is_project_input(path)
+            {
+                continue;
+            }
+            let entry = worktree.entry_for_path(path);
+            if entry.is_some_and(|entry| entry.is_private || entry.is_external || entry.is_ignored)
+            {
+                continue;
+            }
+            let mtime = entry.and_then(|entry| entry.mtime);
+            let update = changed.entry(path.clone()).or_insert(JvmReloadChange {
+                mtime,
+                saved_in_editor: false,
+            });
+            if update.mtime != mtime {
+                *update = JvmReloadChange {
+                    mtime,
+                    saved_in_editor: false,
+                };
+            }
+            if changed.len() > 128 {
+                log::warn!(
+                    "Automatic JVM reload exceeds the input limit; reload the build explicitly"
+                );
+                return;
+            }
+        }
+        if changed.is_empty() {
+            return;
+        }
+        let generation = state.generation();
+        let revision = SettingsStore::global(cx).observed_revision();
+        let timer = cx.background_executor().timer(Duration::from_millis(300));
+        let task = cx.spawn(async move |this, cx| {
+            timer.await;
+            this.update(cx, |store, cx| {
+                let Some(pending) = store.pending_jvm_reloads.remove(&worktree_id) else {
+                    return;
+                };
+                if revision.is_none()
+                    || SettingsStore::global(cx).observed_revision() != revision
+                    || store.jdtls_projects.get(&worktree_id).is_none_or(|state| {
+                        state.generation() != generation
+                            || state.failed_import().is_some()
+                            || state.import_operation().is_some()
+                            || state
+                                .snapshot()
+                                .is_none_or(|snapshot| snapshot.server_id != server_id)
+                    })
+                    || (policy == JvmBuildReload::ExternalChanges
+                        && pending
+                            .changed
+                            .values()
+                            .all(|change| change.saved_in_editor))
+                {
+                    return;
+                }
+                if !TrustedWorktrees::try_get_global(cx).is_some_and(|trusted| {
+                    trusted.update(cx, |trusted, cx| {
+                        trusted.can_trust(&store.worktree_store, worktree_id, cx)
+                    })
+                }) {
+                    return;
+                }
+                if let Err(error) = store.schedule_local_jdtls_project_refresh(
+                    server_id,
+                    worktree_id,
+                    None,
+                    false,
+                    None,
+                    cx,
+                ) {
+                    log::warn!(
+                        "Automatic JVM reload could not read current project ownership: {error:#}"
+                    );
+                    return;
+                }
+                if let Some(query) = store.jdtls_project_query_token(worktree_id)
+                    && let Some(revision) = revision
+                    && let Some(LanguageServerState::Running {
+                        reload_after_snapshot,
+                        ..
+                    }) = store
+                        .as_local_mut()
+                        .and_then(|local| local.language_servers.get_mut(&server_id))
+                {
+                    *reload_after_snapshot = Some((query, revision));
+                }
+            })
+            .log_err();
+        });
+        self.pending_jvm_reloads.insert(
+            worktree_id,
+            PendingJvmReload {
+                changed,
+                _task: task,
+            },
+        );
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn reload_jvm_builds(
+        &mut self,
+        worktree_id: WorktreeId,
+        after_build_change: bool,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        let worktree = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(worktree_id, cx)
+            .context("JVM project folder is unavailable; reopen it")?;
+        let entries = worktree.read(cx).snapshot();
+        let maven = self.effective_maven_selection(worktree_id, cx)?;
+        let gradle = self.effective_saved_gradle_selection(worktree_id, cx)?;
+        let has_maven = maven.is_some()
+            || !jvm_project::default_maven_import_inputs(&entries, worktree_id)?.is_empty();
+        let has_gradle = gradle.is_some()
+            || !jvm_project::default_gradle_import_inputs(&entries, worktree_id)?.is_empty();
+        ensure!(
+            has_maven || has_gradle,
+            "No Maven or Gradle build inputs are available for reload"
+        );
+        self.execute_selected_local_jdtls_phase(
+            worktree_id,
+            SelectedJdtlsPhaseTarget::ReloadBuilds {
+                after_build_change,
+                maven: has_maven.then(|| {
+                    Box::new(SelectedJdtlsPhaseTarget::SavedMaven {
+                        intent: maven,
+                        reload_defaults: true,
+                    })
+                }),
+                gradle: has_gradle
+                    .then(|| Box::new(SelectedJdtlsPhaseTarget::GradleModules(gradle))),
+            },
             cx,
         )
     }
@@ -16041,12 +16606,17 @@ impl LspStore {
         target: SelectedJdtlsPhaseTarget,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
+        ensure!(
+            self.jdtls_projects
+                .get(&worktree_id)
+                .is_none_or(|state| state.import_operation().is_none()),
+            "Java project import is in progress; wait or cancel before importing"
+        );
         let name = target.name();
         let operation = target.operation();
         let (server_id, server, worktree, selection) =
             self.selected_jdtls_phase_provider(worktree_id, &target, None, cx)?;
-        if matches!(&selection, PreparedJdtlsPhase::SavedMaven { phases, .. } if phases.is_empty())
-        {
+        if selection.is_empty_import() {
             self.clear_pending_jvm_startup(server_id, Some(&target));
             return Ok(Task::ready(Ok(())));
         }
@@ -16075,19 +16645,27 @@ impl LspStore {
         .cloned();
         let startup_folders = matches!(target, SelectedJdtlsPhaseTarget::StartupDefault(_))
             .then(|| server.workspace_folders());
-        let startup_settings_revision = startup_folders
-            .as_ref()
-            .map(|_| {
-                SettingsStore::global(cx).observed_revision().context(
-                    "Java startup settings revision is unavailable; restart the language server",
-                )
-            })
-            .transpose()?;
+        let settings_revision = (startup_folders.is_some()
+            || matches!(
+                target,
+                SelectedJdtlsPhaseTarget::ReloadBuilds {
+                    after_build_change: true,
+                    ..
+                }
+            ))
+        .then(|| {
+            SettingsStore::global(cx).observed_revision().context(
+                "Java startup settings revision is unavailable; restart the language server",
+            )
+        })
+        .transpose()?;
         let token = self
             .jdtls_projects
             .entry(worktree_id)
             .or_default()
             .begin_import_operation(server_id, worktree_id)?;
+        self.jdtls_project_settings
+            .insert(worktree_id, lsp_settings.clone());
         self.clear_pending_jvm_startup(server_id, Some(&target));
         let request_timeout = ProjectSettings::get_global(cx)
             .global_lsp_settings
@@ -16100,20 +16678,24 @@ impl LspStore {
                     &LanguageServerName::new_static("jdtls"),
                     cx,
                 ) == lsp_settings.as_ref()
-                    && startup_settings_revision.is_none_or(|revision| {
+                    && settings_revision.is_none_or(|revision| {
                         SettingsStore::global(cx).observed_revision() == Some(revision)
                     })
             };
             let mut startup_changed_membership = false;
             let result = async {
-              let mut phases = match selection {
-                  PreparedJdtlsPhase::SavedMaven { phases, .. } => phases,
-                  phase => vec![phase],
-              };
+              let mut phases = selection.into_import_phases();
               if default_roots_query.is_some() {
                   // M2E can cover nested candidates in one reactor phase; execute containing roots first.
-                  phases.sort_by_key(|phase| phase.maven_reactor_pom().map(|pom| pom.components().count()).unwrap_or(0));
+                  phases.sort_by_key(|phase| {
+                      if phase.gradle_phase().is_some() {
+                          usize::MAX
+                      } else {
+                          phase.maven_reactor_pom().map_or(0, |pom| pom.components().count())
+                      }
+                  });
               }
+              let mut discovered_roots = None;
               let mut expanded_poms: Option<(BTreeSet<PathBuf>, BTreeSet<PathBuf>)> = None;
               for selection in phases {
                 if default_roots_query.is_some() && selection.maven_reactor_pom().is_some_and(|pom| expanded_poms.as_ref().is_some_and(|(imported, ignored)| imported.contains(pom) || ignored.contains(pom))) {
@@ -16128,7 +16710,9 @@ impl LspStore {
                     "{name} project permission or inputs changed; review trust and refresh before retrying");
                 Ok(())
                 }).map_err(|_| anyhow!("{name} project closed before {operation}; reopen and refresh before retrying"))??;
-                if let Some(query) = &default_roots_query {
+                if let Some(query) = &default_roots_query
+                    && discovered_roots.is_none()
+                {
                     let roots = query.query(server.clone(), request_timeout).await?;
                     this.update(cx, |store, cx| {
                         let (current_server, _, current_worktree, current_selection) = store.selected_jdtls_phase_provider(worktree_id, &target, Some(token), cx)?;
@@ -16139,9 +16723,12 @@ impl LspStore {
                             "Maven permission or inputs changed during default-root discovery; refresh before retrying");
                         query.validate_current(&worktree.read(cx).snapshot(), worktree_id)
                     }).map_err(|_| anyhow!("Maven project closed during default-root discovery; reopen and refresh before retrying"))??;
-                    if selection.maven_reactor_pom().is_some_and(|pom| !roots.poms.contains(pom)) {
-                        continue;
-                    }
+                    discovered_roots = Some(roots.poms);
+                }
+                if discovered_roots.as_ref().is_some_and(|roots| {
+                    selection.maven_reactor_pom().is_some_and(|pom| !roots.contains(pom))
+                }) {
+                    continue;
                 }
                 let facts = match selection {
                     PreparedJdtlsPhase::StartupDefault(scopes, defaults) => {
@@ -16210,6 +16797,39 @@ impl LspStore {
                             startup_changed_membership |= import.execute_phase(server.clone(), request_timeout).await?;
                             recheck(cx)?;
                         }
+                        if jvm_project::supports_loose_java_source_registration(&server) {
+                            let sources = this.update(cx, |store, cx| {
+                                let snapshot = worktree.read(cx).snapshot();
+                                let mut sources = BTreeMap::new();
+                                for buffer in store.buffer_store.read(cx).buffers() {
+                                    let buffer = buffer.read(cx);
+                                    let Some(file) = File::from_dyn(buffer.file()) else { continue; };
+                                    if file.worktree_id(cx) == worktree_id
+                                        && let Some(entry) = jvm_project::loose_java_startup_entry(&snapshot, file.path())
+                                    {
+                                        sources.insert(entry.path.clone(), entry);
+                                    }
+                                    if sources.len() > 128 {
+                                        return Err(anyhow!("Too many open Java files for startup source resolution"));
+                                    }
+                                }
+                                Ok(sources)
+                            })??;
+                            for (path, entry) in sources {
+                                recheck(cx)?;
+                                this.update(cx, |_, cx| {
+                                    ensure!(
+                                        jvm_project::loose_java_startup_entry(&worktree.read(cx).snapshot(), &path).as_ref() == Some(&entry),
+                                        "Loose Java source changed during startup; refresh before retrying"
+                                    );
+                                    Ok::<_, anyhow::Error>(())
+                                })??;
+                                startup_changed_membership |= jvm_project::add_loose_java_startup_source(
+                                    &server, &root, &root.join(path.as_std_path()), request_timeout,
+                                ).await?;
+                                recheck(cx)?;
+                            }
+                        }
                         None
                     }
                     PreparedJdtlsPhase::GradleScoped(mut plan) => {
@@ -16217,7 +16837,7 @@ impl LspStore {
                             let (current_server, current_provider, current_worktree, current_selection) = store.selected_jdtls_phase_provider(worktree_id, &target, Some(token), cx)?;
                             ensure!(current_server == server_id && current_worktree == worktree
                                 && current_worktree.read(cx).abs_path() == root
-                                && matches!(current_selection, PreparedJdtlsPhase::GradleScoped(_))
+                                && matches!(current_selection.gradle_phase(), Some(PreparedJdtlsPhase::GradleScoped(_)))
                                 && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
                                 && settings_are_current(cx),
                                 "Scoped Gradle import permission, inputs or host settings changed; import may be partial, refresh before retrying");
@@ -16375,7 +16995,7 @@ impl LspStore {
                             let (current_server, _, current_worktree, current_selection) = store.selected_jdtls_phase_provider(worktree_id, &target, Some(token), cx)?;
                             ensure!(current_server == server_id && current_worktree == worktree
                                 && current_worktree.read(cx).abs_path() == root
-                                && matches!(current_selection, PreparedJdtlsPhase::GradleModules { .. })
+                                && matches!(current_selection.gradle_phase(), Some(PreparedJdtlsPhase::GradleModules { .. }))
                                 && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
                                 && settings_are_current(cx),
                                 "Gradle module policy permission, inputs or host settings changed; import may be partial, refresh before retrying");
@@ -16783,6 +17403,14 @@ impl LspStore {
                 }
             }
             if let Err(error) = this.update(cx, |store, cx| {
+                if store
+                    .jdtls_projects
+                    .get(&worktree_id)
+                    .and_then(|state| state.pending_query())
+                    != Some(token)
+                {
+                    return;
+                }
                 let server_is_current =
                     store
                         .language_server_statuses
@@ -16876,7 +17504,11 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) {
         if self.jdtls_projects.get(&worktree_id).is_some_and(|state| {
-            state.import_operation().is_some() || state.failed_import() == Some(server_id)
+            state.import_operation().is_some()
+                || state.failed_import() == Some(server_id)
+                || state
+                    .pending_query()
+                    .is_some_and(|token| token.server_id() == server_id)
         }) {
             return;
         }
@@ -17017,6 +17649,8 @@ impl LspStore {
             .or_default()
             .begin_with_metadata(server_id, worktree_id, maven_selection.clone())
             .context("Could not advance Java project generation; reopen the project")?;
+        self.jdtls_project_settings
+            .insert(worktree_id, metadata_lsp_settings.clone());
         cx.notify();
         let request_timeout = ProjectSettings::get_global(cx)
             .global_lsp_settings
@@ -17037,12 +17671,13 @@ impl LspStore {
         let requires_trust = gradle_synchronization_root.is_some()
             || trusted_build_root.is_some()
             || maven_selection.is_some();
+        let worktree_root = worktree.read(cx).abs_path();
         let refresh = cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(Duration::from_millis(250))
                 .await;
             let result = jvm_project::query_jdtls_projects(
-                server.clone(), request_timeout, background_executor, maven_root, trusted_build_root,
+                server.clone(), request_timeout, background_executor, &worktree_root, maven_root, trusted_build_root,
             ).await;
             let authorize_metadata = |plan: Option<&jvm_project::ScopedGradleImports>, store: &Self, cx: &mut Context<Self>| -> Result<()> {
                 let current_worktree = store.worktree_store.read(cx).worktree_for_id(worktree_id, cx)
@@ -17124,6 +17759,9 @@ impl LspStore {
                 (result, _) => result,
             };
             if let Err(error) = this.update(cx, |store, cx| {
+                if !store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.pending_query() == Some(token)) {
+                    return;
+                }
                 let server_is_current =
                     store
                         .language_server_statuses
@@ -17195,7 +17833,7 @@ impl LspStore {
                                 });
                             }
                         }
-                        let (projects, mut partial) = jvm_project::filter_provider_projects(projects, partial, &snapshot, false);
+                        let (projects, mut partial) = jvm_project::filter_provider_projects(projects, partial || query.partial, &snapshot, false);
                         ownership.complete &= projects.iter().filter(|project| project.membership.is_imported()).count() == ownership.imported_count;
                         ownership.namespace_complete &= projects.iter().filter(|project| project.membership.is_imported()).count() == ownership.imported_count;
                         let had_selection = maven_selection.is_some();
@@ -17215,11 +17853,27 @@ impl LspStore {
                         };
                         partial |= had_selection && metadata.is_none();
                         if state.finish_with_metadata(token, projects, partial, metadata) {
-                            if let Some(LanguageServerState::Running { imported_ownership, .. }) = store.as_local_mut().and_then(|local| local.language_servers.get_mut(&server_id)) {
+                            let mut reload = None;
+                            if let Some(LanguageServerState::Running { imported_ownership, reload_after_snapshot, .. }) = store.as_local_mut().and_then(|local| local.language_servers.get_mut(&server_id)) {
                                 *imported_ownership = Some((token, ownership));
+                                reload = reload_after_snapshot.take();
                             }
                             cx.notify();
                             store.apply_pending_jvm_startup(server_id, worktree_id, cx);
+                            if reload.is_some_and(|(query, revision)| {
+                                query == token && SettingsStore::global(cx).observed_revision() == Some(revision)
+                            }) && store.jdtls_project_import_token(worktree_id).is_none() {
+                                match store.reload_jvm_builds(worktree_id, true, cx) {
+                                    Ok(reload) => reload.detach_and_log_err(cx),
+                                    Err(error) => {
+                                        if let Some(state) = store.jdtls_projects.get_mut(&worktree_id) {
+                                            state.mark_import_failed(server_id).log_err();
+                                        }
+                                        log::warn!("Automatic JVM reload could not start: {error:#}");
+                                        cx.notify();
+                                    }
+                                }
+                            }
                         }
                     }
                     Err(error) => {
@@ -17367,10 +18021,14 @@ impl LspStore {
             && let Some(worktree_id) = self
                 .language_server_statuses
                 .get(&language_server_id)
-                .filter(|status| status.name == LanguageServerName::new_static("jdtls"))
+                .filter(|status| {
+                    status.name == LanguageServerName::new_static("jdtls")
+                        && !status.pending_work.values().any(jdtls_import_work)
+                })
                 .and_then(|status| status.worktree)
             && let Some(state) = self.jdtls_projects.get_mut(&worktree_id)
             && state.import_operation().is_none()
+            && state.failed_import() != Some(language_server_id)
         {
             if let Err(error) = state.mark_stale() {
                 log::warn!("Could not invalidate JDTLS project state: {error:#}");
@@ -17471,7 +18129,8 @@ impl LspStore {
                 .is_some_and(|work| !work.is_disk_based_diagnostics_progress);
             #[cfg(feature = "jvm-tools")]
             {
-                jdtls_completed_import = completed_work.as_ref().is_some_and(jdtls_import_work);
+                jdtls_completed_import = completed_work.as_ref().is_some_and(jdtls_import_work)
+                    && !status.pending_work.values().any(jdtls_import_work);
             }
             if refresh_inlay_hints {
                 self.refresh_inlay_hints_on_work_end(language_server_id, cx);
@@ -18993,7 +19652,11 @@ impl LspStore {
                 #[cfg(feature = "jvm-tools")]
                 pending_gradle_startup,
                 #[cfg(feature = "jvm-tools")]
+                deferred_loose_java_sources: BTreeMap::new(),
+                #[cfg(feature = "jvm-tools")]
                 imported_ownership: None,
+                #[cfg(feature = "jvm-tools")]
+                reload_after_snapshot: None,
             },
         );
         local
@@ -20945,6 +21608,26 @@ struct LspBufferSnapshot {
     snapshot: TextBufferSnapshot,
 }
 
+#[cfg(feature = "jvm-tools")]
+struct PendingJvmReload {
+    changed: BTreeMap<Arc<RelPath>, JvmReloadChange>,
+    _task: Task<()>,
+}
+
+#[cfg(feature = "jvm-tools")]
+struct JvmReloadChange {
+    mtime: Option<fs::MTime>,
+    saved_in_editor: bool,
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(PartialEq, Eq)]
+pub struct LooseJavaSourceRegistration {
+    entry: worktree::Entry,
+    settings_revision: u64,
+    buffer_id: BufferId,
+}
+
 /// A prompt requested by LSP server.
 #[derive(Clone, Debug)]
 pub struct LanguageServerPromptRequest {
@@ -21106,6 +21789,10 @@ pub enum LanguageServerState {
         #[cfg(feature = "jvm-tools")]
         pending_gradle_startup: Option<Result<settings::GradleBuildSettingsContent, &'static str>>,
         #[cfg(feature = "jvm-tools")]
+        deferred_loose_java_sources: BTreeMap<ProjectPath, LooseJavaSourceRegistration>,
+        #[cfg(feature = "jvm-tools")]
+        reload_after_snapshot: Option<(jvm_project::ProviderRefreshToken, u64)>,
+        #[cfg(feature = "jvm-tools")]
         imported_ownership: Option<(
             jvm_project::ProviderRefreshToken,
             jvm_project::ImportedOwnershipCoverage,
@@ -21166,6 +21853,11 @@ pub struct LanguageServerProgress {
 
 #[cfg(feature = "jvm-tools")]
 enum SelectedJdtlsPhaseTarget {
+    ReloadBuilds {
+        after_build_change: bool,
+        maven: Option<Box<Self>>,
+        gradle: Option<Box<Self>>,
+    },
     StartupDefault(jvm_project::JdtlsStartupDefault),
     Maven(Vec<ProjectPath>),
     MavenGraph(ProjectPath),
@@ -21173,7 +21865,10 @@ enum SelectedJdtlsPhaseTarget {
         module: ProjectPath,
         configuration: String,
     },
-    SavedMaven(settings::MavenBuildSettingsContent),
+    SavedMaven {
+        intent: Option<settings::MavenBuildSettingsContent>,
+        reload_defaults: bool,
+    },
     MavenReactor {
         pom: ProjectPath,
         excluded_projects: Vec<ProjectPath>,
@@ -21190,11 +21885,12 @@ enum SelectedJdtlsPhaseTarget {
 impl SelectedJdtlsPhaseTarget {
     fn name(&self) -> &'static str {
         match self {
+            Self::ReloadBuilds { .. } => "JVM build",
             Self::StartupDefault(_) => "Java startup",
             Self::Maven(_)
             | Self::MavenGraph(_)
             | Self::MavenReactor { .. }
-            | Self::SavedMaven(_) => "Maven",
+            | Self::SavedMaven { .. } => "Maven",
             Self::GradleModules(_) | Self::GradleGraph { .. } => "Gradle",
             Self::Unlink { provider, .. } => provider.name(),
         }
@@ -21210,11 +21906,12 @@ impl SelectedJdtlsPhaseTarget {
 
     fn command(&self) -> &'static str {
         match self {
+            Self::ReloadBuilds { .. } => "",
             Self::StartupDefault(_) => "",
             Self::Maven(_) => "groovy.maven.importSelected",
             Self::MavenGraph(_) => "groovy.maven.dependencyGraph",
             Self::GradleGraph { .. } => "groovy.gradle.dependencyGraph",
-            Self::SavedMaven(_) => "",
+            Self::SavedMaven { .. } => "",
             Self::MavenReactor {
                 pom_masks: Some(_), ..
             } => "groovy.maven.importReactorWithMasks",
@@ -21233,6 +21930,10 @@ enum SelectedJdtlsDependencyGraph {
 
 #[cfg(feature = "jvm-tools")]
 enum PreparedJdtlsPhase {
+    ReloadBuilds {
+        maven: Option<Box<Self>>,
+        gradle: Option<Box<Self>>,
+    },
     StartupDefault(Vec<PathBuf>, Box<StartupDefaultRoots>),
     Maven(jvm_project::SelectedMavenImport),
     MavenGraph(jvm_project::SelectedMavenDependencyGraph),
@@ -21343,9 +22044,42 @@ fn validate_current_maven_reactor_inputs(
 
 #[cfg(feature = "jvm-tools")]
 impl PreparedJdtlsPhase {
+    fn is_empty_import(&self) -> bool {
+        match self {
+            Self::SavedMaven { phases, .. } => phases.is_empty(),
+            Self::ReloadBuilds { maven, gradle } => {
+                gradle.is_none() && maven.as_deref().is_none_or(Self::is_empty_import)
+            }
+            _ => false,
+        }
+    }
+
+    fn into_import_phases(self) -> Vec<Self> {
+        match self {
+            Self::SavedMaven { phases, .. } => phases,
+            Self::ReloadBuilds { maven, gradle } => maven
+                .into_iter()
+                .chain(gradle)
+                .flat_map(|phase| phase.into_import_phases())
+                .collect(),
+            phase => vec![phase],
+        }
+    }
+
+    fn gradle_phase(&self) -> Option<&Self> {
+        match self {
+            Self::ReloadBuilds { gradle, .. } => gradle.as_deref(),
+            Self::GradleScoped(_) | Self::GradleModules { .. } => Some(self),
+            _ => None,
+        }
+    }
+
     fn default_maven_inputs(&self) -> Option<&[ProjectPath]> {
         match self {
             Self::SavedMaven { default_inputs, .. } => default_inputs.as_deref(),
+            Self::ReloadBuilds { maven, .. } => {
+                maven.as_deref().and_then(Self::default_maven_inputs)
+            }
             _ => None,
         }
     }
@@ -21368,7 +22102,7 @@ impl PreparedJdtlsPhase {
                     "Java startup requires its owned phase sequence; refresh before retrying"
                 )
             }
-            Self::SavedMaven { .. } => {
+            Self::SavedMaven { .. } | Self::ReloadBuilds { .. } => {
                 anyhow::bail!("Saved Maven phase preparation changed; refresh before retrying")
             }
             Self::GradleScoped(_) | Self::GradleModules { .. } => {
@@ -22929,6 +23663,102 @@ mod tests {
                 .requested_roots
                 .is_none()
         }));
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn remote_jdtls_snapshot_ignores_reply_after_connection_invalidation(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use proto::EnvelopedMessage as _;
+        let mut fixture = RemoteJvmClientFixture::new(cx).await;
+        fixture.trust(true, cx);
+        let worktree_id = fixture.root.worktree_id;
+        let server_id = LanguageServerId(42);
+        fixture.store.update(cx, |store, _| {
+            store.language_server_statuses.insert(
+                server_id,
+                LanguageServerStatus {
+                    name: LanguageServerName::new_static("jdtls"),
+                    language_name: None,
+                    server_version: None,
+                    server_readable_version: None,
+                    pending_work: Default::default(),
+                    has_pending_diagnostic_updates: false,
+                    progress_tokens: Default::default(),
+                    worktree: Some(worktree_id),
+                    binary: None,
+                    configuration: None,
+                    workspace_folders: Default::default(),
+                    process_id: None,
+                },
+            );
+        });
+        let mut previous_generation = 0;
+        for invalidate in [true, false] {
+            let (started, observed) = oneshot::channel();
+            let (release, held) = oneshot::channel();
+            fixture.store.update(cx, |store, cx| {
+                store.gate_next_remote_jdtls_reply_for_test(started, held);
+                store.refresh_jdtls_project(worktree_id, cx);
+            });
+            cx.run_until_parked();
+            let (message_id, request) = fixture
+                .take_messages()
+                .into_iter()
+                .find_map(|envelope| {
+                    if let Some(proto::envelope::Payload::GetJdtlsProjectSnapshot(request)) =
+                        envelope.payload
+                    {
+                        Some((envelope.id, request))
+                    } else {
+                        None
+                    }
+                })
+                .expect("framed snapshot request");
+            assert!(request.request_id > previous_generation);
+            previous_generation = request.request_id;
+            fixture
+                .input
+                .unbounded_send(
+                    proto::JdtlsProjectSnapshotResponse {
+                        protocol_version: request.protocol_version,
+                        request_id: request.request_id,
+                        worktree_id: request.worktree_id,
+                        server_id: server_id.to_proto(),
+                        ..Default::default()
+                    }
+                    .into_envelope(message_id + 2000, Some(message_id), None),
+                )
+                .expect("deliver host response");
+            cx.run_until_parked();
+            observed
+                .await
+                .expect("reply reached admission")
+                .expect("host response");
+            if invalidate {
+                fixture
+                    .store
+                    .update(cx, |store, cx| store.invalidate_remote_jvm_projects(cx));
+                // The executor can retire the cancelled task before the test releases it.
+                if release.send(()).is_err() {
+                    log::debug!("Cancelled remote snapshot task already retired");
+                }
+            } else {
+                release.send(()).expect("release current reply");
+            }
+            cx.run_until_parked();
+            fixture.store.read_with(cx, |store, _| {
+                let snapshot = store.jdtls_project_snapshot(worktree_id);
+                if invalidate {
+                    assert!(snapshot.is_none());
+                } else {
+                    let (snapshot, current) = snapshot.expect("new snapshot");
+                    assert!(current);
+                    assert_eq!(snapshot.generation, previous_generation);
+                }
+            });
+        }
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
@@ -24989,6 +25819,700 @@ mod tests {
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
     #[gpui::test]
+    async fn reload_maven_uses_provider_defaults_without_saved_selection(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        check_jvm_reload(cx, false, false, None).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn reload_all_jvm_builds_serializes_maven_and_gradle(cx: &mut gpui::TestAppContext) {
+        check_jvm_reload(cx, true, false, None).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn reload_all_jvm_builds_cancellation_skips_gradle(cx: &mut gpui::TestAppContext) {
+        check_jvm_reload(cx, true, true, None).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn automatic_jvm_reload_distinguishes_external_changes(cx: &mut gpui::TestAppContext) {
+        check_jvm_reload(
+            cx,
+            true,
+            false,
+            Some((settings::JvmBuildReload::ExternalChanges, false)),
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn automatic_jvm_reload_coalesces_editor_saves(cx: &mut gpui::TestAppContext) {
+        check_jvm_reload(
+            cx,
+            true,
+            false,
+            Some((settings::JvmBuildReload::AllChanges, false)),
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn automatic_jvm_reload_discards_queued_work_when_disabled(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        check_jvm_reload(
+            cx,
+            true,
+            false,
+            Some((settings::JvmBuildReload::AllChanges, true)),
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn manual_jvm_reload_stales_build_without_importing(cx: &mut gpui::TestAppContext) {
+        check_jvm_reload(
+            cx,
+            true,
+            false,
+            Some((settings::JvmBuildReload::Manual, false)),
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    async fn check_jvm_reload(
+        cx: &mut gpui::TestAppContext,
+        reload_all: bool,
+        cancel: bool,
+        policy: Option<(settings::JvmBuildReload, bool)>,
+    ) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture
+            .fs
+            .write(Path::new("/project-consumer/build.gradle"), b"plugins {}")
+            .await
+            .expect("create Gradle build");
+        let languages = fixture
+            .project
+            .read_with(cx, |project, _| project.languages().clone());
+        languages.remove_lsp_adapter(
+            &fixture.language.name(),
+            &LanguageServerName::new_static("jdtls"),
+        );
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        fixture.servers = languages.register_fake_lsp("Java", language::FakeLspAdapter {
+            name: "jdtls",
+            capabilities: lsp::ServerCapabilities {
+                execute_command_provider: Some(lsp::ExecuteCommandOptions {
+                    commands: [
+                        "groovy.maven.defaultImportRoots", "groovy.maven.importReactor",
+                        "groovy.gradle.rootState", "groovy.gradle.applyRootState", "groovy.gradle.moduleStates",
+                        "groovy.gradle.applyModuleStates", "groovy.gradle.importSelected",
+                    ].into_iter().map(str::to_owned).collect(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            initializer: Some(Box::new({
+                let calls = calls.clone();
+                move |server| {
+                    let calls = calls.clone();
+                    server.set_request_handler::<lsp::request::ExecuteCommand, _, _>(move |parameters, _| {
+                        let calls = calls.clone();
+                        async move {
+                            let root = "file:///project-consumer/";
+                            let pom = "file:///project-consumer/pom.xml";
+                            let nested = "file:///project-consumer/nested/pom.xml";
+                            Ok(Some(match parameters.command.as_str() {
+                                "groovy.maven.defaultImportRoots" => {
+                                    assert_eq!(parameters.arguments[0]["candidatePomUris"], serde_json::json!([nested, pom]));
+                                    calls.lock().push(parameters.command);
+                                    serde_json::json!({"version":1,"rootUri":root,"rootPomUris":[pom],"retainedPomUris":[],
+                                        "cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false})
+                                }
+                                "groovy.maven.importReactor" => {
+                                    assert_eq!(parameters.arguments[0]["pomUri"], pom);
+                                    calls.lock().push(parameters.command);
+                                    if cancel {
+                                        std::future::pending::<()>().await;
+                                    }
+                                    serde_json::json!({"version":1,"rootUri":root,"reactorPomUri":pom,"excludedProjectUris":[],
+                                        "importedPomUris":[pom,nested],"selectedImportPhaseComplete":true,"fullSynchronizationKnown":false})
+                                }
+                                "groovy.gradle.rootState" => serde_json::json!({"version":1,"rootUri":root,
+                                    "workspaceState":"open","descriptionAvailable":true,"fullSynchronizationKnown":false}),
+                                "groovy.gradle.moduleStates" => serde_json::json!({"version":1,"rootUri":root,
+                                    "modules":[],"fullSynchronizationKnown":false}),
+                                "groovy.gradle.importSelected" => {
+                                    assert_eq!(parameters.arguments[0]["offline"], true);
+                                    calls.lock().push(parameters.command);
+                                    serde_json::json!({"version":1,"rootUri":root,
+                                        "selectedImportPhaseComplete":true,"fullSynchronizationKnown":false})
+                                }
+                                _ => serde_json::json!([]),
+                            }))
+                        }
+                    });
+                }
+            })),
+            ..Default::default()
+        });
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let _server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        fixture
+            .store
+            .update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+        ProjectLanguageFixture::pump(cx);
+        assert!(calls.lock().is_empty());
+        if let Some((policy, disable_pending)) = policy {
+            fixture.settings(
+                &serde_json::json!({"jvm_builds":{"reload":policy}}).to_string(),
+                cx,
+            );
+            let pom = fixture
+                .project
+                .update(cx, |project, cx| {
+                    project.open_local_buffer("/project-consumer/pom.xml", cx)
+                })
+                .await
+                .expect("open POM");
+            pom.update(cx, |buffer, cx| {
+                buffer.edit([(0..0, "<!-- editor save -->\n")], None, cx);
+            });
+            fixture
+                .project
+                .update(cx, |project, cx| project.save_buffer(pom, cx))
+                .await
+                .expect("save POM");
+            if disable_pending {
+                assert!(fixture.store.read_with(cx, |store, _| {
+                    store.pending_jvm_reloads.contains_key(&worktree_id)
+                }));
+                fixture.settings(r#"{"jvm_builds":{"reload":"manual"}}"#, cx);
+                ProjectLanguageFixture::pump(cx);
+                assert!(
+                    calls.lock().is_empty(),
+                    "disabled policy cancels queued reload"
+                );
+                return;
+            }
+            if policy == settings::JvmBuildReload::Manual {
+                ProjectLanguageFixture::pump(cx);
+                assert!(calls.lock().is_empty());
+                assert!(fixture.store.read_with(cx, |store, _| {
+                    store
+                        .jdtls_project_snapshot(worktree_id)
+                        .is_some_and(|(_, current)| !current)
+                }));
+                return;
+            }
+            if policy == settings::JvmBuildReload::AllChanges {
+                let nested = fixture
+                    .project
+                    .update(cx, |project, cx| {
+                        project.open_local_buffer("/project-consumer/nested/pom.xml", cx)
+                    })
+                    .await
+                    .expect("open nested POM");
+                nested.update(cx, |buffer, cx| {
+                    buffer.edit([(0..0, "<!-- second editor save -->\n")], None, cx);
+                });
+                fixture
+                    .project
+                    .update(cx, |project, cx| project.save_buffer(nested, cx))
+                    .await
+                    .expect("save nested POM");
+            } else {
+                ProjectLanguageFixture::pump(cx);
+                assert!(calls.lock().is_empty(), "an editor save is excluded");
+                fixture
+                    .fs
+                    .write(Path::new("/project-consumer/build.gradle"), b"plugins {}\n")
+                    .await
+                    .expect("external Gradle change");
+                fixture
+                    .fs
+                    .write(
+                        Path::new("/project-consumer/nested/pom.xml"),
+                        b"<project> </project>",
+                    )
+                    .await
+                    .expect("external Maven change");
+            }
+            ProjectLanguageFixture::pump(cx);
+            ProjectLanguageFixture::pump(cx);
+            assert_eq!(
+                calls.lock().as_slice(),
+                [
+                    "groovy.maven.defaultImportRoots",
+                    "groovy.maven.importReactor",
+                    "groovy.gradle.importSelected"
+                ]
+            );
+            return;
+        }
+        let reload = fixture
+            .store
+            .update(cx, |store, cx| {
+                if reload_all {
+                    store.reload_local_jvm_builds(worktree_id, cx)
+                } else {
+                    store.reload_local_maven_projects(worktree_id, cx)
+                }
+            })
+            .expect("prepare build reload");
+        if cancel {
+            ProjectLanguageFixture::pump(cx);
+            fixture.store.update(cx, |store, cx| {
+                let token = store
+                    .jdtls_project_import_token(worktree_id)
+                    .expect("held reload");
+                assert!(store.reload_local_jvm_builds(worktree_id, cx).is_err());
+                assert_eq!(store.jdtls_project_import_token(worktree_id), Some(token));
+                assert!(
+                    store
+                        .cancel_selected_project_phase_for_token(token, cx)
+                        .expect("cancel reload")
+                );
+            });
+            assert!(reload.await.is_err());
+        } else {
+            reload.await.expect("reload effective build selection");
+        }
+        let mut expected = vec![
+            "groovy.maven.defaultImportRoots",
+            "groovy.maven.importReactor",
+        ];
+        if reload_all && !cancel {
+            expected.push("groovy.gradle.importSelected");
+        }
+        assert_eq!(calls.lock().as_slice(), expected);
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jdtls_settings_changes_retire_current_and_pending_snapshots(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        let server_id = server.server.server_id();
+        let completed = fixture.store.update(cx, |store, cx| {
+            store.refresh_jdtls_project(worktree_id, cx);
+            let state = store.jdtls_projects.get_mut(&worktree_id).expect("state");
+            let completed = state.pending_query().expect("initial query");
+            assert!(state.finish(completed, Vec::new(), false));
+            completed
+        });
+        fixture.settings(r#"{"tab_size": 2}"#, cx);
+        fixture.store.read_with(cx, |store, _| {
+            let (_, current) = store.jdtls_project_snapshot(worktree_id).expect("snapshot");
+            assert!(current, "unrelated settings leave the JVM snapshot current");
+        });
+        let held = fixture.store.update(cx, |store, cx| {
+            store.refresh_jdtls_project(worktree_id, cx);
+            store
+                .jdtls_project_query_token(worktree_id)
+                .expect("held query")
+        });
+        fixture.settings(
+            r#"{"lsp":{"jdtls":{"settings":{"java":{"import":{"gradle":{"java":{"home":"/missing-jdk"}}}}}}}}"#,
+            cx,
+        );
+        fixture.settings(r#"{}"#, cx);
+        fixture.store.update(cx, |store, cx| {
+            let (snapshot, current) = store
+                .jdtls_project_snapshot(worktree_id)
+                .expect("retained snapshot");
+            assert!(!current);
+            assert_eq!(snapshot.generation, completed.generation());
+            let state = store.jdtls_projects.get_mut(&worktree_id).expect("state");
+            assert!(!state.finish(held, Vec::new(), false));
+            assert_ne!(state.pending_query(), Some(held));
+            store.schedule_jdtls_project_refresh(server_id, worktree_id, cx);
+            let fresh = store
+                .jdtls_project_query_token(worktree_id)
+                .expect("fresh query");
+            assert!(fresh.generation() > held.generation());
+            let state = store.jdtls_projects.get_mut(&worktree_id).expect("state");
+            assert!(state.finish(fresh, Vec::new(), false));
+            assert!(
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .expect("fresh snapshot")
+                    .1
+            );
+        });
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jdtls_import_progress_coalesces_snapshot_refresh(cx: &mut gpui::TestAppContext) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        let server_id = server.server.server_id();
+        let first = ProgressToken::Number(1);
+        let second = ProgressToken::Number(2);
+        fixture.store.update(cx, |store, cx| {
+            let state = store.jdtls_projects.entry(worktree_id).or_default();
+            let token = state.begin(server_id, worktree_id).expect("initial query");
+            assert!(state.finish(token, Vec::new(), false));
+            let progress = LanguageServerProgress {
+                is_disk_based_diagnostics_progress: false,
+                is_cancellable: false,
+                title: Some("Importing Maven projects".into()),
+                message: None,
+                percentage: None,
+                last_update_at: cx.background_executor().now(),
+            };
+            store.on_lsp_work_start(server_id, first.clone(), progress.clone(), cx);
+            let generation = store.jdtls_projects[&worktree_id].generation();
+            assert!(generation > token.generation());
+            store.on_lsp_work_start(server_id, second.clone(), progress.clone(), cx);
+            assert_eq!(store.jdtls_projects[&worktree_id].generation(), generation);
+
+            store.on_lsp_work_end(server_id, first, cx);
+            assert!(!store.jdtls_project_query_pending(worktree_id));
+            store.on_lsp_work_end(server_id, second, cx);
+            let query = store
+                .jdtls_project_query_token(worktree_id)
+                .expect("one refresh");
+            store.schedule_jdtls_project_refresh(server_id, worktree_id, cx);
+            assert_eq!(store.jdtls_project_query_token(worktree_id), Some(query));
+
+            let state = store
+                .jdtls_projects
+                .get_mut(&worktree_id)
+                .expect("project state");
+            state.mark_import_failed(server_id).expect("cancel import");
+            let late = ProgressToken::Number(3);
+            store.on_lsp_work_start(server_id, late.clone(), progress, cx);
+            store.on_lsp_work_end(server_id, late, cx);
+            assert!(store.jdtls_project_import_failed(worktree_id));
+            assert!(!store.jdtls_project_query_pending(worktree_id));
+        });
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn external_build_edit_cancels_current_jdtls_import(cx: &mut gpui::TestAppContext) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        let server_id = server.server.server_id();
+        let local_pom = fixture
+            .project
+            .update(cx, |project, cx| {
+                project.open_local_buffer("/project-consumer/nested/pom.xml", cx)
+            })
+            .await
+            .expect("open nested reactor POM");
+        let import = fixture.store.update(cx, |store, _| {
+            let state = store.jdtls_projects.entry(worktree_id).or_default();
+            let query = state.begin(server_id, worktree_id).expect("initial query");
+            assert!(state.finish(query, Vec::new(), false));
+            state
+                .begin_import_operation(server_id, worktree_id)
+                .expect("start import")
+        });
+
+        fixture
+            .fs
+            .write(
+                Path::new("/project-consumer/Main.java"),
+                b"class Main { int field; }",
+            )
+            .await
+            .expect("edit ordinary Java source");
+        fixture
+            .fs
+            .write(
+                Path::new("/project-consumer/.project"),
+                b"<projectDescription/>",
+            )
+            .await
+            .expect("create provider-owned descriptor");
+        ProjectLanguageFixture::pump(cx);
+        fixture.store.read_with(cx, |store, _| {
+            assert_eq!(store.jdtls_project_import_token(worktree_id), Some(import));
+        });
+
+        fixture
+            .fs
+            .write(
+                Path::new("/project-consumer/pom.xml"),
+                b"<project><artifactId>changed</artifactId></project>",
+            )
+            .await
+            .expect("edit reactor POM");
+        ProjectLanguageFixture::pump(cx);
+        fixture.store.update(cx, |store, _| {
+            assert!(store.jdtls_project_import_token(worktree_id).is_none());
+            assert!(store.jdtls_project_import_failed(worktree_id));
+            let state = store
+                .jdtls_projects
+                .get_mut(&worktree_id)
+                .expect("provider state");
+            assert!(state.generation() > import.generation());
+            assert!(!state.snapshot_is_current());
+            assert!(!state.finish_import_without_membership_change(import));
+        });
+        local_pom.update(cx, |buffer, cx| {
+            buffer.edit([(0..0, "<!-- local edit -->\n")], None, cx);
+        });
+        fixture
+            .project
+            .update(cx, |project, cx| project.save_buffer(local_pom, cx))
+            .await
+            .expect("save a second reactor POM");
+        ProjectLanguageFixture::pump(cx);
+        fixture.store.read_with(cx, |store, _| {
+            assert!(store.jdtls_project_import_failed(worktree_id));
+        });
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn already_initialized_java_startup_dispatches_later_opened_source(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        check_later_opened_java_source(cx, LooseJavaSourceTiming::AfterStartup).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn later_opened_java_source_rejects_prior_import_generation(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        check_later_opened_java_source(cx, LooseJavaSourceTiming::HeldReply).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn later_opened_java_source_waits_for_startup_import(cx: &mut gpui::TestAppContext) {
+        check_later_opened_java_source(cx, LooseJavaSourceTiming::DuringImport).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn later_opened_java_source_drops_deferred_source_after_settings_change(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        check_later_opened_java_source(cx, LooseJavaSourceTiming::SettingsChange).await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum LooseJavaSourceTiming {
+        AfterStartup,
+        HeldReply,
+        DuringImport,
+        SettingsChange,
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    async fn check_later_opened_java_source(
+        cx: &mut gpui::TestAppContext,
+        timing: LooseJavaSourceTiming,
+    ) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture
+            .fs
+            .insert_tree(
+                "/project-consumer/loose/src/example",
+                serde_json::json!({"Loose.java": "package example; class Loose {}"}),
+            )
+            .await;
+        let languages = fixture
+            .project
+            .read_with(cx, |project, _| project.languages().clone());
+        languages.remove_lsp_adapter(
+            &fixture.language.name(),
+            &LanguageServerName::new_static("jdtls"),
+        );
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let (release, receiver) = oneshot::channel();
+        let receiver = Arc::new(Mutex::new(Some(receiver)));
+        fixture.servers = languages.register_fake_lsp(
+            "Java",
+            language::FakeLspAdapter {
+                name: "jdtls",
+                capabilities: lsp::ServerCapabilities {
+                    execute_command_provider: Some(lsp::ExecuteCommandOptions {
+                        commands: vec!["groovy.java.addLooseSource".into()],
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+                initializer: Some(Box::new({
+                    let calls = calls.clone();
+                    move |server| {
+                        let calls = calls.clone();
+                        let receiver = receiver.clone();
+                        server.set_request_handler::<lsp::request::ExecuteCommand, _, _>(
+                            move |parameters, _| {
+                                let registered = parameters.command == "groovy.java.addLooseSource";
+                                let held = if registered {
+                                    calls.lock().push(parameters.arguments);
+                                    receiver.lock().take()
+                                } else {
+                                    None
+                                };
+                                async move {
+                                    if let Some(held) = held {
+                                        held.await.expect("release loose Java provider reply");
+                                    }
+                                    let roots = registered.then_some(util::uri!("file:///project-consumer/loose/src/"));
+                                    Ok(Some(serde_json::json!({"version":1,"sourceRoots":roots.into_iter().collect::<Vec<_>>()})))
+                                }
+                            },
+                        );
+                    }
+                })),
+                ..Default::default()
+            },
+        );
+        fixture.settings(r#"{"jvm_builds":{"maven":{"selected_poms":[]}}}"#, cx);
+        fixture.trust(cx, true);
+        fixture
+            .register(cx)
+            .expect("start provider before a document opens");
+        let mut server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        let import = fixture.store.update(cx, |store, _| {
+            let state = store.jdtls_projects.entry(worktree_id).or_default();
+            let token = state
+                .begin(server.server.server_id(), worktree_id)
+                .expect("query token");
+            assert!(state.finish(token, Vec::new(), false));
+            matches!(
+                timing,
+                LooseJavaSourceTiming::DuringImport | LooseJavaSourceTiming::SettingsChange
+            )
+            .then(|| {
+                state
+                    .begin_import_operation(server.server.server_id(), worktree_id)
+                    .expect("startup import token")
+            })
+        });
+        let (_buffer, _handle) = fixture
+            .project
+            .update(cx, |project, cx| {
+                project.open_local_buffer_with_lsp(
+                    "/project-consumer/loose/src/example/Loose.java",
+                    cx,
+                )
+            })
+            .await
+            .expect("open loose Java source");
+        ProjectLanguageFixture::pump(cx);
+        let opened = server
+            .receive_notification::<lsp::notification::DidOpenTextDocument>()
+            .await;
+        if let Some(token) = import {
+            assert!(calls.lock().is_empty());
+            if timing == LooseJavaSourceTiming::SettingsChange {
+                fixture.settings(
+                    r#"{"jvm_builds":{"maven":{"selected_poms":[]}},"lsp":{"jdtls":{"settings":{"java":{"import":{"gradle":{"enabled":false}}}}}}}"#,
+                    cx,
+                );
+            }
+            fixture.store.update(cx, |store, cx| {
+                let state = store
+                    .jdtls_projects
+                    .get_mut(&worktree_id)
+                    .expect("project state");
+                let finished = state.finish_import_without_membership_change(token);
+                assert_eq!(finished, timing != LooseJavaSourceTiming::SettingsChange);
+                if !finished {
+                    assert_eq!(state.failed_import(), Some(server.server.server_id()));
+                    assert!(!state.snapshot_is_current());
+                }
+                store.apply_pending_jvm_startup(server.server.server_id(), worktree_id, cx);
+            });
+            ProjectLanguageFixture::pump(cx);
+            if timing == LooseJavaSourceTiming::SettingsChange {
+                assert!(calls.lock().is_empty());
+                return;
+            }
+        }
+        assert_eq!(
+            calls.lock().as_slice(),
+            [vec![serde_json::json!({
+                "rootUri": util::uri!("file:///project-consumer/"),
+                "sourceUri": util::uri!("file:///project-consumer/loose/src/example/Loose.java"),
+            })]]
+        );
+        if timing == LooseJavaSourceTiming::HeldReply {
+            fixture.store.update(cx, |store, _| {
+                let state = store
+                    .jdtls_projects
+                    .get_mut(&worktree_id)
+                    .expect("project state");
+                let token = state
+                    .begin(server.server.server_id(), worktree_id)
+                    .expect("replacement query token");
+                assert!(state.finish(token, Vec::new(), false));
+            });
+        }
+        release.send(()).expect("release held provider response");
+        ProjectLanguageFixture::pump(cx);
+        if timing == LooseJavaSourceTiming::HeldReply {
+            assert!(
+                server
+                    .try_receive_notification::<lsp::notification::DidCloseTextDocument>()
+                    .now_or_never()
+                    .is_none()
+            );
+            let buffer_id = _buffer.read_with(cx, |buffer, _| buffer.remote_id());
+            fixture.store.read_with(cx, |store, _| {
+                let versions = &store.as_local().expect("local store").buffer_snapshots[&buffer_id]
+                    [&server.server.server_id()];
+                assert_eq!(versions.len(), 1);
+                assert_eq!(versions[0].version, opened.text_document.version);
+            });
+            return;
+        }
+        let closed = server
+            .receive_notification::<lsp::notification::DidCloseTextDocument>()
+            .await;
+        let rebound = server
+            .receive_notification::<lsp::notification::DidOpenTextDocument>()
+            .await;
+        assert_eq!(closed.text_document.uri, opened.text_document.uri);
+        assert_eq!(rebound.text_document.uri, opened.text_document.uri);
+        assert_eq!(rebound.text_document.text, opened.text_document.text);
+        assert_eq!(
+            rebound.text_document.version,
+            opened.text_document.version + 1
+        );
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
     async fn project_language_consumer_initializes_joint_controls_and_restores_defaults(
         cx: &mut gpui::TestAppContext,
     ) {
@@ -25048,22 +26572,28 @@ mod tests {
             false
         );
         let mut previous = original.server.server_id();
-        for (settings, maven, gradle) in [
+        for (settings, maven, gradle, workspace_folders) in [
             (
-                r#"{"jvm_builds":{"maven":{"selected_poms":[]}}}"#,
+                r#"{"jvm_builds":{"maven":{"selected_poms":[]}},"lsp":{"jdtls":{"initialization_options":{"workspaceFolders":["file:///workspace/loose-java","file:///workspace"]}}}}"#,
                 true,
                 false,
+                Some(serde_json::json!([
+                    "file:///workspace/loose-java",
+                    "file:///workspace"
+                ])),
             ),
             (
                 r#"{"jvm_builds":{"gradle":{"selected_build_files":[]}}}"#,
                 false,
                 true,
+                None,
             ),
-            ("{}", false, false),
+            ("{}", false, false, None),
             (
                 r#"{"jvm_builds":{"maven":{"selected_poms":[]},"gradle":{"selected_build_files":[]}}}"#,
                 true,
                 true,
+                None,
             ),
         ] {
             let count = requests.lock().expect("initialize requests").len();
@@ -25089,6 +26619,7 @@ mod tests {
             );
             assert_eq!(options["bundles"], serde_json::json!(["fixture-bundle"]));
             assert_eq!(options["fixture"], "retained");
+            assert_eq!(options.get("workspaceFolders"), workspace_folders.as_ref());
         }
     }
 
@@ -25636,6 +27167,28 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "jvm-tools")]
+    #[test]
+    fn expired_kotlin_lsp_has_a_host_recovery_action_without_private_details() {
+        let name = LanguageServerName::from("kotlin-lsp");
+        let stderr =
+            "Log file: /private/host/intellij-server.log\nThis build of kotlin-server has expired.";
+        let message = language_server_startup_status_error(&name, "Server reset", stderr);
+        assert!(message.contains("project host has expired"));
+        assert!(message.contains("lsp.kotlin-lsp.binary.path"));
+        assert!(message.contains("explicitly select kotlin-language-server"));
+        assert!(!message.contains("/private/host"));
+        assert!(
+            language_server_startup_status_error(
+                &LanguageServerName::from("kotlin-language-server"),
+                "Server reset",
+                stderr,
+            )
+            .contains(stderr)
+        );
+    }
+
+    #[cfg(feature = "jvm-tools")]
     #[test]
     fn non_jvm_download_denials_retain_the_existing_startup_status() {
         let denied = "capability for download_file https://example.invalid/server.zip is not granted by the extension host";
