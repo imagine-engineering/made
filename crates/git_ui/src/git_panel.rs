@@ -174,6 +174,10 @@ actions!(
         ActivateChangesTab,
         /// Activates the History tab.
         ActivateHistoryTab,
+        /// Discards unstaged changes to tracked files, keeping the staged changes.
+        DiscardUnstagedChanges,
+        /// Restores the selected tracked file from HEAD after confirmation.
+        DiscardAllFileChanges,
     ]
 );
 
@@ -203,6 +207,12 @@ where
 enum TrashCancel {
     Trash,
     Cancel,
+}
+
+#[derive(Clone, Copy)]
+enum RestoreSource {
+    Index,
+    Head,
 }
 
 #[derive(Clone, Copy)]
@@ -277,6 +287,7 @@ fn git_panel_context_menu(
     has_tracked_changes: bool,
     has_staged_changes: bool,
     has_unstaged_changes: bool,
+    has_unstaged_tracked_changes: bool,
     has_new_changes: bool,
     has_stash_items: bool,
     include_copy_paths: bool,
@@ -290,9 +301,9 @@ fn git_panel_context_menu(
             .action_disabled_when(!has_unstaged_changes, "Stage All", StageAll.boxed_clone())
             .action_disabled_when(!has_staged_changes, "Unstage All", UnstageAll.boxed_clone())
             .action_disabled_when(
-                !has_tracked_changes,
-                "Restore All Changes",
-                RestoreTrackedFiles.boxed_clone(),
+                !has_unstaged_tracked_changes,
+                "Discard Unstaged Tracked Changes",
+                DiscardUnstagedChanges.boxed_clone(),
             )
             .separator()
             .action_disabled_when(
@@ -2248,16 +2259,66 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.restore_selected_file(None, action.skip_prompt, window, cx);
+    }
+
+    fn discard_all_file_changes(
+        &mut self,
+        _: &DiscardAllFileChanges,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.restore_selected_file(Some(RestoreSource::Head), false, window, cx);
+    }
+
+    fn can_restore_from_index(status: FileStatus) -> bool {
+        matches!(status, FileStatus::Tracked(_)) && status.staging().has_unstaged()
+    }
+
+    fn restore_selected_file(
+        &mut self,
+        source: Option<RestoreSource>,
+        skip_prompt: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let path_style = self.project.read(cx).path_style(cx);
         maybe!({
-            let list_entry = self.entries.get(self.selected_entry?)?.clone();
-            let entry = list_entry.status_entry()?.to_owned();
-            let skip_prompt = action.skip_prompt || entry.status.is_created();
+            let entry = self
+                .entries
+                .get(self.selected_entry?)?
+                .status_entry()?
+                .clone();
+            let active_repository = self.active_repository.clone()?;
+            let status = active_repository
+                .read(cx)
+                .status_for_path(&entry.repo_path)
+                .map_or(entry.status, |status| status.status);
+            let can_restore_from_index = Self::can_restore_from_index(status);
+            let source = source.unwrap_or(if can_restore_from_index {
+                RestoreSource::Index
+            } else {
+                RestoreSource::Head
+            });
+            if status.is_created() && matches!(source, RestoreSource::Head) {
+                self.trash_entry(&entry, window, cx);
+                return Some(());
+            }
 
+            let drops_staged =
+                matches!(source, RestoreSource::Head) && status.staging().has_staged();
+            let skip_prompt = skip_prompt && matches!(source, RestoreSource::Index);
             let prompt = if skip_prompt {
                 Task::ready(Ok(0))
             } else {
-                let (message, confirm_text) = if entry.status.is_deleted() {
+                let (message, confirm_text) = if drops_staged {
+                    (
+                        "Discard staged and unstaged changes to ",
+                        "Discard All Changes",
+                    )
+                } else if matches!(source, RestoreSource::Index) && status.staging().has_staged() {
+                    ("Discard unstaged changes to ", "Discard Unstaged Changes")
+                } else if status.is_deleted() {
                     ("Are you sure you want to restore ", "Restore File")
                 } else {
                     (
@@ -2292,7 +2353,7 @@ impl GitPanel {
                     }
 
                     this.update_in(cx, |this, window, cx| {
-                        this.revert_entry(&entry, window, cx);
+                        this.perform_checkout(active_repository, vec![entry], source, window, cx);
                     })?;
 
                     Ok(())
@@ -2377,64 +2438,58 @@ impl GitPanel {
         });
     }
 
-    fn revert_entry(
-        &mut self,
-        entry: &GitStatusEntry,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        maybe!({
-            let active_repo = self.active_repository.clone()?;
-            let path = active_repo
-                .read(cx)
-                .repo_path_to_project_path(&entry.repo_path, cx)?;
-            let workspace = self.workspace.clone();
-
+    fn trash_entry(&mut self, entry: &GitStatusEntry, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(active_repository) = self.active_repository.clone() else {
+            return;
+        };
+        let Some(path) = active_repository
+            .read(cx)
+            .repo_path_to_project_path(&entry.repo_path, cx)
+        else {
+            return;
+        };
+        let Some(filename) = path.path.file_name() else {
+            return;
+        };
+        let workspace = self.workspace.clone();
+        let entry = entry.clone();
+        let prompt = prompt(&format!("Trash {filename}?"), None, window, cx);
+        cx.spawn_in(window, async move |_, cx| {
+            match prompt.await? {
+                TrashCancel::Trash => {}
+                TrashCancel::Cancel => return Ok(()),
+            }
+            let task = workspace.update(cx, |workspace, cx| {
+                workspace
+                    .project()
+                    .update(cx, |project, cx| project.trash_file(path, cx))
+            })?;
+            if let Some(task) = task {
+                task.await?;
+            }
             if entry.status.staging().has_staged() {
-                self.change_file_stage(false, vec![entry.clone()], cx);
+                active_repository
+                    .update(cx, |repo, cx| {
+                        repo.unstage_entries(vec![entry.repo_path], cx)
+                    })
+                    .await?;
             }
-            let filename = path.path.file_name()?.to_string();
-
-            if !entry.status.is_created() {
-                self.perform_checkout(vec![entry.clone()], window, cx);
-            } else {
-                let prompt = prompt(&format!("Trash {}?", filename), None, window, cx);
-                cx.spawn_in(window, async move |_, cx| {
-                    match prompt.await? {
-                        TrashCancel::Trash => {}
-                        TrashCancel::Cancel => return Ok(()),
-                    }
-                    let task = workspace.update(cx, |workspace, cx| {
-                        workspace
-                            .project()
-                            .update(cx, |project, cx| project.trash_file(path, cx))
-                    })?;
-                    if let Some(task) = task {
-                        task.await?;
-                    }
-                    Ok(())
-                })
-                .detach_and_prompt_err(
-                    "Failed to trash file",
-                    window,
-                    cx,
-                    |e, _, _| Some(format!("{e}")),
-                );
-            }
-            Some(())
+            Ok(())
+        })
+        .detach_and_prompt_err("Failed to trash file", window, cx, |error, _, _| {
+            Some(format!("{error}"))
         });
     }
 
     fn perform_checkout(
         &mut self,
+        active_repository: Entity<Repository>,
         entries: Vec<GitStatusEntry>,
+        source: RestoreSource,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let workspace = self.workspace.clone();
-        let Some(active_repository) = self.active_repository.clone() else {
-            return;
-        };
 
         let task = cx.spawn_in(window, async move |this, cx| {
             let tasks: Vec<_> = workspace.update(cx, |workspace, cx| {
@@ -2455,14 +2510,11 @@ impl GitPanel {
 
             this.update_in(cx, |this, window, cx| {
                 let task = active_repository.update(cx, |repo, cx| {
-                    repo.checkout_files(
-                        "HEAD",
-                        entries
-                            .into_iter()
-                            .map(|entries| entries.repo_path)
-                            .collect(),
-                        cx,
-                    )
+                    let paths = entries.into_iter().map(|entry| entry.repo_path).collect();
+                    match source {
+                        RestoreSource::Index => repo.restore_worktree_from_index(paths, cx),
+                        RestoreSource::Head => repo.checkout_files("HEAD", paths, cx),
+                    }
                 });
                 this.update_visible_entries(window, cx);
                 cx.notify();
@@ -2506,18 +2558,39 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.restore_tracked_entries(RestoreSource::Head, window, cx);
+    }
+
+    fn discard_unstaged_changes(
+        &mut self,
+        _: &DiscardUnstagedChanges,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.restore_tracked_entries(RestoreSource::Index, window, cx);
+    }
+
+    fn restore_tracked_entries(
+        &mut self,
+        source: RestoreSource,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(active_repository) = self.active_repository.clone() else {
+            return;
+        };
         let entries = self
             .change_entries_by_path()
-            .filter(|status_entry| {
-                !status_entry.status.is_created() && status_entry.status.staging().has_staged()
+            .filter(|entry| match source {
+                RestoreSource::Head => !entry.status.is_created() && entry.staging.has_staged(),
+                RestoreSource::Index => {
+                    !entry.status.is_created() && Self::can_restore_from_index(entry.status)
+                }
             })
             .cloned()
             .collect::<Vec<_>>();
-
-        match entries.len() {
-            0 => return,
-            1 => return self.revert_entry(&entries[0], window, cx),
-            _ => {}
+        if entries.is_empty() {
+            return;
         }
         let mut details = entries
             .iter()
@@ -2529,27 +2602,32 @@ impl GitPanel {
             details.push_str(&format!("\nand {} more…", entries.len() - 5))
         }
 
-        #[derive(strum::EnumIter, strum::VariantNames)]
-        #[strum(serialize_all = "title_case")]
-        enum RestoreCancel {
-            RestoreTrackedFiles,
-            Cancel,
-        }
-        let prompt = prompt(
-            "Discard changes to these files?",
+        let (message, confirm) = match source {
+            RestoreSource::Index => (
+                "Discard unstaged changes to these files?",
+                "Discard Unstaged Changes",
+            ),
+            RestoreSource::Head => (
+                "Discard staged and unstaged changes to these files?",
+                "Discard All Changes",
+            ),
+        };
+        let confirmation = window.prompt(
+            PromptLevel::Warning,
+            message,
             Some(&details),
-            window,
+            &[confirm, "Cancel"],
             cx,
         );
         cx.spawn_in(window, async move |this, cx| {
-            if let Ok(RestoreCancel::RestoreTrackedFiles) = prompt.await {
+            if confirmation.await? == 0 {
                 this.update_in(cx, |this, window, cx| {
-                    this.perform_checkout(entries, window, cx);
-                })
-                .ok();
+                    this.perform_checkout(active_repository, entries, source, window, cx);
+                })?;
             }
+            anyhow::Ok(())
         })
-        .detach();
+        .detach_and_log_err(cx);
     }
 
     fn clean_all(&mut self, _: &TrashUntrackedFiles, window: &mut Window, cx: &mut Context<Self>) {
@@ -2565,7 +2643,7 @@ impl GitPanel {
 
         match to_delete.len() {
             0 => return,
-            1 => return self.revert_entry(&to_delete[0], window, cx),
+            1 => return self.trash_entry(&to_delete[0], window, cx),
             _ => {}
         };
 
@@ -5851,6 +5929,9 @@ impl GitPanel {
         let has_tracked_changes = self.has_tracked_changes();
         let has_staged_changes = self.has_staged_changes();
         let has_unstaged_changes = self.has_unstaged_changes();
+        let has_unstaged_tracked_changes = self
+            .change_entries_by_path()
+            .any(|entry| !entry.status.is_created() && Self::can_restore_from_index(entry.status));
         let has_new_changes = self.new_count > 0;
         let has_stash_items = self.stash_entries.entries.len() > 0;
 
@@ -5868,6 +5949,7 @@ impl GitPanel {
                     has_tracked_changes,
                     has_staged_changes,
                     has_unstaged_changes,
+                    has_unstaged_tracked_changes,
                     has_new_changes,
                     has_stash_items,
                     false,
@@ -7575,8 +7657,11 @@ impl GitPanel {
         } else {
             "Unstage File"
         };
-        let restore_title = if entry.status.is_created() {
+        let can_restore_from_index = Self::can_restore_from_index(entry.status);
+        let restore_title = if entry.status.is_created() && !can_restore_from_index {
             "Trash File"
+        } else if can_restore_from_index && entry.status.staging().has_staged() {
+            "Discard Unstaged Changes"
         } else if entry.status.is_deleted() {
             "Restore File"
         } else {
@@ -7588,6 +7673,17 @@ impl GitPanel {
                 .context(self.focus_handle.clone())
                 .action(stage_title, ToggleStaged.boxed_clone())
                 .action(restore_title, git::RestoreFile::default().boxed_clone())
+                .when(
+                    can_restore_from_index && entry.status.staging().has_staged(),
+                    |menu| {
+                        let title = if is_created {
+                            "Trash File"
+                        } else {
+                            "Discard All Changes"
+                        };
+                        menu.action(title, DiscardAllFileChanges.boxed_clone())
+                    },
+                )
                 .separator()
                 .action("Unstaged Changes", ViewUnstagedChanges.boxed_clone())
                 .action("Staged Changes", ViewStagedChanges.boxed_clone())
@@ -7629,6 +7725,9 @@ impl GitPanel {
         let has_tracked_changes = self.has_tracked_changes();
         let has_staged_changes = self.has_staged_changes();
         let has_unstaged_changes = self.has_unstaged_changes();
+        let has_unstaged_tracked_changes = self
+            .change_entries_by_path()
+            .any(|entry| !entry.status.is_created() && Self::can_restore_from_index(entry.status));
         let has_new_changes = self.new_count > 0;
         let has_stash_items = self.stash_entries.entries.len() > 0;
 
@@ -7636,6 +7735,7 @@ impl GitPanel {
             has_tracked_changes,
             has_staged_changes,
             has_unstaged_changes,
+            has_unstaged_tracked_changes,
             has_new_changes,
             has_stash_items,
             include_copy_paths,
@@ -8430,6 +8530,8 @@ impl Render for GitPanel {
                     .on_action(cx.listener(Self::stage_selected))
                     .on_action(cx.listener(Self::unstage_selected))
                     .on_action(cx.listener(Self::restore_tracked_files))
+                    .on_action(cx.listener(Self::discard_unstaged_changes))
+                    .on_action(cx.listener(Self::discard_all_file_changes))
                     .on_action(cx.listener(Self::revert_selected))
                     .on_action(cx.listener(Self::add_to_gitignore))
                     .on_action(cx.listener(Self::add_to_git_info_exclude))
@@ -13000,6 +13102,141 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_git_panel_discard_preserves_staged_contents(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        let root = Path::new(path!("/root/project"));
+        let dot_git = root.join(".git");
+        let first = root.join("first.txt");
+        let second = root.join("second.txt");
+        fs.insert_tree(
+            root,
+            json!({".git": {}, "first.txt": "unstaged first", "second.txt": "unstaged second"}),
+        )
+        .await;
+        fs.set_head_and_index_for_repo(
+            &dot_git,
+            &[
+                ("first.txt", "committed first".into()),
+                ("second.txt", "committed second".into()),
+            ],
+        );
+        fs.set_index_for_repo(
+            &dot_git,
+            &[
+                ("first.txt", "staged first".into()),
+                ("second.txt", "staged second".into()),
+            ],
+        );
+        let backend = fs.open_repo(&dot_git, None).expect("Git backend");
+        let project = Project::test(fs.clone(), [root], cx).await;
+        let window_handle =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = window_handle
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .expect("workspace");
+        let visual = &mut VisualTestContext::from_window(window_handle.into(), cx);
+        project
+            .read_with(visual, |project, cx| {
+                project
+                    .worktrees(cx)
+                    .next()
+                    .expect("worktree")
+                    .read(cx)
+                    .as_local()
+                    .expect("local worktree")
+                    .scan_complete()
+            })
+            .await;
+        visual.run_until_parked();
+        let panel = workspace.update_in(visual, GitPanel::new);
+        await_git_panel_entries(&panel, visual).await;
+        visual.run_until_parked();
+
+        panel.update_in(visual, |panel, window, cx| {
+            panel.selected_entry = Some(
+                panel
+                    .entry_by_path(&repo_path("first.txt"))
+                    .expect("first file"),
+            );
+            panel.revert_selected(&git::RestoreFile::default(), window, cx);
+        });
+        cx.simulate_prompt_answer("Discard Unstaged Changes");
+        visual.run_until_parked();
+        assert_eq!(fs.load(&first).await.expect("first file"), "staged first");
+        assert_eq!(
+            fs.load(&second).await.expect("second file"),
+            "unstaged second"
+        );
+        assert_eq!(
+            backend
+                .load_index_text(repo_path("first.txt"))
+                .await
+                .as_deref(),
+            Some("staged first")
+        );
+
+        panel.update_in(visual, |panel, window, cx| {
+            panel.discard_unstaged_changes(&DiscardUnstagedChanges, window, cx);
+        });
+        cx.simulate_prompt_answer("Discard Unstaged Changes");
+        visual.run_until_parked();
+        assert_eq!(
+            fs.load(&second).await.expect("second file"),
+            "staged second"
+        );
+        assert_eq!(
+            backend
+                .load_index_text(repo_path("second.txt"))
+                .await
+                .as_deref(),
+            Some("staged second")
+        );
+
+        panel.update_in(visual, |panel, window, cx| {
+            panel.restore_tracked_files(&RestoreTrackedFiles, window, cx);
+        });
+        cx.simulate_prompt_answer("Cancel");
+        visual.run_until_parked();
+        assert_eq!(fs.load(&first).await.expect("first file"), "staged first");
+        assert_eq!(
+            backend
+                .load_index_text(repo_path("first.txt"))
+                .await
+                .as_deref(),
+            Some("staged first")
+        );
+
+        panel.update_in(visual, |panel, window, cx| {
+            panel.restore_tracked_files(&RestoreTrackedFiles, window, cx);
+        });
+        cx.simulate_prompt_answer("Discard All Changes");
+        visual.run_until_parked();
+        assert_eq!(
+            fs.load(&first).await.expect("first file"),
+            "committed first"
+        );
+        assert_eq!(
+            fs.load(&second).await.expect("second file"),
+            "committed second"
+        );
+        assert_eq!(
+            backend
+                .load_index_text(repo_path("first.txt"))
+                .await
+                .as_deref(),
+            Some("committed first")
+        );
+        assert_eq!(
+            backend
+                .load_index_text(repo_path("second.txt"))
+                .await
+                .as_deref(),
+            Some("committed second")
+        );
+    }
+
+    #[gpui::test]
     async fn test_discard_tracked_changes_respects_staging(cx: &mut TestAppContext) {
         init_test(cx);
         let fs = FakeFs::new(cx.background_executor.clone());
@@ -13064,7 +13301,10 @@ mod tests {
         let (message, detail) = cx
             .pending_prompt()
             .expect("discard tracked should show a confirmation prompt");
-        assert_eq!(message, "Discard changes to these files?");
+        assert_eq!(
+            message,
+            "Discard staged and unstaged changes to these files?"
+        );
         assert!(
             detail.contains("staged_a.rs"),
             "prompt should list staged_a.rs, got: {detail}"

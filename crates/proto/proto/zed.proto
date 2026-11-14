@@ -566,7 +566,8 @@ message Envelope {
     DoctorRemoteServerResponse doctor_remote_server_response = 531;
     GetCollaborationFilePolicy get_collaboration_file_policy = 532;
     GetCollaborationFilePolicyResponse get_collaboration_file_policy_response = 533;
-    CollaborationFilePolicyInvalidated collaboration_file_policy_invalidated = 534; // current max
+    CollaborationFilePolicyInvalidated collaboration_file_policy_invalidated = 534;
+    GitRestoreIndexFiles git_restore_index_files = 535; // current max
   }
 
   reserved 87 to 88;

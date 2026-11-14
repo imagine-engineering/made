@@ -322,6 +322,12 @@ message GitCheckoutFiles {
   repeated string paths = 5;
 }
 
+message GitRestoreIndexFiles {
+  uint64 project_id = 1;
+  uint64 repository_id = 2;
+  repeated string paths = 3;
+}
+
 message GitAddPathToGitignore {
   uint64 project_id = 1;
   reserved 2;

@@ -351,11 +351,76 @@ impl GitRepository for FakeGitRepository {
 
     fn checkout_files(
         &self,
-        _commit: String,
-        _paths: Vec<RepoPath>,
+        commit: String,
+        paths: Vec<RepoPath>,
         _env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>> {
-        unimplemented!()
+        async move {
+            anyhow::ensure!(commit == "HEAD", "Unsupported checkout revision: {commit}");
+            let worktree = self.dot_git_path.parent().context("Missing worktree")?;
+            let files = self
+                .with_state_async(false, move |state| {
+                    paths
+                        .into_iter()
+                        .map(|path| {
+                            let contents = state
+                                .head_contents
+                                .get(&path)
+                                .with_context(|| format!("Path {path:?} is not in HEAD"))?
+                                .clone();
+                            Ok((path, contents))
+                        })
+                        .collect::<Result<Vec<_>>>()
+                })
+                .await?;
+            for (path, contents) in &files {
+                self.fs
+                    .write(&worktree.join(path.as_std_path()), contents.as_bytes())
+                    .await?;
+            }
+            self.with_state_async(true, move |state| {
+                state.index_contents.extend(files);
+                Ok(())
+            })
+            .await
+        }
+        .boxed()
+    }
+
+    fn restore_worktree_from_index(
+        &self,
+        paths: Vec<RepoPath>,
+        _env: Arc<HashMap<String, String>>,
+    ) -> BoxFuture<'_, Result<()>> {
+        async move {
+            let worktree = self.dot_git_path.parent().context("Missing worktree")?;
+            let files = self
+                .with_state_async(false, move |state| {
+                    paths
+                        .into_iter()
+                        .map(|path| {
+                            anyhow::ensure!(
+                                !state.unmerged_paths.contains_key(&path),
+                                "Path {path:?} is unmerged"
+                            );
+                            let contents = state
+                                .index_contents
+                                .get(&path)
+                                .with_context(|| format!("Path {path:?} is not in the index"))?
+                                .clone();
+                            Ok((path, contents))
+                        })
+                        .collect::<Result<Vec<_>>>()
+                })
+                .await?;
+            for (path, contents) in files {
+                self.fs
+                    .write(&worktree.join(path.as_std_path()), contents.as_bytes())
+                    .await?;
+            }
+            Ok(())
+        }
+        .boxed()
     }
 
     fn path(&self) -> PathBuf {
