@@ -4655,8 +4655,7 @@ async fn test_streaming_tool_completes_when_llm_stream_ends_without_final_input(
         is_input_complete: false,
         thought_signature: None,
     };
-    fake_model
-        .send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(tool_use.clone()));
+    fake_model.send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(tool_use));
     cx.run_until_parked();
 
     // Send a stream error WITHOUT ever sending is_input_complete = true.
