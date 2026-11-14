@@ -574,6 +574,7 @@ async fn selected_java_case_with_debug_hooks(
         .expect("source-backed selector");
     assert!(projection.can_run(&case.id));
     assert_eq!(selection.provider_id.0, JVM_JUNIT_PROVIDER_ID);
+    let initial_selection = selection.clone();
 
     let (container, cx) = cx.add_window_view(|window, cx| {
         workspace::MultiWorkspace::test_new(project.clone(), window, cx)
@@ -1450,15 +1451,38 @@ async fn selected_java_case_with_debug_hooks(
         .expect("existing Tests panel");
     tests_panel.update(cx, |panel, cx| {
         panel.active = true;
-        panel.refresh(cx);
+        if with_real_providers {
+            panel.discover(cx);
+        } else {
+            panel.refresh(cx);
+        }
     });
     cx.run_until_parked();
-    if use_ssh {
+    if use_ssh || with_real_providers {
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
-        while !tests_panel.read_with(cx, |panel, _| {
-            find_node(&panel.projection.snapshot.roots, case_label).is_some()
-        }) && std::time::Instant::now() < deadline
-        {
+        loop {
+            let ready = tests_panel.read_with(cx, |panel, _| {
+                let Some(case) = find_node(&panel.projection.snapshot.roots, case_label) else {
+                    return false;
+                };
+                !with_real_providers
+                    || panel
+                        .projection
+                        .selection(&case.id)
+                        .is_some_and(|selection| {
+                            selection.node_id == initial_selection.node_id
+                                && selection.discovery_generation
+                                    != initial_selection.discovery_generation
+                                && panel.projection.can_run(&case.id)
+                        })
+            });
+            if ready {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Tests did not publish a current runnable Java case"
+            );
             cx.background_executor
                 .timer(Duration::from_millis(100))
                 .await;
@@ -1479,6 +1503,9 @@ async fn selected_java_case_with_debug_hooks(
         panel.host.select(id);
         assert!(panel.host.selected().is_some());
         panel.run_selected(window, cx);
+        if with_real_providers {
+            assert!(panel.action_notice.is_none(), "{:?}", panel.action_notice);
+        }
         selection
     });
     let structured = project.read_with(cx, |project, _| {
