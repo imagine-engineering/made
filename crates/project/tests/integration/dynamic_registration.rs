@@ -1737,6 +1737,242 @@ async fn test_multiple_did_change_watched_files_registrations(cx: &mut gpui::Tes
     );
 }
 
+#[gpui::test]
+async fn test_dynamic_document_change_selectors(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, first, second, _handles) = setup_document_sync_test(cx).await;
+    let notifications = Arc::new(Mutex::new(Vec::new()));
+    server.handle_notification::<lsp::notification::DidChangeTextDocument, _>({
+        let notifications = notifications.clone();
+        move |params, _| notifications.lock().push(params)
+    });
+
+    let method = "textDocument/didChange";
+    register_capability(
+        &server,
+        method,
+        "first",
+        Some(json!({
+            "documentSelector": [{ "language": "rust", "scheme": "file", "pattern": "**/a.rs" }],
+            "syncKind": 1,
+        })),
+    )
+    .await;
+
+    second.update(cx, |buffer, cx| buffer.edit([(0..0, "second")], None, cx));
+    first.update(cx, |buffer, cx| buffer.edit([(0..0, "first")], None, cx));
+    cx.executor().run_until_parked();
+    let changes = mem::take(&mut *notifications.lock());
+    assert_eq!(
+        changes.len(),
+        1,
+        "only the matching buffer should send edits"
+    );
+    assert_eq!(
+        changes[0].text_document.uri,
+        Uri::from_file_path(path!("/the-root/a.rs")).unwrap()
+    );
+    assert_eq!(changes[0].content_changes[0].text, "first");
+    assert_eq!(changes[0].content_changes[0].range, None);
+
+    register_capability(
+        &server,
+        method,
+        "second",
+        Some(json!({
+            "documentSelector": [{ "language": "rust", "pattern": "**/b.rs" }],
+            "syncKind": 2,
+        })),
+    )
+    .await;
+    first.update(cx, |buffer, cx| buffer.edit([(5..5, "!")], None, cx));
+    second.update(cx, |buffer, cx| buffer.edit([(6..6, "!")], None, cx));
+    cx.executor().run_until_parked();
+    let changes = mem::take(&mut *notifications.lock());
+    let changes_by_uri: BTreeMap<_, _> = changes
+        .iter()
+        .map(|change| (&change.text_document.uri, &change.content_changes))
+        .collect();
+    assert_eq!(changes.len(), 2);
+    let first_changes = changes_by_uri[&Uri::from_file_path(path!("/the-root/a.rs")).unwrap()];
+    let second_changes = changes_by_uri[&Uri::from_file_path(path!("/the-root/b.rs")).unwrap()];
+    assert_eq!(first_changes[0].text, "first!");
+    assert_eq!(first_changes[0].range, None);
+    assert_eq!(second_changes[0].text, "second!");
+    assert!(second_changes[0].range.is_some());
+
+    let fs = project.read_with(cx, |project, _| project.fs().as_fake());
+    fs.rename(
+        Path::new(path!("/the-root/a.rs")),
+        Path::new(path!("/the-root/renamed.rs")),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    cx.executor().run_until_parked();
+    first.update(cx, |buffer, cx| buffer.edit([(6..6, "?")], None, cx));
+    cx.executor().run_until_parked();
+    assert!(
+        notifications.lock().is_empty(),
+        "rename changed selector eligibility"
+    );
+
+    unregister_capabilities(&server, method, &["first"]).await;
+    first.update(cx, |buffer, cx| buffer.edit([(7..7, "!")], None, cx));
+    second.update(cx, |buffer, cx| buffer.edit([(7..7, "?")], None, cx));
+    cx.executor().run_until_parked();
+    let changes = mem::take(&mut *notifications.lock());
+    assert_eq!(changes.len(), 1);
+    assert_eq!(
+        changes[0].text_document.uri,
+        Uri::from_file_path(path!("/the-root/b.rs")).unwrap()
+    );
+    assert_eq!(changes[0].content_changes[0].text, "?");
+
+    unregister_capabilities(&server, method, &["second"]).await;
+    first.update(cx, |buffer, cx| buffer.edit([(8..8, "?")], None, cx));
+    cx.executor().run_until_parked();
+    let changes = mem::take(&mut *notifications.lock());
+    assert_eq!(changes.len(), 1, "last unregistration restores static sync");
+    assert_eq!(
+        changes[0].text_document.uri,
+        Uri::from_file_path(path!("/the-root/renamed.rs")).unwrap()
+    );
+    assert_eq!(changes[0].content_changes[0].text, "first!?!?");
+    assert_eq!(changes[0].content_changes[0].range, None);
+}
+
+#[gpui::test]
+async fn test_dynamic_document_save_selectors(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, first, second, _handles) = setup_document_sync_test(cx).await;
+    let notifications = Arc::new(Mutex::new(Vec::new()));
+    server.handle_notification::<lsp::notification::DidSaveTextDocument, _>({
+        let notifications = notifications.clone();
+        move |params, _| notifications.lock().push(params)
+    });
+
+    let method = "textDocument/didSave";
+    register_capability(
+        &server,
+        method,
+        "first",
+        Some(json!({
+            "documentSelector": [{ "language": "rust", "scheme": "file", "pattern": "**/a.rs" }],
+            "includeText": true,
+        })),
+    )
+    .await;
+
+    let save = |buffer: &Entity<Buffer>, cx: &mut gpui::TestAppContext| {
+        project.update(cx, |project, cx| project.save_buffer(buffer.clone(), cx))
+    };
+    first.update(cx, |buffer, cx| buffer.edit([(0..0, "first")], None, cx));
+    second.update(cx, |buffer, cx| buffer.edit([(0..0, "second")], None, cx));
+    save(&second, cx).await.unwrap();
+    save(&first, cx).await.unwrap();
+    cx.executor().run_until_parked();
+    let saves = mem::take(&mut *notifications.lock());
+    let first_uri = Uri::from_file_path(path!("/the-root/a.rs")).unwrap();
+    let second_uri = Uri::from_file_path(path!("/the-root/b.rs")).unwrap();
+    assert_eq!(
+        saves.len(),
+        1,
+        "only the matching buffer should send a save"
+    );
+    assert_eq!(saves[0].text_document.uri, first_uri);
+    assert_eq!(saves[0].text.as_deref(), Some("first"));
+
+    register_capability(
+        &server,
+        method,
+        "second",
+        Some(json!({
+            "documentSelector": [{ "language": "rust", "pattern": "**/b.rs" }],
+        })),
+    )
+    .await;
+    first.update(cx, |buffer, cx| buffer.edit([(5..5, "!")], None, cx));
+    second.update(cx, |buffer, cx| buffer.edit([(6..6, "!")], None, cx));
+    save(&first, cx).await.unwrap();
+    save(&second, cx).await.unwrap();
+    cx.executor().run_until_parked();
+    let saves = mem::take(&mut *notifications.lock());
+    assert_eq!(saves.len(), 2);
+    assert_eq!(saves[0].text_document.uri, first_uri);
+    assert_eq!(saves[0].text.as_deref(), Some("first!"));
+    assert_eq!(saves[1].text_document.uri, second_uri);
+    assert_eq!(saves[1].text, None);
+
+    unregister_capabilities(&server, method, &["first"]).await;
+    first.update(cx, |buffer, cx| buffer.edit([(6..6, "?")], None, cx));
+    second.update(cx, |buffer, cx| buffer.edit([(7..7, "?")], None, cx));
+    save(&first, cx).await.unwrap();
+    save(&second, cx).await.unwrap();
+    cx.executor().run_until_parked();
+    let saves = mem::take(&mut *notifications.lock());
+    assert_eq!(saves.len(), 1);
+    assert_eq!(saves[0].text_document.uri, second_uri);
+    assert_eq!(saves[0].text, None);
+
+    unregister_capabilities(&server, method, &["second"]).await;
+    first.update(cx, |buffer, cx| buffer.edit([(7..7, "!")], None, cx));
+    save(&first, cx).await.unwrap();
+    cx.executor().run_until_parked();
+    let saves = mem::take(&mut *notifications.lock());
+    assert_eq!(saves.len(), 1, "last unregistration restores static saves");
+    assert_eq!(saves[0].text_document.uri, first_uri);
+    assert_eq!(saves[0].text, None);
+}
+
+async fn setup_document_sync_test(
+    cx: &mut gpui::TestAppContext,
+) -> (
+    Entity<Project>,
+    lsp::FakeLanguageServer,
+    Entity<Buffer>,
+    Entity<Buffer>,
+    [project::lsp_store::OpenLspBufferHandle; 2],
+) {
+    let (project, server) = setup_dynamic_registration_test(
+        cx,
+        lsp::ServerCapabilities {
+            text_document_sync: Some(lsp::TextDocumentSyncCapability::Options(
+                lsp::TextDocumentSyncOptions {
+                    change: Some(lsp::TextDocumentSyncKind::FULL),
+                    save: Some(lsp::TextDocumentSyncSaveOptions::Supported(true)),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        },
+    )
+    .await;
+    let fs = project.read_with(cx, |project, _| project.fs().as_fake());
+    fs.insert_tree(path!("/the-root"), json!({ "b.rs": "" }))
+        .await;
+    let (first, first_handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/the-root/a.rs"), cx)
+        })
+        .await
+        .unwrap();
+    let (second, second_handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/the-root/b.rs"), cx)
+        })
+        .await
+        .unwrap();
+    cx.executor().run_until_parked();
+    (
+        project,
+        server,
+        first,
+        second,
+        [first_handle, second_handle],
+    )
+}
+
 async fn setup_dynamic_registration_test(
     cx: &mut gpui::TestAppContext,
     capabilities: lsp::ServerCapabilities,

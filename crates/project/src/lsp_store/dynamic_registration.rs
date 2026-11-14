@@ -4,15 +4,18 @@
 //! Multiple registrations of the same capability may coexist: the most recent one is
 //! "active" and mirrored into the server's [`lsp::ServerCapabilities`], while the rest
 //! (including the statically declared capability, if any) are kept to be restored when
-//! the active registration is unregistered.
+//! the active registration is unregistered. Document change and save options
+//! remain separate from the server-wide capabilities because they depend on the document.
 
 use anyhow::{Context as _, Result};
 use collections::{BTreeSet, HashSet};
+use globset::{GlobBuilder, GlobMatcher};
 use gpui::{Context, SharedString};
 use lsp::{
     CompletionOptions, DiagnosticServerCapabilities, LanguageServer, LanguageServerId, OneOf,
-    TextDocumentSyncSaveOptions,
 };
+
+use std::path::Path;
 
 use crate::lsp_store::{
     LanguageServerState, LspStore, RenamePathsWatchedForServer, lsp_workspace_diagnostics_refresh,
@@ -57,6 +60,8 @@ impl CapabilityUnregistration {
 #[derive(Default, Debug)]
 pub(super) struct DynamicRegistrations {
     pub(super) did_change_watched_files: HashSet<String>,
+    pub(super) did_change: DocumentSyncRegistrations<lsp::TextDocumentSyncKind>,
+    pub(super) did_save: DocumentSyncRegistrations<bool>,
     pub(super) diagnostics: CapabilityRegistrations<DiagnosticServerCapabilities>,
     workspace_folders: CapabilityRegistrations<lsp::WorkspaceFoldersServerCapabilities>,
     workspace_symbol: CapabilityRegistrations<OneOf<bool, lsp::WorkspaceSymbolOptions>>,
@@ -78,6 +83,123 @@ pub(super) struct DynamicRegistrations {
     inlay_hint: CapabilityRegistrations<OneOf<bool, lsp::InlayHintServerCapabilities>>,
     code_lens: CapabilityRegistrations<lsp::CodeLensOptions>,
     document_symbol: CapabilityRegistrations<OneOf<bool, lsp::DocumentSymbolOptions>>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChangeRegistrationOptions {
+    document_selector: Option<lsp::DocumentSelector>,
+    sync_kind: lsp::TextDocumentSyncKind,
+}
+
+#[derive(Debug)]
+pub(super) struct DocumentSyncRegistrations<T>(Vec<DocumentSyncRegistration<T>>);
+
+impl<T> Default for DocumentSyncRegistrations<T> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
+#[derive(Debug)]
+struct DocumentSyncRegistration<T> {
+    id: String,
+    selector: Option<Vec<DocumentSyncFilter>>,
+    options: T,
+}
+
+#[derive(Debug)]
+struct DocumentSyncFilter {
+    language: Option<String>,
+    scheme: Option<String>,
+    pattern: Option<GlobMatcher>,
+}
+
+pub(super) struct DocumentSyncTarget<'a> {
+    pub uri: &'a lsp::Uri,
+    pub absolute_path: &'a Path,
+    pub worktree_path: &'a str,
+    pub language_id: Option<&'a str>,
+    pub matches_client_selector: bool,
+}
+
+impl<T: Copy> DocumentSyncRegistrations<T> {
+    fn register(
+        &mut self,
+        id: String,
+        selector: Option<lsp::DocumentSelector>,
+        options: T,
+    ) -> Result<()> {
+        let selector = selector
+            .map(|filters| {
+                filters
+                    .into_iter()
+                    .map(|filter| {
+                        let pattern = filter
+                            .pattern
+                            .as_deref()
+                            .map(|pattern| {
+                                GlobBuilder::new(pattern)
+                                    .literal_separator(true)
+                                    .build()
+                                    .map(|glob| glob.compile_matcher())
+                                    .with_context(|| {
+                                        format!("Invalid LSP document selector pattern {pattern:?}")
+                                    })
+                            })
+                            .transpose()?;
+                        Ok(DocumentSyncFilter {
+                            language: filter.language,
+                            scheme: filter.scheme,
+                            pattern,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
+        if let Some(registration) = self.0.iter_mut().find(|registration| registration.id == id) {
+            registration.selector = selector;
+            registration.options = options;
+        } else {
+            self.0.push(DocumentSyncRegistration {
+                id,
+                selector,
+                options,
+            });
+        }
+        Ok(())
+    }
+
+    fn unregister(&mut self, id: &str) {
+        self.0.retain(|registration| registration.id != id);
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(super) fn matching_options(&self, target: DocumentSyncTarget<'_>) -> Option<T> {
+        self.0.iter().rev().find_map(|registration| {
+            let matches = match &registration.selector {
+                Some(filters) => filters.iter().any(|filter| {
+                    filter
+                        .language
+                        .as_deref()
+                        .is_none_or(|language| Some(language) == target.language_id)
+                        && filter
+                            .scheme
+                            .as_deref()
+                            .is_none_or(|scheme| scheme == target.uri.scheme())
+                        && filter.pattern.as_ref().is_none_or(|pattern| {
+                            pattern.is_match(target.absolute_path)
+                                || pattern.is_match(target.worktree_path)
+                        })
+                }),
+                None => target.matches_client_selector,
+            };
+            matches.then_some(registration.options)
+        })
+    }
 }
 
 impl LspStore {
@@ -501,48 +623,36 @@ impl LspStore {
                     }
                 }
                 "textDocument/didChange" => {
-                    if let Some(sync_kind) = reg
+                    if let Some(options) = reg
                         .register_options
-                        .and_then(|opts| opts.get("syncKind").cloned())
-                        .map(serde_json::from_value::<lsp::TextDocumentSyncKind>)
+                        .map(serde_json::from_value::<ChangeRegistrationOptions>)
                         .transpose()?
                     {
-                        server.update_capabilities(|capabilities| {
-                            let mut sync_options = take_text_document_sync_options(capabilities);
-                            sync_options.change = Some(sync_kind);
-                            capabilities.text_document_sync =
-                                Some(lsp::TextDocumentSyncCapability::Options(sync_options));
-                        });
-                        notify_server_capabilities_updated(&server, cx);
+                        self.as_local_mut()
+                            .context("Expected LSP Store to be local")?
+                            .language_server_dynamic_registrations
+                            .entry(server_id)
+                            .or_default()
+                            .did_change
+                            .register(reg.id, options.document_selector, options.sync_kind)?;
                     }
                 }
                 "textDocument/didSave" => {
-                    if let Some(include_text) = reg
-                        .register_options
-                        .map(|opts| {
-                            let transpose = opts
-                                .get("includeText")
-                                .cloned()
-                                .map(serde_json::from_value::<Option<bool>>)
-                                .transpose();
-                            match transpose {
-                                Ok(value) => Ok(value.flatten()),
-                                Err(e) => Err(e),
-                            }
-                        })
-                        .transpose()?
-                    {
-                        server.update_capabilities(|capabilities| {
-                            let mut sync_options = take_text_document_sync_options(capabilities);
-                            sync_options.save =
-                                Some(TextDocumentSyncSaveOptions::SaveOptions(lsp::SaveOptions {
-                                    include_text,
-                                }));
-                            capabilities.text_document_sync =
-                                Some(lsp::TextDocumentSyncCapability::Options(sync_options));
-                        });
-                        notify_server_capabilities_updated(&server, cx);
-                    }
+                    let options: lsp::TextDocumentSaveRegistrationOptions = serde_json::from_value(
+                        reg.register_options
+                            .unwrap_or_else(|| serde_json::json!({})),
+                    )?;
+                    self.as_local_mut()
+                        .context("Expected LSP Store to be local")?
+                        .language_server_dynamic_registrations
+                        .entry(server_id)
+                        .or_default()
+                        .did_save
+                        .register(
+                            reg.id,
+                            options.text_document_registration_options.document_selector,
+                            options.include_text.unwrap_or(false),
+                        )?;
                 }
                 "textDocument/codeLens" => {
                     if let Some(options) = reg
@@ -885,23 +995,20 @@ impl LspStore {
                         self.refresh_semantic_tokens(server_id, cx);
                     }
                 }
-                "textDocument/didChange" => {
-                    server.update_capabilities(|capabilities| {
-                        let mut sync_options = take_text_document_sync_options(capabilities);
-                        sync_options.change = None;
-                        capabilities.text_document_sync =
-                            Some(lsp::TextDocumentSyncCapability::Options(sync_options));
-                    });
-                    notify_server_capabilities_updated(&server, cx);
-                }
-                "textDocument/didSave" => {
-                    server.update_capabilities(|capabilities| {
-                        let mut sync_options = take_text_document_sync_options(capabilities);
-                        sync_options.save = None;
-                        capabilities.text_document_sync =
-                            Some(lsp::TextDocumentSyncCapability::Options(sync_options));
-                    });
-                    notify_server_capabilities_updated(&server, cx);
+                "textDocument/didChange" | "textDocument/didSave" => {
+                    let local = self
+                        .as_local_mut()
+                        .context("Expected LSP Store to be local")?;
+                    if let Some(registrations) = local
+                        .language_server_dynamic_registrations
+                        .get_mut(&server_id)
+                    {
+                        if unreg.method == "textDocument/didChange" {
+                            registrations.did_change.unregister(&unreg.id);
+                        } else {
+                            registrations.did_save.unregister(&unreg.id);
+                        }
+                    }
                 }
                 "textDocument/inlayHint" => {
                     if self
@@ -1037,18 +1144,4 @@ fn parse_register_capabilities<T: serde::de::DeserializeOwned>(
         Some(options) => OneOf::Right(serde_json::from_value::<T>(options)?),
         None => OneOf::Left(true),
     })
-}
-
-fn take_text_document_sync_options(
-    capabilities: &mut lsp::ServerCapabilities,
-) -> lsp::TextDocumentSyncOptions {
-    match capabilities.text_document_sync.take() {
-        Some(lsp::TextDocumentSyncCapability::Options(sync_options)) => sync_options,
-        Some(lsp::TextDocumentSyncCapability::Kind(sync_kind)) => {
-            let mut sync_options = lsp::TextDocumentSyncOptions::default();
-            sync_options.change = Some(sync_kind);
-            sync_options
-        }
-        None => lsp::TextDocumentSyncOptions::default(),
-    }
 }
