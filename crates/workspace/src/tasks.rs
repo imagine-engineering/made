@@ -3435,8 +3435,9 @@ mod tests {
         fixture
             .fs
             .insert_tree(
-                "/root/application",
-                json!({"pom.xml":"<project/>","Main.java":"class Main {}"}),
+                "/root/reactor",
+                json!({"pom.xml":"<project/>","mvnw":"#!/bin/sh",
+                    "application":{"pom.xml":"<project/>","Main.java":"class Main {}"}}),
             )
             .await;
         cx.update(|_, cx| project::trusted_worktrees::init(collections::HashMap::default(), cx));
@@ -3492,17 +3493,25 @@ mod tests {
             execute_command_provider:Some(lsp::ExecuteCommandOptions{commands:["java.project.getAll","java.project.getSettings","groovy.maven.importedProjects","groovy.gradle.importedProjects","groovy.maven.projects"].into_iter().map(str::to_owned).collect(),..Default::default()}),..Default::default()},
             initializer:Some(Box::new(|server| {server.set_request_handler::<lsp::request::ExecuteCommand,_,_>(|params,_|async move {
                 match params.command.as_str() {
-                    "java.project.getAll"=>Ok(Some(json!(["file:///root/application/"]))),
+                    "java.project.getAll"=>Ok(Some(if params.arguments.is_empty() {
+                        json!(["file:///root/reactor/application/"])
+                    } else {
+                        json!(["file:///root/reactor/application/","file:///root/reactor/"])
+                    })),
                     "java.project.getSettings"=>Ok(Some(json!({"org.eclipse.jdt.ls.core.sourcePaths":[],"org.eclipse.jdt.ls.core.classpathEntries":[]}))),
-                    "groovy.maven.importedProjects"|"groovy.gradle.importedProjects"=>Ok(Some(json!({"version":1,"rootUri":"file:///root/","projects":if params.command=="groovy.maven.importedProjects" {vec![json!({"projectUri":"file:///root/application/","javaNature":true})]}else{vec![]},"partial":false,"fullSynchronizationKnown":false}))),
+                    "groovy.maven.importedProjects"|"groovy.gradle.importedProjects"=>Ok(Some(json!({"version":1,"rootUri":"file:///root/","projects":if params.command=="groovy.maven.importedProjects" {vec![
+                        json!({"projectUri":"file:///root/reactor/application/","javaNature":true}),
+                        json!({"projectUri":"file:///root/reactor/","javaNature":false})]}else{vec![]},"partial":false,"fullSynchronizationKnown":false}))),
                     "groovy.maven.projects"=>Ok(Some(json!({"version":1,"rootUri":"file:///root/","cachedOnly":true,"reactorOrderKnown":false,"unavailablePomUris":[],
-                        "lifecycles":[{"id":"default","phases":["verify"]}],"projects":[{"pomUri":"file:///root/application/pom.xml","groupId":"fixture","artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{},"inheritedProfileDefinitionsKnown":false,"plugins":[]}]}))),
+                        "lifecycles":[{"id":"default","phases":["verify"]}],"projects":[
+                            {"pomUri":"file:///root/reactor/application/pom.xml","groupId":"fixture","artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{},"inheritedProfileDefinitionsKnown":false,"plugins":[]},
+                            {"pomUri":"file:///root/reactor/pom.xml","groupId":"fixture","artifactId":"reactor","version":"1","packaging":"pom","moduleUris":["file:///root/reactor/application/"],"profiles":{},"inheritedProfileDefinitionsKnown":false,"plugins":[]}]}))),
                     _=>anyhow::bail!("Unexpected operation fixture command"),
                 }
             });})),..Default::default()});
         let (_buffer, _open) = project
             .update(cx, |project, cx| {
-                project.open_local_buffer_with_lsp("/root/application/Main.java", cx)
+                project.open_local_buffer_with_lsp("/root/reactor/application/Main.java", cx)
             })
             .await
             .expect("source");
@@ -3535,7 +3544,15 @@ mod tests {
                 let receipt = JvmBuildOperationReceipt::new(
                     snapshot,
                     current,
-                    snapshot.projects[0].module_root.clone(),
+                    snapshot
+                        .projects
+                        .iter()
+                        .find(|module| {
+                            module.module_root.path.as_unix_str() == "reactor/application"
+                        })
+                        .expect("current reactor module")
+                        .module_root
+                        .clone(),
                     vec![JvmBuildOperation::MavenPhase {
                         lifecycle: "default".into(),
                         phase: "verify".into(),
@@ -3579,6 +3596,14 @@ mod tests {
             ]
         );
         assert_eq!(spawns.lock()[0].literal_prefix_args, 6);
+        assert_eq!(
+            spawns.lock()[0].command.as_deref(),
+            Some("/root/reactor/mvnw")
+        );
+        assert_eq!(
+            spawns.lock()[0].cwd.as_deref(),
+            Some(Path::new("/root/reactor"))
+        );
         let (source, resolved) = inventory
             .update(cx, |inventory, cx| {
                 inventory.register_jvm_operation(receipt, &snapshot, true, cx)

@@ -3286,6 +3286,16 @@ impl JvmBuildOperationReceipt {
         current: bool,
         path_style: PathStyle,
     ) -> Result<JvmBuildOperationPlan> {
+        self.plan_with_maven_wrapper(snapshot, current, path_style, |_| false)
+    }
+
+    pub(crate) fn plan_with_maven_wrapper(
+        &self,
+        snapshot: &JdtlsProjectSnapshot,
+        current: bool,
+        path_style: PathStyle,
+        maven_wrapper_available: impl Fn(&RelPath) -> bool,
+    ) -> Result<JvmBuildOperationPlan> {
         ensure!(
             current
                 && self.server_id == snapshot.server_id
@@ -3327,9 +3337,52 @@ impl JvmBuildOperationReceipt {
                         && maven.pom.path.file_name() == Some("pom.xml"),
                     "The selected Maven POM does not match its module; refresh before running operations"
                 );
+                let wrapper_name = if path_style.is_windows() {
+                    "mvnw.cmd"
+                } else {
+                    "mvnw"
+                };
+                let wrapper_file = RelPath::from_unix_str(wrapper_name)?;
+                let mut root = RelPath::empty_arc();
+                let mut reactor_poms = vec![maven.pom.clone()];
+                let mut member = &self.module_root;
+                // Only a current provider module edge can supply a nested reactor wrapper.
+                while !member.path.is_empty() {
+                    if maven_wrapper_available(&member.path.join(wrapper_file)) {
+                        root = member.path.clone();
+                        break;
+                    }
+                    let mut parents = snapshot.projects.iter().filter(|parent| {
+                        parent.module_root.worktree_id == self.worktree_id
+                            && parent.module_root.path != member.path
+                            && member.path.starts_with(&parent.module_root.path)
+                            && parent.membership.is_imported()
+                            && parent.imported_build_kind == JdtlsImportedBuildKind::Maven
+                            && parent.maven.as_ref().is_some_and(|model| {
+                                model.pom.worktree_id == self.worktree_id
+                                    && model.pom.path.parent()
+                                        == Some(parent.module_root.path.as_ref())
+                                    && model.pom.path.file_name() == Some("pom.xml")
+                                    && model.modules.contains(member)
+                            })
+                    });
+                    let Some(parent) = parents.next().filter(|_| parents.next().is_none()) else {
+                        break;
+                    };
+                    if let Some(model) = &parent.maven {
+                        reactor_poms.push(model.pom.clone());
+                    }
+                    member = &parent.module_root;
+                }
+                let pom_argument = maven.pom.path.strip_prefix(&root).map_err(|_| {
+                    anyhow::anyhow!("The selected Maven POM is outside its wrapper root")
+                })?;
+                if root.is_empty() {
+                    reactor_poms.truncate(1);
+                }
                 arguments.extend([
                     "--file".into(),
-                    maven.pom.path.display(path_style).to_string(),
+                    pom_argument.display(path_style).to_string(),
                 ]);
                 for operation in &self.operations {
                     let argument = match operation {
@@ -3370,12 +3423,9 @@ impl JvmBuildOperationReceipt {
                     arguments.push(argument);
                 }
                 (
-                    RelPath::empty_arc(),
-                    match path_style {
-                        PathStyle::Unix => "mvnw",
-                        PathStyle::Windows => "mvnw.cmd",
-                    },
-                    vec![maven.pom.clone()],
+                    root,
+                    wrapper_name,
+                    reactor_poms,
                     "Run Maven operations offline",
                 )
             }

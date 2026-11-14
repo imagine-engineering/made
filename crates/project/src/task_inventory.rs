@@ -380,9 +380,14 @@ fn jvm_operation_plan(
     snapshot: &crate::jvm_project::JdtlsProjectSnapshot,
     current: bool,
     path_style: PathStyle,
+    worktree: &worktree::Snapshot,
     cx: &App,
 ) -> Result<(crate::jvm_project::JvmBuildOperationPlan, Vec<JvmHostInput>)> {
-    let mut plan = receipt.plan(snapshot, current, path_style)?;
+    let mut plan = receipt.plan_with_maven_wrapper(snapshot, current, path_style, |path| {
+        worktree
+            .entry_for_path(path)
+            .is_some_and(jvm_build_entry_is_available)
+    })?;
     let location = settings::SettingsLocation {
         worktree_id: receipt.worktree_id,
         path: RelPath::empty(),
@@ -1409,20 +1414,26 @@ impl Inventory {
             worktree.is_local() && worktree.is_visible(),
             "Discovered build operations currently require a visible local project; remote execution is not qualified"
         );
-        let (plan, host_inputs) =
-            jvm_operation_plan(&receipt, snapshot, current, worktree.path_style(), cx)?;
+        let worktree_snapshot = worktree.snapshot();
+        let (plan, host_inputs) = jvm_operation_plan(
+            &receipt,
+            snapshot,
+            current,
+            worktree.path_style(),
+            &worktree_snapshot,
+            cx,
+        )?;
         ensure!(
             worktree.abs_path().to_str().is_some(),
             "The build root needs a valid Unicode path; reopen it under a supported path"
         );
-        let root_entry = worktree
-            .snapshot()
+        let root_entry = worktree_snapshot
             .root_entry()
             .filter(|entry| entry.is_dir())
             .context("The selected build root is unavailable; reopen the project and refresh")?
             .clone();
         let wrapper = if plan.uses_wrapper {
-            Some(worktree.snapshot().entry_for_path(&plan.wrapper.path)
+            Some(worktree_snapshot.entry_for_path(&plan.wrapper.path)
                 .filter(|entry| jvm_build_entry_is_available(entry))
                 .context("The project wrapper is missing or unavailable; restore the trusted local wrapper and refresh")?.clone())
         } else {
@@ -1431,8 +1442,9 @@ impl Inventory {
         let manifests = plan
             .build_files
             .iter()
-            .map(|path| worktree.snapshot().entry_for_path(&path.path).cloned())
+            .map(|path| worktree_snapshot.entry_for_path(&path.path).cloned())
             .collect::<Vec<_>>();
+        let maven = matches!(plan.wrapper.path.file_name(), Some("mvnw" | "mvnw.cmd"));
         ensure!(
             manifests
                 .iter()
@@ -1440,7 +1452,11 @@ impl Inventory {
                 && manifests.iter().flatten().all(jvm_build_entry_is_available),
             "Build files are missing or unavailable; restore the trusted project files and refresh"
         );
-        let launch_inputs = jvm_operation_launch_inputs(&plan, &worktree.snapshot())?;
+        ensure!(
+            !maven || manifests.iter().all(Option::is_some),
+            "A selected Maven reactor POM is missing; restore the project files and refresh"
+        );
+        let launch_inputs = jvm_operation_launch_inputs(&plan, &worktree_snapshot)?;
         let settings = jvm_operation_settings(receipt.worktree_id, cx)?;
         let source = TaskSourceKind::groovy_jvm_operation(receipt.worktree_id);
         let binding = serde_json::to_vec(&(
@@ -1576,6 +1592,7 @@ impl Inventory {
             snapshot,
             current,
             worktree.path_style(),
+            &worktree_snapshot,
             cx,
         )
         .is_ok_and(|(plan, inputs)| plan == admitted.plan && inputs == admitted.host_inputs)
@@ -2139,6 +2156,7 @@ mod tests {
         use crate::jvm_project::*;
         use fs::Fs as _;
         use gpui::BorrowAppContext as _;
+        use std::path::Path;
         cx.update(|cx| {
             let store = settings::SettingsStore::test(cx);
             cx.set_global(store);
@@ -2568,6 +2586,131 @@ mod tests {
                 assert!(inventory.jvm_operations.len() <= inventory.last_scheduled_tasks.len() + 1);
             });
         }
+
+        let mut nested_snapshot = snapshot.clone();
+        nested_snapshot.generation += 200;
+        let mut reactor = nested_snapshot.projects[0].clone();
+        reactor.module_root = path("reactor $ZED_FILE");
+        let reactor_model = reactor.maven.as_mut().expect("reactor model");
+        reactor_model.pom = path("reactor $ZED_FILE/pom.xml");
+        let nested_module = path("reactor $ZED_FILE/application");
+        reactor_model.modules = vec![nested_module.clone()];
+        nested_snapshot.projects[0].module_root = nested_module.clone();
+        nested_snapshot.projects[0]
+            .maven
+            .as_mut()
+            .expect("module model")
+            .pom = path("reactor $ZED_FILE/application/pom.xml");
+        nested_snapshot.projects.push(reactor);
+        fs.insert_tree(
+            "/operation project",
+            serde_json::json!({
+                "reactor $ZED_FILE": {"mvnw":"#!/bin/sh","pom.xml":"<project/>",
+                    "application":{"pom.xml":"<project/>"}}
+            }),
+        )
+        .await;
+        cx.run_until_parked();
+        let nested_receipt = JvmBuildOperationReceipt::new(
+            &nested_snapshot,
+            true,
+            nested_module,
+            receipt.operations,
+            PathStyle::Unix,
+        )
+        .expect("provider reactor receipt");
+        let (source, nested_task) = inventory
+            .update(cx, |inventory, cx| {
+                inventory.register_jvm_operation(nested_receipt.clone(), &nested_snapshot, true, cx)
+            })
+            .expect("nested wrapper admission");
+        assert_eq!(
+            nested_task.resolved.command.as_deref(),
+            Some("/operation project/reactor $ZED_FILE/mvnw")
+        );
+        assert_eq!(
+            nested_task.resolved.cwd.as_deref(),
+            Some(Path::new("/operation project/reactor $ZED_FILE"))
+        );
+        assert_eq!(
+            nested_task.resolved.args.last().map(String::as_str),
+            Some("verify")
+        );
+        assert!(
+            nested_task
+                .resolved
+                .args
+                .windows(2)
+                .any(|arguments| arguments == ["--file", "application/pom.xml"])
+        );
+        inventory.update(cx, |inventory, _| {
+            inventory.task_scheduled(source, nested_task.clone())
+        });
+        fs.remove_file(
+            Path::new("/operation project/reactor $ZED_FILE/mvnw"),
+            Default::default(),
+        )
+        .await
+        .expect("remove fixture wrapper");
+        cx.run_until_parked();
+        let (_, fallback) = inventory
+            .update(cx, |inventory, cx| {
+                assert!(!inventory.jvm_operation_is_current(
+                    worktree_id,
+                    &nested_task,
+                    &nested_snapshot,
+                    true,
+                    cx
+                ));
+                inventory.register_jvm_operation(nested_receipt.clone(), &nested_snapshot, true, cx)
+            })
+            .expect("existing worktree wrapper fallback");
+        assert_ne!(fallback.id, nested_task.id);
+        assert_eq!(
+            fallback.resolved.command.as_deref(),
+            Some("/operation project/mvnw")
+        );
+        assert!(
+            fallback
+                .resolved
+                .args
+                .windows(2)
+                .any(|arguments| arguments == ["--file", "reactor $ZED_FILE/application/pom.xml"])
+        );
+        fs.insert_file(
+            "/operation project/reactor $ZED_FILE/mvnw",
+            b"#!/bin/sh".to_vec(),
+        )
+        .await;
+        fs.remove_file(
+            Path::new("/operation project/reactor $ZED_FILE/pom.xml"),
+            Default::default(),
+        )
+        .await
+        .expect("remove fixture reactor POM");
+        cx.run_until_parked();
+        inventory.update(cx, |inventory, cx| {
+            assert!(
+                inventory
+                    .register_jvm_operation(nested_receipt.clone(), &nested_snapshot, true, cx)
+                    .is_err()
+            );
+        });
+        nested_snapshot.projects[1]
+            .maven
+            .as_mut()
+            .expect("reactor model")
+            .modules
+            .clear();
+        let (_, unrelated) = inventory
+            .update(cx, |inventory, cx| {
+                inventory.register_jvm_operation(nested_receipt, &nested_snapshot, true, cx)
+            })
+            .expect("an unrelated nested wrapper cannot shadow the worktree wrapper");
+        assert_eq!(
+            unrelated.resolved.command.as_deref(),
+            Some("/operation project/mvnw")
+        );
     }
 
     fn context_with_greeting(value: &str) -> TaskContext {
