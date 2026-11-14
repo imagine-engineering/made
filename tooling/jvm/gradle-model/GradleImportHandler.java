@@ -140,6 +140,24 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
     private record BuildInputIdentity(Object fileKey, java.nio.file.attribute.FileTime modified,
             long size, String sha256) {}
 
+    private record GradleUserHomeIdentity(String configuredPath, Path realHome, Object fileKey) {
+        private static GradleUserHomeIdentity capture(String configuredPath) {
+            if (configuredPath == null || configuredPath.isEmpty()) {
+                return null;
+            }
+            Path path = Path.of(configuredPath);
+            if (!path.isAbsolute()) {
+                throw new IllegalArgumentException("Use an absolute Gradle user home on the project host.");
+            }
+            try {
+                Path realHome = path.toRealPath();
+                return new GradleUserHomeIdentity(configuredPath, realHome, rootFileKey(realHome));
+            } catch (java.io.IOException failure) {
+                throw new IllegalArgumentException("The configured Gradle user home is unavailable.");
+            }
+        }
+    }
+
     private static BuildConfiguration buildConfiguration(Path root) {
         configuredJavaHome(JavaLanguageServerPlugin.getPreferencesManager().getPreferences().getGradleJavaHome());
         var configuration = GradleProjectImporter.getBuildConfiguration(root);
@@ -1610,7 +1628,8 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
                 || !Files.isDirectory(Path.of(home))) {
             throw new IllegalArgumentException();
         }
-        return Arrays.asList(ToolHomeIdentity.gradleHome(home), version, preferences.getGradleUserHome(),
+        return Arrays.asList(ToolHomeIdentity.gradleHome(home), version,
+                GradleUserHomeIdentity.capture(preferences.getGradleUserHome()),
                 ToolHomeIdentity.javaHome(preferences.getGradleJavaHome()),
                 preferences.isGradleWrapperEnabled(), preferences.isImportGradleOfflineEnabled(),
                 List.copyOf(preferences.getGradleArguments()), List.copyOf(preferences.getGradleJvmArguments()));

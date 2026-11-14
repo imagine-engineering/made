@@ -3317,13 +3317,16 @@ def probe_startup_controls(arguments):
         home.mkdir()
         configured_gradle_home = arguments.gradle_home.resolve()
         configured_gradle_java_home = arguments.gradle_java_home.resolve()
+        configured_gradle_user_home = home
         if arguments.workspace_scoped_details_only:
             # Settings notifications also schedule unrelated SDK synchronization jobs.
             # Remove only owned aliases to isolate backend missing-tool failures.
             configured_gradle_home = workspace / "scoped-model-gradle-home"
             configured_gradle_java_home = workspace / "scoped-model-java-home"
+            configured_gradle_user_home = workspace / "scoped-model-gradle-user-home"
             configured_gradle_home.symlink_to(arguments.gradle_home.resolve(), target_is_directory=True)
             configured_gradle_java_home.symlink_to(arguments.gradle_java_home.resolve(), target_is_directory=True)
+            configured_gradle_user_home.symlink_to(home, target_is_directory=True)
             receipt["scopedDetailsToolFaultIsolation"] = "owned aliases outside initialized fixtures; real SDK targets unchanged"
         settings = {"java": {
             "autobuild": {"enabled": False},
@@ -3331,7 +3334,7 @@ def probe_startup_controls(arguments):
             "import": {"maven": {"offline": {"enabled": True}}, "gradle": {
                 "offline": {"enabled": True}, "wrapper": {"enabled": False}, "version": None,
                 "home": str(configured_gradle_home), "java": {"home": str(configured_gradle_java_home)},
-                "user": {"home": str(home)}, "arguments": ["--offline"],
+                "user": {"home": str(configured_gradle_user_home)}, "arguments": ["--offline"],
             }},
         }}
         maven_java = {"maven/application", "maven/library"}
@@ -3706,7 +3709,8 @@ def probe_startup_controls(arguments):
                             "arguments": [{"rootUri": root.as_uri()}],
                         }, timeout=30)
                         if set(value) != {"workspaceRootUris", "gradleArguments", "gradleJvmArguments", "offline",
-                                          "wrapperEnabled", "gradleHome", "gradleJavaHome", "gradleVersion"}:
+                                          "wrapperEnabled", "gradleHome", "gradleJavaHome", "gradleUserHome",
+                                          "gradleVersion"}:
                             raise AssertionError("Scoped import host oracle schema differs")
                         if sorted(uri.rstrip("/") for uri in value["workspaceRootUris"]) != sorted([root.as_uri(), maven.as_uri()]):
                             raise AssertionError("Nested build became an initialized root or lost workspace authority")
@@ -4736,7 +4740,7 @@ def probe_startup_controls(arguments):
                             original = build_input.read_bytes()
                             if arguments.workspace_scoped_live_tool_settings_only:
                                 categories = ["java-home-restored", "java-home-replaced", "gradle-home-replaced",
-                                              "daemon-criteria-added"]
+                                              "gradle-user-home-replaced", "daemon-criteria-added"]
                             else:
                                 categories = ["input","settings","build","workspace","cancel","timeout"]
                             if arguments.workspace_scoped_module_details_only and not arguments.workspace_scoped_live_tool_settings_only:
@@ -4754,6 +4758,7 @@ def probe_startup_controls(arguments):
                                 criteria_added = False
                                 java_alias_replaced = False
                                 gradle_alias_replaced = False
+                                user_home_alias_replaced = False
                                 replacement_distribution = None
                                 detached = None
                                 destination = None
@@ -4847,6 +4852,18 @@ def probe_startup_controls(arguments):
                                         configured_gradle_home.symlink_to(replacement_distribution, target_is_directory=True)
                                         if host_state() != original_host:
                                             raise AssertionError("Replacing an owned Gradle-home alias must leave configured settings unchanged")
+                                    elif category == "gradle-user-home-replaced":
+                                        replacement_user_home = workspace / "replacement-scoped-model-gradle-user-home"
+                                        replacement_user_home.mkdir(exist_ok=True)
+                                        if (configured_gradle_user_home.parent != workspace
+                                                or not configured_gradle_user_home.is_symlink()
+                                                or configured_gradle_user_home.readlink() != home):
+                                            raise AssertionError("Held Gradle cache replacement requires its owned alias")
+                                        configured_gradle_user_home.unlink()
+                                        user_home_alias_replaced = True
+                                        configured_gradle_user_home.symlink_to(replacement_user_home, target_is_directory=True)
+                                        if host_state() != original_host:
+                                            raise AssertionError("Replacing an owned cache alias must leave host settings unchanged")
                                     elif category == "module-edit":
                                         module_input.write_bytes(module_original + b"\n// changed during model\n")
                                     elif category == "module-add":
@@ -4896,6 +4913,9 @@ def probe_startup_controls(arguments):
                                     if gradle_alias_replaced:
                                         configured_gradle_home.unlink(missing_ok=True)
                                         configured_gradle_home.symlink_to(arguments.gradle_home.resolve(), target_is_directory=True)
+                                    if user_home_alias_replaced:
+                                        configured_gradle_user_home.unlink(missing_ok=True)
+                                        configured_gradle_user_home.symlink_to(home, target_is_directory=True)
                                     if replacement_distribution is not None:
                                         shutil.rmtree(replacement_distribution)
                                     if category in {"module-edit","module-remove"}:

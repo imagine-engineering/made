@@ -1072,6 +1072,7 @@ public final class UnlinkFixtureHandler implements IDelegateCommandHandler {
     "wrapperEnabled", preferences.isGradleWrapperEnabled(),
     "gradleHome", String.valueOf(preferences.getGradleHome()),
     "gradleJavaHome", String.valueOf(preferences.getGradleJavaHome()),
+    "gradleUserHome", String.valueOf(preferences.getGradleUserHome()),
     "gradleVersion", String.valueOf(preferences.getGradleVersion()));
   }
   if (command.equals("groovy.fixture.unlink.prepare")) {''', 1)
