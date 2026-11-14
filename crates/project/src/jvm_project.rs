@@ -5856,22 +5856,37 @@ pub(crate) async fn query_jdtls_projects(
         }
     }
     check_module_count(result.len())?;
+    let mut maven_roots = maven_root.into_iter().collect::<BTreeSet<_>>();
+    let initialized_folders = server.workspace_folders();
     if let Some(root) = imported_build_root {
         let folders = imported_ownership_scope_folders(
-            server
-                .workspace_folders()
+            initialized_folders
                 .iter()
                 .map(|folder| folder.as_str().to_owned()),
             &root,
         )?;
         let (namespace_kinds_complete, kinds_complete) =
             query_imported_build_kinds(&server, request_timeout, &root, &mut result).await?;
+        let provider_roots = imported_build_read_roots(
+            initialized_folders
+                .iter()
+                .map(|folder| folder.as_str().to_owned()),
+            &root,
+        )?;
         let mut complete = resource_enumeration_complete && kinds_complete;
         let mut imported_count = 0;
         for (uri, settings) in &result {
-            if settings.membership.is_imported() && file_uri_path(uri)?.starts_with(&root) {
+            let project_path = file_uri_path(uri)?;
+            if settings.membership.is_imported() && project_path.starts_with(&root) {
                 imported_count += 1;
                 complete &= settings.imported_build_kind != JdtlsImportedBuildKind::Unknown;
+                if settings.imported_build_kind == JdtlsImportedBuildKind::Maven
+                    && let Some(scope) = provider_roots
+                        .iter()
+                        .find(|scope| project_path.starts_with(scope))
+                {
+                    maven_roots.insert(scope.clone());
+                }
             }
         }
         ensure!(
@@ -5916,27 +5931,31 @@ pub(crate) async fn query_jdtls_projects(
                 })
                 .cloned()
         });
-    if let Some(root) = maven_root
-        && let Some(command) = maven_command
-    {
-        let root_uri = url::Url::from_directory_path(&root)
-            .map_err(|()| anyhow::anyhow!("Maven project root is unavailable"))?;
-        let response = server
-            .request::<lsp::request::ExecuteCommand>(
-                lsp::ExecuteCommandParams {
-                    command,
-                    arguments: vec![json!({"rootUri": root_uri, "cachedOnly": true})],
-                    ..Default::default()
-                },
-                request_timeout,
-            )
-            .await
-            .into_response()
-            .context(
-                "Could not read cached Maven metadata; check import/cache settings and refresh",
-            )?
-            .context("Maven model provider returned no data")?;
-        merge_maven_model(&mut result, response, &root)?;
+    if let Some(command) = maven_command {
+        for root in maven_roots {
+            let root_uri = url::Url::from_directory_path(&root)
+                .map_err(|()| anyhow::anyhow!("Maven project root is unavailable"))?;
+            let response = server
+                .request::<lsp::request::ExecuteCommand>(
+                    lsp::ExecuteCommandParams {
+                        command: command.clone(),
+                        arguments: vec![json!({"rootUri": root_uri, "cachedOnly": true})],
+                        ..Default::default()
+                    },
+                    request_timeout,
+                )
+                .await
+                .into_response()
+                .context(
+                    "Could not read cached Maven metadata; check import/cache settings and refresh",
+                )?
+                .context("Maven model provider returned no data")?;
+            ensure!(
+                server.workspace_folders() == initialized_folders,
+                "Initialized Maven folders changed during refresh; retry"
+            );
+            merge_maven_model(&mut result, response, &root)?;
+        }
     }
     let launch_java_home = jdtls_launch_java_home(server.binary()).map(Path::to_path_buf);
     let projects = background_executor
@@ -18116,6 +18135,114 @@ mod tests {
             query.projects[0].1.membership,
             JdtlsProjectMembership::ImportedJava
         );
+    }
+
+    #[gpui::test]
+    async fn jdtls_reads_cached_maven_model_for_import_under_parent_workspace(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let root = Path::new(util::path!("/fixture"));
+        let root_uri = selected_import_uri(root, true).expect("root URI");
+        let maven = selected_import_uri(&root.join("maven/application"), true).expect("Maven URI");
+        let pom =
+            selected_import_uri(&root.join("maven/application/pom.xml"), false).expect("POM URI");
+        let gradle = selected_import_uri(&root.join("gradle"), true).expect("Gradle URI");
+        let (server, fake) = lsp::FakeLanguageServer::new(
+            LanguageServerId(0),
+            LanguageServerBinary {
+                path: "unused-fake-jdtls".into(),
+                arguments: vec![],
+                env: None,
+            },
+            "jdtls".into(),
+            lsp::ServerCapabilities {
+                execute_command_provider: Some(lsp::ExecuteCommandOptions {
+                    commands: [
+                        "groovy.maven.importedProjects",
+                        "groovy.gradle.importedProjects",
+                        "groovy.maven.goalDetails",
+                    ]
+                    .map(str::to_owned)
+                    .to_vec(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            &mut cx.to_async(),
+        );
+        fake.set_request_handler::<lsp::request::ExecuteCommand, _, _>({
+            let root_uri = root_uri.clone();
+            move |parameters, _| {
+                let (root_uri, maven, gradle, pom) = (root_uri.clone(), maven.clone(), gradle.clone(), pom.clone());
+                async move {
+                    let records = |module: &url::Url| json!({"version":1,"rootUri":root_uri,
+                        "projects":[{"projectUri":module,"javaNature":true}],"partial":false,"fullSynchronizationKnown":false});
+                    let response = match parameters.command.as_str() {
+                        "java.project.getAll" => json!([maven,gradle]),
+                        "java.project.getSettings" => json!({}),
+                        "groovy.maven.importedProjects" => records(&maven),
+                        "groovy.gradle.importedProjects" => records(&gradle),
+                        "groovy.maven.goalDetails" => {
+                            assert_eq!(parameters.arguments, [json!({"rootUri":root_uri,"cachedOnly":true})]);
+                            json!({"version":1,"rootUri":root_uri,"cachedOnly":true,"reactorOrderKnown":false,
+                                "unavailablePomUris":[],"lifecycles":[],"projects":[{"pomUri":pom,"groupId":"test",
+                                    "artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{},
+                                    "inheritedProfileDefinitionsKnown":false,"plugins":[]}]})
+                        }
+                        _ => anyhow::bail!("Unexpected JDTLS command"),
+                    };
+                    Ok(Some(response))
+                }
+            }
+        });
+        let server = cx
+            .update(|cx| {
+                let parameters = server.default_initialize_params(false, false, cx);
+                server.initialize(
+                    parameters,
+                    Arc::new(lsp::DidChangeConfigurationParams {
+                        settings: json!({}),
+                    }),
+                    Duration::from_secs(10),
+                    cx,
+                )
+            })
+            .await
+            .expect("initialized fake");
+        server.set_workspace_folders([root_uri.as_str().parse().expect("workspace folder")].into());
+        let unscoped = query_jdtls_projects(
+            server.clone(),
+            Duration::from_secs(10),
+            cx.background_executor.clone(),
+            root,
+            None,
+            None,
+        )
+        .await
+        .expect("unscoped Java project query");
+        assert!(
+            unscoped
+                .projects
+                .iter()
+                .all(|(_, settings)| settings.maven.is_none())
+        );
+        let query = query_jdtls_projects(
+            server,
+            Duration::from_secs(10),
+            cx.background_executor.clone(),
+            root,
+            None,
+            Some(root.to_path_buf()),
+        )
+        .await
+        .expect("cached parent workspace Maven query");
+        assert_eq!(query.projects.len(), 2);
+        let maven = query
+            .projects
+            .iter()
+            .find_map(|(_, settings)| settings.maven.as_ref())
+            .expect("admitted Maven details");
+        assert_eq!(maven.artifact_id, "application");
     }
 
     fn imported_kind_reply(records: Value) -> Value {
