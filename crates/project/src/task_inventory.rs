@@ -302,20 +302,44 @@ fn apply_gradle_task_settings(
     plan: &mut crate::jvm_project::JvmBuildOperationPlan,
     preferences: &serde_json::Value,
     path_style: PathStyle,
+    wrapper_properties_present: bool,
 ) -> Result<()> {
     let mut arguments = Vec::new();
-    if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.home", path_style)? {
-        let executable = std::path::Path::new(home).join(if path_style.is_windows() {
-            "bin/gradle.bat"
+    let wrapper_enabled = jdtls_preference(preferences, "java.import.gradle.wrapper.enabled")
+        .map(|value| {
+            value.as_bool().ok_or_else(|| {
+                anyhow::anyhow!("Set java.import.gradle.wrapper.enabled to a boolean")
+            })
+        })
+        .transpose()?
+        .unwrap_or(true);
+    if !wrapper_enabled || !wrapper_properties_present {
+        if let Some(version) = jdtls_preference(preferences, "java.import.gradle.version") {
+            anyhow::ensure!(
+                version
+                    .as_str()
+                    .is_some_and(|version| version.trim().is_empty()),
+                "Selected offline Tasks require a project Gradle wrapper or configured installation; clear java.import.gradle.version before retrying"
+            );
+        }
+        if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.home", path_style)? {
+            let executable = std::path::Path::new(home).join(if path_style.is_windows() {
+                "bin/gradle.bat"
+            } else {
+                "bin/gradle"
+            });
+            let executable = executable
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("Use a Gradle installation with a Unicode path"))?;
+            // Task resolution still expands variables in the command and environment.
+            plan.template.command = executable.replace('$', "$$");
+            plan.uses_wrapper = false;
         } else {
-            "bin/gradle"
-        });
-        let executable = executable
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Use a Gradle installation with a Unicode path"))?;
-        // Task resolution still expands variables in the command and environment.
-        plan.template.command = executable.replace('$', "$$");
-        plan.uses_wrapper = false;
+            anyhow::ensure!(
+                wrapper_enabled,
+                "Configure java.import.gradle.home to use a local Gradle installation while the wrapper is disabled"
+            );
+        }
     }
     if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.java.home", path_style)? {
         plan.template
@@ -402,7 +426,20 @@ fn jvm_operation_plan(
     if maven {
         apply_maven_task_settings(&mut plan, preferences, path_style)?;
     } else if let Some(preferences) = preferences {
-        apply_gradle_task_settings(&mut plan, preferences, path_style)?;
+        let wrapper_properties =
+            plan.wrapper
+                .path
+                .parent()
+                .unwrap_or(RelPath::empty())
+                .join(RelPath::from_unix_str(
+                    "gradle/wrapper/gradle-wrapper.properties",
+                )?);
+        apply_gradle_task_settings(
+            &mut plan,
+            preferences,
+            path_style,
+            worktree.entry_for_path(&wrapper_properties).is_some(),
+        )?;
     }
     let mut host_inputs = Vec::new();
     if let Some(preferences) = preferences {
@@ -424,6 +461,9 @@ fn jvm_operation_plan(
             ]
         };
         for &(key, launcher) in paths {
+            if key == "java.import.gradle.home" && plan.uses_wrapper {
+                continue;
+            }
             if let Some(path) = jdtls_task_path(preferences, key, path_style)? {
                 let path = PathBuf::from(path);
                 host_inputs.push(JvmHostInput {
@@ -2078,7 +2118,29 @@ mod tests {
             "java.import.gradle.arguments": ["--offline", "-Pflavor=dev $ZED_FILE", "-Pempty=", "-Pflavor=last value"],
             "java.import.gradle.jvmArguments": ["-Xmx384m", "-Dprobe=space $ZED_FILE \"quote\" 'single' \\literal", "-Dempty="]
         });
-        apply_gradle_task_settings(&mut plan, &settings, PathStyle::Unix).expect("host settings");
+        let mut wrapper_plan = plan.clone();
+        apply_gradle_task_settings(&mut wrapper_plan, &settings, PathStyle::Unix, true)
+            .expect("enabled wrapper takes priority over the configured installation");
+        assert!(wrapper_plan.uses_wrapper);
+        assert_eq!(wrapper_plan.template.command, plan.template.command);
+        for invalid in [
+            serde_json::json!({"java.import.gradle.wrapper.enabled": false}),
+            serde_json::json!({
+                "java.import.gradle.wrapper.enabled": false,
+                "java.import.gradle.version": "8.13",
+                "java.import.gradle.home": "/host/gradle"
+            }),
+            serde_json::json!({"java.import.gradle.wrapper.enabled": "false"}),
+        ] {
+            assert!(
+                apply_gradle_task_settings(&mut plan.clone(), &invalid, PathStyle::Unix, true)
+                    .is_err()
+            );
+        }
+        let mut explicitly_disabled = settings.clone();
+        explicitly_disabled["java.import.gradle.wrapper.enabled"] = false.into();
+        apply_gradle_task_settings(&mut plan, &explicitly_disabled, PathStyle::Unix, true)
+            .expect("host settings");
         assert!(!plan.uses_wrapper);
         let mut context = TaskContext::default();
         context
@@ -2143,6 +2205,7 @@ mod tests {
                     &mut plan,
                     &serde_json::json!({"java":{"import":{"gradle":{"arguments": invalid}}}}),
                     PathStyle::Unix,
+                    false,
                 )
                 .is_err()
             );
