@@ -646,13 +646,24 @@ public class CancelledMavenQuery {
             parent = next(project for project in projects if project["artifactId"] == "groovy-jvm-maven")
             if len(parent["moduleUris"]) != 2 or parent["profiles"].get("parity") is not False:
                 raise AssertionError("Effective modules or declared inactive profile differ")
-            if not any(application["profiles"].values()):
-                raise AssertionError("Effective active profile facts missing")
+            if application["profiles"] != {"parity": False, "javals.profile": True}:
+                raise AssertionError("Effective application profile activity differs")
             if any(project["inheritedProfileDefinitionsKnown"] for project in projects) or response["reactorOrderKnown"]:
                 raise AssertionError("Unqualified profile/order facts claimed known")
             lifecycles = {lifecycle["id"]: lifecycle["phases"] for lifecycle in response["lifecycles"]}
-            if set(lifecycles) != {"clean", "default", "site"} or "test" not in lifecycles["default"]:
-                raise AssertionError("Runtime Maven lifecycles missing")
+            expected_lifecycles = {
+                "clean": "pre-clean clean post-clean".split(),
+                "default": (
+                    "validate initialize generate-sources process-sources generate-resources "
+                    "process-resources compile process-classes generate-test-sources "
+                    "process-test-sources generate-test-resources process-test-resources "
+                    "test-compile process-test-classes test prepare-package package "
+                    "pre-integration-test integration-test post-integration-test verify install deploy"
+                ).split(),
+                "site": "pre-site site post-site site-deploy".split(),
+            }
+            if len(response["lifecycles"]) != len(expected_lifecycles) or lifecycles != expected_lifecycles:
+                raise AssertionError("Runtime Maven lifecycle membership or phase order differs")
             surefire = next(plugin for plugin in application["plugins"] if plugin["artifactId"] == "maven-surefire-plugin")
             if surefire["version"] != "3.5.2" or not surefire["goalsKnown"] or "test" not in {goal["name"] for goal in surefire["goals"]}:
                 raise AssertionError("Cached effective plugin goal differs")
@@ -661,7 +672,8 @@ public class CancelledMavenQuery {
             if projects != discover(client, root)["projects"]:
                 raise AssertionError("Repeat cached metadata changed identities")
             receipt["checks"].extend(["cached three-module metadata with external network denied", "stable module identities",
-                                      "effective module links", "declared inactive profile", "effective active profile facts", "runtime lifecycle phases",
+                                      "effective module links", "declared inactive profile", "exact effective application profile activity",
+                                      "complete ordered clean/default/site runtime lifecycle phases",
                                       "cached surefire goal and managed version", "build versus managed-only plugins distinguished",
                                       "unqualified inherited profiles/order remain unknown"])
             details = discover(client, root, details=True)
@@ -802,7 +814,7 @@ public class CancelledMavenQuery {
     print(json.dumps(receipt, indent=2))
 
 
-def unlink_fixture_bundle(arguments, directory, identity_modes=False, ownership_modes=False, hydration_modes=False, default_root_modes=False, workspace_states=False, scoped_import_modes=False, import_state_modes=False):
+def unlink_fixture_bundle(arguments, directory, identity_modes=False, ownership_modes=False, hydration_modes=False, default_root_modes=False, workspace_states=False, scoped_import_modes=False, import_state_modes=False, cached_topology_mode=False):
     directory = Path(directory)
     source = directory / "UnlinkFixtureHandler.java"
     source.write_text('''package dev.made.groovy.fixture;
@@ -1108,6 +1120,97 @@ public final class UnlinkFixtureHandler implements IDelegateCommandHandler {
   }
   if (command.equals("groovy.fixture.unlink.prepare")) {''', 1)
         source.write_text(fixture)
+    if cached_topology_mode:
+        fixture = source.read_text().replace('  if (command.equals("groovy.fixture.unlink.prepare")) {', '''
+  if (command.equals("groovy.fixture.unlink.cachedGradleTopology")) {
+   boolean hold = Boolean.TRUE.equals(request.get("hold"));
+   if (!request.keySet().equals(hold ? java.util.Set.of("rootUri", "childUri", "hold")
+       : java.util.Set.of("rootUri", "childUri"))) throw new IllegalArgumentException();
+   if (monitor.isCanceled()) throw new org.eclipse.core.runtime.OperationCanceledException();
+   Path child = Path.of(new URI((String) request.get("childUri"))).toRealPath();
+   if (!child.startsWith(root) || child.equals(root)) throw new IllegalArgumentException();
+   var resource = java.util.Arrays.stream(ResourcesPlugin.getWorkspace().getRoot().getProjects())
+    .filter(project -> project.isAccessible() && project.getLocation() != null
+      && project.getLocation().toFile().toPath().equals(child)).findFirst().orElseThrow();
+   var owner = org.eclipse.buildship.core.GradleCore.getWorkspace().getBuild(resource).orElseThrow();
+   if (!(owner instanceof org.eclipse.buildship.core.internal.workspace.InternalGradleBuild build))
+    throw new IllegalStateException("Fixture requires an actual Buildship connection");
+   var cache = build.getModelProvider();
+   var cancellation = org.gradle.tooling.GradleConnector.newCancellationTokenSource();
+   var strategy = org.eclipse.buildship.core.internal.workspace.FetchStrategy.FROM_CACHE_ONLY;
+   var unused = cache.fetchModel(org.gradle.tooling.model.idea.IdeaProject.class, strategy, cancellation, monitor);
+   if (unused != null) throw new IllegalStateException("Unused model cache key unexpectedly populated");
+   var models = cache.fetchModels(org.gradle.tooling.model.eclipse.EclipseProject.class, strategy, cancellation, monitor);
+   // Buildship persists per-resource state separately from the Tooling API model cache.
+   var persisted = new java.util.TreeMap<String, Map<String, Object>>();
+   var workspaceProjects = ResourcesPlugin.getWorkspace().getRoot().getProjects();
+   if (workspaceProjects.length > 128) throw new IllegalStateException("Too many persisted resource records");
+   for (var project : workspaceProjects) {
+    if (monitor.isCanceled()) throw new org.eclipse.core.runtime.OperationCanceledException();
+    if (!project.isAccessible() || project.getLocation() == null) continue;
+    var location = project.getLocation().toFile().toPath().toRealPath();
+    if (!location.startsWith(root)
+        || org.eclipse.buildship.core.GradleCore.getWorkspace().getBuild(project).orElse(null) != build) continue;
+    var stored = org.eclipse.buildship.core.internal.CorePlugin.modelPersistence().loadModel(project);
+    var subprojects = new java.util.TreeSet<String>();
+    var paths = stored.isPresent() ? stored.getSubprojectPaths() : List.<org.eclipse.core.runtime.IPath>of();
+    if (paths.size() > 128) throw new IllegalStateException("Too many persisted subproject paths");
+    for (var path : paths) {
+     var value = path.toPortableString();
+     if (value.isEmpty() || value.length() > 4096 || value.chars().anyMatch(Character::isISOControl))
+      throw new IllegalStateException("Invalid persisted subproject path");
+     subprojects.add(value);
+    }
+    persisted.put(location.toUri().toString(), Map.of("present", stored.isPresent(),
+      "subprojectPaths", List.copyOf(subprojects)));
+   }
+   var projects = new java.util.TreeMap<String, Map<String, String>>();
+   if (models != null) {
+    if (models.size() > 128) throw new IllegalStateException("Too many cached participant models");
+    var pending = new java.util.ArrayDeque<org.gradle.tooling.model.eclipse.EclipseProject>(models.values());
+    while (!pending.isEmpty()) {
+     if (monitor.isCanceled()) throw new org.eclipse.core.runtime.OperationCanceledException();
+     var project = pending.removeFirst();
+     var directory = project.getProjectDirectory().toPath().toRealPath();
+     var identifier = project.getGradleProject().getProjectIdentifier();
+     var participant = identifier.getBuildIdentifier().getRootDir().toPath().toRealPath();
+     if (!directory.startsWith(participant) || !participant.startsWith(root)
+         || identifier.getProjectPath().length() > 4096
+         || directory.toUri().toString().length() > 4096 || participant.toUri().toString().length() > 4096)
+      throw new IllegalStateException("Cached model identity escapes the fixture");
+     var record = Map.of("projectUri", directory.toUri().toString(), "buildRootUri", participant.toUri().toString(),
+      "projectPath", identifier.getProjectPath());
+     var previous = projects.putIfAbsent(record.get("projectUri"), record);
+     if (previous == null) pending.addAll(project.getChildren());
+     else if (!previous.equals(record)) throw new IllegalStateException("Conflicting cached module identity");
+     if (projects.size() + pending.size() > 256) throw new IllegalStateException("Cache traversal exceeds fixture limit");
+    }
+   }
+   if (hold) {
+    Path gate = root.getParent().getParent();
+    Files.writeString(gate.resolve("cached-topology-started"), "started");
+    try {
+     long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45);
+     while (!Files.exists(gate.resolve("cached-topology-release")) && !monitor.isCanceled()
+         && System.nanoTime() < deadline) Thread.sleep(10);
+     if (!Files.exists(gate.resolve("cached-topology-release")) && !monitor.isCanceled())
+      throw new IllegalStateException("Cached topology fixture gate expired");
+    } finally {
+     Files.writeString(gate.resolve("cached-topology-finished"), "finished");
+    }
+   }
+   if (monitor.isCanceled()) throw new org.eclipse.core.runtime.OperationCanceledException();
+   if (!resource.isAccessible()
+       || org.eclipse.buildship.core.GradleCore.getWorkspace().getBuild(resource).orElse(null) != build
+       || build.getModelProvider() != cache
+       || models != cache.fetchModels(org.gradle.tooling.model.eclipse.EclipseProject.class, strategy, cancellation, monitor))
+    throw new IllegalStateException("Cached participant model changed during fixture read");
+   return Map.of("topologyKnown", models != null, "unusedModelMissing", true,
+    "connectionRootUri", build.getBuildConfig().getRootProjectDirectory().toPath().toRealPath().toUri().toString(),
+    "projects", List.copyOf(projects.values()), "persistedResources", persisted);
+  }
+  if (command.equals("groovy.fixture.unlink.prepare")) {''', 1)
+        source.write_text(fixture)
     classes = directory / "unlink-fixture-classes"
     classes.mkdir()
     plugins = arguments.launcher.resolve().parent.parent / "plugins"
@@ -1129,10 +1232,10 @@ public final class UnlinkFixtureHandler implements IDelegateCommandHandler {
     bundle = directory / "unlink-fixture.jar"
     with zipfile.ZipFile(bundle, "w") as archive:
         archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nBundle-ManifestVersion: 2\nBundle-SymbolicName: dev.made.groovy.unlink.fixture;singleton:=true\nBundle-Version: 1.0.0\nBundle-RequiredExecutionEnvironment: JavaSE-17\nRequire-Bundle: org.eclipse.jdt.ls.core,org.eclipse.core.resources,\n org.eclipse.core.runtime,org.eclipse.lsp4j"
-                        + "\n"
+                        + (",\n org.eclipse.buildship.core,org.gradle.toolingapi" if cached_topology_mode else "") + "\n"
                         + ("Import-Package: org.osgi.framework\n" if import_state_modes else "") + "\n")
         commands = "".join(f'<command id="groovy.fixture.unlink.{name}"/>' for name in
-                           ["prepare", "hold", "stack"] + (["natures"] if identity_modes or ownership_modes or hydration_modes or default_root_modes else []) + (["defaultRootsOracle", "gradleDefaultRootsOracle", "gradleDefaultRootsState"] if default_root_modes else []) + (["projectState"] if workspace_states else []) + (["importHostState"] if scoped_import_modes else []) + (["heldDefaultImportState"] if import_state_modes else []))
+                           ["prepare", "hold", "stack"] + (["natures"] if identity_modes or ownership_modes or hydration_modes or default_root_modes else []) + (["defaultRootsOracle", "gradleDefaultRootsOracle", "gradleDefaultRootsState"] if default_root_modes else []) + (["projectState"] if workspace_states else []) + (["importHostState"] if scoped_import_modes else []) + (["heldDefaultImportState"] if import_state_modes else []) + (["cachedGradleTopology"] if cached_topology_mode else []))
         archive.writestr("plugin.xml", '<plugin><extension point="org.eclipse.jdt.ls.core.delegateCommandHandler"><delegateCommandHandler class="dev.made.groovy.fixture.UnlinkFixtureHandler">' + commands + '</delegateCommandHandler></extension></plugin>')
         for path in classes.rglob("*.class"):
             archive.write(path, path.relative_to(classes).as_posix())
@@ -1302,6 +1405,10 @@ def qualify_unlink_wait(client, root, selection, command, receipt, journey, repl
             if str(root) in json.dumps(response):
                 raise AssertionError("Scoped import scope/host failure is not sanitized")
             receipt["checks"].append("held scoped import rejects changed scope/host state without a success receipt")
+        elif importing and during_wait is not None:
+            if str(root) in json.dumps(response) or "Selected Maven import cancelled" not in error.get("message", ""):
+                raise AssertionError("Changed Maven settings did not produce a sanitized cancellation")
+            receipt["checks"].append("held Maven reactor rejects changed host settings without a success receipt")
         else:
             journey["cancelledUnlinkResponse"] = response
             receipt["checks"].append(f"in-flight held {phase_name} cancellation rejects a success receipt")
@@ -1353,7 +1460,7 @@ def imported_resource_membership(client, root):
 
 
 def qualify_imported_resources(client, root, build_root, provider, java_members,
-                               non_java_members, java_membership, journey, receipt):
+                               non_java_members, java_membership, journey, receipt, after_unlink=None):
     before = imported_resource_membership(client, root)
     if set(before) != java_members | non_java_members or java_membership(client) != java_members:
         raise AssertionError("Java and non-Java imported resource identities differ from the fixture")
@@ -1396,6 +1503,8 @@ def qualify_imported_resources(client, root, build_root, provider, java_members,
     if set(imported_resource_membership(client, root)) != java_members or java_membership(client) != java_members:
         raise AssertionError("Selected non-Java unlink removed another imported resource or Java project")
     receipt["checks"].append("guarded unlink removes only exact non-Java resources and preserves Java/unrelated projects")
+    if after_unlink is not None:
+        after_unlink()
     import_request = {"rootUri": build_root.as_uri(), "offline": True}
     if provider == "maven":
         import_request["pomUris"] = [(build_root / "pom.xml").as_uri()]
@@ -2237,6 +2346,8 @@ def probe_reactor_root(arguments):
         receipt["fixtureBundleSha256"] = hashlib.sha256(bundle.read_bytes()).hexdigest()
         settings = {"java": {"import": {"maven": {"enabled": False, "offline": {"enabled": True}}, "gradle": {"enabled": False}},
                              "configuration": {"maven": {"userSettings": str(settings_path)}}}}
+        if arguments.profile_change:
+            settings["java"]["configuration"]["updateBuildConfiguration"] = "disabled"
         data = temporary / "data"
         root_request = {"rootUri": reactor.as_uri(), "pomUri": (reactor / "pom.xml").as_uri(),
                         "excludedProjectUris": [ignored.as_uri()], "offline": True}
@@ -2312,6 +2423,51 @@ def probe_reactor_root(arguments):
                     raise AssertionError("Reactor expansion imported inactive/ignored/foreign or omitted effective nested modules")
                 receipt["checks"].append("host-active profile, nested and parentless modules imported; inactive and ignored subtrees excluded")
                 invoke("groovy.maven.importReactor", root_request, expected_poms, "repeated current reactor import")
+                if arguments.profile_change and not restart:
+                    empty_profile_settings = temporary / "no-active-profile.xml"
+                    deactivated_settings_contents = settings_contents.replace(
+                        "<activeProfiles><activeProfile>active-reactor</activeProfile></activeProfiles>", "")
+                    empty_profile_settings.write_text(deactivated_settings_contents)
+                    try:
+                        qualify_unlink_wait(
+                            client, reactor, root_request, "groovy.maven.importReactor", receipt, journey,
+                            during_wait=lambda: settings_path.write_text(deactivated_settings_contents),
+                        )
+                        if membership() != expected_all:
+                            raise AssertionError("Rejected Maven settings change mutated resource membership")
+                        if not next(project for project in discover(client, reactor, details=True)["projects"]
+                                    if project["pomUri"] == root_request["pomUri"])["profiles"].get("active-reactor"):
+                            raise AssertionError("Rejected Maven settings change mutated the cached reactor")
+                    finally:
+                        settings_path.write_text(settings_contents)
+                    switched_settings = {"java": {**settings["java"], "configuration": {
+                        **settings["java"]["configuration"],
+                        "maven": {"userSettings": str(empty_profile_settings)},
+                    }}}
+                    profile_pom = reactor / "extra/pom.xml"
+                    for configuration, expected, label in [
+                        (switched_settings, expected_poms - {profile_pom}, "deactivated profile"),
+                        (settings, expected_poms, "restored profile"),
+                    ]:
+                        client.notify("workspace/didChangeConfiguration", {"settings": configuration})
+                        invoke("groovy.maven.importReactor", root_request, expected, label)
+                        actual_membership = membership()
+                        journey["responses"][-1]["observedMembership"] = sorted(actual_membership)
+                        if actual_membership != expected_all:
+                            raise AssertionError("Profile change unexpectedly altered retained Eclipse resources")
+                        model = discover(client, reactor, details=True)
+                        root_model = next(project for project in model["projects"] if project["pomUri"] == root_request["pomUri"])
+                        reported_active = root_model["profiles"].get("active-reactor")
+                        reported_module = any(
+                            Path(unquote(urlparse(uri).path)) == profile_pom.parent
+                            for uri in root_model["moduleUris"]
+                        )
+                        journey["responses"][-1]["cachedRootProfileActive"] = reported_active
+                        journey["responses"][-1]["cachedRootContainsProfileModule"] = reported_module
+                        active = profile_pom in expected
+                        if reported_active != active or reported_module != active:
+                            raise AssertionError("Cached reactor model still reports previous Maven profile state")
+                        receipt["checks"].append(label + ": current profile activity and effective module link, retained workspace resources preserved")
                 if not restart:
                     unlink = client.request("workspace/executeCommand", {"command": "groovy.maven.unlinkSelected", "arguments": [
                         {"rootUri": reactor.as_uri(), "projectUris": [(reactor / "library").as_uri()]}]}, timeout=30)
@@ -3203,6 +3359,8 @@ if __name__ == "__main__":
     parser.add_argument("--pom-masks-only", action="store_true", help="Qualify versioned POM masks through the existing reactor fixture")
     parser.add_argument("--reactor-root-only", action="store_true",
                         help="Qualify explicit effective Maven reactor expansion through the guarded M2E phase")
+    parser.add_argument("--profile-change", action="store_true",
+                        help="Exercise live host Maven profile deactivation and restoration during the reactor probe")
     parser.add_argument("--default-roots-only", action="store_true", help="Read-only default Maven root discovery against the pinned SDK scanner")
     parser.add_argument("--dependency-graph-only", action="store_true", help="Qualify explicit offline cached Maven dependency collection")
     arguments = parser.parse_args()
@@ -3219,6 +3377,8 @@ if __name__ == "__main__":
         parser.error("--masked-models-only requires --reactor-root-only --pom-masks-only")
     if arguments.pom_masks_only and not arguments.reactor_root_only:
         parser.error("--pom-masks-only requires --reactor-root-only")
+    if arguments.profile_change and (not arguments.reactor_root_only or arguments.pom_masks_only):
+        parser.error("--profile-change requires --reactor-root-only without --pom-masks-only")
     if arguments.profile_projection_only and any(value for name, value in vars(arguments).items()
                                                 if name not in ["profile_projection_only", "launcher", "java_home", "provider",
                                                                 "maven_repository", "receipt", "sha256"]):

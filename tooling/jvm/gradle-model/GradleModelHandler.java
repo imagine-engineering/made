@@ -67,7 +67,7 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
             throw new IllegalArgumentException("A project file URI and explicit offline mode are required.");
         }
         Path root = initializedRoot((String) request.get("rootUri"), "Gradle");
-        return queryModel(request, monitor, root, includeDetails, includeOutputs, includeGraph);
+        return queryModel(request, monitor, root, currentPreferences(), includeDetails, includeOutputs, includeGraph);
     }
 
     private static Object scopedProjectDetails(List<Object> arguments, IProgressMonitor monitor,
@@ -80,13 +80,15 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
                     || !Boolean.TRUE.equals(request.get("offline"))) {
                 throw new IllegalArgumentException();
             }
+            Preferences preferences = currentPreferences();
             GradleImportHandler.ScopedBuild scope = GradleImportHandler.scopedBuild(workspaceUri, buildUri, monitor);
             scope.validate(monitor);
             var moduleContext = moduleFenced ? GradleImportHandler.scopedMetadataContext(scope, monitor) : null;
             if (moduleContext != null) {
                 moduleContext.validate();
             }
-            Object model = queryModel(request, monitor, scope.build(), true, false, false);
+            requireCurrentPreferences(preferences);
+            Object model = queryModel(request, monitor, scope.build(), preferences, true, false, false);
             scope.validate(monitor);
             if (moduleContext != null) {
                 moduleContext.validate();
@@ -98,6 +100,7 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
             if (new Gson().toJson(response).getBytes(StandardCharsets.UTF_8).length > 8 * 1024 * 1024) {
                 throw new IllegalArgumentException();
             }
+            requireCurrentPreferences(preferences);
             return response;
         } catch (org.eclipse.core.runtime.OperationCanceledException cancelled) {
             throw new IllegalStateException("Scoped Gradle model discovery cancelled or authority changed. Check current inputs and host settings, then refresh and retry.");
@@ -112,8 +115,19 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
         }
     }
 
+    private static Preferences currentPreferences() {
+        return JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
+    }
+
+    private static void requireCurrentPreferences(Preferences preferences) {
+        // JDTLS replaces its preference object on configuration changes, including a change back to the original values.
+        if (currentPreferences() != preferences) {
+            throw new org.eclipse.core.runtime.OperationCanceledException();
+        }
+    }
+
     private static Object queryModel(Map<?, ?> request, IProgressMonitor monitor, Path root,
-            boolean includeDetails, boolean includeOutputs, boolean includeGraph) throws Exception {
+            Preferences preferences, boolean includeDetails, boolean includeOutputs, boolean includeGraph) throws Exception {
         String resolutionModule = null;
         if (includeGraph) {
             try {
@@ -130,7 +144,6 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
                 throw new IllegalArgumentException("The Gradle graph module is outside its initialized root or unavailable.");
             }
         }
-        Preferences preferences = JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
         if (!root.resolve("settings.gradle").toFile().isFile()
                 && !root.resolve("settings.gradle.kts").toFile().isFile()
                 && !root.resolve("build.gradle").toFile().isFile()
@@ -158,6 +171,10 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
             operationArguments.add("--offline");
         }
         operationArguments.addAll(properties);
+        String javaHome = GradleImportHandler.configuredJavaHome(preferences.getGradleJavaHome());
+        if (javaHome != null) {
+            operationArguments.add(GradleImportHandler.javaHomeArgument(javaHome));
+        }
         if (monitor.isCanceled()) {
             throw new IllegalStateException("Gradle model discovery cancelled. Refresh to retry.");
         }
@@ -201,9 +218,6 @@ public final class GradleModelHandler implements IDelegateCommandHandler {
                         .withCancellationToken(cancellation.token())
                         .setStandardOutput(OutputStream.nullOutputStream())
                         .setStandardError(OutputStream.nullOutputStream());
-                if (preferences.getGradleJavaHome() != null && !preferences.getGradleJavaHome().isEmpty()) {
-                    operation.setJavaHome(new File(preferences.getGradleJavaHome()));
-                }
                 operation.setJvmArguments(preferences.getGradleJvmArguments());
                 operation.run(new ResultHandler<Map<String, Object>>() {
                     @Override

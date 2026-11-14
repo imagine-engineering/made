@@ -1236,11 +1236,11 @@ def probe_import_selection(arguments):
                 raise RuntimeError("Cannot load existing unlink qualification fixture")
             qualifiers = importlib.util.module_from_spec(specification)
             specification.loader.exec_module(qualifiers)
-            if arguments.guarded_unlink_only or arguments.closed_modules_only:
+            if arguments.guarded_unlink_only or arguments.closed_modules_only or arguments.cached_topology_only:
                 if arguments.fresh_closed_modules_only:
                     fixture_bundle, fixture_source = fresh_gradle_fixture_bundle(arguments, directory, qualifiers)
                 else:
-                    fixture_bundle, fixture_source = qualifiers.unlink_fixture_bundle(arguments, directory, workspace_states=arguments.closed_modules_only, ownership_modes=arguments.provider_module_states_only)
+                    fixture_bundle, fixture_source = qualifiers.unlink_fixture_bundle(arguments, directory, workspace_states=arguments.closed_modules_only, ownership_modes=arguments.provider_module_states_only, cached_topology_mode=arguments.cached_topology_only)
                 receipt["testOnlyFixtureSha256"] = hashlib.sha256(fixture_bundle.read_bytes()).hexdigest()
                 receipt["testOnlyFixtureSourceSha256"] = hashlib.sha256(fixture_source.read_bytes()).hexdigest()
                 shutil.copy2(fixture_source, evidence / fixture_source.name)
@@ -1393,6 +1393,8 @@ tasks.named('jar') {
             for module in [primary, unrelated, primary / "included", primary / "application", primary / "library"]:
                 with (module / "build.gradle").open("a") as build:
                     build.write("\ntasks.register('unrequestedCompositeDefault') { doLast { file('unrequested-composite-default.marker').text = 'ran' } }\ndefaultTasks 'unrequestedCompositeDefault'\n")
+                    if arguments.cached_topology_only:
+                        build.write("file('cached-topology-configuration.marker').append('configured\\n')\n")
         originals = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
                      for path in root.rglob("*") if path.is_file()}
         receipt["fixture_sha256"] = originals
@@ -1562,6 +1564,124 @@ tasks.named('jar') {
                 stage + ": complete independent v1 namespace with Java/non-Java and unrelated ownership",
                 stage + ": current cached identities and resource metadata unchanged before/after model; no default task",
             ])
+
+        def cached_composite_topology(client, journey, stage, require_warm=True, held=None):
+            from urllib.parse import unquote, urlparse
+
+            def metadata():
+                return {path: hashlib.sha256(path.read_bytes()).hexdigest()
+                        for path in root.rglob("*") if path.is_file()
+                        and (path.name in {".project", ".classpath"} or ".settings" in path.parts)}
+
+            membership_before = qualifiers.imported_resource_membership(client, root)
+            metadata_before = metadata()
+            markers = sorted(root.rglob("cached-topology-configuration.marker"))
+            marker_contents = {path: path.read_bytes() for path in markers}
+            request = {
+                "command": "groovy.fixture.unlink.cachedGradleTopology",
+                "arguments": [{"rootUri": primary.as_uri(), "childUri": (primary / "application").as_uri()}],
+            }
+            if held is not None:
+                request["arguments"][0]["hold"] = True
+                gate = root.parent
+                started, release, finished = (gate / ("cached-topology-" + event) for event in
+                                               ["started", "release", "finished"])
+                request_id = client.next_id
+                client.next_id += 1
+                client.send({"jsonrpc": "2.0", "id": request_id,
+                             "method": "workspace/executeCommand", "params": request})
+                try:
+                    deadline = time.monotonic() + 15
+                    while not started.exists() and time.monotonic() < deadline:
+                        time.sleep(0.02)
+                    if not started.exists():
+                        raise AssertionError("Cached SDK read did not reach the cancellation gate")
+                    if held == "cancel":
+                        client.notify("$/cancelRequest", {"id": request_id})
+                        expected_error = "cancel"
+                    else:
+                        repaired = client.request("workspace/executeCommand", {
+                            "command": "groovy.gradle.importSelected",
+                            "arguments": [{"rootUri": primary.as_uri(), "offline": True}],
+                        }, timeout=30)
+                        if repaired.get("selectedImportPhaseComplete") is not True:
+                            raise AssertionError("Concurrent fixture refresh did not finish")
+                        release.write_text("release")
+                        expected_error = "cached participant model changed"
+                    try:
+                        client.receive_response(request_id, "held cached topology", timeout=15)
+                    except RuntimeError as failure:
+                        if expected_error not in str(failure).lower():
+                            raise
+                        journey.setdefault("heldTopologyResponses", {})[held] = str(failure)
+                    else:
+                        raise AssertionError("Held SDK cache observation returned stale success")
+                finally:
+                    release.write_text("release")
+                    deadline = time.monotonic() + 5
+                    while started.exists() and not finished.exists() and time.monotonic() < deadline:
+                        time.sleep(0.02)
+                    if started.exists() and not finished.exists():
+                        raise AssertionError("Cancelled SDK cache observation did not release its gate")
+                    for marker in [started, release, finished]:
+                        marker.unlink(missing_ok=True)
+            else:
+                response = client.request("workspace/executeCommand", request, timeout=30)
+                journey.setdefault("cachedTopology", []).append({"stage": stage, "reply": response})
+                if set(response) != {"topologyKnown", "unusedModelMissing", "connectionRootUri", "projects", "persistedResources"}:
+                    raise AssertionError("Unexpected SDK cache observation")
+                if response["unusedModelMissing"] is not True or response["connectionRootUri"].rstrip("/") != primary.as_uri():
+                    raise AssertionError("SDK cache observation changed the connection or loaded an unused model")
+                persisted = response["persistedResources"]
+                current_directories = {Path(unquote(urlparse(uri).path)).resolve(strict=True)
+                                       for uri in membership_before.values()}
+                primary_directories = {path for path in current_directories if path.is_relative_to(primary)}
+                if (not isinstance(persisted, dict) or len(persisted) > 128
+                        or any(set(record) != {"present", "subprojectPaths"} or type(record["present"]) is not bool
+                               or not isinstance(record["subprojectPaths"], list)
+                               or not record["present"] and record["subprojectPaths"]
+                               for record in persisted.values())):
+                    raise AssertionError("Buildship per-resource persisted facts are invalid")
+                persisted_by_directory = {Path(unquote(urlparse(uri).path)).resolve(strict=True): record
+                                          for uri, record in persisted.items()}
+                expected_persistence = {
+                    path: {"present": True, "subprojectPaths": ["application", "library"] if path == primary else []}
+                    for path in primary_directories
+                }
+                if len(persisted_by_directory) != len(persisted) or persisted_by_directory != expected_persistence:
+                    raise AssertionError("Buildship persisted resource model differs from the observed fixture contract")
+                receipt["checks"].append(stage + ": exact Buildship persisted resource paths")
+            if held == "replacement":
+                if (qualifiers.imported_resource_membership(client, root) != membership_before
+                        or metadata() != metadata_before
+                        or list(root.rglob("unrequested-composite-default.marker"))):
+                    raise AssertionError("Concurrent fixture refresh changed resource metadata or ran a default task")
+                preserve_sources(stage + ": replaced cache cannot publish the held read")
+                return
+            if (not markers or qualifiers.imported_resource_membership(client, root) != membership_before
+                    or metadata() != metadata_before
+                    or sorted(root.rglob("cached-topology-configuration.marker")) != markers
+                    or any(path.read_bytes() != content for path, content in marker_contents.items())
+                    or list(root.rglob("unrequested-composite-default.marker"))):
+                raise AssertionError("Cached SDK read changed resources, configured a build or ran its default task")
+            preserve_sources(stage + ": cache read preserves resource and source metadata without running Gradle")
+            if held == "cancel":
+                return
+            if response["topologyKnown"] is False and response["projects"] == []:
+                receipt["checks"].append(stage + ": cache miss remains unknown and existing resources remain intact")
+                if require_warm:
+                    raise AssertionError(stage + ": Buildship cache has no EclipseProject model")
+                return False
+            actual = {(Path(unquote(urlparse(row["projectUri"]).path)),
+                       Path(unquote(urlparse(row["buildRootUri"]).path)), row["projectPath"])
+                      for row in response["projects"]}
+            expected = {(primary, primary, ":"), (primary / "application", primary, ":application"),
+                        (primary / "library", primary, ":library"),
+                        (primary / "included", primary / "included", ":")}
+            if response["topologyKnown"] is not True or actual != expected or len(response["projects"]) != len(expected):
+                raise AssertionError(stage + ": cached participant topology differs from the composite fixture")
+            receipt["checks"].append(stage + ": exact cached participant topology and independent unused model miss")
+            return True
 
         graph_baseline = None
 
@@ -2598,10 +2718,24 @@ tasks.named('jar') {
                     required = {"groovy.gradle.importedBuildRoots", "groovy.gradle.importedProjects", "groovy.gradle.projectDetails.v4"}
                     if not required.issubset(commands):
                         raise AssertionError("Composite cached ownership and fenced model commands unavailable")
+                    after_unlink = None
+                    if arguments.cached_topology_only:
+                        if not required_restart:
+                            cached_composite_topology(client, journey, label + ": held cancellation", held="cancel")
+                            cached_composite_topology(client, journey, label + ": held cache replacement", held="replacement")
+                        was_warm = cached_composite_topology(client, journey, label + ": before resource mutation",
+                                                            require_warm=not required_restart)
+                        def after_unlink():
+                            cached_composite_topology(client, journey, label + ": grouping resources absent",
+                                                      require_warm=was_warm)
                     composite_cached_ownership(client, journey, label + ": before resource mutation")
                     qualifiers.qualify_imported_resources(client, root, primary, "gradle", expected,
-                        {"primary", "primary/included"}, membership, journey, receipt)
+                        {"primary", "primary/included"}, membership, journey, receipt, after_unlink=after_unlink)
                     composite_cached_ownership(client, journey, label + ": after resource repair")
+                    if arguments.cached_topology_only:
+                        cached_composite_topology(client, journey, label + ": after resource repair")
+                        if not was_warm:
+                            raise AssertionError("Same-profile restart retained resources but did not retain the warm Buildship topology before explicit repair")
                 if guarded_actions:
                     def phase(root_uri=primary.as_uri(), offline=True):
                         return {"command": "groovy.gradle.importSelected",
@@ -3019,7 +3153,7 @@ tasks.named('jar') {
                 return
             if arguments.resource_membership_only:
                 run("resources", all_data, all_members)
-                run("resources-restart", all_data, all_members)
+                run("resources-restart", all_data, all_members, required_restart=arguments.cached_topology_only)
                 return
             if arguments.guarded_phase_only:
                 run("guarded-phase", all_data, set(), guarded_actions=True)
@@ -3102,6 +3236,8 @@ def probe_startup_controls(arguments):
         if digest != expected:
             raise AssertionError("Pinned startup provider artifact differs")
         receipt["pinned_input_sha256"][artifact.name] = digest
+    use_fixture_ipv4 = not arguments.workspace_scoped_live_tool_settings_dual_stack
+    receipt["fixtureIPv4Only"] = use_fixture_ipv4
     with tempfile.TemporaryDirectory(prefix="groovy-mixed-startup-") as directory:
         workspace = Path(directory).resolve()
         fixture_bundle = None
@@ -3153,14 +3289,15 @@ def probe_startup_controls(arguments):
                 '<classpathentry kind="output" path="bin"/></classpath>\n'
             )
         if arguments.single_provider_replay_only:
-            loose = root / "loose/src/evidence"
-            loose.mkdir(parents=True)
-            (loose / "Loose.java").write_text(
-                "package evidence; public class Loose { String use() { return Helper.message(); } }\n"
-            )
-            (loose / "Helper.java").write_text(
-                'package evidence; public class Helper { static String message() { return "ok"; } }\n'
-            )
+            for folder, package in [("loose", "evidence"), ("loose-later", "later")]:
+                loose = root / folder / "src" / package
+                loose.mkdir(parents=True)
+                (loose / "Loose.java").write_text(
+                    f"package {package}; public class Loose {{ String use() {{ return Helper.message(); }} }}\n"
+                )
+                (loose / "Helper.java").write_text(
+                    f'package {package}; public class Helper {{ static String message() {{ return "ok"; }} }}\n'
+                )
         if arguments.workspace_scoped_details_only:
             with (gradle / "build.gradle").open("a") as build:
                 build.write("\nclass ScopedOptionProbe extends DefaultTask { @org.gradle.api.tasks.options.Option(option='scope-mode', description='Mode') void setMode(String value) {} }\ntasks.register('scopedOptionProbe', ScopedOptionProbe)\n")
@@ -3312,7 +3449,7 @@ def probe_startup_controls(arguments):
 
         def replay_default(client, label, journey, name, enabled, java, resources):
             build = root / name
-            scope = build if label.startswith("replay-loose-") else root
+            scope = root if root.as_uri() in journey["initializedFolderUris"] else build
             if name == "maven":
                 candidates = [build / relative for relative in ["pom.xml", "application/pom.xml", "library/pom.xml"]]
                 candidate_field = "candidatePomUris"
@@ -3374,15 +3511,21 @@ def probe_startup_controls(arguments):
                 resources |= maven_resources if name == "maven" else gradle_resources
             await_membership(client, java, resources, journey, label + ": replay preserves exact unrelated membership")
 
-        def qualify_loose_java(client, journey, label):
-            source = root / "loose/src/evidence/Loose.java"
-            helper = source.with_name("Helper.java")
-            text = source.read_text()
+        def open_loose_java(client, source):
             client.notify("textDocument/didOpen", {"textDocument": {
-                "uri": source.as_uri(), "languageId": "java", "version": 1, "text": text,
+                "uri": source.as_uri(), "languageId": "java", "version": 1, "text": source.read_text(),
             }})
-            request = {"textDocument": {"uri": source.as_uri()},
-                       "position": {"line": 0, "character": text.index("Helper") + 2}}
+
+        def loose_java_definition_request(source):
+            return {"textDocument": {"uri": source.as_uri()},
+                    "position": {"line": 0, "character": source.read_text().index("Helper") + 2}}
+
+        def qualify_loose_java(client, journey, label, source=None):
+            if source is None:
+                source = root / "loose/src/evidence/Loose.java"
+                open_loose_java(client, source)
+            helper = source.with_name("Helper.java")
+            request = loose_java_definition_request(source)
             deadline = time.monotonic() + 30
             while time.monotonic() < deadline:
                 definitions = client.request("textDocument/definition", request, timeout=15)
@@ -3393,6 +3536,75 @@ def probe_startup_controls(arguments):
                     return
                 time.sleep(0.25)
             raise AssertionError("Loose Java could not resolve the other source after startup")
+
+        def qualify_loose_source_path(client, journey, data, java, resources):
+            from urllib.parse import unquote, urlparse
+
+            source = root / "loose/src/evidence/Loose.java"
+            command = "groovy.java.addLooseSource"
+            for invalid in [source.with_suffix(".txt").as_uri(), (root.parent / "Foreign.java").as_uri()]:
+                expect_failure(client, {"command": command, "arguments": [{
+                    "rootUri": root.as_uri(), "sourceUri": invalid,
+                }]}, "Loose Java source setup failed", str(root))
+            for folder, package in [("loose", "evidence"), ("loose-later", "later")]:
+                source_root = root / folder / "src"
+                source = source_root / package / "Loose.java"
+                open_loose_java(client, source)
+                before = client.request("textDocument/definition", loose_java_definition_request(source), timeout=15)
+                if before and folder == "loose":
+                    raise AssertionError("Expected the first loose document to start without a sibling binding")
+                if before and any(
+                    definition.get("uri", definition.get("targetUri")) == source.with_name("Helper.java").as_uri()
+                    for definition in before
+                ):
+                    raise AssertionError("Expected the later source to need registration")
+                receipt["checks"].append(journey["label"] + ": " + folder + " starts without its sibling binding")
+                reply = client.request("workspace/executeCommand", {"command": command, "arguments": [{
+                    "rootUri": root.as_uri(), "sourceUri": source.as_uri(),
+                }]}, timeout=30)
+                if reply != {"version": 1, "sourceRoots": [source_root.as_uri() + "/"]}:
+                    raise AssertionError("Could not add exactly the requested loose source path")
+                if folder == "loose-later":
+                    client.notify("textDocument/didClose", {"textDocument": {"uri": source.as_uri()}})
+                    client.notify("textDocument/didOpen", {"textDocument": {
+                        "uri": source.as_uri(), "languageId": "java", "version": 2, "text": source.read_text(),
+                    }})
+                qualify_loose_java(client, journey, journey["label"] + ": " + folder, source)
+                if folder == "loose-later":
+                    client.notify("textDocument/didClose", {"textDocument": {"uri": source.as_uri()}})
+            invisible = []
+            for arguments, expected in [
+                ([], java),
+                ([json.dumps({"includeNonJava": True})], resources),
+            ]:
+                reply = client.request("workspace/executeCommand", {
+                    "command": "java.project.getAll", "arguments": arguments,
+                }, timeout=30)
+                members, private = set(), set()
+                default_project = (data / "jdt.ls-java-project").resolve()
+                if (not isinstance(reply, list) or len(reply) > 128
+                        or not all(isinstance(uri, str) for uri in reply) or len(set(reply)) != len(reply)):
+                    raise AssertionError("Invalid or duplicate project identities")
+                for uri in reply:
+                    parsed = urlparse(uri)
+                    if parsed.scheme != "file" or parsed.netloc or parsed.query or parsed.fragment:
+                        raise AssertionError("Unexpected project URI")
+                    path = Path(unquote(parsed.path)).resolve(strict=True)
+                    if path.is_dir() and path.is_relative_to(root):
+                        members.add(path.relative_to(root).as_posix())
+                    elif path.is_dir() and path.parent == data.resolve() and path.name.startswith(root.name + "_"):
+                        private.add(path.name)
+                    elif path == default_project and path.is_dir():
+                        # Opening an unmanaged document can also materialize the SDK's default project.
+                        continue
+                    else:
+                        raise AssertionError("Unexpected project outside the fixture and JDTLS data")
+                if members != expected or len(private) != 1:
+                    raise AssertionError("Loose source path changed imported project membership")
+                invisible.append(private)
+            if invisible[0] != invisible[1]:
+                raise AssertionError("JDTLS enumerated different invisible project identities")
+            receipt["checks"].append(journey["label"] + ": source path preserves imported ownership")
 
         def run(label, data, enabled, expected_java, expected_resources, repair=False, reuse_fixture=None, folders=None, linked_actions=False, identity_reads=False, ownership_actions=False, metadata_exclusion=False, metadata_actions=False, root_actions=False, configurations=None, replay_provider=None):
             nonlocal root, maven, gradle
@@ -3425,7 +3637,8 @@ def probe_startup_controls(arguments):
                 options["projectConfigurations"] = [path.as_uri() for path in configurations]
                 journey["explicitProjectConfigurations"] = options["projectConfigurations"]
             client = client_class()(arguments.launcher.resolve(), arguments.java_home.resolve(), root, data,
-                                    deny_external_network=True, gradle_user_home=home)
+                                    deny_external_network=True, gradle_user_home=home,
+                                    fixture_ipv4_only=use_fixture_ipv4)
             try:
                 initialized = client.request("initialize", {
                     "processId": os.getpid(), "rootUri": root.as_uri(),
@@ -3471,7 +3684,15 @@ def probe_startup_controls(arguments):
                         replay_default(client, label + ": after live settings removal", journey,
                                        replay_provider, False, java, resources)
                     if label.startswith("replay-loose-"):
-                        qualify_loose_java(client, journey, label)
+                        if label.startswith("replay-loose-source-path-"):
+                            provider_java, provider_resources = (
+                                (maven_java, maven_resources) if replay_provider == "maven"
+                                else (gradle_java, gradle_resources)
+                            )
+                            qualify_loose_source_path(client, journey, data,
+                                                      java | provider_java, resources | provider_resources)
+                        else:
+                            qualify_loose_java(client, journey, label)
                         client.notify("textDocument/didClose", {"textDocument": {
                             "uri": (root / "loose/src/evidence/Loose.java").as_uri(),
                         }})
@@ -3594,14 +3815,16 @@ def probe_startup_controls(arguments):
                     if arguments.cached_build_associations_only:
                         read_cached_associations("before initial import")
 
-                    def apply_configuration(value, expected_arguments):
+                    def apply_configuration(value, expected_arguments, **expected_preferences):
                         client.notify("workspace/didChangeConfiguration", {"settings": value})
+                        expected_preferences["gradleArguments"] = expected_arguments
                         deadline = time.monotonic() + 30
                         while time.monotonic() < deadline:
-                            if host_state()["gradleArguments"] == expected_arguments:
-                                return
+                            observed = host_state()
+                            if all(observed[key] == expected for key, expected in expected_preferences.items()):
+                                return observed
                             time.sleep(0.05)
-                        raise AssertionError("Scoped host-settings oracle did not observe configuration replacement")
+                        raise AssertionError("Scoped host-settings oracle did not observe " + ", ".join(expected_preferences))
 
                     detached_build = gradle.with_name("scoped-detached-gradle")
 
@@ -4351,7 +4574,7 @@ def probe_startup_controls(arguments):
                         baseline_witness = {"membership": sorted(members),
                             "metadata": {path.relative_to(root).as_posix(): digest for path,digest in metadata.items()},
                             "host": original_host, "defaultTaskMarker": False}
-                        def query_scoped_details(stage):
+                        def query_scoped_details(stage, reference=baseline_witness):
                             before = details_witness()
                             value = client.request("workspace/executeCommand", request, timeout=150)
                             after = details_witness()
@@ -4382,7 +4605,7 @@ def probe_startup_controls(arguments):
                                 source = next(source for source in json.loads(record["detailsJson"])["sourceSets"] if source["name"] == "main")
                                 if not any(model_path(uri) == gradle / name / "src/main/java" for uri in source["roots"]) or source["generatednessKnown"]:
                                     raise AssertionError("Nested source roots missing or generatedness invented")
-                            if after != baseline_witness:
+                            if after != reference:
                                 raise AssertionError("Scoped model changes membership/Eclipse metadata/host authority or runs default tasks")
                             journey["commands"].append({"stage":stage,"request":request,"reply":value})
                             receipt["checks"].append(label + ": " + stage + " nested tasks/options/sources, stable membership and unknown full synchronization")
@@ -4390,6 +4613,72 @@ def probe_startup_controls(arguments):
                         baseline = query_scoped_details("explicit scoped nested details")
                         if query_scoped_details("stable scoped nested details") != baseline:
                             raise AssertionError("Repeated nested details changed stable model identities")
+                        if arguments.workspace_scoped_live_tool_settings_only and label.endswith("fresh"):
+                            def observe_tool_change(probe, stage, reference):
+                                observed = details_witness()
+                                probe["observations"].append({
+                                    "stage": stage,
+                                    "state": observed,
+                                    "metadataChanges": {
+                                        path: {"before": reference["metadata"].get(path),
+                                               "after": observed["metadata"].get(path)}
+                                        for path in sorted(reference["metadata"].keys() | observed["metadata"].keys())
+                                        if reference["metadata"].get(path) != observed["metadata"].get(path)
+                                    },
+                                    "hostChanges": {
+                                        key: {"before": previous, "after": observed["host"][key]}
+                                        for key, previous in reference["host"].items() if observed["host"][key] != previous
+                                    },
+                                })
+                                return observed
+
+                            for setting, field in [("java", "gradleJavaHome"), ("distribution", "gradleHome")]:
+                                reference = details_witness()
+                                missing = workspace / f"unavailable-gradle-{setting}"
+                                if missing.exists() or missing.is_symlink():
+                                    raise AssertionError("Missing configured tool path must be absent")
+                                changed = json.loads(json.dumps(configuration))
+                                gradle_settings = changed["java"]["import"]["gradle"]
+                                if setting == "java":
+                                    gradle_settings["java"]["home"] = str(missing)
+                                else:
+                                    gradle_settings["home"] = str(missing)
+                                probe = {"setting": field, "baseline": reference, "observations": []}
+                                journey.setdefault("liveScopedToolSettings", []).append(probe)
+                                criteria = gradle / "gradle/gradle-daemon-jvm.properties"
+                                if setting == "java":
+                                    criteria.parent.mkdir(exist_ok=True)
+                                    with criteria.open("x") as file:
+                                        file.write("toolchainVersion=17\n")
+                                try:
+                                    apply_configuration(changed, reference["host"]["gradleArguments"], **{field: str(missing)})
+                                    revoked = observe_tool_change(probe, "revoked", reference)
+                                    expected_host = {**reference["host"], field: str(missing)}
+                                    if revoked["host"] != expected_host:
+                                        raise AssertionError("Live Gradle notification changed unrelated host preferences")
+                                    probe["error"] = expect_failure(client, request, "Scoped Gradle model discovery failed", str(workspace))
+                                    probe["importError"] = expect_failure(client, {
+                                        "command": "groovy.gradle.importSelected.v2", "arguments": [selection],
+                                    }, "Selected Gradle import failed", str(workspace))
+                                    refused = observe_tool_change(probe, "refused", reference)
+                                    if (refused["host"] != expected_host
+                                            or refused["membership"] != reference["membership"]
+                                            or refused["defaultTaskMarker"]):
+                                        raise AssertionError("Live Gradle refusal changed authority, membership or ran default tasks")
+                                    receipt["checks"].append(label + ": live " + field + " revocation refuses model discovery and guarded import")
+                                finally:
+                                    if setting == "java":
+                                        criteria.unlink()
+                                    apply_configuration(configuration, reference["host"]["gradleArguments"], **{field: reference["host"][field]})
+                                    restored = observe_tool_change(probe, "restored", reference)
+                                try:
+                                    recovered = query_scoped_details("recovery after live " + field + " revocation", restored)
+                                finally:
+                                    after = observe_tool_change(probe, "after recovery query", reference)
+                                probe["sameModel"] = recovered == baseline
+                                if not probe["sameModel"] or after != reference:
+                                    raise AssertionError("Live Gradle settings recovery did not restore the model and workspace witness; inspect liveScopedToolSettings")
+                                receipt["checks"].append(label + ": live " + field + " recovery restores model and workspace witnesses")
                         expect_failure(client, {"command":"groovy.gradle.projectDetails","arguments":[{"rootUri":gradle.as_uri(),"offline":True}]}, "root must match an initialized project folder")
                         receipt["checks"].append(label + ": legacy nested details authority remains exact")
                         if label.endswith("fresh"):
@@ -4445,8 +4734,12 @@ def probe_startup_controls(arguments):
                         if label.endswith("fresh"):
                             build_input = gradle / "build.gradle"
                             original = build_input.read_bytes()
-                            categories = ["input","settings","build","workspace","cancel","timeout"]
-                            if arguments.workspace_scoped_module_details_only:
+                            if arguments.workspace_scoped_live_tool_settings_only:
+                                categories = ["java-home-restored", "java-home-replaced", "gradle-home-replaced",
+                                              "daemon-criteria-added"]
+                            else:
+                                categories = ["input","settings","build","workspace","cancel","timeout"]
+                            if arguments.workspace_scoped_module_details_only and not arguments.workspace_scoped_live_tool_settings_only:
                                 categories.extend(["module-edit","module-add","module-remove","module-directory"])
                             for category in categories:
                                 module_input = gradle / "library/build.gradle"
@@ -4457,6 +4750,11 @@ def probe_startup_controls(arguments):
                                 import queue
                                 waiting_file = gradle / "scoped-model-started"
                                 release_file = gradle / "scoped-model-release"
+                                criteria = gradle / "gradle/gradle-daemon-jvm.properties"
+                                criteria_added = False
+                                java_alias_replaced = False
+                                gradle_alias_replaced = False
+                                replacement_distribution = None
                                 detached = None
                                 destination = None
                                 try:
@@ -4500,6 +4798,55 @@ def probe_startup_controls(arguments):
                                         changed["java"]["import"]["gradle"]["arguments"] = changed_args
                                         # The configuration gate prevents a model reply while the existing serial client observes settings.
                                         apply_configuration(changed, changed_args)
+                                    elif category == "java-home-restored":
+                                        changed = json.loads(json.dumps(configuration))
+                                        missing = workspace / "unavailable-gradle-java-while-held"
+                                        if missing.exists() or missing.is_symlink():
+                                            raise AssertionError("Held Java-home path must be absent")
+                                        changed["java"]["import"]["gradle"]["java"]["home"] = str(missing)
+                                        revoked = apply_configuration(changed, original_host["gradleArguments"],
+                                                                      gradleJavaHome=str(missing))
+                                        restored = apply_configuration(configuration, original_host["gradleArguments"],
+                                                                       gradleJavaHome=original_host["gradleJavaHome"])
+                                        journey["heldJavaHomePreferences"] = {"before": original_host, "revoked": revoked,
+                                                                             "restored": restored}
+                                        if (revoked != {**original_host, "gradleJavaHome": str(missing)}
+                                                or restored != original_host):
+                                            raise AssertionError("Held Java-home change did not restore exact host preferences")
+                                    elif category == "daemon-criteria-added":
+                                        criteria.parent.mkdir(exist_ok=True)
+                                        with criteria.open("x") as file:
+                                            criteria_added = True
+                                            file.write("toolchainVersion=17\n")
+                                    elif category == "java-home-replaced":
+                                        original_jdk = arguments.gradle_java_home.resolve()
+                                        replacement_jdk = arguments.java_home.resolve()
+                                        if (replacement_jdk == original_jdk or not (replacement_jdk / "bin/java").is_file()
+                                                or configured_gradle_java_home.parent != workspace
+                                                or not configured_gradle_java_home.is_symlink()
+                                                or configured_gradle_java_home.readlink() != original_jdk):
+                                            raise AssertionError("Held Java-home replacement requires its owned alias and two distinct JDKs")
+                                        configured_gradle_java_home.unlink()
+                                        java_alias_replaced = True
+                                        configured_gradle_java_home.symlink_to(replacement_jdk, target_is_directory=True)
+                                        if host_state() != original_host:
+                                            raise AssertionError("Replacing an owned Java-home alias must leave configured settings unchanged")
+                                    elif category == "gradle-home-replaced":
+                                        original_distribution = arguments.gradle_home.resolve()
+                                        replacement_distribution = workspace / "replacement-scoped-model-gradle-home"
+                                        if (configured_gradle_home.parent != workspace
+                                                or not configured_gradle_home.is_symlink()
+                                                or configured_gradle_home.readlink() != original_distribution):
+                                            raise AssertionError("Held Gradle-home replacement requires its owned alias")
+                                        replacement_distribution.mkdir()
+                                        for entry in original_distribution.iterdir():
+                                            (replacement_distribution / entry.name).symlink_to(
+                                                entry, target_is_directory=entry.is_dir())
+                                        configured_gradle_home.unlink()
+                                        gradle_alias_replaced = True
+                                        configured_gradle_home.symlink_to(replacement_distribution, target_is_directory=True)
+                                        if host_state() != original_host:
+                                            raise AssertionError("Replacing an owned Gradle-home alias must leave configured settings unchanged")
                                     elif category == "module-edit":
                                         module_input.write_bytes(module_original + b"\n// changed during model\n")
                                     elif category == "module-add":
@@ -4532,6 +4879,8 @@ def probe_startup_controls(arguments):
                                             or category == "timeout" and "timed out" not in message
                                             or category == "cancel" and "cancel" not in message):
                                         raise AssertionError("Scoped model error loses category or exposes private cause")
+                                    if arguments.workspace_scoped_live_tool_settings_only and "cancelled or authority changed" not in message:
+                                        raise AssertionError("A stale model must fail with a changed-authority error")
                                     journey.setdefault("heldScopedDetails",[]).append({"category":category,"error":message,"response":response})
                                     receipt["checks"].append(label + ": held scoped details " + category + " refuses stale success and sanitizes failure")
                                 finally:
@@ -4539,6 +4888,16 @@ def probe_startup_controls(arguments):
                                         shutil.rmtree(destination)
                                         detached.rename(destination)
                                     build_input.write_bytes(original)
+                                    if criteria_added:
+                                        criteria.unlink()
+                                    if java_alias_replaced:
+                                        configured_gradle_java_home.unlink(missing_ok=True)
+                                        configured_gradle_java_home.symlink_to(arguments.gradle_java_home.resolve(), target_is_directory=True)
+                                    if gradle_alias_replaced:
+                                        configured_gradle_home.unlink(missing_ok=True)
+                                        configured_gradle_home.symlink_to(arguments.gradle_home.resolve(), target_is_directory=True)
+                                    if replacement_distribution is not None:
+                                        shutil.rmtree(replacement_distribution)
                                     if category in {"module-edit","module-remove"}:
                                         module_input.write_bytes(module_original)
                                     if category == "module-add" and module_alternate.exists():
@@ -5151,6 +5510,12 @@ def probe_startup_controls(arguments):
                     run("replay-loose-" + name, workspace / ("loose-" + name + "-profile"),
                         {"maven": False, "gradle": False}, set(), set(), configurations=[], reuse_fixture=retained,
                         folders=folders[1:], replay_provider=name)
+                    run("replay-loose-shared-parent-" + name, workspace / ("loose-shared-parent-" + name + "-profile"),
+                        {controlled: False}, set(), set(), configurations=[], reuse_fixture=retained,
+                        folders=["loose", *folders[:-1]], replay_provider=name)
+                    run("replay-loose-source-path-" + name, workspace / ("loose-source-path-" + name + "-profile"),
+                        {controlled: False}, set(), set(), configurations=[], reuse_fixture=retained,
+                        folders=folders[:-1], replay_provider=name)
                 receipt["limits"].append("Headless replay with known Eclipse descriptions and an initialized worktree root. Mounted editor discovery, installed-combination behavior and physical platforms have separate evidence.")
                 return
             if arguments.workspace_scoped_import_only:
@@ -5285,7 +5650,14 @@ def probe_startup_controls(arguments):
             receipt["limits"].append("Existing Eclipse metadata may be admitted by the Eclipse importer even with both build importers disabled; last journey is observation, not exclusion acceptance")
         finally:
             environment = dict(os.environ, JAVA_HOME=str(arguments.gradle_java_home.resolve()), GRADLE_USER_HOME=str(home))
-            stopped = subprocess.run([str(arguments.gradle_home.resolve() / "bin/gradle"), "--offline", "--stop", "--gradle-user-home", str(home)],
+            command = [str(arguments.gradle_home.resolve() / "bin/gradle"), "--offline", "--stop", "--gradle-user-home", str(home)]
+            if arguments.workspace_scoped_live_tool_settings_only:
+                command = ["/usr/bin/sandbox-exec", "-p", jdtls_probe().GRADLE_DENIED_NETWORK_PROFILE, *command]
+                if use_fixture_ipv4:
+                    environment["JAVA_TOOL_OPTIONS"] = (
+                        environment.get("JAVA_TOOL_OPTIONS", "") + " -Djava.net.preferIPv4Stack=true"
+                    ).strip()
+            stopped = subprocess.run(command,
                                      cwd=root, env=environment, capture_output=True, text=True)
             (evidence / "owned-gradle-stop.log").write_text(stopped.stdout + stopped.stderr)
             receipt["owned_worker_stop_exit"] = stopped.returncode
@@ -6015,6 +6387,8 @@ if __name__ == "__main__":
     parser.add_argument("--sha256", required=True)
     parser.add_argument("--default-import-state-only", action="store_true",
                         help="Qualify actual cached Maven/Gradle import enablement without executing builds")
+    parser.add_argument("--cached-topology-only", action="store_true",
+                        help="Observe Buildship's cache during the composite resource fixture")
     parser.add_argument("--default-roots-only", action="store_true",
                         help="Qualify read-only default-root candidates against the pinned SDK detector without Gradle builds")
     parser.add_argument("--generated-source-declarations-only", action="store_true",
@@ -6066,6 +6440,10 @@ if __name__ == "__main__":
                         help="Qualify v4 registered-module descriptor/directory freshness; requires scoped details mode")
     parser.add_argument("--workspace-scoped-details-only", action="store_true",
                         help="Qualify scoped nested detail model through existing cached policy fixtures")
+    parser.add_argument("--workspace-scoped-live-tool-settings-only", action="store_true",
+                        help="Check live Gradle tool-home revocation and recovery; requires scoped details mode")
+    parser.add_argument("--workspace-scoped-live-tool-settings-dual-stack", action="store_true",
+                        help="Run live settings checks with the JVM's default network stack")
     parser.add_argument("--workspace-scoped-reselection-only", action="store_true",
                         help="Qualify independent nonempty Gradle selection transitions; requires cached empty-selection mode")
     parser.add_argument("--workspace-scoped-empty-selection-only", action="store_true",
@@ -6091,6 +6469,8 @@ if __name__ == "__main__":
     parser.add_argument("--provider-root-state-only", action="store_true",
                         help="Qualify retained production root mutation with a Java Gradle root")
     arguments = parser.parse_args()
+    if arguments.cached_topology_only and not arguments.resource_membership_only:
+        parser.error("--cached-topology-only requires --resource-membership-only")
     if arguments.default_import_state_only and (not arguments.default_roots_only or arguments.cached_build_associations_only or arguments.maven_repository is None):
         parser.error("--default-import-state-only requires --default-roots-only --maven-repository without --cached-build-associations-only")
 
@@ -6099,6 +6479,12 @@ if __name__ == "__main__":
 
     if arguments.workspace_scoped_module_details_only and not arguments.workspace_scoped_details_only:
         parser.error("--workspace-scoped-module-details-only requires --workspace-scoped-details-only")
+
+    if arguments.workspace_scoped_live_tool_settings_only and not arguments.workspace_scoped_details_only:
+        parser.error("--workspace-scoped-live-tool-settings-only requires --workspace-scoped-details-only")
+
+    if arguments.workspace_scoped_live_tool_settings_dual_stack and not arguments.workspace_scoped_live_tool_settings_only:
+        parser.error("--workspace-scoped-live-tool-settings-dual-stack requires --workspace-scoped-live-tool-settings-only")
 
     if arguments.workspace_scoped_details_only and not (arguments.workspace_scoped_policy_only and arguments.cached_build_associations_only):
         parser.error("--workspace-scoped-details-only requires --workspace-scoped-policy-only --cached-build-associations-only")
@@ -6126,7 +6512,7 @@ if __name__ == "__main__":
 
     if arguments.workspace_scoped_import_only and (not arguments.startup_selection_only or any(
             value is True for name, value in vars(arguments).items()
-            if name not in {"workspace_scoped_import_only", "workspace_scoped_root_only", "workspace_scoped_module_only", "workspace_scoped_policy_only", "workspace_scoped_default_policy_only", "cached_build_associations_only", "workspace_scoped_empty_selection_only", "workspace_scoped_reselection_only", "workspace_scoped_details_only", "workspace_scoped_module_details_only", "startup_selection_only"})):
+            if name not in {"workspace_scoped_import_only", "workspace_scoped_root_only", "workspace_scoped_module_only", "workspace_scoped_policy_only", "workspace_scoped_default_policy_only", "cached_build_associations_only", "workspace_scoped_empty_selection_only", "workspace_scoped_reselection_only", "workspace_scoped_details_only", "workspace_scoped_module_details_only", "workspace_scoped_live_tool_settings_only", "workspace_scoped_live_tool_settings_dual_stack", "startup_selection_only"})):
         parser.error("--workspace-scoped-import-only requires --startup-selection-only without other specialized modes")
 
     if arguments.single_provider_configurations_only and not arguments.startup_configurations_only:

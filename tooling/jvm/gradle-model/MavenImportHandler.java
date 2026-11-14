@@ -10,8 +10,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,6 +38,7 @@ import org.eclipse.jdt.ls.core.internal.JavaLanguageServerPlugin;
 import org.eclipse.jdt.ls.core.internal.ProjectUtils;
 import org.eclipse.jdt.ls.core.internal.managers.BasicFileDetector;
 import org.eclipse.m2e.core.MavenPlugin;
+import org.eclipse.m2e.core.embedder.MavenSettingsLocations;
 import org.eclipse.m2e.core.project.IMavenProjectImportResult;
 import org.eclipse.m2e.core.project.MavenProjectInfo;
 import org.eclipse.m2e.core.project.ProjectImportConfiguration;
@@ -44,6 +49,7 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
     private static final int MAX_REACTOR_BYTES = 8 * 1024 * 1024;
     private static final int MAX_TEXT = 4096;
     private static final int MAX_POM_BYTES = 1024 * 1024;
+    private static final int MAX_SETTINGS_BYTES = 1024 * 1024;
 
     @Override
     public Object executeCommand(String command, List<Object> arguments, IProgressMonitor monitor) throws Exception {
@@ -73,6 +79,7 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
             if (!MavenPlugin.getMavenConfiguration().isOffline()) {
                 throw new IllegalStateException("Selected Maven import requires the host Maven offline setting. Check settings and retry.");
             }
+            ReactorSettings reactorSettings = reactor ? ReactorSettings.capture() : null;
             Set<Path> poms = new LinkedHashSet<>();
             Set<Path> excluded = new LinkedHashSet<>();
             Path reactorPom = null;
@@ -187,6 +194,9 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
                             || !MavenPlugin.getMavenConfiguration().isOffline()) {
                         throw new OperationCanceledException();
                     }
+                    if (reactorSettings != null) {
+                        reactorSettings.validateCurrent();
+                    }
                     for (Path directory : excluded) {
                         if (!directory.toRealPath().equals(directory) || !Files.isDirectory(directory)) {
                             throw new OperationCanceledException();
@@ -269,6 +279,9 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
                     || !MavenPlugin.getMavenConfiguration().isOffline()) {
                 throw new OperationCanceledException();
             }
+            if (reactorSettings != null) {
+                reactorSettings.validateCurrent();
+            }
             for (Path directory : excluded) {
                 if (!directory.toRealPath().equals(directory) || !Files.isDirectory(directory)) {
                     throw new OperationCanceledException();
@@ -313,6 +326,46 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
     private static String portableHostPath(Path pom) {
         String path = pom.toString();
         return File.separatorChar == '\\' ? path.replace('\\', '/') : path;
+    }
+
+    private record ReactorSettings(MavenSettingsLocations locations, String globalDigest, String userDigest) {
+        private static ReactorSettings capture() throws IOException, NoSuchAlgorithmException {
+            var locations = MavenPlugin.getMavenConfiguration().getSettingsLocations();
+            return new ReactorSettings(locations, settingsDigest(locations.globalSettings()), settingsDigest(locations.userSettings()));
+        }
+
+        private void validateCurrent() {
+            ReactorSettings current;
+            try {
+                current = capture();
+            } catch (IOException | NoSuchAlgorithmException failure) {
+                throw new OperationCanceledException();
+            }
+            if (!equals(current)) {
+                throw new OperationCanceledException();
+            }
+        }
+
+        private static String settingsDigest(File file) throws IOException, NoSuchAlgorithmException {
+            if (file == null) {
+                return null;
+            }
+            try {
+                Path path = file.toPath().toRealPath();
+                if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Host Maven settings are not a regular file");
+                }
+                try (InputStream input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
+                    byte[] bytes = input.readNBytes(MAX_SETTINGS_BYTES + 1);
+                    if (bytes.length > MAX_SETTINGS_BYTES) {
+                        throw new IOException("Host Maven settings exceed the size limit");
+                    }
+                    return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+                }
+            } catch (NoSuchFileException absent) {
+                return null;
+            }
+        }
     }
 
     static final class PomMasks {

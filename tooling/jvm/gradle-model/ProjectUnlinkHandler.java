@@ -30,12 +30,16 @@ import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.jobs.ISchedulingRule;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTParser;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.ls.core.internal.EventNotification;
 import org.eclipse.jdt.ls.core.internal.EventType;
 import org.eclipse.jdt.ls.core.internal.IDelegateCommandHandler;
 import org.eclipse.jdt.ls.core.internal.JavaLanguageServerPlugin;
 import org.eclipse.jdt.ls.core.internal.ProjectUtils;
 import org.eclipse.jdt.ls.core.internal.ResourceUtils;
+import org.eclipse.jdt.ls.core.internal.commands.BuildPathCommand;
 import org.eclipse.jdt.ls.core.internal.managers.BasicFileDetector;
 import org.eclipse.jdt.ls.core.internal.managers.EclipseProjectImporter;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
@@ -50,6 +54,9 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
     public Object executeCommand(String command, List<Object> arguments, IProgressMonitor monitor) throws Exception {
         if ("groovy.java.importPlainProjects".equals(command)) {
             return importPlainProjects(arguments, monitor);
+        }
+        if ("groovy.java.addLooseSource".equals(command)) {
+            return addLooseSource(arguments, monitor);
         }
         if ("groovy.gradle.importedBuildRoots".equals(command)) {
             return importedProjects("Gradle", arguments, true, monitor);
@@ -282,6 +289,109 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
         } catch (Exception | LinkageError failure) {
             throw new IllegalStateException("Plain Java startup import failed or may be partial. Check initialized folders and current Eclipse metadata; refresh before retrying.");
         }
+    }
+
+    private static Object addLooseSource(List<Object> arguments, IProgressMonitor monitor) {
+        try {
+            checkCancelled(monitor);
+            if (arguments == null || arguments.size() != 1 || !(arguments.get(0) instanceof Map<?, ?> request)
+                    || !request.keySet().equals(Set.of("rootUri", "sourceUri"))
+                    || !(request.get("rootUri") instanceof String rootUri) || !boundedText(rootUri)
+                    || !(request.get("sourceUri") instanceof String sourceUri) || !boundedText(sourceUri)) {
+                throw new IllegalArgumentException();
+            }
+            Path root = GradleModelHandler.initializedRoot(rootUri, "Java");
+            Path source = Path.of(URI.create(sourceUri));
+            if (!source.startsWith(root) || !source.equals(source.toRealPath())
+                    || !source.getFileName().toString().endsWith(".java")
+                    || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS) || Files.size(source) > 1024 * 1024) {
+                throw new IllegalArgumentException();
+            }
+            IWorkspace workspace = ResourcesPlugin.getWorkspace();
+            ISchedulingRule rule = workspace.getRoot();
+            ISchedulingRule current = Job.getJobManager().currentRule();
+            if (current != null && current.contains(rule)) {
+                rule = null;
+            }
+            var applied = new LinkedHashSet<String>();
+            workspace.run(progress -> {
+                checkCancelled(progress);
+                if (!GradleModelHandler.initializedRoot(rootUri, "Java").equals(root)) {
+                    throw new OperationCanceledException();
+                }
+                var preferences = JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
+                if (preferences.getInvisibleProjectSourcePaths() != null) {
+                    return;
+                }
+                try {
+                    if (!source.equals(source.toRealPath()) || Files.size(source) > 1024 * 1024) {
+                        throw new OperationCanceledException();
+                    }
+                    Path directory = looseSourceDirectory(source);
+                    if (directory == null) {
+                        return;
+                    }
+                    if (!directory.startsWith(root) || directory.equals(root) || !directory.equals(directory.toRealPath())) {
+                        return;
+                    }
+                    if (projectLocations(workspace).stream().anyMatch(
+                            project -> directory.startsWith(project) || project.startsWith(directory))) {
+                        return;
+                    }
+                    for (Path ancestor = source.getParent(); ancestor != null && ancestor.startsWith(root);
+                            ancestor = ancestor.getParent()) {
+                        if (hasProjectDescriptor(ancestor)) {
+                            return;
+                        }
+                    }
+                    checkCancelled(progress);
+                    if (!BuildPathCommand.addToSourcePath(directory.toUri().toString()).status) {
+                        throw new IllegalStateException();
+                    }
+                    applied.add(directory.toUri().toString());
+                } catch (IOException failure) {
+                    throw new IllegalStateException(failure);
+                }
+            }, rule, IWorkspace.AVOID_UPDATE, monitor);
+            checkCancelled(monitor);
+            return Map.of("version", 1, "sourceRoots", List.copyOf(applied));
+        } catch (OperationCanceledException cancelled) {
+            throw new IllegalStateException("Loose Java source setup was cancelled. Refresh before retrying.");
+        } catch (Exception | LinkageError failure) {
+            throw new IllegalStateException("Loose Java source setup failed. Check initialized folders and current project metadata.");
+        }
+    }
+
+    private static Path looseSourceDirectory(Path source) throws IOException {
+        try (var input = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS)) {
+            byte[] bytes = input.readNBytes(1024 * 1024 + 1);
+            if (bytes.length > 1024 * 1024) {
+                throw new IOException("Java source exceeds the size limit");
+            }
+            ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
+            parser.setIgnoreMethodBodies(true);
+            parser.setSource(new String(bytes, java.nio.charset.StandardCharsets.UTF_8).toCharArray());
+            var unit = (CompilationUnit) parser.createAST(null);
+            Path parent = source.getParent();
+            if (unit.getPackage() == null) {
+                return parent;
+            }
+            String[] segments = unit.getPackage().getName().getFullyQualifiedName().split("\\.");
+            for (int index = segments.length - 1; index >= 0; index--) {
+                if (parent == null || parent.getFileName() == null
+                        || !parent.getFileName().toString().equals(segments[index])) {
+                    return null;
+                }
+                parent = parent.getParent();
+            }
+            return parent;
+        }
+    }
+
+    private static boolean hasProjectDescriptor(Path directory) {
+        return List.of("pom.xml", "settings.gradle", "settings.gradle.kts", "build.gradle",
+                "build.gradle.kts", ".project", ".classpath").stream()
+                .anyMatch(name -> !Files.notExists(directory.resolve(name), LinkOption.NOFOLLOW_LINKS));
     }
 
     private static Set<Path> projectLocations(IWorkspace workspace) {

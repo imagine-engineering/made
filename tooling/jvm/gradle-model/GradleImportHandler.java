@@ -1,5 +1,6 @@
 package dev.made.groovy;
 
+import java.io.File;
 import java.net.URI;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.buildship.core.BuildConfiguration;
 import org.eclipse.buildship.core.GradleCore;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
@@ -114,7 +116,7 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
         List<Object> configuration = offlineConfiguration();
         checkCancelled(monitor);
         authority.validate();
-        var build = GradleCore.getWorkspace().createBuild(GradleProjectImporter.getBuildConfiguration(root));
+        var build = GradleCore.getWorkspace().createBuild(buildConfiguration(root));
         var result = build.synchronize(monitor);
         checkCancelled(monitor);
         if (result == null || result.getStatus() == null || !result.getStatus().isOK()) {
@@ -138,10 +140,88 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
     private record BuildInputIdentity(Object fileKey, java.nio.file.attribute.FileTime modified,
             long size, String sha256) {}
 
+    private static BuildConfiguration buildConfiguration(Path root) {
+        configuredJavaHome(JavaLanguageServerPlugin.getPreferencesManager().getPreferences().getGradleJavaHome());
+        var configuration = GradleProjectImporter.getBuildConfiguration(root);
+        var javaHome = configuration.getJavaHome();
+        if (javaHome.isEmpty()) {
+            return configuration;
+        }
+        var arguments = new ArrayList<>(configuration.getArguments());
+        arguments.add(javaHomeArgument(javaHome.get().toString()));
+        return BuildConfiguration.forRootProjectDirectory(configuration.getRootProjectDirectory())
+                .overrideWorkspaceConfiguration(configuration.isOverrideWorkspaceConfiguration())
+                .gradleDistribution(configuration.getGradleDistribution())
+                .gradleUserHome(configuration.getGradleUserHome().orElse(null))
+                .buildScansEnabled(configuration.isBuildScansEnabled())
+                .offlineMode(configuration.isOfflineMode())
+                .autoSync(configuration.isAutoSync())
+                .arguments(arguments)
+                .jvmArguments(configuration.getJvmArguments())
+                .showConsoleView(configuration.isShowConsoleView())
+                .showExecutionsView(configuration.isShowExecutionsView())
+                .build();
+    }
+
+    static String javaHomeArgument(String home) {
+        // Gradle 8.13 applies setJavaHome after loading daemon criteria, whereas this property preserves their precedence.
+        return "-Dorg.gradle.java.home=" + home;
+    }
+
+    static String configuredJavaHome(String home) {
+        if (home == null || home.isEmpty()) {
+            return null;
+        }
+        var path = Path.of(home);
+        var launcher = javaLauncher(path);
+        if (!path.isAbsolute() || !Files.isRegularFile(launcher) || !Files.isExecutable(launcher)) {
+            throw new IllegalArgumentException("The configured Gradle Java home is unavailable.");
+        }
+        return home;
+    }
+
+    private static Path javaLauncher(Path home) {
+        return home.resolve(File.separatorChar == '\\' ? "bin/java.exe" : "bin/java");
+    }
+
+    private record ToolHomeIdentity(String configuredPath, Path realHome, Object homeKey,
+            Path launcher, Object launcherKey, java.nio.file.attribute.FileTime launcherModified,
+            long launcherSize) {
+        private static ToolHomeIdentity javaHome(String path) {
+            String home = configuredJavaHome(path);
+            if (home == null) {
+                return null;
+            }
+            return capture(home, javaLauncher(Path.of("")), "Java home");
+        }
+
+        private static ToolHomeIdentity gradleHome(String home) {
+            String launcher = File.separatorChar == '\\' ? "bin/gradle.bat" : "bin/gradle";
+            return capture(home, Path.of(launcher), "installation");
+        }
+
+        private static ToolHomeIdentity capture(String home, Path relativeLauncher, String tool) {
+            String unavailable = "The configured Gradle " + tool + " is unavailable.";
+            try {
+                Path realHome = Path.of(home).toRealPath();
+                Path launcher = realHome.resolve(relativeLauncher).toRealPath();
+                var attributes = Files.readAttributes(launcher, java.nio.file.attribute.BasicFileAttributes.class,
+                        LinkOption.NOFOLLOW_LINKS);
+                if (!attributes.isRegularFile() || attributes.fileKey() == null || !Files.isExecutable(launcher)) {
+                    throw new IllegalArgumentException(unavailable);
+                }
+                return new ToolHomeIdentity(home, realHome, rootFileKey(realHome), launcher,
+                        attributes.fileKey(), attributes.lastModifiedTime(), attributes.size());
+            } catch (java.io.IOException failure) {
+                throw new IllegalArgumentException(unavailable);
+            }
+        }
+    }
+
     private static Map<String, BuildInputIdentity> selectedBuildInputs(Path root) throws Exception {
         validateBuildInputs(root);
         Map<String, BuildInputIdentity> inputs = new LinkedHashMap<>();
-        for (String name : BUILD_DESCRIPTORS) {
+        for (String name : SCOPED_BUILD_INPUTS) {
             Path path = root.resolve(name);
             if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
                 continue;
@@ -589,6 +669,9 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
 
     private static final List<String> BUILD_DESCRIPTORS = List.of(
             "build.gradle", "settings.gradle", "build.gradle.kts", "settings.gradle.kts");
+    private static final List<String> SCOPED_BUILD_INPUTS = java.util.stream.Stream.concat(
+            BUILD_DESCRIPTORS.stream(), java.util.stream.Stream.of(
+                    "gradle.properties", "gradle/gradle-daemon-jvm.properties")).toList();
 
     private static Map<String, Object> defaultImportRootsWithImportState(List<Object> arguments,
             IProgressMonitor monitor) {
@@ -1280,7 +1363,7 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
     private static ModelProjects freshModuleProjects(Path root, IProgressMonitor monitor) throws Exception {
         try {
             checkCancelled(monitor);
-            var build = GradleCore.getWorkspace().createBuild(GradleProjectImporter.getBuildConfiguration(root));
+            var build = GradleCore.getWorkspace().createBuild(buildConfiguration(root));
             var models = build.withConnection(
                     org.eclipse.buildship.core.internal.workspace.EclipseModelUtils::queryModels, monitor);
             return eclipseModuleProjects(models, root, monitor);
@@ -1527,7 +1610,8 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
                 || !Files.isDirectory(Path.of(home))) {
             throw new IllegalArgumentException();
         }
-        return Arrays.asList(home, version, preferences.getGradleUserHome(), preferences.getGradleJavaHome(),
+        return Arrays.asList(ToolHomeIdentity.gradleHome(home), version, preferences.getGradleUserHome(),
+                ToolHomeIdentity.javaHome(preferences.getGradleJavaHome()),
                 preferences.isGradleWrapperEnabled(), preferences.isImportGradleOfflineEnabled(),
                 List.copyOf(preferences.getGradleArguments()), List.copyOf(preferences.getGradleJvmArguments()));
     }

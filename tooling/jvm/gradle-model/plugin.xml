@@ -38,6 +38,7 @@
     </delegateCommandHandler>
     <delegateCommandHandler class="dev.made.groovy.ProjectUnlinkHandler">
       <command id="groovy.java.importPlainProjects"/>
+      <command id="groovy.java.addLooseSource"/>
       <command id="groovy.maven.importedProjects"/>
       <command id="groovy.gradle.importedProjects"/>
       <command id="groovy.gradle.importedBuildRoots"/>

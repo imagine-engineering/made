@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
 import json
 import os
 import queue
@@ -57,6 +58,7 @@ class JdtlsClient:
         data,
         deny_external_network=False,
         gradle_user_home=None,
+        fixture_ipv4_only=True,
     ):
         environment = os.environ.copy()
         environment["JAVA_HOME"] = str(java_home)
@@ -69,9 +71,10 @@ class JdtlsClient:
             str(data),
         ]
         if deny_external_network:
-            environment["JAVA_TOOL_OPTIONS"] = (
-                environment.get("JAVA_TOOL_OPTIONS", "") + " -Djava.net.preferIPv4Stack=true"
-            ).strip()
+            if fixture_ipv4_only:
+                environment["JAVA_TOOL_OPTIONS"] = (
+                    environment.get("JAVA_TOOL_OPTIONS", "") + " -Djava.net.preferIPv4Stack=true"
+                ).strip()
             command = ["/usr/bin/sandbox-exec", "-p", GRADLE_DENIED_NETWORK_PROFILE, *command]
         self.stderr = tempfile.TemporaryFile()
         self.process = subprocess.Popen(
@@ -755,6 +758,133 @@ def run_offline_gradle_failure(launcher, java_home, gradle_home):
             client.close()
 
 
+def run_gradle_background_java_home(launcher, java_home, gradle_home, initial_jdk, replacement_jdk):
+    if sys.platform != "darwin":
+        raise ValueError("The denied-network Gradle probe requires macOS Seatbelt")
+    if initial_jdk == replacement_jdk or not all((path / "bin/java").is_file()
+                                                for path in (initial_jdk, replacement_jdk)):
+        raise ValueError("The background fixture requires two distinct installed JDKs")
+    verify_gradle_network_boundary()
+    with tempfile.TemporaryDirectory(prefix="groovy-jdtls-gradle-background-") as directory:
+        workspace = Path(directory).resolve()
+        root = workspace / "project"
+        root.mkdir()
+        user_home = workspace / "gradle-home"
+        user_home.mkdir()
+        (root / "settings.gradle").write_text("rootProject.name = 'groovy-gradle-background'\n")
+        build = root / "build.gradle"
+        build.write_text("""plugins { id 'java' }
+file("jvm-witness-${ProcessHandle.current().pid()}").text = System.getProperty('java.home')
+""")
+        (root / "gradle").mkdir()
+        (root / "gradle/gradle-daemon-jvm.properties").write_text(
+            "toolchainVersion=17\ntoolchainVendor=JETBRAINS\n"
+        )
+        gradle_settings = {
+            "enabled": True, "offline": {"enabled": True}, "wrapper": {"enabled": False},
+            "home": str(gradle_home), "java": {"home": str(initial_jdk)}, "user": {"home": str(user_home)},
+        }
+        settings = {"java": {
+            "autobuild": {"enabled": False},
+            "configuration": {"updateBuildConfiguration": "automatic"},
+            "import": {"maven": {"enabled": False}, "gradle": gradle_settings},
+        }}
+        client = JdtlsClient(launcher, java_home, root, workspace / "jdtls",
+                             deny_external_network=True, gradle_user_home=user_home)
+        owned_daemons = set()
+        try:
+            client.request("initialize", {
+                "processId": os.getpid(), "rootUri": root.as_uri(),
+                "workspaceFolders": [{"name": root.name, "uri": root.as_uri()}],
+                "capabilities": {"workspace": {"configuration": True, "workspaceFolders": True}},
+                "initializationOptions": {"settings": settings},
+            }, timeout=90)
+            client.notify("initialized", {})
+
+            def membership():
+                projects = client.request("workspace/executeCommand", {
+                    "command": "java.project.getAll", "arguments": [],
+                }, timeout=45)
+                return {file_path(uri) for uri in projects}
+
+            def await_java_home(expected):
+                samples = []
+                deadline = time.monotonic() + 55
+                while time.monotonic() < deadline:
+                    for witness in sorted(root.glob("jvm-witness-*")):
+                        owned_daemons.add(int(witness.name.removeprefix("jvm-witness-")))
+                        path = witness.read_text()
+                        if path and path not in samples:
+                            samples.append(path)
+                        if path and Path(path).resolve() == expected:
+                            return samples
+                    time.sleep(0.2)
+                raise AssertionError(f"SDK Gradle background JVM did not reach the expected installation: {samples}")
+
+            def metadata():
+                files = [root / ".project", root / ".classpath", *sorted((root / ".settings").glob("*.prefs"))]
+                return {path.relative_to(root).as_posix(): path.read_bytes()
+                        for path in files if path.is_file()}
+
+            initial = await_java_home(initial_jdk)
+            before = membership()
+            if root not in before:
+                raise AssertionError("SDK startup did not import the Gradle project")
+            before_metadata = metadata()
+            for witness in root.glob("jvm-witness-*"):
+                witness.unlink()
+            gradle_settings["java"]["home"] = str(replacement_jdk)
+            client.notify("workspace/didChangeConfiguration", {"settings": settings})
+            build.write_text(build.read_text() + "\n// Trigger watched-file refresh.\n")
+            client.notify("workspace/didChangeWatchedFiles", {
+                "changes": [{"uri": build.as_uri(), "type": 2}],
+            })
+            refreshed = await_java_home(replacement_jdk)
+            if membership() != before:
+                raise AssertionError("SDK automatic Gradle refresh changed imported membership")
+            after_metadata = metadata()
+        finally:
+            client.close()
+            environment = dict(os.environ, JAVA_HOME=str(initial_jdk), JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true")
+            stop = ["/usr/bin/sandbox-exec", "-p", GRADLE_DENIED_NETWORK_PROFILE,
+                    str(gradle_home / "bin/gradle"), "--offline", "--gradle-user-home", str(user_home), "--stop"]
+            subprocess.run(stop, cwd=root, env=environment, check=True, timeout=45, capture_output=True)
+            for witness in root.glob("jvm-witness-*"):
+                owned_daemons.add(int(witness.name.removeprefix("jvm-witness-")))
+            deadline = time.monotonic() + 15
+            while owned_daemons and time.monotonic() < deadline:
+                for pid in tuple(owned_daemons):
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        owned_daemons.remove(pid)
+                if owned_daemons:
+                    time.sleep(0.1)
+            if owned_daemons:
+                raise AssertionError("An isolated Gradle daemon remained alive after shutdown")
+        def digest(contents):
+            return hashlib.sha256(contents).hexdigest() if contents is not None else None
+
+        def preference_entries(contents):
+            return dict(line.split("=", 1) for line in (contents or b"").decode().splitlines()
+                        if "=" in line and not line.startswith(("#", "!")))
+
+        changed_metadata = {}
+        for path in sorted(before_metadata.keys() | after_metadata.keys()):
+            before = before_metadata.get(path)
+            after = after_metadata.get(path)
+            if before != after:
+                change = {"before": digest(before), "after": digest(after)}
+                if path.endswith(".prefs"):
+                    old, new = preference_entries(before), preference_entries(after)
+                    change["changedKeys"] = sorted(key for key in old.keys() | new.keys()
+                                                   if old.get(key) != new.get(key))
+                changed_metadata[path] = change
+        print(json.dumps({"sdkStartup": initial, "sdkAutomaticRefresh": refreshed,
+                          "membershipUnchanged": True, "metadataChanges": changed_metadata,
+                          "ownedDaemonsExited": True}))
+
+
 def run_cached_gradle_recovery(launcher, java_home, gradle_home):
     if sys.platform != "darwin":
         raise ValueError("The denied-network Gradle probe requires macOS Seatbelt")
@@ -1036,6 +1166,13 @@ def main():
         action="store_true",
         help="Warm an isolated Gradle cache, then require import with external TCP denied",
     )
+    failure_mode.add_argument(
+        "--require-gradle-background-java-home",
+        action="store_true",
+        help="Observe pinned SDK startup and automatic refresh with a live Java-home change",
+    )
+    parser.add_argument("--gradle-initial-jdk", type=Path, help="Installed non-JetBrains Java 17 JDK for the background probe")
+    parser.add_argument("--gradle-replacement-jdk", type=Path, help="Installed JetBrains Java 17 JDK for the background probe")
     parser.add_argument(
         "--gradle-home", type=Path, help="Installed Gradle home for offline Gradle probes"
     )
@@ -1064,6 +1201,14 @@ def main():
             arguments.jdtls.resolve(),
             arguments.java_home.resolve(),
             arguments.gradle_home.resolve(),
+        )
+        return
+    if arguments.require_gradle_background_java_home:
+        if not all((arguments.gradle_home, arguments.gradle_initial_jdk, arguments.gradle_replacement_jdk)):
+            parser.error("The Gradle background probe requires --gradle-home, --gradle-initial-jdk and --gradle-replacement-jdk")
+        run_gradle_background_java_home(
+            arguments.jdtls.resolve(), arguments.java_home.resolve(), arguments.gradle_home.resolve(),
+            arguments.gradle_initial_jdk.resolve(), arguments.gradle_replacement_jdk.resolve(),
         )
         return
     for name in ("maven", "gradle"):
