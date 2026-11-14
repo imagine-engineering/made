@@ -3438,7 +3438,10 @@ mod jvm_tools_runtime_tests {
             "application/pom.xml"
         );
         assert!(client_selection.ignored_poms.is_empty());
-        for revoke_authority in [false, true] {
+        let remote = project.read_with(auto_refresh_cx, |project, _| {
+            project.remote_client().expect("remote client")
+        });
+        for invalidation in ["supersede", "revoke", "reconnect"] {
             let (started, started_receiver) = futures::channel::oneshot::channel();
             let (release, release_receiver) = futures::channel::oneshot::channel();
             lsp_store.update(auto_refresh_cx, |store, cx| {
@@ -3461,7 +3464,7 @@ mod jvm_tools_runtime_tests {
                 ["application/pom.xml"]
             );
             let held_generation = held.request_id;
-            if revoke_authority {
+            if invalidation == "revoke" {
                 let trust = auto_refresh_cx.update(|_, cx| {
                     cx.remove_global::<project::trusted_worktrees::TrustedWorktrees>()
                 });
@@ -3474,6 +3477,47 @@ mod jvm_tools_runtime_tests {
                 auto_refresh_cx.update(|_, cx| cx.set_global(trust));
                 lsp_store.update(auto_refresh_cx, |store, cx| {
                     store.refresh_jdtls_project(worktree_id, cx)
+                });
+            } else if invalidation == "reconnect" {
+                remote.update(auto_refresh_cx, |remote, cx| {
+                    remote.force_heartbeat_timeout(1, cx);
+                    assert_ne!(
+                        remote.connection_state(),
+                        remote::ConnectionState::Connected
+                    );
+                });
+                {
+                    let recovery = async {
+                        while remote
+                            .read_with(auto_refresh_cx, |remote, _| remote.connection_state())
+                            != remote::ConnectionState::Connected
+                        {
+                            auto_refresh_cx
+                                .background_executor
+                                .timer(std::time::Duration::from_millis(10))
+                                .await;
+                        }
+                    };
+                    let deadline = auto_refresh_cx
+                        .background_executor
+                        .timer(std::time::Duration::from_secs(5));
+                    futures::pin_mut!(recovery);
+                    assert!(matches!(
+                        futures::future::select(recovery, deadline).await,
+                        futures::future::Either::Left(_)
+                    ));
+                }
+                if release.send(()).is_err() {
+                    log::debug!("Disconnected JDTLS admission task already retired");
+                }
+                auto_refresh_cx.run_until_parked();
+                lsp_store.update(auto_refresh_cx, |store, cx| {
+                    assert!(
+                        store
+                            .jdtls_project_snapshot(worktree_id)
+                            .is_none_or(|(snapshot, _)| snapshot.generation > held_generation)
+                    );
+                    store.refresh_jdtls_project(worktree_id, cx);
                 });
             } else {
                 lsp_store.update(auto_refresh_cx, |store, cx| {
@@ -3488,7 +3532,7 @@ mod jvm_tools_runtime_tests {
             lsp_store.read_with(auto_refresh_cx, |store, _| {
                 let (current, fresh) = store
                     .jdtls_project_snapshot(worktree_id)
-                    .expect("fresh admission after supersession or restored authority");
+                    .expect("fresh admission after supersession, restored authority or reconnect");
                 assert!(fresh && current.generation > held_generation);
                 assert!(current.metadata.as_ref().is_some_and(|facts| {
                     facts
