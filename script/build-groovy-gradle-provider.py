@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -56,7 +57,7 @@ def build(jdtls, java_home, gradle_home, component_annotations, output):
             for name in archive.namelist():
                 if name.startswith("jars/") and name.endswith(".jar"):
                     (maven / Path(name).name).write_bytes(archive.read(name))
-        classpath = ":".join(str(path) for path in sorted([
+        classpath = os.pathsep.join(str(path) for path in sorted([
             component_annotations, *plugins.glob("*.jar"), *gradle_home.glob("lib/*.jar"),
             *gradle_home.glob("lib/plugins/*.jar"), *maven.glob("*.jar"),
         ]))

@@ -1,11 +1,14 @@
 package dev.made.groovy;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -15,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.IWorkspaceRunnable;
@@ -32,6 +36,8 @@ import org.eclipse.jdt.ls.core.internal.IDelegateCommandHandler;
 import org.eclipse.jdt.ls.core.internal.JavaLanguageServerPlugin;
 import org.eclipse.jdt.ls.core.internal.ProjectUtils;
 import org.eclipse.jdt.ls.core.internal.ResourceUtils;
+import org.eclipse.jdt.ls.core.internal.managers.BasicFileDetector;
+import org.eclipse.jdt.ls.core.internal.managers.EclipseProjectImporter;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 
 public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
@@ -42,6 +48,9 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
 
     @Override
     public Object executeCommand(String command, List<Object> arguments, IProgressMonitor monitor) throws Exception {
+        if ("groovy.java.importPlainProjects".equals(command)) {
+            return importPlainProjects(arguments, monitor);
+        }
         if ("groovy.gradle.importedBuildRoots".equals(command)) {
             return importedProjects("Gradle", arguments, true, monitor);
         }
@@ -151,6 +160,153 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
                 }
             }
         }
+    }
+
+    private static Object importPlainProjects(List<Object> arguments, IProgressMonitor monitor) {
+        try {
+            checkCancelled(monitor);
+            if (arguments == null || arguments.size() != 1 || !(arguments.get(0) instanceof Map<?, ?> request)
+                    || !request.keySet().equals(Set.of("rootUri", "descriptionUris"))
+                    || !(request.get("rootUri") instanceof String rootUri) || !boundedText(rootUri)
+                    || !(request.get("descriptionUris") instanceof List<?> descriptions)
+                    || descriptions.size() > MAX_PROJECTS) {
+                throw new IllegalArgumentException();
+            }
+            Path root = GradleModelHandler.initializedRoot(rootUri, "Java");
+            Set<Path> candidates = new LinkedHashSet<>();
+            for (Object description : descriptions) {
+                checkCancelled(monitor);
+                if (!(description instanceof String text) || !boundedText(text)) {
+                    throw new IllegalArgumentException();
+                }
+                Path file = Path.of(URI.create(text));
+                if (!file.startsWith(root) || !file.equals(file.normalize()) || !file.equals(file.toRealPath())
+                        || !IProjectDescription.DESCRIPTION_FILE_NAME.equals(file.getFileName().toString())
+                        || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !candidates.add(file)) {
+                    throw new IllegalArgumentException();
+                }
+            }
+            IWorkspace workspace = ResourcesPlugin.getWorkspace();
+            ISchedulingRule rule = workspace.getRoot();
+            ISchedulingRule current = Job.getJobManager().currentRule();
+            if (current != null && current.contains(rule)) {
+                rule = null;
+            }
+            Set<Path> imported = new LinkedHashSet<>();
+            workspace.run((IWorkspaceRunnable) progress -> {
+                try {
+                    checkCancelled(progress);
+                    if (!GradleModelHandler.initializedRoot(rootUri, "Java").equals(root)) {
+                        throw new OperationCanceledException();
+                    }
+                    BasicFileDetector detector = new BasicFileDetector(root, IProjectDescription.DESCRIPTION_FILE_NAME)
+                            .addExclusions("**/bin");
+                    var predicate = GradleModelHandler.detectorPredicate();
+                    int maximumDepth = GradleModelHandler.detectorDepth(detector);
+                    var exclusions = JavaLanguageServerPlugin.getPreferencesManager().getPreferences()
+                            .getJavaImportExclusions();
+                    boolean hasInclusions = exclusions != null && exclusions.stream().anyMatch(pattern -> pattern.startsWith("!"));
+                    Set<Path> existing = projectLocations(workspace);
+                    for (Path directory : existing) {
+                        detector.addExclusions(directory.toString().replace("\\", "\\\\"));
+                    }
+                    Map<Path, byte[]> eligible = new LinkedHashMap<>();
+                    int descriptionBytes = 0;
+                    for (Path file : candidates) {
+                        checkCancelled(progress);
+                        Path directory = file.getParent();
+                        if (existing.contains(directory) || (directory.equals(root) ? 0 : root.relativize(directory).getNameCount()) > maximumDepth
+                                || GradleModelHandler.detectorExcludes(detector, predicate, directory)) {
+                            continue;
+                        }
+                        boolean excluded = false;
+                        for (Path ancestor = directory.getParent(); !hasInclusions && ancestor != null && ancestor.startsWith(root);
+                                ancestor = ancestor.getParent()) {
+                            if (existing.contains(ancestor) || GradleModelHandler.detectorExcludes(detector, predicate, ancestor)) {
+                                excluded = true;
+                                break;
+                            }
+                        }
+                        if (excluded) {
+                            continue;
+                        }
+                        Path classpath = directory.resolve(".classpath");
+                        if (!Files.isRegularFile(classpath, LinkOption.NOFOLLOW_LINKS) || !classpath.equals(classpath.toRealPath())) {
+                            continue;
+                        }
+                        byte[] bytes = GradleImportHandler.descriptionBytes(file);
+                        descriptionBytes += bytes.length;
+                        if (descriptionBytes > 8 * 1024 * 1024) {
+                            throw new IllegalArgumentException();
+                        }
+                        IProjectDescription description = workspace.loadProjectDescription(new ByteArrayInputStream(bytes));
+                        if (description.hasNature(JavaCore.NATURE_ID)
+                                && !description.hasNature("org.eclipse.m2e.core.maven2Nature")
+                                && !description.hasNature("org.eclipse.buildship.core.gradleprojectnature")) {
+                            eligible.put(file, bytes);
+                        }
+                    }
+                    for (var entry : eligible.entrySet()) {
+                        checkCancelled(progress);
+                        Path classpath = entry.getKey().getParent().resolve(".classpath");
+                        if (!Files.isRegularFile(classpath, LinkOption.NOFOLLOW_LINKS) || !classpath.equals(classpath.toRealPath())
+                                || !Arrays.equals(entry.getValue(), GradleImportHandler.descriptionBytes(entry.getKey()))) {
+                            throw new OperationCanceledException();
+                        }
+                    }
+                    if (!eligible.isEmpty()) {
+                        EclipseProjectImporter importer = new EclipseProjectImporter();
+                        importer.initialize(root.toFile());
+                        importer.setDirectories(eligible.keySet().stream().map(Path::getParent).toList());
+                        importer.importToWorkspace(progress);
+                        for (Path file : eligible.keySet()) {
+                            Path directory = file.getParent();
+                            if (!plainJavaProjectExists(workspace, directory)) {
+                                throw new IllegalStateException();
+                            }
+                            imported.add(directory);
+                        }
+                    }
+                } catch (Exception failure) {
+                    if (progress.isCanceled() || failure instanceof OperationCanceledException) {
+                        throw new OperationCanceledException();
+                    }
+                    throw new IllegalStateException();
+                }
+            }, rule, IWorkspace.AVOID_UPDATE, monitor);
+            checkCancelled(monitor);
+            return Map.of("version", 1, "rootUri", root.toUri().toString(),
+                    "importedProjectUris", imported.stream().map(path -> path.toUri().toString()).toList());
+        } catch (OperationCanceledException cancelled) {
+            throw new IllegalStateException("Plain Java startup import cancelled and may be partial. Refresh before retrying.");
+        } catch (Exception | LinkageError failure) {
+            throw new IllegalStateException("Plain Java startup import failed or may be partial. Check initialized folders and current Eclipse metadata; refresh before retrying.");
+        }
+    }
+
+    private static Set<Path> projectLocations(IWorkspace workspace) {
+        IProject[] projects = workspace.getRoot().getProjects();
+        if (projects.length > MAX_INSPECTED_PROJECTS) {
+            throw new IllegalStateException();
+        }
+        Set<Path> paths = new LinkedHashSet<>();
+        for (IProject project : projects) {
+            if (project.getLocation() != null) {
+                paths.add(project.getLocation().toFile().toPath().toAbsolutePath().normalize());
+            }
+        }
+        return paths;
+    }
+
+    private static boolean plainJavaProjectExists(IWorkspace workspace, Path path) throws CoreException {
+        for (IProject project : workspace.getRoot().getProjects()) {
+            if (project.isOpen() && project.getLocation() != null && path.equals(project.getLocation().toFile().toPath())
+                    && project.hasNature(JavaCore.NATURE_ID) && !ProjectUtils.isMavenProject(project)
+                    && !ProjectUtils.isGradleProject(project)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Object importedProjects(String buildSystem, List<Object> arguments, boolean includeBuildRoots,

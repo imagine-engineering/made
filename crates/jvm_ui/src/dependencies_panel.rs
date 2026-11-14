@@ -10052,6 +10052,20 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn single_provider_startup_discards_enabled_fact_after_settings_removal(
+        cx: &mut TestAppContext,
+    ) {
+        saved_gradle_startup_lifecycle(cx, None, StartupFixtureOutcome::SettingsRemoval).await;
+    }
+
+    #[gpui::test]
+    async fn single_provider_startup_discards_enabled_fact_after_settings_round_trip(
+        cx: &mut TestAppContext,
+    ) {
+        saved_gradle_startup_lifecycle(cx, None, StartupFixtureOutcome::SettingsRoundTrip).await;
+    }
+
+    #[gpui::test]
     async fn saved_mixed_startup_read_failure_discards_pending_gradle(cx: &mut TestAppContext) {
         saved_gradle_startup_lifecycle(
             cx,
@@ -10068,6 +10082,8 @@ mod tests {
         ReadFailure,
         Cancellation,
         Revocation,
+        SettingsRemoval,
+        SettingsRoundTrip,
     }
 
     async fn saved_gradle_startup_lifecycle(
@@ -10117,6 +10133,15 @@ mod tests {
             initial_settings["jvm_builds"]["maven"] =
                 serde_json::json!({"selected_poms":selection,"ignored_projects":[]});
         }
+        let settings_removed = initial_settings.to_string();
+        let changes_importer_settings = matches!(
+            outcome,
+            StartupFixtureOutcome::SettingsRemoval | StartupFixtureOutcome::SettingsRoundTrip
+        );
+        if changes_importer_settings {
+            initial_settings["lsp"] =
+                serde_json::json!({"jdtls":{"settings":{"java.import.maven.enabled":true}}});
+        }
         set_user(cx, &initial_settings.to_string());
         cx.update(|cx| TrustedWorktrees::try_get_global(cx).expect("trust owner"))
             .update(cx, |trusted, cx| {
@@ -10132,6 +10157,7 @@ mod tests {
         let fail_read = Arc::new(AtomicBool::new(false));
         let (release, held) = oneshot::channel();
         let gate = Arc::new(std::sync::Mutex::new(Some(held)));
+        let default_reads = Arc::new(AtomicUsize::new(0));
         let languages = project.read_with(cx, |project, _| project.languages().clone());
         languages.add(Arc::new(Language::new(
             LanguageConfig {
@@ -10148,18 +10174,32 @@ mod tests {
         let mut servers = languages.register_fake_lsp("Java", FakeLspAdapter {
             name: "jdtls", capabilities: lsp::ServerCapabilities {
                 execute_command_provider: Some(lsp::ExecuteCommandOptions {
-                    commands: ["java.project.getAll", "java.project.getSettings", "groovy.maven.importedProjects", "groovy.gradle.importedProjects", "groovy.maven.importReactor", "groovy.gradle.importSelected", "groovy.gradle.rootState", "groovy.gradle.applyRootState", "groovy.gradle.moduleStates", "groovy.gradle.applyModuleStates"].into_iter().map(str::to_owned).collect(),
+                    commands: ["java.project.getAll", "java.project.getSettings", "groovy.maven.importedProjects", "groovy.gradle.importedProjects", "groovy.maven.defaultImportRoots.v2", "groovy.java.importPlainProjects", "groovy.maven.importReactor", "groovy.gradle.importSelected", "groovy.gradle.rootState", "groovy.gradle.applyRootState", "groovy.gradle.moduleStates", "groovy.gradle.applyModuleStates"].into_iter().map(str::to_owned).collect(),
                     ..Default::default()
                 }), ..Default::default()
             }, initializer: Some(Box::new({
-                let commands = commands.clone(); let active = active.clone(); let fail = fail.clone(); let fail_read = fail_read.clone(); let gate = gate.clone();
+                let commands = commands.clone(); let active = active.clone(); let fail = fail.clone(); let fail_read = fail_read.clone(); let gate = gate.clone(); let default_reads = default_reads.clone();
                 move |server| {
                     server.set_request_handler::<lsp::request::ExecuteCommand, _, _>({
-                        let commands = commands.clone(); let active = active.clone(); let fail = fail.clone(); let fail_read = fail_read.clone(); let gate = gate.clone();
+                        let commands = commands.clone(); let active = active.clone(); let fail = fail.clone(); let fail_read = fail_read.clone(); let gate = gate.clone(); let default_reads = default_reads.clone();
                         move |parameters, _| {
-                            let commands = commands.clone(); let active = active.clone(); let fail = fail.clone(); let fail_read = fail_read.clone(); let gate = gate.clone();
+                            let commands = commands.clone(); let active = active.clone(); let fail = fail.clone(); let fail_read = fail_read.clone(); let gate = gate.clone(); let default_reads = default_reads.clone();
                             async move {
                                 match parameters.command.as_str() {
+                                    "groovy.maven.defaultImportRoots.v2" => {
+                                        let held = if changes_importer_settings {
+                                            default_reads.fetch_add(1, Ordering::SeqCst);
+                                            gate.lock().expect("gate").take()
+                                        } else { None };
+                                        let enabled = changes_importer_settings;
+                                        let retained = held.is_none();
+                                        if let Some(held) = held { held.await.expect("release enabled fact"); }
+                                        Ok(Some(serde_json::json!({
+                                        "version":2,"rootUri":"file:///saved-gradle/","rootPomUris":["file:///saved-gradle/maven/pom.xml"],
+                                        "retainedPomUris":if retained { vec!["file:///saved-gradle/maven/pom.xml"] } else { vec![] },"cachedOnly":true,
+                                        "readOnly":true,"partial":false,"fullSynchronizationKnown":false,"importEnabled":enabled
+                                        })))
+                                    },
                                     "java.project.getAll" => {
                                         if fail_read.load(Ordering::SeqCst) { anyhow::bail!("private-read-canary at /secret/provider-cache"); }
                                         Ok(Some(serde_json::json!(["file:///saved-gradle/", "file:///saved-gradle/maven/"])))
@@ -10211,6 +10251,46 @@ mod tests {
                 .advance_clock(std::time::Duration::from_millis(300));
             cx.run_until_parked();
         };
+        if changes_importer_settings {
+            pump(cx);
+            assert_eq!(default_reads.load(Ordering::SeqCst), 1);
+            assert!(commands.lock().expect("commands").is_empty());
+            set_user(cx, &settings_removed);
+            pump(cx);
+            if outcome == StartupFixtureOutcome::SettingsRoundTrip {
+                set_user(cx, &initial_settings.to_string());
+                pump(cx);
+            }
+            assert!(
+                servers.next().now_or_never().is_none(),
+                "settings removal keeps the same JDTLS process"
+            );
+            release.send(()).expect("release held query");
+            pump(cx);
+            assert!(lsp_store.read_with(cx, |store, _| {
+                store.jdtls_project_import_failed(worktree_id)
+            }));
+            assert!(commands.lock().expect("commands").is_empty());
+            lsp_store.update(cx, |store, cx| {
+                store.restart_language_servers_for_buffers(
+                    vec![buffer],
+                    HashSet::default(),
+                    true,
+                    cx,
+                )
+            });
+            let replacement = servers.next().await.expect("replacement JDTLS");
+            assert_ne!(server.server.server_id(), replacement.server.server_id());
+            for _ in 0..4 {
+                pump(cx);
+            }
+            assert_eq!(default_reads.load(Ordering::SeqCst), 2);
+            assert_eq!(
+                *commands.lock().expect("commands"),
+                ["groovy.gradle.importSelected"]
+            );
+            return;
+        }
         if outcome == StartupFixtureOutcome::Revocation {
             cx.run_until_parked();
             let trust = cx.update(|cx| cx.remove_global::<TrustedWorktrees>());
@@ -10227,6 +10307,9 @@ mod tests {
             return;
         }
         pump(cx);
+        if maven_selection.is_none() {
+            pump(cx);
+        }
         let first = if maven_selection.is_some_and(|selection| !selection.is_empty()) {
             "groovy.maven.importReactor"
         } else {
@@ -10867,6 +10950,8 @@ mod tests {
                     "groovy.maven.importReactor",
                     "groovy.maven.importReactorWithMasks",
                     "groovy.maven.defaultImportRoots",
+                    "groovy.gradle.defaultImportRoots.v2",
+                    "groovy.java.importPlainProjects",
                 ]
                 .into_iter()
                 .filter(|command| {
@@ -10914,6 +10999,10 @@ mod tests {
                             let inventory_empty = inventory_empty.clone(); let resources_unavailable = resources_unavailable.clone(); let private_inventory = private_inventory.clone(); let semantic_partial = semantic_partial.clone(); let ignored_present = ignored_present.clone(); let other_present = other_present.clone(); let partial = partial.clone(); let failure = failure.clone(); let commands = commands.clone(); let gate = gate.clone(); let private_reply = private_reply.clone(); let default_root_reads = default_root_reads.clone(); let discovery_gate = discovery_gate.clone();
                             async move {
                                 match parameters.command.as_str() {
+                                    "groovy.gradle.defaultImportRoots.v2" => Ok(Some(serde_json::json!({
+                                        "version":2,"rootUri":"file:///saved-maven/","buildRootUris":["file:///saved-maven/gradle/"],
+                                        "cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false,"importEnabled":false
+                                    }))),
                                     "groovy.maven.defaultImportRoots" => {
                                         default_root_reads.fetch_add(1, Ordering::SeqCst);
                                         assert_eq!(parameters.arguments.len(), 1);
@@ -11053,6 +11142,9 @@ mod tests {
             return;
         }
         if startup {
+            cx.executor()
+                .advance_clock(std::time::Duration::from_millis(300));
+            cx.run_until_parked();
             assert_eq!(
                 commands.lock().expect("startup commands").len(),
                 if default_roots { 1 } else { 3 }
@@ -11741,6 +11833,37 @@ mod tests {
                 .jdtls_project_snapshot(worktree_id)
                 .is_some_and(|(_, current)| current)
         }));
+        if mask_capability.is_none() && !coverage_checks {
+            set_user(cx, original);
+            ignored_present.store(true, Ordering::SeqCst);
+            refresh(cx);
+            commands.lock().expect("commands").clear();
+            let (release, receiver) = oneshot::channel();
+            *gate.lock().expect("gate") = Some(receiver);
+            let application = lsp_store
+                .update(cx, |store, cx| {
+                    store.apply_saved_local_maven_selection(worktree_id, cx)
+                })
+                .expect("application");
+            cx.run_until_parked();
+            assert_eq!(commands.lock().expect("commands").len(), 1);
+            let mut settings: serde_json::Value = serde_json::from_str(original).expect("settings");
+            settings["lsp"] =
+                serde_json::json!({"jdtls":{"settings":{"java.import.gradle.enabled": false}}});
+            set_user(cx, &settings.to_string());
+            release.send(()).expect("release");
+            let error = application
+                .await
+                .expect_err("dynamic JDTLS settings changed while unlink was held")
+                .to_string();
+            assert!(error.contains("refresh") && !error.contains("private-canary"));
+            assert_eq!(commands.lock().expect("commands").len(), 1);
+            assert!(!lsp_store.read_with(cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(_, current)| current)
+            }));
+        }
         set_user(cx, original);
         ignored_present.store(true, Ordering::SeqCst);
         refresh(cx);
@@ -13596,6 +13719,8 @@ mod tests {
             "java.project.getAll",
             "java.project.getSettings",
             "groovy.maven.importedProjects",
+            "groovy.maven.defaultImportRoots.v2",
+            "groovy.java.importPlainProjects",
             "groovy.gradle.importedProjects",
         ];
         if case != ScopedGradleCase::MissingCapability {
@@ -13677,6 +13802,13 @@ mod tests {
                                     futures::future::pending::<()>().await;
                                 }
                                 match params.command.as_str() {
+                                    "groovy.maven.defaultImportRoots.v2" => Ok(Some(serde_json::json!({
+                                        "version":2,"rootUri":"file:///scoped-gradle/","rootPomUris":[],"retainedPomUris":[],
+                                        "cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false,"importEnabled":false
+                                    }))),
+                                    "groovy.java.importPlainProjects" => Ok(Some(serde_json::json!({
+                                        "version":1,"rootUri":"file:///scoped-gradle/","importedProjectUris":[]
+                                    }))),
                                     "groovy.gradle.importedBuildRoots" => {
                                         let input=params.arguments.first().expect("cached read");
                                         assert_eq!(input.as_object().expect("request").len(), 2);
@@ -15360,6 +15492,8 @@ mod tests {
             "java.project.getAll",
             "java.project.getSettings",
             "groovy.maven.importedProjects",
+            "groovy.maven.defaultImportRoots.v2",
+            "groovy.java.importPlainProjects",
             "groovy.gradle.importedProjects",
             "groovy.gradle.rootState",
             "groovy.gradle.applyRootState",
@@ -15447,6 +15581,13 @@ mod tests {
                                     };
                                     match params.command.as_str() {
                                         "java.project.getAll" => Ok(Some(serde_json::json!(active()))),
+                                        "groovy.maven.defaultImportRoots.v2" => Ok(Some(serde_json::json!({
+                                            "version":2,"rootUri":"file:///module-policy/","rootPomUris":[],"retainedPomUris":[],
+                                            "cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false,"importEnabled":false
+                                        }))),
+                                        "groovy.java.importPlainProjects" => Ok(Some(serde_json::json!({
+                                            "version":1,"rootUri":"file:///module-policy/","importedProjectUris":[]
+                                        }))),
                                         "java.project.getSettings" => Ok(Some(serde_json::json!({
                                             "org.eclipse.jdt.ls.core.sourcePaths": [],
                                             "org.eclipse.jdt.ls.core.classpathEntries": []

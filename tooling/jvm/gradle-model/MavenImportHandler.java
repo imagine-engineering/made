@@ -47,6 +47,9 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
 
     @Override
     public Object executeCommand(String command, List<Object> arguments, IProgressMonitor monitor) throws Exception {
+        if ("groovy.maven.defaultImportRoots.v2".equals(command)) {
+            return defaultImportRootsWithImportState(arguments, monitor);
+        }
         if ("groovy.maven.defaultImportRoots".equals(command)) {
             return defaultImportRoots(arguments, monitor);
         }
@@ -436,7 +439,31 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
         }
     }
 
-    private static Object defaultImportRoots(List<Object> arguments, IProgressMonitor monitor) {
+    private static Map<String, Object> defaultImportRootsWithImportState(List<Object> arguments,
+            IProgressMonitor monitor) {
+        try {
+            var preferences = JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
+            boolean importEnabled = preferences.isImportMavenEnabled();
+            Map<String, Object> result = new LinkedHashMap<>(defaultImportRoots(arguments, monitor));
+            var current = JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
+            if (current != preferences || current.isImportMavenEnabled() != importEnabled) {
+                throw new OperationCanceledException();
+            }
+            checkCancelled(monitor);
+            result.put("version", 2);
+            result.put("importEnabled", importEnabled);
+            return result;
+        } catch (OperationCanceledException cancelled) {
+            throw new IllegalStateException("Maven default-root import settings changed or discovery cancelled; no projects were imported. Refresh before retrying.");
+        } catch (Exception | LinkageError failure) {
+            if (monitor.isCanceled()) {
+                throw new IllegalStateException("Maven default-root import settings discovery cancelled; no projects were imported. Refresh before retrying.");
+            }
+            throw new IllegalStateException("Maven default-root import settings unavailable; no projects were imported. Check initialized host and compatible provider settings, then refresh and retry.");
+        }
+    }
+
+    private static Map<String, Object> defaultImportRoots(List<Object> arguments, IProgressMonitor monitor) {
         try {
             checkCancelled(monitor);
             if (arguments == null || arguments.size() != 1

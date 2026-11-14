@@ -14797,6 +14797,41 @@ impl LspStore {
             .language_server_for_id(server_id)
             .context("Java language server is unavailable; check extension setup")?;
         let mut selection = match target {
+            SelectedJdtlsPhaseTarget::StartupDefault(provider) => {
+                let location = SettingsLocation {
+                    worktree_id,
+                    path: RelPath::empty(),
+                };
+                let settings = ProjectSettings::get(Some(location), cx);
+                let controls = settings
+                    .jvm_build_selection_intent(SettingsStore::global(cx), location)?
+                    .startup_import_controls();
+                ensure!(
+                    controls.uncontrolled_default() == Some(*provider),
+                    "Saved JVM startup settings changed; restart the language server before retrying"
+                );
+                let entries = worktree.read(cx).snapshot();
+                let roots = jvm_project::imported_build_read_roots(
+                    server
+                        .workspace_folders()
+                        .iter()
+                        .map(|folder| folder.as_str().to_owned()),
+                    entries.abs_path().as_ref(),
+                )?;
+                ensure!(
+                    roots.iter().any(|root| root == entries.abs_path().as_ref()),
+                    "Java tooling does not own the startup worktree; review initialized folders and restart before retrying"
+                );
+                let defaults = match provider {
+                    jvm_project::JdtlsStartupDefault::Maven => StartupDefaultRoots::Maven(
+                        jvm_project::MavenDefaultImportRootsQuery::new(&entries, worktree_id)?,
+                    ),
+                    jvm_project::JdtlsStartupDefault::Gradle => StartupDefaultRoots::Gradle(
+                        jvm_project::GradleDefaultImportRootsQuery::new(&entries, worktree_id)?,
+                    ),
+                };
+                PreparedJdtlsPhase::StartupDefault(roots, Box::new(defaults))
+            }
             SelectedJdtlsPhaseTarget::Maven(poms) => {
                 let worktree = worktree.read(cx);
                 ensure!(
@@ -15325,14 +15360,7 @@ impl LspStore {
         };
         ensure!(
             selection.default_maven_inputs().is_none()
-                || server
-                    .capabilities()
-                    .execute_command_provider
-                    .as_ref()
-                    .is_some_and(|provider| provider
-                        .commands
-                        .iter()
-                        .any(|command| { command == "groovy.maven.defaultImportRoots" })),
+                || jvm_project::MavenDefaultImportRootsQuery::is_supported(&server),
             "Maven default-root discovery provider is unavailable; check extension setup or select explicit POM roots and refresh before retrying"
         );
         ensure!(
@@ -15342,20 +15370,12 @@ impl LspStore {
                     default_roots: Some(_),
                     ..
                 }
-            ) || server
-                .capabilities()
-                .execute_command_provider
-                .as_ref()
-                .is_some_and(|provider| {
-                    provider
-                        .commands
-                        .iter()
-                        .any(|command| command == "groovy.gradle.defaultImportRoots")
-                }),
+            ) || jvm_project::GradleDefaultImportRootsQuery::is_supported(&server),
             "Gradle default-root discovery provider is unavailable; check extension setup or select explicit build files and refresh before retrying"
         );
         ensure!(
             matches!(target, SelectedJdtlsPhaseTarget::SavedMaven(_))
+                || matches!(&selection, PreparedJdtlsPhase::StartupDefault(..))
                 || matches!(&selection, PreparedJdtlsPhase::GradleScoped(_))
                 || server
                     .capabilities()
@@ -15563,6 +15583,7 @@ impl LspStore {
         target: Option<&SelectedJdtlsPhaseTarget>,
     ) {
         if let Some(LanguageServerState::Running {
+            pending_startup_default,
             pending_maven_startup,
             pending_gradle_startup,
             ..
@@ -15570,6 +15591,11 @@ impl LspStore {
             .as_local_mut()
             .and_then(|local| local.language_servers.get_mut(&server_id))
         {
+            if target
+                .is_none_or(|target| matches!(target, SelectedJdtlsPhaseTarget::StartupDefault(_)))
+            {
+                *pending_startup_default = None;
+            }
             if target.is_none_or(|target| matches!(target, SelectedJdtlsPhaseTarget::SavedMaven(_)))
             {
                 *pending_maven_startup = None;
@@ -15596,8 +15622,8 @@ impl LspStore {
         {
             return;
         }
-        // Empty Maven selection completes without a phase or follow-up read.
-        for _ in 0..2 {
+        // An empty saved selection can complete without a phase or follow-up read.
+        for _ in 0..3 {
             if self.jdtls_projects.get(&worktree_id).is_none_or(|state| {
                 !state.snapshot_is_current()
                     || state
@@ -15613,12 +15639,18 @@ impl LspStore {
                 .and_then(|local| local.language_servers.get_mut(&server_id))
             {
                 Some(LanguageServerState::Running {
+                    pending_startup_default,
                     pending_maven_startup,
                     pending_gradle_startup,
                     ..
-                }) => pending_maven_startup
+                }) => pending_startup_default
                     .take()
-                    .map(|intent| intent.map(SelectedJdtlsPhaseTarget::SavedMaven))
+                    .map(|provider| Ok(SelectedJdtlsPhaseTarget::StartupDefault(provider)))
+                    .or_else(|| {
+                        pending_maven_startup
+                            .take()
+                            .map(|intent| intent.map(SelectedJdtlsPhaseTarget::SavedMaven))
+                    })
                     .or_else(|| {
                         pending_gradle_startup.take().map(|intent| {
                             intent
@@ -16032,7 +16064,7 @@ impl LspStore {
             })
             .transpose()?;
         // Dynamic JDTLS settings can change without replacing the server that answered discovery.
-        let default_lsp_settings = language_server_settings_for(
+        let lsp_settings = language_server_settings_for(
             SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
@@ -16041,6 +16073,16 @@ impl LspStore {
             cx,
         )
         .cloned();
+        let startup_folders = matches!(target, SelectedJdtlsPhaseTarget::StartupDefault(_))
+            .then(|| server.workspace_folders());
+        let startup_settings_revision = startup_folders
+            .as_ref()
+            .map(|_| {
+                SettingsStore::global(cx).observed_revision().context(
+                    "Java startup settings revision is unavailable; restart the language server",
+                )
+            })
+            .transpose()?;
         let token = self
             .jdtls_projects
             .entry(worktree_id)
@@ -16052,6 +16094,17 @@ impl LspStore {
             .get_request_timeout();
         let (sender, receiver) = oneshot::channel();
         let import = cx.spawn(async move |this, cx| {
+            let settings_are_current = |cx: &App| {
+                language_server_settings_for(
+                    SettingsLocation { worktree_id, path: RelPath::empty() },
+                    &LanguageServerName::new_static("jdtls"),
+                    cx,
+                ) == lsp_settings.as_ref()
+                    && startup_settings_revision.is_none_or(|revision| {
+                        SettingsStore::global(cx).observed_revision() == Some(revision)
+                    })
+            };
+            let mut startup_changed_membership = false;
             let result = async {
               let mut phases = match selection {
                   PreparedJdtlsPhase::SavedMaven { phases, .. } => phases,
@@ -16071,10 +16124,7 @@ impl LspStore {
                 ensure!(current_server == server_id && current_worktree == worktree && current_worktree.read(cx).abs_path() == root
                     && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
                     && current_selection.default_maven_inputs() == default_inputs.as_deref()
-                    && (default_inputs.is_none() || language_server_settings_for(
-                        SettingsLocation { worktree_id, path: RelPath::empty() },
-                        &LanguageServerName::new_static("jdtls"), cx,
-                    ) == default_lsp_settings.as_ref()),
+                    && settings_are_current(cx),
                     "{name} project permission or inputs changed; review trust and refresh before retrying");
                 Ok(())
                 }).map_err(|_| anyhow!("{name} project closed before {operation}; reopen and refresh before retrying"))??;
@@ -16085,10 +16135,7 @@ impl LspStore {
                         ensure!(current_server == server_id && current_worktree == worktree && current_worktree.read(cx).abs_path() == root
                             && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
                             && current_selection.default_maven_inputs() == default_inputs.as_deref()
-                    && (default_inputs.is_none() || language_server_settings_for(
-                        SettingsLocation { worktree_id, path: RelPath::empty() },
-                        &LanguageServerName::new_static("jdtls"), cx,
-                    ) == default_lsp_settings.as_ref()),
+                            && settings_are_current(cx),
                             "Maven permission or inputs changed during default-root discovery; refresh before retrying");
                         query.validate_current(&worktree.read(cx).snapshot(), worktree_id)
                     }).map_err(|_| anyhow!("Maven project closed during default-root discovery; reopen and refresh before retrying"))??;
@@ -16097,6 +16144,74 @@ impl LspStore {
                     }
                 }
                 let facts = match selection {
+                    PreparedJdtlsPhase::StartupDefault(scopes, defaults) => {
+                        let authorize = |store: &LspStore, cx: &mut Context<LspStore>| -> Result<()> {
+                            let (current_server, current_provider, current_worktree, _) =
+                                store.selected_jdtls_phase_provider(worktree_id, &target, Some(token), cx)?;
+                            ensure!(current_server == server_id && current_worktree == worktree
+                                && current_worktree.read(cx).abs_path() == root
+                                && Some(current_provider.workspace_folders()) == startup_folders
+                                && settings_are_current(cx)
+                                && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token)),
+                                "Java startup permission, settings or initialized folders changed; review the project and refresh before retrying");
+                            let snapshot = current_worktree.read(cx).snapshot();
+                            match defaults.as_ref() {
+                                StartupDefaultRoots::Maven(query) => query.validate_current(&snapshot, worktree_id),
+                                StartupDefaultRoots::Gradle(query) => query.validate_current(&snapshot, worktree_id),
+                            }
+                        };
+                        let recheck = |cx: &mut gpui::AsyncApp| this.update(cx, |store, cx| authorize(store, cx))
+                            .map_err(|_| anyhow!("Java startup project closed; reopen and refresh before retrying"))?;
+                        recheck(cx)?;
+                        ensure!(jvm_project::PlainJavaStartupImport::is_supported(&server),
+                            "Single-provider startup requires the current Groovy JDTLS bundle; update the provider and restart the language server");
+                        match defaults.as_ref() {
+                            StartupDefaultRoots::Maven(query) => {
+                                let (enabled, defaults) = query.query_import_state(server.clone(), request_timeout).await?;
+                                recheck(cx)?;
+                                if enabled {
+                                    let mut imported = defaults.retained_poms;
+                                    let mut poms = defaults.poms.into_iter().collect::<Vec<_>>();
+                                    poms.sort_by_key(|pom| pom.components().count());
+                                    for pom in poms {
+                                        if imported.contains(&pom) { continue; }
+                                        let facts = jvm_project::MavenReactorImport::new(root.as_ref(), &pom, &[])?
+                                            .execute_phase(server.clone(), request_timeout).await?;
+                                        startup_changed_membership = true;
+                                        recheck(cx)?;
+                                        this.update(cx, |_, cx| validate_current_maven_reactor_inputs(
+                                            &worktree.read(cx).snapshot(), root.as_ref(), worktree_id, &facts.imported_poms,
+                                        ))??;
+                                        imported.extend(facts.imported_poms);
+                                    }
+                                }
+                            }
+                            StartupDefaultRoots::Gradle(query) => {
+                                let (enabled, defaults) = query.query_import_state(server.clone(), request_timeout).await?;
+                                recheck(cx)?;
+                                if enabled {
+                                    for build in defaults {
+                                        jvm_project::SelectedGradleImport::new_scoped(root.as_ref(), &build)?
+                                            .execute_phase(server.clone(), request_timeout).await?;
+                                        startup_changed_membership = true;
+                                        recheck(cx)?;
+                                    }
+                                }
+                            }
+                        }
+                        let plain = this.update(cx, |_, cx| {
+                            let snapshot = worktree.read(cx).snapshot();
+                            scopes.into_iter().map(|scope| jvm_project::PlainJavaStartupImport::new(&snapshot, scope))
+                                .collect::<Result<Vec<_>>>()
+                        })??;
+                        for import in &plain {
+                            recheck(cx)?;
+                            this.update(cx, |_, cx| import.validate_current(&worktree.read(cx).snapshot()))??;
+                            startup_changed_membership |= import.execute_phase(server.clone(), request_timeout).await?;
+                            recheck(cx)?;
+                        }
+                        None
+                    }
                     PreparedJdtlsPhase::GradleScoped(mut plan) => {
                         let authorize = |plan: &jvm_project::ScopedGradleImports, store: &LspStore, cx: &mut Context<LspStore>| -> Result<()> {
                             let (current_server, current_provider, current_worktree, current_selection) = store.selected_jdtls_phase_provider(worktree_id, &target, Some(token), cx)?;
@@ -16104,8 +16219,7 @@ impl LspStore {
                                 && current_worktree.read(cx).abs_path() == root
                                 && matches!(current_selection, PreparedJdtlsPhase::GradleScoped(_))
                                 && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
-                                && language_server_settings_for(SettingsLocation { worktree_id, path: RelPath::empty() },
-                                    &LanguageServerName::new_static("jdtls"), cx) == default_lsp_settings.as_ref(),
+                                && settings_are_current(cx),
                                 "Scoped Gradle import permission, inputs or host settings changed; import may be partial, refresh before retrying");
                             plan.validate_current(&current_worktree.read(cx).snapshot(), worktree_id)?;
                             plan.validate_initialized_folders(&current_provider)
@@ -16263,8 +16377,7 @@ impl LspStore {
                                 && current_worktree.read(cx).abs_path() == root
                                 && matches!(current_selection, PreparedJdtlsPhase::GradleModules { .. })
                                 && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
-                                && language_server_settings_for(SettingsLocation { worktree_id, path: RelPath::empty() },
-                                    &LanguageServerName::new_static("jdtls"), cx) == default_lsp_settings.as_ref(),
+                                && settings_are_current(cx),
                                 "Gradle module policy permission, inputs or host settings changed; import may be partial, refresh before retrying");
                             if let Some(query) = &default_roots {
                                 query.validate_current(&current_worktree.read(cx).snapshot(), worktree_id)?;
@@ -16334,11 +16447,11 @@ impl LspStore {
                         ensure!(current_server == server_id && current_worktree == worktree && current_worktree.read(cx).abs_path() == root
                             && store.jdtls_projects.get(&worktree_id).is_some_and(|state| state.import_operation() == Some(token))
                             && current_selection.default_maven_inputs() == default_inputs.as_deref()
-                    && (default_inputs.is_none() || language_server_settings_for(
-                        SettingsLocation { worktree_id, path: RelPath::empty() },
-                        &LanguageServerName::new_static("jdtls"), cx,
-                    ) == default_lsp_settings.as_ref()),
+                            && settings_are_current(cx),
                             "Maven project changed during selection application; import may be partial, refresh before retrying");
+                        if let Some(query) = &default_roots_query {
+                            query.validate_current(&current_worktree.read(cx).snapshot(), worktree_id)?;
+                        }
                         validate_current_maven_reactor_inputs(&worktree.read(cx).snapshot(), root.as_ref(), worktree_id, &facts.imported_poms)?;
                         validate_current_maven_reactor_inputs(&worktree.read(cx).snapshot(), root.as_ref(), worktree_id, &facts.ignored_poms)
                     }).map_err(|_| anyhow!("Maven project closed during selection application; import may be partial, reopen and refresh before retrying"))??;
@@ -16358,11 +16471,11 @@ impl LspStore {
                     .and_then(|(current_server, _, current_worktree, current_selection)| {
                         ensure!(current_server == server_id && current_worktree == worktree && current_worktree.read(cx).abs_path() == root
                             && current_selection.default_maven_inputs() == default_inputs.as_deref()
-                    && (default_inputs.is_none() || language_server_settings_for(
-                        SettingsLocation { worktree_id, path: RelPath::empty() },
-                        &LanguageServerName::new_static("jdtls"), cx,
-                    ) == default_lsp_settings.as_ref()),
+                            && settings_are_current(cx),
                             "{name} project changed during {operation}; refresh before retrying");
+                        if let Some(query) = &default_roots_query {
+                            query.validate_current(&current_worktree.read(cx).snapshot(), worktree_id)?;
+                        }
                         Ok(())
                     });
                 let result = authorization.and(result).and_then(|expanded_poms| {
@@ -16387,20 +16500,33 @@ impl LspStore {
                     .with_context(|| format!("{name} project changed during {operation}; refresh before retrying"))?;
                 ensure!(state.import_operation() == Some(token),
                     "{name} {operation} cancelled or inputs changed; import may be partial, refresh before retrying");
-                let should_refresh = result.is_ok();
+                let startup_unchanged = result.is_ok()
+                    && matches!(target, SelectedJdtlsPhaseTarget::StartupDefault(_))
+                    && !startup_changed_membership;
+                let should_refresh = result.is_ok() && !startup_unchanged;
                 let maven_selection = result.as_ref().ok().and_then(|facts| facts.clone());
-                if should_refresh {
+                if startup_unchanged {
+                    state.finish_import_without_membership_change(token);
+                    if let Some(LanguageServerState::Running { imported_ownership, .. }) = store.as_local_mut()
+                        .and_then(|local| local.language_servers.get_mut(&server_id))
+                        && let Some((generation, _)) = imported_ownership {
+                            *generation = token;
+                        }
+                } else if should_refresh {
                     state.finish_import_operation(token);
                 } else {
                     state.fail(token);
                     state.mark_import_failed(server_id).log_err();
                 }
-                if !should_refresh {
+                if result.is_err() {
                     store.clear_pending_jvm_startup(server_id, None);
                 }
                 cx.notify();
                 if sender.send(result.map(|_| ())).is_err() {
                     log::debug!("Selected {name} {operation} caller no longer awaits the result");
+                }
+                if startup_unchanged {
+                    store.apply_pending_jvm_startup(server_id, worktree_id, cx);
                 }
                 if should_refresh {
                     if let Err(error) = store.schedule_local_jdtls_project_refresh(
@@ -18795,6 +18921,13 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) {
         #[cfg(feature = "jvm-tools")]
+        let pending_startup_default = key
+            .settings
+            .jvm_startup
+            .as_ref()
+            .ok()
+            .and_then(|controls| controls.uncontrolled_default());
+        #[cfg(feature = "jvm-tools")]
         let pending_maven_startup = (language_server.name()
             == LanguageServerName::new_static("jdtls"))
         .then(|| Self::saved_maven_startup_intent(key.worktree_id, cx))
@@ -18853,6 +18986,8 @@ impl LspStore {
                 adapter: adapter.clone(),
                 server: language_server.clone(),
                 simulate_disk_based_diagnostics_completion: None,
+                #[cfg(feature = "jvm-tools")]
+                pending_startup_default,
                 #[cfg(feature = "jvm-tools")]
                 pending_maven_startup,
                 #[cfg(feature = "jvm-tools")]
@@ -20965,6 +21100,8 @@ pub enum LanguageServerState {
         simulate_disk_based_diagnostics_completion: Option<Task<()>>,
         workspace_diagnostics_refresh_tasks: HashMap<Option<String>, WorkspaceRefreshTask>,
         #[cfg(feature = "jvm-tools")]
+        pending_startup_default: Option<jvm_project::JdtlsStartupDefault>,
+        #[cfg(feature = "jvm-tools")]
         pending_maven_startup: Option<Result<settings::MavenBuildSettingsContent, &'static str>>,
         #[cfg(feature = "jvm-tools")]
         pending_gradle_startup: Option<Result<settings::GradleBuildSettingsContent, &'static str>>,
@@ -21029,6 +21166,7 @@ pub struct LanguageServerProgress {
 
 #[cfg(feature = "jvm-tools")]
 enum SelectedJdtlsPhaseTarget {
+    StartupDefault(jvm_project::JdtlsStartupDefault),
     Maven(Vec<ProjectPath>),
     MavenGraph(ProjectPath),
     GradleGraph {
@@ -21052,6 +21190,7 @@ enum SelectedJdtlsPhaseTarget {
 impl SelectedJdtlsPhaseTarget {
     fn name(&self) -> &'static str {
         match self {
+            Self::StartupDefault(_) => "Java startup",
             Self::Maven(_)
             | Self::MavenGraph(_)
             | Self::MavenReactor { .. }
@@ -21071,6 +21210,7 @@ impl SelectedJdtlsPhaseTarget {
 
     fn command(&self) -> &'static str {
         match self {
+            Self::StartupDefault(_) => "",
             Self::Maven(_) => "groovy.maven.importSelected",
             Self::MavenGraph(_) => "groovy.maven.dependencyGraph",
             Self::GradleGraph { .. } => "groovy.gradle.dependencyGraph",
@@ -21093,6 +21233,7 @@ enum SelectedJdtlsDependencyGraph {
 
 #[cfg(feature = "jvm-tools")]
 enum PreparedJdtlsPhase {
+    StartupDefault(Vec<PathBuf>, Box<StartupDefaultRoots>),
     Maven(jvm_project::SelectedMavenImport),
     MavenGraph(jvm_project::SelectedMavenDependencyGraph),
     GradleGraph(jvm_project::SelectedGradleDependencyGraph),
@@ -21111,6 +21252,12 @@ enum PreparedJdtlsPhase {
         phases: Vec<PreparedJdtlsPhase>,
         default_inputs: Option<Vec<ProjectPath>>,
     },
+}
+
+#[cfg(feature = "jvm-tools")]
+enum StartupDefaultRoots {
+    Maven(jvm_project::MavenDefaultImportRootsQuery),
+    Gradle(jvm_project::GradleDefaultImportRootsQuery),
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -21216,6 +21363,11 @@ impl PreparedJdtlsPhase {
         request_timeout: Duration,
     ) -> Result<Option<jvm_project::MavenReactorPhaseFacts>> {
         match self {
+            Self::StartupDefault(..) => {
+                anyhow::bail!(
+                    "Java startup requires its owned phase sequence; refresh before retrying"
+                )
+            }
             Self::SavedMaven { .. } => {
                 anyhow::bail!("Saved Maven phase preparation changed; refresh before retrying")
             }
@@ -24925,7 +25077,7 @@ mod tests {
             let options = requests.last().expect("current initialize");
             assert_eq!(
                 options.get("projectConfigurations"),
-                (maven && gradle).then(|| serde_json::json!([])).as_ref()
+                (maven || gradle).then(|| serde_json::json!([])).as_ref()
             );
             assert_eq!(
                 options["settings"]["java"]["import"]["maven"]["enabled"],

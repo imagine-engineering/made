@@ -802,7 +802,7 @@ public class CancelledMavenQuery {
     print(json.dumps(receipt, indent=2))
 
 
-def unlink_fixture_bundle(arguments, directory, identity_modes=False, ownership_modes=False, hydration_modes=False, default_root_modes=False, workspace_states=False, scoped_import_modes=False):
+def unlink_fixture_bundle(arguments, directory, identity_modes=False, ownership_modes=False, hydration_modes=False, default_root_modes=False, workspace_states=False, scoped_import_modes=False, import_state_modes=False):
     directory = Path(directory)
     source = directory / "UnlinkFixtureHandler.java"
     source.write_text('''package dev.made.groovy.fixture;
@@ -1064,6 +1064,50 @@ public final class UnlinkFixtureHandler implements IDelegateCommandHandler {
   }
   if (command.equals("groovy.fixture.unlink.prepare")) {''', 1)
         source.write_text(fixture)
+    if import_state_modes:
+        if not default_root_modes:
+            raise ValueError("Import-state qualification requires the existing default-root fixture")
+        fixture = source.read_text().replace('  if (command.equals("groovy.fixture.unlink.prepare")) {', '''
+  if (command.equals("groovy.fixture.unlink.heldDefaultImportState")) {
+   String provider = (String) request.get("provider");
+   if (!List.of("maven", "gradle").contains(provider)
+     || !(request.get("parameters") instanceof Map<?, ?> parameters)
+     || !Path.of(new URI((String) parameters.get("rootUri"))).toRealPath().equals(root)) throw new IllegalArgumentException();
+   var bundles = java.util.Arrays.stream(org.osgi.framework.FrameworkUtil.getBundle(JavaLanguageServerPlugin.class)
+    .getBundleContext().getBundles()).filter(bundle -> bundle.getSymbolicName().equals("dev.made.groovy.gradle.model")).toList();
+   if (bundles.size() != 1) throw new IllegalStateException("The isolated provider bundle is ambiguous");
+   Class<?> handlerType = bundles.get(0).loadClass("dev.made.groovy."
+    + (provider.equals("maven") ? "MavenImportHandler" : "GradleImportHandler"));
+   var handler = (IDelegateCommandHandler) handlerType.getConstructor().newInstance();
+   Path started = root.getParent().resolve("import-state-" + provider + "-started");
+   Path release = root.getParent().resolve("import-state-" + provider + "-release");
+   Path finished = root.getParent().resolve("import-state-" + provider + "-finished");
+   var entered = new java.util.concurrent.atomic.AtomicBoolean();
+   IProgressMonitor held = new org.eclipse.core.runtime.NullProgressMonitor() {
+    @Override public boolean isCanceled() {
+     if (entered.compareAndSet(false, true)) {
+      try {
+       Files.writeString(started, "started");
+       long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45);
+       while (!Files.exists(release) && !monitor.isCanceled() && System.nanoTime() < deadline) Thread.sleep(10);
+       if (!Files.exists(release) && !monitor.isCanceled()) throw new IllegalStateException("Isolated import-state gate expired");
+      } catch (InterruptedException interrupted) {
+       Thread.currentThread().interrupt();
+       throw new IllegalStateException("Isolated import-state gate interrupted");
+      } catch (java.io.IOException failure) {
+       throw new IllegalStateException("Isolated import-state gate failed");
+      } finally {
+       try { Files.writeString(finished, "finished"); }
+       catch (java.io.IOException failure) { JavaLanguageServerPlugin.logException("Isolated import-state gate cleanup failed", failure); }
+      }
+     }
+     return monitor.isCanceled();
+    }
+   };
+   return handler.executeCommand("groovy." + provider + ".defaultImportRoots.v2", List.of(parameters), held);
+  }
+  if (command.equals("groovy.fixture.unlink.prepare")) {''', 1)
+        source.write_text(fixture)
     classes = directory / "unlink-fixture-classes"
     classes.mkdir()
     plugins = arguments.launcher.resolve().parent.parent / "plugins"
@@ -1084,9 +1128,11 @@ public final class UnlinkFixtureHandler implements IDelegateCommandHandler {
         raise
     bundle = directory / "unlink-fixture.jar"
     with zipfile.ZipFile(bundle, "w") as archive:
-        archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nBundle-ManifestVersion: 2\nBundle-SymbolicName: dev.made.groovy.unlink.fixture;singleton:=true\nBundle-Version: 1.0.0\nBundle-RequiredExecutionEnvironment: JavaSE-17\nRequire-Bundle: org.eclipse.jdt.ls.core,org.eclipse.core.resources,\n org.eclipse.core.runtime,org.eclipse.lsp4j\n\n")
+        archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nBundle-ManifestVersion: 2\nBundle-SymbolicName: dev.made.groovy.unlink.fixture;singleton:=true\nBundle-Version: 1.0.0\nBundle-RequiredExecutionEnvironment: JavaSE-17\nRequire-Bundle: org.eclipse.jdt.ls.core,org.eclipse.core.resources,\n org.eclipse.core.runtime,org.eclipse.lsp4j"
+                        + "\n"
+                        + ("Import-Package: org.osgi.framework\n" if import_state_modes else "") + "\n")
         commands = "".join(f'<command id="groovy.fixture.unlink.{name}"/>' for name in
-                           ["prepare", "hold", "stack"] + (["natures"] if identity_modes or ownership_modes or hydration_modes or default_root_modes else []) + (["defaultRootsOracle", "gradleDefaultRootsOracle", "gradleDefaultRootsState"] if default_root_modes else []) + (["projectState"] if workspace_states else []) + (["importHostState"] if scoped_import_modes else []))
+                           ["prepare", "hold", "stack"] + (["natures"] if identity_modes or ownership_modes or hydration_modes or default_root_modes else []) + (["defaultRootsOracle", "gradleDefaultRootsOracle", "gradleDefaultRootsState"] if default_root_modes else []) + (["projectState"] if workspace_states else []) + (["importHostState"] if scoped_import_modes else []) + (["heldDefaultImportState"] if import_state_modes else []))
         archive.writestr("plugin.xml", '<plugin><extension point="org.eclipse.jdt.ls.core.delegateCommandHandler"><delegateCommandHandler class="dev.made.groovy.fixture.UnlinkFixtureHandler">' + commands + '</delegateCommandHandler></extension></plugin>')
         for path in classes.rglob("*.class"):
             archive.write(path, path.relative_to(classes).as_posix())

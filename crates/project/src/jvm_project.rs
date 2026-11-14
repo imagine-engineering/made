@@ -475,6 +475,12 @@ pub(crate) struct JvmStartupImportControls {
     gradle: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum JdtlsStartupDefault {
+    Maven,
+    Gradle,
+}
+
 impl JvmBuildSelectionIntent<'_> {
     pub(crate) fn startup_import_controls(&self) -> JvmStartupImportControls {
         JvmStartupImportControls {
@@ -493,6 +499,14 @@ impl JvmBuildSelectionIntent<'_> {
 const JVM_STARTUP_IMPORT_CONFLICT: &str = "Saved JVM build selection conflicts with advanced JDTLS import settings. Remove projectConfigurations and enabled importer overrides from lsp.jdtls initialization_options/settings, or remove jvm_builds selection; then restart the language server. Existing imported projects still require reconciliation.";
 
 impl JvmStartupImportControls {
+    pub(crate) fn uncontrolled_default(self) -> Option<JdtlsStartupDefault> {
+        match (self.maven, self.gradle) {
+            (true, false) => Some(JdtlsStartupDefault::Gradle),
+            (false, true) => Some(JdtlsStartupDefault::Maven),
+            _ => None,
+        }
+    }
+
     fn controlled_providers(self) -> impl Iterator<Item = &'static str> {
         [(self.maven, "maven"), (self.gradle, "gradle")]
             .into_iter()
@@ -546,10 +560,8 @@ impl JvmStartupImportControls {
             .context(JVM_STARTUP_IMPORT_CONFLICT)?;
         let configuration = object.entry("settings").or_insert_with(|| json!({}));
         self.apply_configuration(configuration)?;
-        if self.maven && self.gradle {
-            // Importer enabled flags do not suppress the SDK's Eclipse metadata importer.
-            object.insert("projectConfigurations".to_owned(), json!([]));
-        }
+        // Importer enabled flags do not suppress the SDK's Eclipse metadata importer.
+        object.insert("projectConfigurations".to_owned(), json!([]));
         Ok(())
     }
 
@@ -3587,6 +3599,23 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         true
     }
 
+    pub(crate) fn finish_import_without_membership_change(
+        &mut self,
+        token: ProviderRefreshToken,
+    ) -> bool {
+        if !self.finish_import_operation(token) {
+            return false;
+        }
+        if let Some(snapshot) = self.snapshot.as_mut()
+            && snapshot.server_id == token.server_id
+            && snapshot.worktree_id == token.worktree_id
+        {
+            snapshot.generation = token.generation;
+            self.stale = false;
+        }
+        true
+    }
+
     pub fn finish(
         &mut self,
         token: ProviderRefreshToken,
@@ -5938,7 +5967,7 @@ fn imported_build_identity_path(uri: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn imported_build_read_roots(
+pub(crate) fn imported_build_read_roots(
     workspace_folders: impl IntoIterator<Item = String>,
     worktree_root: &Path,
 ) -> Result<Vec<PathBuf>> {
@@ -7771,16 +7800,7 @@ impl ScopedGradleImports {
 
     pub(crate) fn supports_default_policy(server: &LanguageServer) -> bool {
         Self::policy_commands_available(server)
-            && server
-                .capabilities()
-                .execute_command_provider
-                .as_ref()
-                .is_some_and(|provider| {
-                    provider
-                        .commands
-                        .iter()
-                        .any(|command| command == "groovy.gradle.defaultImportRoots")
-                })
+            && GradleDefaultImportRootsQuery::is_supported(server)
     }
 
     fn for_empty(
@@ -8457,6 +8477,7 @@ pub(crate) struct MavenDefaultImportRootsQuery {
     root: PathBuf,
     worktree_id: WorktreeId,
     inputs: Vec<ProjectPath>,
+    entries: Vec<worktree::Entry>,
     candidates: BTreeSet<PathBuf>,
     parameters: lsp::ExecuteCommandParams,
 }
@@ -8467,7 +8488,174 @@ pub(crate) struct MavenDefaultImportRoots {
     pub retained_poms: BTreeSet<PathBuf>,
 }
 
+const MAVEN_DEFAULT_IMPORT_ROOTS: &str = "groovy.maven.defaultImportRoots";
+const MAVEN_DEFAULT_IMPORT_STATE: &str = "groovy.maven.defaultImportRoots.v2";
+const GRADLE_DEFAULT_IMPORT_ROOTS: &str = "groovy.gradle.defaultImportRoots";
+const GRADLE_DEFAULT_IMPORT_STATE: &str = "groovy.gradle.defaultImportRoots.v2";
+const JAVA_PLAIN_STARTUP_IMPORT: &str = "groovy.java.importPlainProjects";
+
+pub(crate) struct PlainJavaStartupImport {
+    worktree_root: PathBuf,
+    root: PathBuf,
+    descriptions: Vec<worktree::Entry>,
+    parameters: lsp::ExecuteCommandParams,
+}
+
+impl PlainJavaStartupImport {
+    pub(crate) fn is_supported(server: &LanguageServer) -> bool {
+        advertises_jdtls_command(server, JAVA_PLAIN_STARTUP_IMPORT)
+    }
+
+    fn descriptions(snapshot: &Snapshot, root: &Path) -> Result<Vec<worktree::Entry>> {
+        let worktree_root = snapshot.abs_path();
+        let scope = root
+            .strip_prefix(&worktree_root)
+            .ok()
+            .and_then(|path| RelPath::new(path, snapshot.path_style()).ok())
+            .context("Java startup folder is outside the current worktree; reopen and retry")?;
+        ensure!(
+            snapshot.visible_entry_count() <= MAX_DEFAULT_JVM_DISCOVERY_ENTRIES,
+            "Java startup exceeds the project discovery budget; open a narrower worktree and retry"
+        );
+        let is_visible = |file: &worktree::Entry| {
+            file.is_file()
+                && remote_path_is_visible(&file.path, snapshot)
+                && file.path.ancestors().all(|ancestor| {
+                    snapshot.entry_for_path(ancestor).is_some_and(|entry| {
+                        entry.canonical_path.is_none()
+                            && !entry.is_ignored
+                            && (ancestor == file.path.as_ref() || entry.is_dir())
+                    })
+                })
+        };
+        let mut descriptions = Vec::new();
+        for entry in snapshot.entries(false, 0) {
+            if entry.path.file_name() != Some(".project")
+                || !entry.path.starts_with(scope.as_ref())
+                || !is_visible(entry)
+            {
+                continue;
+            }
+            descriptions.push(entry.clone());
+            ensure!(
+                descriptions.len() <= MAX_JDTLS_MODULES,
+                "Too many Eclipse descriptions for Java startup; open a narrower worktree and retry"
+            );
+        }
+        Ok(descriptions)
+    }
+
+    pub(crate) fn new(snapshot: &Snapshot, root: PathBuf) -> Result<Self> {
+        let descriptions = Self::descriptions(snapshot, &root)?;
+        let root_uri = selected_import_uri(&root, true)?;
+        let worktree_root = snapshot.abs_path();
+        let uris = descriptions
+            .iter()
+            .map(|entry| selected_import_uri(&worktree_root.join(entry.path.as_std_path()), false))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self {
+            worktree_root: worktree_root.as_ref().to_path_buf(),
+            root,
+            descriptions,
+            parameters: lsp::ExecuteCommandParams {
+                command: JAVA_PLAIN_STARTUP_IMPORT.into(),
+                arguments: vec![json!({"rootUri": root_uri, "descriptionUris": uris})],
+                ..Default::default()
+            },
+        })
+    }
+
+    pub(crate) fn validate_current(&self, snapshot: &Snapshot) -> Result<()> {
+        ensure!(
+            self.descriptions == Self::descriptions(snapshot, &self.root)?,
+            "Eclipse project descriptions changed; refresh before retrying Java startup import"
+        );
+        Ok(())
+    }
+
+    pub(crate) async fn execute_phase(
+        &self,
+        server: Arc<LanguageServer>,
+        request_timeout: Duration,
+    ) -> Result<bool> {
+        if self.descriptions.is_empty() {
+            return Ok(false);
+        }
+        let response = request_selected_jdtls_phase(
+            server, &self.parameters, request_timeout, "Java", "startup import",
+            "Plain Java startup import failed or may be partial; check current Eclipse metadata and refresh before retrying",
+        ).await?;
+        self.validate_receipt(response)
+    }
+
+    fn validate_receipt(&self, response: Value) -> Result<bool> {
+        let invalid = || {
+            anyhow::anyhow!(
+                "Plain Java startup import returned invalid project identities; refresh before retrying"
+            )
+        };
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Receipt {
+            version: u32,
+            root_uri: String,
+            imported_project_uris: Vec<String>,
+        }
+        let receipt: Receipt = serde_json::from_value(response).map_err(|_| invalid())?;
+        ensure!(
+            receipt.version == 1
+                && selected_import_path(&receipt.root_uri, true).map_err(|_| invalid())?
+                    == self.root
+                && receipt.imported_project_uris.len() <= self.descriptions.len(),
+            "{}",
+            invalid()
+        );
+        let mut admitted = BTreeSet::new();
+        for uri in receipt.imported_project_uris {
+            let directory = selected_import_path(&uri, true).map_err(|_| invalid())?;
+            ensure!(
+                self.descriptions.iter().any(|file| {
+                    self.worktree_root
+                        .join(file.path.parent().unwrap_or(RelPath::empty()).as_std_path())
+                        == directory
+                }) && admitted.insert(directory),
+                "{}",
+                invalid()
+            );
+        }
+        Ok(!admitted.is_empty())
+    }
+}
+
+fn decode_default_import_state(
+    mut response: Value,
+    invalid: impl Fn() -> anyhow::Error,
+) -> Result<(bool, Value)> {
+    let fields = response.as_object_mut().ok_or_else(&invalid)?;
+    let version = fields.get_mut("version").ok_or_else(&invalid)?;
+    ensure!(version.as_u64() == Some(2), "{}", invalid());
+    *version = json!(1);
+    let enabled = fields
+        .remove("importEnabled")
+        .and_then(|value| value.as_bool())
+        .ok_or_else(invalid)?;
+    Ok((enabled, response))
+}
+
+fn advertises_jdtls_command(server: &LanguageServer, command: &str) -> bool {
+    server
+        .capabilities()
+        .execute_command_provider
+        .as_ref()
+        .is_some_and(|provider| provider.commands.iter().any(|name| name == command))
+}
+
 impl MavenDefaultImportRootsQuery {
+    pub(crate) fn is_supported(server: &LanguageServer) -> bool {
+        advertises_jdtls_command(server, MAVEN_DEFAULT_IMPORT_STATE)
+            || advertises_jdtls_command(server, MAVEN_DEFAULT_IMPORT_ROOTS)
+    }
+
     pub(crate) fn new(snapshot: &Snapshot, worktree_id: WorktreeId) -> Result<Self> {
         ensure!(
             snapshot.id() == worktree_id,
@@ -8475,6 +8663,15 @@ impl MavenDefaultImportRootsQuery {
         );
         let root = snapshot.abs_path().as_ref().to_path_buf();
         let inputs = default_maven_import_inputs(snapshot, worktree_id)?;
+        let entries = inputs
+            .iter()
+            .map(|input| {
+                snapshot
+                    .entry_for_path(&input.path)
+                    .cloned()
+                    .context("Maven candidate input is unavailable; refresh before retrying")
+            })
+            .collect::<Result<Vec<_>>>()?;
         let candidates = inputs
             .iter()
             .map(|input| root.join(input.path.as_std_path()))
@@ -8488,9 +8685,10 @@ impl MavenDefaultImportRootsQuery {
             root,
             worktree_id,
             inputs,
+            entries,
             candidates,
             parameters: lsp::ExecuteCommandParams {
-                command: "groovy.maven.defaultImportRoots".into(),
+                command: MAVEN_DEFAULT_IMPORT_ROOTS.into(),
                 arguments: vec![
                     json!({"rootUri": root_uri, "candidatePomUris": candidate_uris, "cachedOnly": true}),
                 ],
@@ -8508,7 +8706,11 @@ impl MavenDefaultImportRootsQuery {
             snapshot.id() == worktree_id
                 && worktree_id == self.worktree_id
                 && snapshot.abs_path().as_ref() == self.root
-                && default_maven_import_inputs(snapshot, worktree_id)? == self.inputs,
+                && default_maven_import_inputs(snapshot, worktree_id)? == self.inputs
+                && self
+                    .entries
+                    .iter()
+                    .all(|entry| snapshot.entry_for_path(&entry.path) == Some(entry)),
             "Maven candidate inputs changed; refresh before retrying"
         );
         Ok(())
@@ -8519,11 +8721,38 @@ impl MavenDefaultImportRootsQuery {
         server: Arc<LanguageServer>,
         request_timeout: Duration,
     ) -> Result<MavenDefaultImportRoots> {
+        if advertises_jdtls_command(&server, MAVEN_DEFAULT_IMPORT_STATE) {
+            return self
+                .query_import_state(server, request_timeout)
+                .await
+                .map(|(_, roots)| roots);
+        }
         let response = request_selected_jdtls_phase(
             server, &self.parameters, request_timeout, "Maven", "default-root discovery",
             "Maven default-root discovery failed; check extension/JDTLS setup and current POMs, then refresh before retrying",
         ).await?;
         self.validate_response(response)
+    }
+
+    pub(crate) async fn query_import_state(
+        &self,
+        server: Arc<LanguageServer>,
+        request_timeout: Duration,
+    ) -> Result<(bool, MavenDefaultImportRoots)> {
+        let parameters = lsp::ExecuteCommandParams {
+            command: MAVEN_DEFAULT_IMPORT_STATE.into(),
+            ..self.parameters.clone()
+        };
+        let response = request_selected_jdtls_phase(
+            server, &parameters, request_timeout, "Maven", "default-root discovery",
+            "Maven default-root discovery failed; check extension/JDTLS setup and current POMs, then refresh before retrying",
+        ).await?;
+        let (enabled, roots) = decode_default_import_state(response, || {
+            anyhow::anyhow!(
+                "Maven importer state is invalid; update the JVM provider and refresh before retrying"
+            )
+        })?;
+        Ok((enabled, self.validate_response(roots)?))
     }
 
     fn validate_response(&self, response: Value) -> Result<MavenDefaultImportRoots> {
@@ -8614,6 +8843,11 @@ pub(crate) struct GradleDefaultImportRootsQuery {
 }
 
 impl GradleDefaultImportRootsQuery {
+    pub(crate) fn is_supported(server: &LanguageServer) -> bool {
+        advertises_jdtls_command(server, GRADLE_DEFAULT_IMPORT_STATE)
+            || advertises_jdtls_command(server, GRADLE_DEFAULT_IMPORT_ROOTS)
+    }
+
     pub(crate) fn new(snapshot: &Snapshot, worktree_id: WorktreeId) -> Result<Self> {
         ensure!(
             snapshot.id() == worktree_id,
@@ -8652,7 +8886,7 @@ impl GradleDefaultImportRootsQuery {
             entries,
             candidates,
             parameters: lsp::ExecuteCommandParams {
-                command: "groovy.gradle.defaultImportRoots".into(),
+                command: GRADLE_DEFAULT_IMPORT_ROOTS.into(),
                 arguments: vec![json!({
                     "rootUri": root_uri,
                     "candidateBuildFileUris": candidate_uris,
@@ -8687,11 +8921,38 @@ impl GradleDefaultImportRootsQuery {
         server: Arc<LanguageServer>,
         request_timeout: Duration,
     ) -> Result<BTreeSet<PathBuf>> {
+        if advertises_jdtls_command(&server, GRADLE_DEFAULT_IMPORT_STATE) {
+            return self
+                .query_import_state(server, request_timeout)
+                .await
+                .map(|(_, roots)| roots);
+        }
         let response = request_selected_jdtls_phase(
             server, &self.parameters, request_timeout, "Gradle", "default-root discovery",
             "Gradle default-root discovery failed; check extension/JDTLS setup and current build files, then refresh before retrying",
         ).await?;
         self.validate_response(response)
+    }
+
+    pub(crate) async fn query_import_state(
+        &self,
+        server: Arc<LanguageServer>,
+        request_timeout: Duration,
+    ) -> Result<(bool, BTreeSet<PathBuf>)> {
+        let parameters = lsp::ExecuteCommandParams {
+            command: GRADLE_DEFAULT_IMPORT_STATE.into(),
+            ..self.parameters.clone()
+        };
+        let response = request_selected_jdtls_phase(
+            server, &parameters, request_timeout, "Gradle", "default-root discovery",
+            "Gradle default-root discovery failed; check extension/JDTLS setup and current build files, then refresh before retrying",
+        ).await?;
+        let (enabled, roots) = decode_default_import_state(response, || {
+            anyhow::anyhow!(
+                "Gradle importer state is invalid; update the JVM provider and refresh before retrying"
+            )
+        })?;
+        Ok((enabled, self.validate_response(roots)?))
     }
 
     fn validate_response(&self, response: Value) -> Result<BTreeSet<PathBuf>> {
@@ -10827,6 +11088,50 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn plain_java_startup_captures_visible_descriptions_and_rejects_foreign_receipts(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (_, project) = default_root_fixture(
+            "/plain-startup",
+            json!({
+                "plain": {".project": "description", ".classpath": "classpath"},
+                "unpaired": {".project": "description"},
+                "nested": {"other": {".project": "description", ".classpath": "classpath"}}
+            }),
+            cx,
+        )
+        .await;
+        let snapshot = default_root_snapshot(&project, cx);
+        let import = PlainJavaStartupImport::new(&snapshot, PathBuf::from("/plain-startup/plain"))
+            .expect("plain scope");
+        assert_eq!(
+            import.parameters.arguments,
+            [json!({
+                "rootUri": "file:///plain-startup/plain/",
+                "descriptionUris": ["file:///plain-startup/plain/.project"],
+            })]
+        );
+        let receipt = |projects: &[&str]| {
+            json!({
+                "version": 1,
+                "rootUri": "file:///plain-startup/plain/",
+                "importedProjectUris": projects,
+            })
+        };
+        assert!(
+            import
+                .validate_receipt(receipt(&["file:///plain-startup/plain/"]))
+                .is_ok()
+        );
+        assert!(
+            import
+                .validate_receipt(receipt(&["file:///plain-startup/nested/other/"]))
+                .is_err()
+        );
+        assert!(import.validate_current(&snapshot).is_ok());
+    }
+
+    #[gpui::test]
     async fn default_maven_candidates_preserve_intent_and_retire_obsolete_phase_facts(
         cx: &mut gpui::TestAppContext,
     ) {
@@ -12467,7 +12772,7 @@ mod tests {
         assert_eq!(
             controlled,
             Some(
-                json!({"bundles": ["fixture-bundle"], "settings": {"java": {"import": {
+                json!({"bundles": ["fixture-bundle"], "projectConfigurations": [], "settings": {"java": {"import": {
             "maven": {"enabled": false, "offline": {"enabled": true}},
             "gradle": {"enabled": true, "home": "fixture-home"}
         }}, "java.import.maven.enabled": false, "java_home": "fixture-jdk"}})
@@ -12476,7 +12781,7 @@ mod tests {
     }
 
     #[test]
-    fn startup_controls_suppress_fresh_metadata_only_for_joint_saved_intent() {
+    fn startup_controls_suppress_fresh_metadata_for_saved_intent() {
         for (maven, gradle) in [(false, false), (true, false), (false, true), (true, true)] {
             let controls = JvmStartupImportControls { maven, gradle };
             let original = json!({"bundles": ["fixture-bundle"], "settings": {"java": {
@@ -12490,7 +12795,7 @@ mod tests {
             let options = options.expect("original options");
             assert_eq!(
                 options.get("projectConfigurations"),
-                (maven && gradle).then(|| json!([])).as_ref()
+                (maven || gradle).then(|| json!([])).as_ref()
             );
             assert_eq!(options["bundles"], original["bundles"]);
             assert_eq!(options["fixture"], original["fixture"]);
@@ -15747,6 +16052,12 @@ mod tests {
         );
         let response = json!({"version":1,"rootUri":uri(root,true),"buildRootUris":[uri(root,true)],
             "cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false});
+        for enabled in [json!(null), json!("false"), json!(0)] {
+            let mut invalid = response.clone();
+            invalid["version"] = json!(2);
+            invalid["importEnabled"] = enabled;
+            assert!(decode_default_import_state(invalid, || anyhow::anyhow!("invalid")).is_err());
+        }
         assert_eq!(
             query
                 .validate_response(response.clone())
@@ -15904,13 +16215,17 @@ mod tests {
         )
         .await;
         let snapshot = default_root_snapshot(&project, cx);
-        for supported in [false, true] {
+        for version in [0, 1, 2] {
             let selection =
                 GradleDefaultImportRootsQuery::new(&snapshot, snapshot.id()).expect("query");
-            let receipt = json!({"version":1,"rootUri":selected_import_uri(root,true).expect("root URI"),
+            let mut receipt = json!({"version":version,"rootUri":selected_import_uri(root,true).expect("root URI"),
                 "buildRootUris":[selected_import_uri(root,true).expect("build URI")],
                 "cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false});
-            let expected = selection.parameters.clone();
+            let mut expected = selection.parameters.clone();
+            if version == 2 {
+                expected.command = GRADLE_DEFAULT_IMPORT_STATE.into();
+                receipt["importEnabled"] = json!(false);
+            }
             let requests = Arc::new(AtomicUsize::new(0));
             let mode = Arc::new(AtomicUsize::new(0));
             let cancelled = Arc::new(AtomicUsize::new(0));
@@ -15925,7 +16240,7 @@ mod tests {
                 "jdtls".into(),
                 lsp::ServerCapabilities {
                     execute_command_provider: Some(lsp::ExecuteCommandOptions {
-                        commands: vec![if supported {
+                        commands: vec![if version != 0 {
                             expected.command.clone()
                         } else {
                             "java.project.changeImportedProjects".into()
@@ -15980,7 +16295,7 @@ mod tests {
                 })
                 .await
                 .expect("initialized fake");
-            if !supported {
+            if version == 0 {
                 let message = selection
                     .query(server, Duration::from_secs(10))
                     .await
@@ -15990,10 +16305,29 @@ mod tests {
                 assert_eq!(requests.load(Ordering::SeqCst), 0);
                 continue;
             }
-            selection
+            assert!(GradleDefaultImportRootsQuery::is_supported(&server));
+            if version == 1 {
+                assert!(
+                    selection
+                        .query_import_state(server.clone(), Duration::from_secs(10))
+                        .await
+                        .is_err()
+                );
+                assert_eq!(requests.load(Ordering::SeqCst), 0);
+            }
+            let roots = selection
                 .query(server.clone(), Duration::from_secs(10))
                 .await
                 .expect("captured phase");
+            assert_eq!(roots, BTreeSet::from([root.to_path_buf()]));
+            if version == 2 {
+                let (enabled, state_roots) = selection
+                    .query_import_state(server.clone(), Duration::from_secs(10))
+                    .await
+                    .expect("disabled importer with known roots");
+                assert!(!enabled);
+                assert_eq!(state_roots, roots);
+            }
             for current_mode in 1..=4 {
                 mode.store(current_mode, Ordering::SeqCst);
                 let message = selection
@@ -16027,7 +16361,10 @@ mod tests {
                 .query(server, Duration::from_secs(10))
                 .await
                 .expect("recovery after timeout/drop");
-            assert_eq!(requests.load(Ordering::SeqCst), 7);
+            assert_eq!(
+                requests.load(Ordering::SeqCst),
+                7 + usize::from(version == 2)
+            );
         }
     }
 
@@ -16208,6 +16545,19 @@ mod tests {
         cx.run_until_parked();
         let current = default_root_snapshot(&project, cx);
         assert!(query.validate_current(&current, current.id()).is_err());
+        let query = MavenDefaultImportRootsQuery::new(&current, current.id()).expect("fresh query");
+        fs.insert_tree(
+            root,
+            json!({"pom.xml":"<project><name>replaced</name></project>"}),
+        )
+        .await;
+        cx.run_until_parked();
+        let replaced = default_root_snapshot(&project, cx);
+        assert_eq!(
+            default_maven_import_inputs(&replaced, replaced.id()).expect("same candidate paths"),
+            query.inputs
+        );
+        assert!(query.validate_current(&replaced, replaced.id()).is_err());
     }
 
     #[gpui::test]
@@ -16228,12 +16578,16 @@ mod tests {
         .await;
         let snapshot = default_root_snapshot(&project, cx);
         let query = MavenDefaultImportRootsQuery::new(&snapshot, snapshot.id()).expect("query");
-        for supported in [false, true] {
-            let response = json!({"version":1,"rootUri":selected_import_uri(root,true).expect("root URI"),"rootPomUris":[selected_import_uri(&root.join("pom.xml"),false).expect("POM URI")],
+        for version in [0, 1, 2] {
+            let mut response = json!({"version":version,"rootUri":selected_import_uri(root,true).expect("root URI"),"rootPomUris":[selected_import_uri(&root.join("pom.xml"),false).expect("POM URI")],
                 "retainedPomUris":[],"cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false});
             let requests = Arc::new(AtomicUsize::new(0));
             let mode = Arc::new(AtomicUsize::new(0));
-            let expected = query.parameters.clone();
+            let mut expected = query.parameters.clone();
+            if version == 2 {
+                expected.command = MAVEN_DEFAULT_IMPORT_STATE.into();
+                response["importEnabled"] = json!(true);
+            }
             let (server, fake) = lsp::FakeLanguageServer::new(
                 LanguageServerId(0),
                 LanguageServerBinary {
@@ -16244,7 +16598,7 @@ mod tests {
                 "jdtls".into(),
                 lsp::ServerCapabilities {
                     execute_command_provider: Some(lsp::ExecuteCommandOptions {
-                        commands: vec![if supported {
+                        commands: vec![if version != 0 {
                             expected.command.clone()
                         } else {
                             "groovy.maven.importReactor".into()
@@ -16287,11 +16641,30 @@ mod tests {
                 })
                 .await
                 .expect("initialized");
-            if supported {
-                query
+            if version != 0 {
+                assert!(MavenDefaultImportRootsQuery::is_supported(&server));
+                if version == 1 {
+                    assert!(
+                        query
+                            .query_import_state(server.clone(), Duration::from_secs(10))
+                            .await
+                            .is_err()
+                    );
+                    assert_eq!(requests.load(Ordering::SeqCst), 0);
+                }
+                let roots = query
                     .query(server.clone(), Duration::from_secs(10))
                     .await
                     .expect("read");
+                assert_eq!(roots.poms, BTreeSet::from([root.join("pom.xml")]));
+                if version == 2 {
+                    let (enabled, state_roots) = query
+                        .query_import_state(server.clone(), Duration::from_secs(10))
+                        .await
+                        .expect("enabled importer with known roots");
+                    assert!(enabled);
+                    assert_eq!(state_roots, roots);
+                }
                 for failure in 1..=3 {
                     mode.store(failure, Ordering::SeqCst);
                     let message = format!(
@@ -16307,7 +16680,10 @@ mod tests {
                             && !message.contains("token")
                     );
                 }
-                assert_eq!(requests.load(Ordering::SeqCst), 4);
+                assert_eq!(
+                    requests.load(Ordering::SeqCst),
+                    4 + usize::from(version == 2)
+                );
             } else {
                 assert!(
                     query

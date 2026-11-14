@@ -17,6 +17,7 @@
     </delegateCommandHandler>
     <delegateCommandHandler class="dev.made.groovy.GradleImportHandler">
       <command id="groovy.gradle.defaultImportRoots"/>
+      <command id="groovy.gradle.defaultImportRoots.v2"/>
       <command id="groovy.gradle.importSelected"/>
       <command id="groovy.gradle.importSelected.v2"/>
       <command id="groovy.gradle.applyModuleStates"/>
@@ -30,11 +31,13 @@
     </delegateCommandHandler>
     <delegateCommandHandler class="dev.made.groovy.MavenImportHandler">
       <command id="groovy.maven.defaultImportRoots"/>
+      <command id="groovy.maven.defaultImportRoots.v2"/>
       <command id="groovy.maven.importSelected"/>
       <command id="groovy.maven.importReactor"/>
       <command id="groovy.maven.importReactorWithMasks"/>
     </delegateCommandHandler>
     <delegateCommandHandler class="dev.made.groovy.ProjectUnlinkHandler">
+      <command id="groovy.java.importPlainProjects"/>
       <command id="groovy.maven.importedProjects"/>
       <command id="groovy.gradle.importedProjects"/>
       <command id="groovy.gradle.importedBuildRoots"/>

@@ -3082,6 +3082,8 @@ def probe_startup_controls(arguments):
         "Required modules, ignore patterns, orphan handling, Tasks/Tests/Debug remain unqualified",
     ]}
     modules = {}
+    plain_metadata = (arguments.single_provider_configurations_only or arguments.single_provider_replay_only
+                      or arguments.workspace_scoped_root_only)
     for name, script in [("inputs", "build-groovy-gradle-provider.py"),
                          ("resources", "test-groovy-maven-model-provider.py")]:
         specification = importlib.util.spec_from_file_location(name, REPOSITORY / "script" / script)
@@ -3136,7 +3138,7 @@ def probe_startup_controls(arguments):
         if arguments.startup_configurations_only or arguments.workspace_scoped_import_only:
             build_file = gradle / "build.gradle"
             build_file.write_text(build_file.read_text() + "tasks.register('unrequestedRootDefault') { doLast { file('unrequested-root-task.marker').text = 'ran' } }\ndefaultTasks 'unrequestedRootDefault'\n")
-        if arguments.single_provider_configurations_only or arguments.workspace_scoped_root_only:
+        if plain_metadata:
             plain = root / "plain"
             (plain / "src/evidence").mkdir(parents=True)
             (plain / "src/evidence/Plain.java").write_text("package evidence; public class Plain {}\n")
@@ -3149,6 +3151,15 @@ def probe_startup_controls(arguments):
                 '<classpath><classpathentry kind="src" path="src"/>'
                 '<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>'
                 '<classpathentry kind="output" path="bin"/></classpath>\n'
+            )
+        if arguments.single_provider_replay_only:
+            loose = root / "loose/src/evidence"
+            loose.mkdir(parents=True)
+            (loose / "Loose.java").write_text(
+                "package evidence; public class Loose { String use() { return Helper.message(); } }\n"
+            )
+            (loose / "Helper.java").write_text(
+                'package evidence; public class Helper { static String message() { return "ok"; } }\n'
             )
         if arguments.workspace_scoped_details_only:
             with (gradle / "build.gradle").open("a") as build:
@@ -3195,7 +3206,7 @@ def probe_startup_controls(arguments):
         def preserve_sources(label):
             for relative, digest in originals.items():
                 path = root / relative
-                if (arguments.single_provider_configurations_only or arguments.workspace_scoped_root_only) and relative in {"plain/.project", "plain/.classpath"}:
+                if plain_metadata and relative in {"plain/.project", "plain/.classpath"}:
                     import re
                     import xml.etree.ElementTree as xml
 
@@ -3299,7 +3310,91 @@ def probe_startup_controls(arguments):
             journey["states"].append({"label": label, "expectedJava": sorted(expected_java) if expected_java is not None else None, "expectedResources": sorted(expected_resources) if expected_resources is not None else None, "samples": samples})
             raise AssertionError("Mixed startup membership differs: " + label)
 
-        def run(label, data, enabled, expected_java, expected_resources, repair=False, reuse_fixture=None, folders=None, linked_actions=False, identity_reads=False, ownership_actions=False, metadata_exclusion=False, metadata_actions=False, root_actions=False, configurations=None):
+        def replay_default(client, label, journey, name, enabled, java, resources):
+            build = root / name
+            scope = build if label.startswith("replay-loose-") else root
+            if name == "maven":
+                candidates = [build / relative for relative in ["pom.xml", "application/pom.xml", "library/pom.xml"]]
+                candidate_field = "candidatePomUris"
+                root_field = "rootPomUris"
+                expected_root = candidates[0]
+            else:
+                candidates = [build / relative for relative in ["settings.gradle", "build.gradle", "application/build.gradle", "library/build.gradle"]]
+                candidate_field = "candidateBuildFileUris"
+                root_field = "buildRootUris"
+                expected_root = build
+            request = {"command": f"groovy.{name}.defaultImportRoots.v2", "arguments": [{
+                "rootUri": scope.as_uri(), candidate_field: [path.as_uri() for path in candidates], "cachedOnly": True,
+            }]}
+            facts = client.request("workspace/executeCommand", request, timeout=60)
+            journey["commands"].append({"request": request, "reply": facts})
+            expected_roots = {expected_root.as_uri()}
+            if name == "maven":
+                retained = {path.as_uri() for path in candidates if path.parent.relative_to(root).as_posix() in resources}
+                if set(facts.get("retainedPomUris", [])) != retained:
+                    raise AssertionError("Replay importer facts disagree with current retained Maven ownership")
+                expected_roots.update(retained)
+            if (facts.get("version") != 2 or facts.get("rootUri") != scope.as_uri() + "/"
+                    or facts.get("importEnabled") is not enabled
+                    or facts.get("cachedOnly") is not True or facts.get("readOnly") is not True
+                    or facts.get("partial") is not False or facts.get("fullSynchronizationKnown") is not False
+                    or {uri.rstrip("/") for uri in facts[root_field]} != expected_roots):
+                raise AssertionError("Replay importer facts differ from the expected effective flag and roots")
+            receipt["checks"].append(label + ": observed exact cached roots and effective importer state")
+            if enabled:
+                if name == "maven":
+                    imported_poms = set(facts["retainedPomUris"])
+                    for pom_uri in sorted(facts["rootPomUris"], key=lambda uri: (uri.count("/"), uri)):
+                        if pom_uri in imported_poms:
+                            continue
+                        request = {"command": "groovy.maven.importReactor", "arguments": [{
+                            "rootUri": root.as_uri(), "pomUri": pom_uri,
+                            "excludedProjectUris": [], "offline": True,
+                        }]}
+                        reply = client.request("workspace/executeCommand", request, timeout=100)
+                        journey["commands"].append({"request": request, "reply": reply})
+                        expected = {"version": 1, "rootUri": root.as_uri() + "/", "reactorPomUri": pom_uri,
+                                    "excludedProjectUris": [], "selectedImportPhaseComplete": True,
+                                    "fullSynchronizationKnown": False}
+                        if ({key: value for key, value in reply.items() if key != "importedPomUris"} != expected
+                                or set(reply.get("importedPomUris", [])) != {path.as_uri() for path in candidates}):
+                            raise AssertionError("Maven startup reactor returned unexpected membership or scope")
+                        imported_poms.update(reply["importedPomUris"])
+                else:
+                    request = {"command": "groovy.gradle.importSelected.v2", "arguments": [{
+                        "workspaceRootUri": root.as_uri(), "buildRootUri": build.as_uri(), "offline": True,
+                    }]}
+                    reply = client.request("workspace/executeCommand", request, timeout=100)
+                    journey["commands"].append({"request": request, "reply": reply})
+                    if reply != {"version": 2, "workspaceRootUri": root.as_uri() + "/",
+                                 "buildRootUri": build.as_uri() + "/", "selectedImportPhaseComplete": True,
+                                 "fullSynchronizationKnown": False}:
+                        raise AssertionError("Scoped Gradle startup import returned unexpected authority")
+                java |= maven_java if name == "maven" else gradle_java
+                resources |= maven_resources if name == "maven" else gradle_resources
+            await_membership(client, java, resources, journey, label + ": replay preserves exact unrelated membership")
+
+        def qualify_loose_java(client, journey, label):
+            source = root / "loose/src/evidence/Loose.java"
+            helper = source.with_name("Helper.java")
+            text = source.read_text()
+            client.notify("textDocument/didOpen", {"textDocument": {
+                "uri": source.as_uri(), "languageId": "java", "version": 1, "text": text,
+            }})
+            request = {"textDocument": {"uri": source.as_uri()},
+                       "position": {"line": 0, "character": text.index("Helper") + 2}}
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                definitions = client.request("textDocument/definition", request, timeout=15)
+                locations = definitions if isinstance(definitions, list) else [definitions] if definitions else []
+                journey.setdefault("looseJavaDefinitions", []).append(locations)
+                if any(location.get("uri", location.get("targetUri")) == helper.as_uri() for location in locations):
+                    receipt["checks"].append(label + ": loose Java resolves a second source without Eclipse metadata")
+                    return
+                time.sleep(0.25)
+            raise AssertionError("Loose Java could not resolve the other source after startup")
+
+        def run(label, data, enabled, expected_java, expected_resources, repair=False, reuse_fixture=None, folders=None, linked_actions=False, identity_reads=False, ownership_actions=False, metadata_exclusion=False, metadata_actions=False, root_actions=False, configurations=None, replay_provider=None):
             nonlocal root, maven, gradle
             scoped_policy_cold = arguments.workspace_scoped_policy_only and label.endswith("restart")
             if arguments.workspace_scoped_root_only and label.endswith("restart"):
@@ -3347,6 +3442,39 @@ def probe_startup_controls(arguments):
                 receipt["checks"].append(label + ": advertised guarded provider commands")
                 client.notify("initialized", {})
                 await_membership(client, expected_java, expected_resources, journey, label + ": stable startup membership")
+                if replay_provider is not None:
+                    plain = root / "plain/.project"
+                    def plain_import(scope, files):
+                        return {"command": "groovy.java.importPlainProjects", "arguments": [{
+                            "rootUri": scope.as_uri(), "descriptionUris": [file.as_uri() for file in files],
+                        }]}
+
+                    for scope, files in [(root / "plain", [plain, plain]), (root / "plain", [maven / "application/.project"])]:
+                        expect_failure(client, plain_import(scope, files), "Plain Java startup import failed", str(root))
+                        receipt["checks"].append(label + ": rejects duplicate or foreign descriptions")
+                    for scope, files in [(maven, sorted(maven.rglob(".project"))),
+                                         (gradle, sorted(gradle.rglob(".project"))), (root / "plain", [plain])]:
+                        request = plain_import(scope, files)
+                        reply = client.request("workspace/executeCommand", request, timeout=60)
+                        journey["commands"].append({"request": request, "reply": reply})
+                        expected = [scope.as_uri() + "/"] if scope == plain.parent and "plain" not in expected_java else []
+                        if reply != {"version": 1, "rootUri": scope.as_uri() + "/", "importedProjectUris": expected}:
+                            raise AssertionError("Guarded Java replay admitted unexpected metadata")
+                        receipt["checks"].append(label + ": exact plain Java import receipt")
+                    java = expected_java | {"plain"}
+                    resources = expected_resources | {"plain"}
+                    await_membership(client, java, resources, journey, label + ": exact plain Java replay")
+                    replay_default(client, label, journey, replay_provider, enabled.get(replay_provider, True), java, resources)
+                    if label.startswith("replay-fresh-disabled-"):
+                        configuration["java"]["import"][replay_provider].pop("enabled")
+                        client.notify("workspace/didChangeConfiguration", {"settings": configuration})
+                        replay_default(client, label + ": after live settings removal", journey,
+                                       replay_provider, False, java, resources)
+                    if label.startswith("replay-loose-"):
+                        qualify_loose_java(client, journey, label)
+                        client.notify("textDocument/didClose", {"textDocument": {
+                            "uri": (root / "loose/src/evidence/Loose.java").as_uri(),
+                        }})
                 if arguments.workspace_scoped_import_only and label.startswith("scoped-import-audit"):
                     if "groovy.gradle.importSelected.v2" not in commands:
                         raise AssertionError("Scoped Gradle import command is unavailable")
@@ -4998,6 +5126,33 @@ def probe_startup_controls(arguments):
                 arguments.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
 
         try:
+            if arguments.single_provider_replay_only:
+                folders = ["", "maven", "gradle", "plain", "loose"]
+                seed = workspace / "replay-seed-profile"
+                run("replay-seed", seed, {"maven": False, "gradle": False}, set(), set(),
+                    configurations=[], repair=True, folders=folders)
+                retained = fixtures_by_profile[seed]
+                for name, java, resources in [("maven", maven_java, maven_resources),
+                                              ("gradle", gradle_java, gradle_resources)]:
+                    data = workspace / ("replay-" + name + "-profile")
+                    run("replay-enabled-" + name, data, {"maven": name == "maven", "gradle": name == "gradle"},
+                        set(), set(), configurations=[], reuse_fixture=retained, folders=folders, replay_provider=name)
+                    run("replay-retained-disabled-" + name, data, {"maven": False, "gradle": False},
+                        java | {"plain"}, resources | {"plain"}, configurations=[], reuse_fixture=retained,
+                        folders=folders, replay_provider=name)
+                    disabled_profile = workspace / ("disabled-" + name + "-profile")
+                    run("replay-fresh-disabled-" + name, disabled_profile,
+                        {"maven": False, "gradle": False}, set(), set(), configurations=[], reuse_fixture=retained,
+                        folders=folders, replay_provider=name)
+                    controlled = "maven" if name == "gradle" else "gradle"
+                    run("replay-restarted-after-removal-" + name, disabled_profile, {controlled: False},
+                        {"plain"}, {"plain"}, configurations=[], reuse_fixture=retained,
+                        folders=folders, replay_provider=name)
+                    run("replay-loose-" + name, workspace / ("loose-" + name + "-profile"),
+                        {"maven": False, "gradle": False}, set(), set(), configurations=[], reuse_fixture=retained,
+                        folders=folders[1:], replay_provider=name)
+                receipt["limits"].append("Headless replay with known Eclipse descriptions and an initialized worktree root. Mounted editor discovery, installed-combination behavior and physical platforms have separate evidence.")
+                return
             if arguments.workspace_scoped_import_only:
                 seed = workspace / "scoped-import-seed-profile"
                 run("scoped-import-seed", seed, {"maven": False, "gradle": False}, set(), set(),
@@ -5138,6 +5293,340 @@ def probe_startup_controls(arguments):
             if stopped.returncode:
                 raise RuntimeError("Isolated owned Gradle worker shutdown failed")
     print(json.dumps(receipt, indent=2))
+
+
+def probe_default_import_enablement(arguments):
+    from urllib.parse import unquote, urlparse
+
+    provider = arguments.provider.resolve()
+    if hashlib.sha256(provider.read_bytes()).hexdigest() != arguments.sha256:
+        raise AssertionError("Provider binary differs from the source build")
+    specification = importlib.util.spec_from_file_location(
+        "groovy_import_state_fixture", REPOSITORY / "script/test-groovy-maven-model-provider.py"
+    )
+    if specification is None or specification.loader is None:
+        raise RuntimeError("Cannot load the existing default-root fixture owner")
+    fixture = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(fixture)
+    evidence = arguments.receipt.parent
+    evidence.mkdir(parents=True, exist_ok=True)
+    receipt = {"provider_sha256": arguments.sha256, "checks": [], "journeys": [], "limits": [
+        "Headless provider-root/import-state contract only; not product startup, remote, native or release qualification",
+        "Static full-root cases and dynamic empty-root cases are separate; dynamic settings can legitimately schedule SDK work",
+        "No Tasks, tests, Debug, dependency resolution or Gradle worker is requested",
+    ]}
+
+    with tempfile.TemporaryDirectory(prefix="groovy-import-enablement-") as directory:
+        workspace = Path(directory).resolve()
+        full = workspace / "full-projects"
+        empty = workspace / "empty-projects"
+        empty.mkdir()
+        pom = full / "maven/aggregate/pom.xml"
+        pom.parent.mkdir(parents=True)
+        pom.write_text('<project><modelVersion>4.0.0</modelVersion><groupId>dev.made.fixture</groupId>'
+                       '<artifactId>import-state</artifactId><version>1</version><packaging>pom</packaging></project>\n')
+        script = full / "gradle/aggregate/build.gradle"
+        script.parent.mkdir(parents=True)
+        script.write_text("new File(rootDir, 'forbidden-import').text='executed'\nthrow new GradleException('must not execute')\n")
+        sentinel = full / "gradle/aggregate/build/generated/Sentinel.java"
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text("class Sentinel {}\n")
+        originals = {path: path.read_bytes() for path in [pom, script, sentinel]}
+        receipt["sourceSha256"] = {str(path.relative_to(workspace)): hashlib.sha256(data).hexdigest()
+                                   for path, data in originals.items()}
+        repository = workspace / "repository"
+        shutil.copytree(arguments.maven_repository.resolve(), repository, copy_function=shutil.copy2,
+                        ignore=shutil.ignore_patterns("*.lock"))
+        from xml.sax.saxutils import escape
+        settings_file = workspace / "settings.xml"
+        settings_file.write_text('<settings><offline>true</offline><localRepository>'
+                                 + escape(str(repository)) + '</localRepository></settings>')
+        settings_hash = hashlib.sha256(settings_file.read_bytes()).hexdigest()
+        home = workspace / "owned-gradle-home"
+        home.mkdir()
+        bundle_directory = workspace / "fixture-bundle"
+        bundle_directory.mkdir()
+        try:
+            bundle, source = fixture.unlink_fixture_bundle(arguments, bundle_directory,
+                                                           default_root_modes=True, import_state_modes=True)
+        except subprocess.CalledProcessError as failure:
+            (evidence / "UnlinkFixtureHandler.java").write_bytes((bundle_directory / "UnlinkFixtureHandler.java").read_bytes())
+            (evidence / "fixture-compilation.log").write_bytes((failure.stdout or b"") + (failure.stderr or b""))
+            receipt.update(status="fixture_compile_failed", fixtureCompileExitCode=failure.returncode)
+            arguments.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+            raise
+        (evidence / "UnlinkFixtureHandler.java").write_bytes(source.read_bytes())
+        receipt["fixtureBundleSha256"] = hashlib.sha256(bundle.read_bytes()).hexdigest()
+        base_settings = {"java": {
+            "autobuild": {"enabled": False},
+            "configuration": {"maven": {"userSettings": str(settings_file)}, "updateBuildConfiguration": "disabled"},
+            "import": {"maven": {"offline": {"enabled": True}}, "gradle": {
+                "offline": {"enabled": True}, "wrapper": {"enabled": False},
+                "home": str(arguments.gradle_home.resolve()),
+                "java": {"home": str(arguments.gradle_java_home.resolve())},
+                "user": {"home": str(home)}, "arguments": ["--offline"],
+            }},
+        }}
+
+        def configuration(maven, gradle):
+            value = json.loads(json.dumps(base_settings))
+            value["java"]["import"]["maven"]["enabled"] = maven
+            value["java"]["import"]["gradle"]["enabled"] = gradle
+            return value
+
+        def parameters(provider_name, project_root, candidates=None):
+            if candidates is None:
+                candidates = ([pom] if provider_name == "maven" else [script]) if project_root == full else []
+            field = "candidatePomUris" if provider_name == "maven" else "candidateBuildFileUris"
+            return {"rootUri": project_root.as_uri(), field: [path.as_uri() for path in candidates], "cachedOnly": True}
+
+        def check_sources():
+            if any(not path.is_file() or path.read_bytes() != data for path, data in originals.items()):
+                raise AssertionError("Import-state discovery changed source or generated inputs")
+            if hashlib.sha256(settings_file.read_bytes()).hexdigest() != settings_hash:
+                raise AssertionError("Import-state discovery changed host settings")
+            if any(workspace.rglob("forbidden-import")) or any(home.iterdir()):
+                raise AssertionError("Import-state discovery executed a script or initialized owned Gradle workers/caches")
+
+        def run(label, project_root, data, settings, expected, dynamic=False):
+            journey = {"label": label, "emptyRoot": project_root == empty, "reads": [], "passed": False}
+            receipt["journeys"].append(journey)
+            client = client_class()(arguments.launcher.resolve(), arguments.java_home.resolve(), project_root, data,
+                                    deny_external_network=True, gradle_user_home=home)
+
+            def execute(name, request):
+                return client.request("workspace/executeCommand", {"command": name, "arguments": [request]}, timeout=60)
+
+            def state(provider_name, enabled, stage, candidates=None):
+                command = "groovy." + provider_name + ".defaultImportRoots"
+                oracle_name = "defaultRootsOracle" if provider_name == "maven" else "gradleDefaultRootsOracle"
+                oracle_field = "automaticMavenImportEnabled" if provider_name == "maven" else "automaticGradleImportEnabled"
+                request = parameters(provider_name, project_root, candidates)
+                deadline = time.monotonic() + 15
+                while True:
+                    oracle = execute("groovy.fixture.unlink." + oracle_name, {"rootUri": project_root.as_uri()})
+                    if oracle.get(oracle_field) is enabled:
+                        break
+                    journey.setdefault("settingTransitions", []).append({"stage": stage, "provider": provider_name, "oracle": oracle})
+                    if time.monotonic() >= deadline:
+                        raise AssertionError("Actual SDK importer setting did not reach the requested value")
+                    time.sleep(0.05)
+                legacy = execute(command, request)
+                response = execute(command + ".v2", request)
+                journey["reads"].append({"stage": stage, "provider": provider_name,
+                                          "request": request, "oracle": oracle, "legacy": legacy, "response": response})
+                expected_response = {**legacy, "version": 2, "importEnabled": enabled}
+                if (response != expected_response or type(response.get("version")) is not int
+                        or type(response.get("importEnabled")) is not bool):
+                    raise AssertionError("V2 importer state or legacy root projection differs")
+                if (type(legacy.get("version")) is not int or legacy["version"] != 1
+                        or legacy.get("cachedOnly") is not True or legacy.get("readOnly") is not True
+                        or legacy.get("partial") is not False or legacy.get("fullSynchronizationKnown") is not False
+                        or legacy.get("rootUri") != project_root.as_uri() + "/"):
+                    raise AssertionError("Legacy default-root envelope differs or overclaims")
+                required = {"version", "rootUri", "cachedOnly", "readOnly", "partial", "fullSynchronizationKnown"}
+                candidate_paths = [Path(unquote(urlparse(uri).path)) for uri in request[
+                    "candidatePomUris" if provider_name == "maven" else "candidateBuildFileUris"]]
+                oracle_directories = {Path(unquote(urlparse(uri).path)) for uri in oracle["directories"]}
+                if provider_name == "maven":
+                    required |= {"rootPomUris", "retainedPomUris"}
+                    if (legacy.get("retainedPomUris") != [] or set(legacy.get("rootPomUris", []))
+                            != {path.as_uri() for path in candidate_paths if path.parent in oracle_directories}):
+                        raise AssertionError("Maven roots differ from the independent scanner without imported resources")
+                else:
+                    required.add("buildRootUris")
+                    if {uri.rstrip("/") for uri in legacy.get("buildRootUris", [])} != {
+                            path.parent.as_uri() for path in candidate_paths if path.parent in oracle_directories}:
+                        raise AssertionError("Gradle roots differ from the independent scanner without imported resources")
+                if set(legacy) != required:
+                    raise AssertionError("Default-root response fields differ")
+                if fixture.imported_resource_membership(client, project_root):
+                    raise AssertionError("Read-only importer-state qualification imported a project")
+                check_sources()
+                receipt["checks"].append(label + ": " + stage + " " + provider_name + " exact v1/v2/SDK state without import")
+                return response
+
+            def notify_and_check(value, flags, stage):
+                client.notify("workspace/didChangeConfiguration", {"settings": value})
+                for provider_name, enabled in zip(["maven", "gradle"], flags):
+                    state(provider_name, enabled, stage)
+
+            def held(provider_name, control):
+                notify_and_check(configuration(False, False), (False, False), "before held " + control)
+                paths = {name: project_root.parent / ("import-state-" + provider_name + "-" + name)
+                         for name in ["started", "release", "finished"]}
+                for path in paths.values():
+                    path.unlink(missing_ok=True)
+                candidate = project_root / "held" / ("pom.xml" if provider_name == "maven" else "build.gradle")
+                if control == "input":
+                    candidate.parent.mkdir(exist_ok=True)
+                    candidate.write_text("<project/>" if provider_name == "maven" else "must not execute")
+                selected = [candidate] if control == "input" else []
+                request_id = client.next_id
+                client.next_id += 1
+                client.send({"jsonrpc": "2.0", "id": request_id, "method": "workspace/executeCommand", "params": {
+                    "command": "groovy.fixture.unlink.heldDefaultImportState", "arguments": [{
+                        "rootUri": project_root.as_uri(), "provider": provider_name,
+                        "parameters": parameters(provider_name, project_root, selected),
+                    }],
+                }})
+                observation = {"provider": provider_name, "control": control, "requestId": request_id}
+                journey.setdefault("held", []).append(observation)
+                try:
+                    deadline = time.monotonic() + 10
+                    while not paths["started"].exists() and time.monotonic() < deadline:
+                        if client.process.poll() is not None:
+                            raise AssertionError("SDK exited before the held default-root read")
+                        time.sleep(0.02)
+                    if not paths["started"].exists():
+                        try:
+                            observation["responseBeforeGate"] = client.receive_response(request_id, "default-root gate", timeout=1)
+                        except (RuntimeError, TimeoutError, EOFError) as failure:
+                            observation["errorBeforeGate"] = str(failure)
+                        raise AssertionError("Actual production default-root monitor did not reach the fixture gate")
+                    if control == "settings":
+                        flags = (True, False) if provider_name == "maven" else (False, True)
+                        client.notify("workspace/didChangeConfiguration", {"settings": configuration(*flags)})
+                        oracle_name = "defaultRootsOracle" if provider_name == "maven" else "gradleDefaultRootsOracle"
+                        field = "automaticMavenImportEnabled" if provider_name == "maven" else "automaticGradleImportEnabled"
+                        deadline = time.monotonic() + 10
+                        while True:
+                            oracle = execute("groovy.fixture.unlink." + oracle_name, {"rootUri": project_root.as_uri()})
+                            observation["appliedSettingOracle"] = oracle
+                            if oracle.get(field) is True:
+                                break
+                            if time.monotonic() >= deadline:
+                                raise AssertionError("Real settings notification did not apply during the held read")
+                            time.sleep(0.05)
+                    elif control == "cancel":
+                        client.notify("$/cancelRequest", {"id": request_id})
+                    else:
+                        candidate.unlink()
+                    paths["release"].write_text("release\n")
+                    try:
+                        response = client.receive_response(request_id, "held default-root read", timeout=60)
+                    except RuntimeError as failure:
+                        message = str(failure)
+                        observation["error"] = message
+                        rpc_cancelled = control == "cancel" and "'code': -32800" in message and "cancel" in message.lower()
+                        if (("default-root import settings" not in message and not rpc_cancelled) or str(workspace) in message
+                                or "private-canary" in message or control == "cancel" and "cancel" not in message.lower()
+                                or control == "settings" and "changed" not in message.lower()):
+                            raise AssertionError("Held default-root failure is not causal and sanitized") from failure
+                    else:
+                        observation["unexpectedResponse"] = response
+                        raise AssertionError("Held stale/cancelled/missing-input root read succeeded")
+                finally:
+                    paths["release"].write_text("release\n")
+                    if control == "input":
+                        candidate.write_text("<project/>" if provider_name == "maven" else "must not execute")
+                    deadline = time.monotonic() + 5
+                    while not paths["finished"].exists() and time.monotonic() < deadline:
+                        time.sleep(0.02)
+                    if not paths["finished"].exists():
+                        raise AssertionError("Owned default-root monitor did not release")
+                if control == "input":
+                    state(provider_name, False, "repaired missing input", [candidate])
+                    candidate.unlink()
+                    candidate.parent.rmdir()
+                notify_and_check(configuration(False, False), (False, False), "recovery after held " + control)
+                receipt["checks"].append(label + ": held " + provider_name + " " + control + " refused and recovered")
+
+            try:
+                initialized = client.request("initialize", {"processId": os.getpid(), "rootUri": project_root.as_uri(),
+                    "workspaceFolders": [{"uri": project_root.as_uri(), "name": project_root.name}],
+                    "capabilities": {"workspace": {"workspaceFolders": True, "configuration": True}},
+                    "initializationOptions": {"bundles": [str(provider), str(bundle)], "settings": settings,
+                                              "projectConfigurations": [], "workspaceFolders": [project_root.as_uri()]}}, timeout=90)
+                commands = initialized["capabilities"]["executeCommandProvider"]["commands"]
+                if not {"groovy.maven.defaultImportRoots.v2", "groovy.gradle.defaultImportRoots.v2",
+                        "groovy.fixture.unlink.heldDefaultImportState"}.issubset(commands):
+                    raise AssertionError("Effective import-state commands are unavailable")
+                client.notify("initialized", {})
+                for provider_name, enabled in zip(["maven", "gradle"], expected):
+                    state(provider_name, enabled, "initial current flags")
+                if project_root == full and expected == (False, False):
+                    for provider_name in ["maven", "gradle"]:
+                        request = parameters(provider_name, project_root)
+                        field = "candidatePomUris" if provider_name == "maven" else "candidateBuildFileUris"
+                        for invalid in [{**request, "cachedOnly": False}, {**request, "extra": "private-canary"},
+                                        {key: value for key, value in request.items() if key != "cachedOnly"},
+                                        {**request, field: request[field] * 2},
+                                        {**request, field: ["https://example.invalid/private-canary"]},
+                                        {**request, "rootUri": workspace.as_uri()}]:
+                            try:
+                                execute("groovy." + provider_name + ".defaultImportRoots.v2", invalid)
+                            except RuntimeError as failure:
+                                message = str(failure)
+                                journey.setdefault("invalid", []).append({"provider": provider_name, "request": invalid, "error": message})
+                                if "default-root import settings" not in message or str(workspace) in message or "private-canary" in message:
+                                    raise AssertionError("Invalid import-state query leaked authority or input") from failure
+                            else:
+                                raise AssertionError("Invalid import-state request was accepted")
+                        state(provider_name, False, "recovery after invalid requests")
+                if dynamic:
+                    for flags in [(True, True), (False, True), (True, False), (False, False)]:
+                        notify_and_check(configuration(*flags), flags, "nested notification " + str(flags))
+                    for enabled in [True, False]:
+                        value = configuration(False, False)
+                        for provider_name in ["maven", "gradle"]:
+                            value["java"]["import"][provider_name].pop("enabled")
+                            value["java.import." + provider_name + ".enabled"] = enabled
+                        notify_and_check(value, (enabled, enabled), "dotted notification " + str(enabled))
+                    value = configuration(False, False)
+                    for provider_name in ["maven", "gradle"]:
+                        value["java"]["import"][provider_name].pop("enabled")
+                    # JDTLS applies configuration notifications as patches. An absent
+                    # key retains the existing value until a client explicitly resets it.
+                    notify_and_check(value, (False, False), "omitted flags preserve SDK preferences")
+                    notify_and_check(configuration(True, True), (True, True), "explicit reset restores importer flags")
+                    for provider_name in ["maven", "gradle"]:
+                        for control in ["settings", "cancel", "input"]:
+                            held(provider_name, control)
+                journey["passed"] = True
+            finally:
+                logs = evidence / label
+                logs.mkdir(exist_ok=True)
+                client.stderr.seek(0)
+                (logs / "stderr-before-shutdown.log").write_bytes(client.stderr.read())
+                try:
+                    client.notify("workspace/didChangeConfiguration", {"settings": configuration(False, False)})
+                except (EOFError, BrokenPipeError, OSError) as failure:
+                    journey["settingsRestoreError"] = str(failure)
+                client.close()
+                journey["serverExitCode"] = client.process.returncode
+                provider_log = data / ".metadata/.log"
+                if provider_log.is_file():
+                    shutil.copy2(provider_log, logs / "jdtls.log")
+                arguments.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+            if journey["serverExitCode"] != 0 or "settingsRestoreError" in journey:
+                raise AssertionError("Isolated import-state server/settings cleanup failed")
+
+        try:
+            for maven, gradle in [(False, False), (True, False), (False, True), (True, True)]:
+                data = workspace / ("profile-" + str(maven) + "-" + str(gradle))
+                for restart in [False, True]:
+                    run("flags-" + str(maven) + "-" + str(gradle) + ("-restart" if restart else "-fresh"),
+                        full, data, configuration(maven, gradle), (maven, gradle))
+            for restart in [False, True]:
+                run("dynamic" + ("-restart" if restart else "-fresh"), empty, workspace / "dynamic-profile",
+                    configuration(False, False), (False, False), dynamic=True)
+            run("fresh-defaults", empty, workspace / "default-profile", base_settings, (True, True))
+            check_sources()
+            receipt["status"] = "passed"
+        finally:
+            if any(home.iterdir()):
+                receipt["unexpectedGradleHomeEntries"] = sorted(path.name for path in home.iterdir())[:128]
+                environment = dict(os.environ, JAVA_HOME=str(arguments.gradle_java_home.resolve()), GRADLE_USER_HOME=str(home))
+                environment["JAVA_TOOL_OPTIONS"] = (environment.get("JAVA_TOOL_OPTIONS", "") + " -Djava.net.preferIPv4Stack=true").strip()
+                stopped = subprocess.run([str(arguments.gradle_home.resolve() / "bin/gradle"), "--offline", "--stop",
+                                          "--gradle-user-home", str(home)], env=environment, capture_output=True, text=True)
+                (evidence / "unexpected-owned-gradle-stop.log").write_text(stopped.stdout + stopped.stderr)
+                receipt["unexpectedOwnedWorkerStopExit"] = stopped.returncode
+                if stopped.returncode:
+                    raise RuntimeError("Unexpected owned Gradle worker cleanup failed")
+            arguments.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+    print(json.dumps({"checks": len(receipt["checks"]), "journeys": len(receipt["journeys"]), "status": receipt["status"]}))
 
 
 def probe_default_roots(arguments):
@@ -5524,6 +6013,8 @@ if __name__ == "__main__":
     for name in ["launcher", "java-home", "gradle-java-home", "gradle-home", "provider", "gradle-user-home", "receipt"]:
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--sha256", required=True)
+    parser.add_argument("--default-import-state-only", action="store_true",
+                        help="Qualify actual cached Maven/Gradle import enablement without executing builds")
     parser.add_argument("--default-roots-only", action="store_true",
                         help="Qualify read-only default-root candidates against the pinned SDK detector without Gradle builds")
     parser.add_argument("--generated-source-declarations-only", action="store_true",
@@ -5569,6 +6060,8 @@ if __name__ == "__main__":
                         help="Qualify explicit empty startup configurations against retained SDK metadata and cached repair")
     parser.add_argument("--single-provider-configurations-only", action="store_true",
                         help="Qualify explicit uncontrolled-provider and plain Java configuration lists; requires startup configuration mode")
+    parser.add_argument("--single-provider-replay-only", action="store_true",
+                        help="Qualify post-initialize replay of a known plain Java project and provider defaults")
     parser.add_argument("--workspace-scoped-module-details-only", action="store_true",
                         help="Qualify v4 registered-module descriptor/directory freshness; requires scoped details mode")
     parser.add_argument("--workspace-scoped-details-only", action="store_true",
@@ -5598,7 +6091,10 @@ if __name__ == "__main__":
     parser.add_argument("--provider-root-state-only", action="store_true",
                         help="Qualify retained production root mutation with a Java Gradle root")
     arguments = parser.parse_args()
-    if arguments.default_roots_only and any(value is True for name, value in vars(arguments).items() if name not in {"default_roots_only", "cached_build_associations_only"}):
+    if arguments.default_import_state_only and (not arguments.default_roots_only or arguments.cached_build_associations_only or arguments.maven_repository is None):
+        parser.error("--default-import-state-only requires --default-roots-only --maven-repository without --cached-build-associations-only")
+
+    if arguments.default_roots_only and any(value is True for name, value in vars(arguments).items() if name not in {"default_roots_only", "cached_build_associations_only", "default_import_state_only"}):
         parser.error("--default-roots-only requires no other specialized mode")
 
     if arguments.workspace_scoped_module_details_only and not arguments.workspace_scoped_details_only:
@@ -5635,6 +6131,9 @@ if __name__ == "__main__":
 
     if arguments.single_provider_configurations_only and not arguments.startup_configurations_only:
         parser.error("--single-provider-configurations-only requires --startup-configurations-only")
+    if arguments.single_provider_replay_only and (not arguments.startup_configurations_only
+                                                or arguments.single_provider_configurations_only):
+        parser.error("--single-provider-replay-only requires --startup-configurations-only and its own fixture run")
 
     if arguments.startup_configurations_only and (not arguments.startup_selection_only or any([
             arguments.root_state_only, arguments.startup_metadata_only, arguments.linked_root_phase_only,
@@ -5713,7 +6212,9 @@ if __name__ == "__main__":
         parser.error("--guarded-phase-only requires --import-selection-only without --mutation-failures-only")
     if arguments.mutation_failures_only and not arguments.import_selection_only:
         parser.error("--mutation-failures-only requires --import-selection-only")
-    if arguments.default_roots_only:
+    if arguments.default_import_state_only:
+        probe_default_import_enablement(arguments)
+    elif arguments.default_roots_only:
         probe_default_roots(arguments)
     elif arguments.generated_source_declarations_only:
         probe_generated_source_declarations(arguments)

@@ -45,6 +45,9 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
         if ("groovy.gradle.applyRootState.v2".equals(command)) {
             return applyRootStateWithinWorkspace(arguments, monitor);
         }
+        if ("groovy.gradle.defaultImportRoots.v2".equals(command)) {
+            return defaultImportRootsWithImportState(arguments, monitor);
+        }
         if ("groovy.gradle.defaultImportRoots".equals(command)) {
             return defaultImportRoots(arguments, monitor);
         }
@@ -587,7 +590,31 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
     private static final List<String> BUILD_DESCRIPTORS = List.of(
             "build.gradle", "settings.gradle", "build.gradle.kts", "settings.gradle.kts");
 
-    private static Object defaultImportRoots(List<Object> arguments, IProgressMonitor monitor) {
+    private static Map<String, Object> defaultImportRootsWithImportState(List<Object> arguments,
+            IProgressMonitor monitor) {
+        try {
+            var preferences = JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
+            boolean importEnabled = preferences.isImportGradleEnabled();
+            Map<String, Object> result = new LinkedHashMap<>(defaultImportRoots(arguments, monitor));
+            var current = JavaLanguageServerPlugin.getPreferencesManager().getPreferences();
+            if (current != preferences || current.isImportGradleEnabled() != importEnabled) {
+                throw new OperationCanceledException();
+            }
+            checkCancelled(monitor);
+            result.put("version", 2);
+            result.put("importEnabled", importEnabled);
+            return result;
+        } catch (OperationCanceledException cancelled) {
+            throw new IllegalStateException("Gradle default-root import settings changed or discovery cancelled; no projects were imported. Refresh before retrying.");
+        } catch (Exception | LinkageError failure) {
+            if (monitor.isCanceled()) {
+                throw new IllegalStateException("Gradle default-root import settings discovery cancelled; no projects were imported. Refresh before retrying.");
+            }
+            throw new IllegalStateException("Gradle default-root import settings unavailable; no projects were imported. Check initialized host and compatible provider settings, then refresh and retry.");
+        }
+    }
+
+    private static Map<String, Object> defaultImportRoots(List<Object> arguments, IProgressMonitor monitor) {
         try {
             checkCancelled(monitor);
             if (arguments == null || arguments.size() != 1 || !(arguments.get(0) instanceof Map<?, ?> request)
@@ -1187,7 +1214,7 @@ public final class GradleImportHandler implements IDelegateCommandHandler {
         return real;
     }
 
-    private static byte[] descriptionBytes(Path path) throws java.io.IOException {
+    static byte[] descriptionBytes(Path path) throws java.io.IOException {
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || !path.toRealPath().equals(path)
                 || Files.size(path) > 1024 * 1024) {
             throw new IllegalArgumentException();

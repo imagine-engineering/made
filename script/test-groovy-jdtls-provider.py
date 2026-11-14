@@ -119,6 +119,9 @@ class JdtlsClient:
         request_id = self.next_id
         self.next_id += 1
         self.send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
+        return self.receive_response(request_id, method, timeout)
+
+    def receive_response(self, request_id, method, timeout=45):
         deadline = time.monotonic() + timeout
         while True:
             try:
