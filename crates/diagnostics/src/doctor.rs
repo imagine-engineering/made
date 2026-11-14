@@ -7406,6 +7406,7 @@ pub(crate) mod tests {
         let mut snapshot = CargoWorkspaceSnapshot {
             revision: 4,
             input_fingerprint: 2,
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Complete,
             failures: Vec::new(),
             workspaces: vec![CargoWorkspaceModel {
@@ -12231,6 +12232,7 @@ pub(crate) mod tests {
         let mut snapshot = CargoWorkspaceSnapshot {
             revision: 1,
             input_fingerprint: 2,
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Complete,
             failures: Vec::new(),
             workspaces: vec![CargoWorkspaceModel {
@@ -14303,6 +14305,7 @@ pub(crate) mod tests {
         let mut snapshot = CargoWorkspaceSnapshot {
             revision: 1,
             input_fingerprint: 1,
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Partial,
             failures: (0..5)
                 .map(|index| CargoCandidateFailure {

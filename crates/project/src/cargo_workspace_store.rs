@@ -1,3 +1,6 @@
+use crate::cargo_workspace::{
+    CargoDiscoveryOmissions, MAX_CARGO_DISCOVERY_CANDIDATES, MAX_CARGO_SNAPSHOT_ENTRIES,
+};
 use feature_flags::{FeatureFlagAppExt as _, RustNativeProfilingExperimentalFeatureFlag};
 #[cfg(any(test, feature = "test-support"))]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1506,43 +1509,95 @@ impl CargoMetadataRunner for ProcessCargoMetadataRunner {
     async fn run(&self, request: CargoMetadataRequest) -> Result<Vec<u8>> {
         #[cfg(any(test, feature = "test-support"))]
         LOCAL_CARGO_PROCESS_CALLS.fetch_add(1, Ordering::Relaxed);
-        let mut command = util::command::new_command("cargo");
-        command
-            .current_dir(&request.working_directory)
-            .kill_on_drop(true);
-        let mut arguments = ["metadata", "--format-version", "1", "--manifest-path"]
-            .into_iter()
-            .map(OsString::from)
-            .collect::<Vec<_>>();
-        arguments.push(request.manifest_path.into_os_string());
+        let environment = PassiveRustEnvironment::from_request(request.environment.as_ref());
+        let cargo = which::which_in(
+            "cargo",
+            environment.path_for_executable_lookup().as_ref(),
+            &request.working_directory,
+        )
+        .context("failed to start Cargo metadata: Cargo is not on the project PATH")?;
         let preparation = prepare_rust_execution_in_environment(
-            Some(command.get_program()),
+            Some(cargo.as_os_str()),
             false,
             &request.working_directory,
-            PassiveRustEnvironment::from_request(request.environment.as_ref()),
+            environment,
             CargoDependencyNetwork::Configured,
             &self.executor,
         )
         .await?;
-        if let Some(environment) = &request.environment {
-            command.envs(environment);
+        let command = || {
+            let mut command = util::command::new_command(&cargo);
+            command.current_dir(&request.working_directory);
+            if let Some(environment) = &request.environment {
+                command.envs(environment);
+            }
+            preparation
+                .cargo_parent_environment
+                .apply_to_command(&mut command);
+            command.env("RUSTUP_AUTO_INSTALL", "0");
+            if let Some(toolchain) = &preparation.toolchain {
+                command.env("RUSTUP_TOOLCHAIN", toolchain);
+            }
+            command
+        };
+        let run_metadata = |legacy: bool| {
+            let mut command = command();
+            if legacy {
+                command.args(["-Z", "unstable-options"]);
+            }
+            command
+                .args(&preparation.cargo_options)
+                .args(["metadata", "--format-version", "1", "--manifest-path"])
+                .arg(&request.manifest_path);
+            // The policy arguments may contain values from the protected environment.
+            log::debug!(
+                "Running Cargo metadata using {:?} in {:?} for {:?} (legacy options: {legacy})",
+                cargo,
+                request.working_directory,
+                request.manifest_path
+            );
+            bounded_cargo_command_output(
+                command,
+                "Cargo metadata",
+                MAX_CARGO_METADATA_BYTES,
+                CARGO_METADATA_TIMEOUT,
+                &self.executor,
+            )
+        };
+        let mut output = run_metadata(false).await?;
+        if !output.status.success()
+            && cargo_requires_unstable_config(&bounded_error(&output.stderr))
+        {
+            let version = {
+                let mut command = command();
+                command.arg("--version");
+                bounded_cargo_command_output(
+                    command,
+                    "Cargo version",
+                    4096,
+                    CARGO_METADATA_TIMEOUT,
+                    &self.executor,
+                )
+                .await
+                .ok()
+                .filter(|output| output.status.success())
+                .map(|output| bounded_error(&output.stdout))
+                .unwrap_or_else(|| "Cargo version unavailable".to_owned())
+            };
+            output = run_metadata(true).await?;
+            if !output.status.success() {
+                let message = bounded_error(&output.stderr);
+                if cargo_requires_unstable_config(&message)
+                    || message.contains("only accepted on the nightly channel")
+                    || message.contains("unexpected argument '--config'")
+                    || message.contains("Found argument '--config'")
+                {
+                    return Err(anyhow!(
+                        "{version} cannot apply Copper's required Cargo configuration: {message} Select an installed workspace toolchain that supports --config on stable (for example, Cargo 1.98), then refresh."
+                    ));
+                }
+            }
         }
-        preparation
-            .cargo_parent_environment
-            .apply_to_command(&mut command);
-        command.env("RUSTUP_AUTO_INSTALL", "0");
-        if let Some(toolchain) = preparation.toolchain {
-            command.env("RUSTUP_TOOLCHAIN", toolchain);
-        }
-        command.args(preparation.cargo_options).args(arguments);
-        let output = bounded_cargo_command_output(
-            command,
-            "Cargo metadata",
-            MAX_CARGO_METADATA_BYTES,
-            CARGO_METADATA_TIMEOUT,
-            &self.executor,
-        )
-        .await?;
         if !output.status.success() {
             let message = bounded_error(&output.stderr);
             let recovery = if message.contains("--offline") || message.contains("offline mode") {
@@ -1557,6 +1612,10 @@ impl CargoMetadataRunner for ProcessCargoMetadataRunner {
         }
         Ok(output.stdout)
     }
+}
+
+fn cargo_requires_unstable_config(message: &str) -> bool {
+    message.contains("the `--config` flag is unstable") && message.contains("-Z unstable-options")
 }
 
 #[derive(Debug)]
@@ -4828,8 +4887,8 @@ impl CargoWorkspaceStore {
                 cx.spawn(async move |_this, cx| {
                     wait_for_scan.await;
                     let (abort_handle, abort_registration) = AbortHandle::new_pair();
-                    let (candidates, input_fingerprint, trust_subscription) = cx.update(|cx| {
-                        let (candidates, input_fingerprint) = collect_candidates(
+                    let (candidates, input_fingerprint, omitted_candidates, trust_subscription) = cx.update(|cx| {
+                        let (candidates, input_fingerprint, omitted_candidates) = collect_candidates(
                             &worktree_store,
                             &environment,
                             allowed_worktree_ids.as_ref(),
@@ -4843,7 +4902,7 @@ impl CargoWorkspaceStore {
                                 }
                             })
                         });
-                        (candidates, input_fingerprint, subscription)
+                        (candidates, input_fingerprint, omitted_candidates, subscription)
                     });
                     let collection = collect_snapshot(
                         revision,
@@ -4852,7 +4911,7 @@ impl CargoWorkspaceStore {
                         runner,
                         configuration_probe,
                     );
-                    let result = Abortable::new(collection, abort_registration)
+                    let mut result = Abortable::new(collection, abort_registration)
                         .await
                         .map_err(|_| {
                             proto::ErrorCode::Forbidden
@@ -4860,6 +4919,10 @@ impl CargoWorkspaceStore {
                                 .message("Cargo workspace trust was revoked during metadata collection".into())
                         })?;
                     drop(trust_subscription);
+                    if omitted_candidates > 0 && let Ok(collection) = &mut result {
+                        collection.snapshot.omitted.candidates = omitted_candidates;
+                        collection.snapshot.completeness = CargoSnapshotCompleteness::Partial;
+                    }
                     result
                 })
             }
@@ -7371,6 +7434,7 @@ impl CargoWorkspaceStore {
                     input_fingerprint: store.current_input_fingerprint(cx),
                     workspaces: Vec::new(),
                     failures: Vec::new(),
+                    omitted: Default::default(),
                     completeness: CargoSnapshotCompleteness::Partial,
                 };
                 if let Some(previous) = &store.cached_snapshot {
@@ -7514,8 +7578,10 @@ fn collect_candidates(
     environment: &Entity<ProjectEnvironment>,
     allowed_worktree_ids: Option<&HashSet<settings::WorktreeId>>,
     cx: &mut App,
-) -> (Vec<Candidate>, u64) {
+) -> (Vec<Candidate>, u64, u32) {
     let mut candidates = Vec::new();
+    let mut manifests = std::collections::BTreeMap::new();
+    let mut omitted = 0u32;
     let worktrees = worktree_store
         .read(cx)
         .visible_worktrees(cx)
@@ -7553,44 +7619,72 @@ fn collect_candidates(
             .collect::<Vec<_>>()
             .into();
         for entry in snapshot.files(false, 0) {
-            if entry.path.file_name() != Some("Cargo.toml") || entry.is_private {
+            if entry.path.file_name() != Some("Cargo.toml")
+                || entry.is_private
+                || entry.is_ignored
+                || entry.is_external
+            {
                 continue;
             }
-            let manifest_path = entry.path.clone();
-            let manifest_text = load_visible_worktree_text(&worktree, manifest_path.clone(), cx);
-            let toolchain_text =
-                nearest_toolchain_path(&snapshot, manifest_path.as_ref()).map(|path| {
-                    let project_path = ProjectPath {
-                        worktree_id,
-                        path: path.clone(),
-                    };
-                    let text = load_visible_worktree_text(&worktree, path, cx);
-                    (project_path, text)
-                });
-            let lock_text =
-                nearest_cargo_lock_path(&snapshot, manifest_path.as_ref()).map(|path| {
-                    let project_path = ProjectPath {
-                        worktree_id,
-                        path: path.clone(),
-                    };
-                    let text = load_visible_worktree_text(&worktree, path, cx);
-                    (project_path, text)
-                });
-            candidates.push(Candidate {
-                project_path: ProjectPath {
-                    worktree_id,
-                    path: manifest_path.clone(),
-                },
-                absolute_path: worktree_root.join(manifest_path.as_unix_str()),
-                worktree_root: worktree_root.clone(),
-                environment: worktree_environment.clone(),
-                manifest_text,
-                lock_text,
-                toolchain_text,
-                trusted,
-                private_paths: private_paths.clone(),
-            });
+            let key = (
+                entry.path.components().count(),
+                worktree_id,
+                entry.path.clone(),
+            );
+            manifests.insert(
+                key,
+                (
+                    worktree.clone(),
+                    worktree_root.clone(),
+                    snapshot.clone(),
+                    worktree_environment.clone(),
+                    trusted,
+                    private_paths.clone(),
+                ),
+            );
+            if manifests.len() > MAX_CARGO_DISCOVERY_CANDIDATES {
+                manifests.pop_last();
+                omitted = omitted.saturating_add(1);
+            }
         }
+    }
+    for (
+        (_, worktree_id, manifest_path),
+        (worktree, worktree_root, snapshot, worktree_environment, trusted, private_paths),
+    ) in manifests
+    {
+        let manifest_text = load_visible_worktree_text(&worktree, manifest_path.clone(), cx);
+        let toolchain_text =
+            nearest_toolchain_path(&snapshot, manifest_path.as_ref()).map(|path| {
+                let project_path = ProjectPath {
+                    worktree_id,
+                    path: path.clone(),
+                };
+                let text = load_visible_worktree_text(&worktree, path, cx);
+                (project_path, text)
+            });
+        let lock_text = nearest_cargo_lock_path(&snapshot, manifest_path.as_ref()).map(|path| {
+            let project_path = ProjectPath {
+                worktree_id,
+                path: path.clone(),
+            };
+            let text = load_visible_worktree_text(&worktree, path, cx);
+            (project_path, text)
+        });
+        candidates.push(Candidate {
+            project_path: ProjectPath {
+                worktree_id,
+                path: manifest_path.clone(),
+            },
+            absolute_path: worktree_root.join(manifest_path.as_unix_str()),
+            worktree_root: worktree_root.clone(),
+            environment: worktree_environment.clone(),
+            manifest_text,
+            lock_text,
+            toolchain_text,
+            trusted,
+            private_paths: private_paths.clone(),
+        });
     }
     candidates.sort_by(|left, right| {
         left.project_path
@@ -7605,8 +7699,15 @@ fn collect_candidates(
             })
             .then_with(|| left.project_path.path.cmp(&right.project_path.path))
     });
+    log::trace!(
+        "Cargo discovery admitted manifests {:?}, omitted {omitted} candidates",
+        candidates
+            .iter()
+            .map(|candidate| &candidate.project_path)
+            .collect::<Vec<_>>(),
+    );
     let input_fingerprint = cargo_input_fingerprint(worktree_store, allowed_worktree_ids, cx);
-    (candidates, input_fingerprint)
+    (candidates, input_fingerprint, omitted)
 }
 
 fn nearest_cargo_lock_path(
@@ -7675,7 +7776,11 @@ fn cargo_input_fingerprint(
             continue;
         }
         for entry in snapshot.files(false, 0) {
-            if !entry.is_private && is_cargo_workspace_input(entry.path.as_ref()) {
+            if !entry.is_private
+                && !entry.is_ignored
+                && !entry.is_external
+                && is_cargo_workspace_input(entry.path.as_ref())
+            {
                 inputs.push((
                     worktree_id.to_proto(),
                     entry.path.as_unix_str().to_string(),
@@ -8058,7 +8163,23 @@ async fn collect_snapshot(
             )),
         }
     }
-    let completeness = if failures.is_empty()
+    let mut workspaces = deduplicate_workspaces(workspaces);
+    let omitted = CargoDiscoveryOmissions {
+        workspaces: workspaces.len().saturating_sub(MAX_CARGO_SNAPSHOT_ENTRIES) as u32,
+        failures: failures.len().saturating_sub(MAX_CARGO_SNAPSHOT_ENTRIES) as u32,
+        ..Default::default()
+    };
+    if !omitted.is_empty() {
+        log::warn!(
+            "Cargo discovery retained up to {MAX_CARGO_SNAPSHOT_ENTRIES} entries per list; omitted {} workspaces and {} failed manifests",
+            omitted.workspaces,
+            omitted.failures
+        );
+    }
+    workspaces.truncate(MAX_CARGO_SNAPSHOT_ENTRIES);
+    failures.truncate(MAX_CARGO_SNAPSHOT_ENTRIES);
+    let completeness = if omitted.is_empty()
+        && failures.is_empty()
         && workspaces.iter().all(|workspace| {
             workspace.configuration.completeness == CargoConfigurationCompleteness::Complete
         }) {
@@ -8069,7 +8190,8 @@ async fn collect_snapshot(
     let snapshot = CargoWorkspaceSnapshot {
         revision,
         input_fingerprint,
-        workspaces: deduplicate_workspaces(workspaces),
+        workspaces,
+        omitted,
         failures,
         completeness,
     };
@@ -8266,6 +8388,9 @@ fn snapshot_to_proto(
         request_id,
         revision: snapshot.revision,
         input_fingerprint: snapshot.input_fingerprint,
+        omitted_candidates: snapshot.omitted.candidates,
+        omitted_workspaces: snapshot.omitted.workspaces,
+        omitted_failures: snapshot.omitted.failures,
         workspaces: snapshot
             .workspaces
             .into_iter()
@@ -8675,7 +8800,16 @@ fn snapshot_from_proto(response: proto::CargoWorkspaceResponse) -> Result<CargoW
         input_fingerprint: response.input_fingerprint,
         workspaces,
         failures,
-        completeness: if response.partial {
+        omitted: CargoDiscoveryOmissions {
+            candidates: response.omitted_candidates,
+            workspaces: response.omitted_workspaces,
+            failures: response.omitted_failures,
+        },
+        completeness: if response.partial
+            || response.omitted_candidates != 0
+            || response.omitted_workspaces != 0
+            || response.omitted_failures != 0
+        {
             CargoSnapshotCompleteness::Partial
         } else {
             CargoSnapshotCompleteness::Complete
@@ -10998,6 +11132,81 @@ esac
             }
             drop(collection);
             require_cargo_process_exit(cx, process_id);
+        }
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    async fn cargo_workspace_metadata_config_compatibility(cx: &mut TestAppContext) {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        cx.executor().allow_parking();
+        for mode in ["modern", "legacy", "unsupported"] {
+            let directory = tempfile::tempdir().expect("Cargo compatibility fixture");
+            let cargo = directory.path().join("cargo");
+            let calls = directory.path().join("calls");
+            std::fs::write(
+                &cargo,
+                r#"#!/bin/sh
+printf '%s|%s|%s\n' "$0" "$PWD" "$*" >> "$COPPER_TEST_CALLS"
+if [ "$1" = "--version" ]; then
+  printf 'cargo 1.59.0-fixture\n'
+  exit 0
+fi
+case " $* " in *" --config "*) ;; *) exit 73 ;; esac
+if [ "$COPPER_TEST_MODE" != modern ]; then
+  if [ "$1" != "-Z" ] || [ "$2" != "unstable-options" ]; then
+    printf 'the `--config` flag is unstable, pass `-Z unstable-options` to enable it\n' >&2
+    exit 101
+  fi
+  if [ "$COPPER_TEST_MODE" = unsupported ]; then
+    printf 'the -Z flag is only accepted on the nightly channel\n' >&2
+    exit 101
+  fi
+fi
+printf 'metadata\n'
+"#,
+            )
+            .expect("write Cargo fixture");
+            std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o700))
+                .expect("set Cargo fixture executable");
+            let runner = ProcessCargoMetadataRunner {
+                executor: cx.background_executor.clone(),
+            };
+            let path = directory.path().canonicalize().expect("fixture path");
+            let result = runner
+                .run(CargoMetadataRequest {
+                    working_directory: path.clone(),
+                    manifest_path: path.join("Cargo.toml"),
+                    environment: Some(HashMap::from_iter([
+                        ("PATH".into(), path.display().to_string()),
+                        ("COPPER_TEST_MODE".into(), mode.into()),
+                        ("COPPER_TEST_CALLS".into(), calls.display().to_string()),
+                    ])),
+                })
+                .await;
+            if mode == "unsupported" {
+                let error = result
+                    .expect_err("stable legacy Cargo cannot enable CLI config")
+                    .to_string();
+                assert!(
+                    error.contains("cargo 1.59.0-fixture")
+                        && error.contains("supports --config on stable"),
+                    "{error}"
+                );
+            } else {
+                assert_eq!(
+                    result.expect("Cargo accepts retained config"),
+                    b"metadata\n"
+                );
+            }
+            let calls = std::fs::read_to_string(calls).expect("recorded invocation");
+            assert!(calls.contains("metadata --format-version 1 --manifest-path"));
+            assert_eq!(calls.lines().count(), if mode == "modern" { 1 } else { 3 });
+            if mode != "modern" {
+                let lines = calls.lines().collect::<Vec<_>>();
+                assert_eq!(lines[2].replace("|-Z unstable-options ", "|"), lines[0]);
+            }
         }
     }
 
@@ -14211,6 +14420,7 @@ printf 'metadata\n'
             input_fingerprint: 2,
             workspaces: vec![workspace],
             failures: Vec::new(),
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Partial,
         };
         let response = snapshot_to_proto(snapshot.clone(), 3);
@@ -14865,6 +15075,7 @@ printf 'metadata\n'
                 input_fingerprint: store.current_input_fingerprint(cx),
                 workspaces: vec![other.clone()],
                 failures: Vec::new(),
+                omitted: Default::default(),
                 completeness: CargoSnapshotCompleteness::Partial,
             });
             store.cached_generation = store.revision;
@@ -14955,6 +15166,7 @@ printf 'metadata\n'
                     })
                     .collect(),
                 failures: Vec::new(),
+                omitted: Default::default(),
                 completeness: CargoSnapshotCompleteness::Partial,
             };
             validate_cargo_snapshot_bounds(&previous).expect("Individually valid existing cache");

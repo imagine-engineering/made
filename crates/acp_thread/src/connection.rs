@@ -490,6 +490,12 @@ pub trait AgentModelSelector: 'static {
     fn should_render_footer(&self) -> bool {
         false
     }
+
+    fn model_discovery_status(&self, _cx: &App) -> Option<language_model::ModelDiscoveryStatus> {
+        None
+    }
+
+    fn retry_model_discovery(&self, _cx: &mut App) {}
 }
 
 /// Icon for a model in the model selector.

@@ -1031,7 +1031,24 @@ pub struct CargoWorkspaceSnapshot {
     pub input_fingerprint: u64,
     pub workspaces: Vec<CargoWorkspaceModel>,
     pub failures: Vec<CargoCandidateFailure>,
+    pub omitted: CargoDiscoveryOmissions,
     pub completeness: CargoSnapshotCompleteness,
+}
+
+pub const MAX_CARGO_SNAPSHOT_ENTRIES: usize = 128;
+pub const MAX_CARGO_DISCOVERY_CANDIDATES: usize = 512;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CargoDiscoveryOmissions {
+    pub candidates: u32,
+    pub workspaces: u32,
+    pub failures: u32,
+}
+
+impl CargoDiscoveryOmissions {
+    pub fn is_empty(self) -> bool {
+        self == Self::default()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1248,10 +1265,6 @@ impl CargoEvidenceBudget {
 }
 
 pub fn validate_cargo_snapshot_bounds(snapshot: &CargoWorkspaceSnapshot) -> Result<()> {
-    ensure!(
-        snapshot.workspaces.len() <= 128 && snapshot.failures.len() <= 128,
-        "Cargo workspace snapshot count exceeded"
-    );
     validate_cargo_projection_bounds(
         &snapshot.workspaces.iter().collect::<Vec<_>>(),
         &snapshot.failures.iter().collect::<Vec<_>>(),
@@ -1287,8 +1300,14 @@ fn validate_cargo_projection_bounds(
     failures: &[&CargoCandidateFailure],
 ) -> Result<()> {
     ensure!(
-        workspaces.len() <= 128 && failures.len() <= 128,
-        "Cargo workspace snapshot count exceeded"
+        workspaces.len() <= MAX_CARGO_SNAPSHOT_ENTRIES,
+        "Cargo workspace limit ({MAX_CARGO_SNAPSHOT_ENTRIES}) exceeded by {} entries",
+        workspaces.len().saturating_sub(MAX_CARGO_SNAPSHOT_ENTRIES)
+    );
+    ensure!(
+        failures.len() <= MAX_CARGO_SNAPSHOT_ENTRIES,
+        "Cargo failed manifest limit ({MAX_CARGO_SNAPSHOT_ENTRIES}) exceeded by {} entries",
+        failures.len().saturating_sub(MAX_CARGO_SNAPSHOT_ENTRIES)
     );
     let mut budget = CargoEvidenceBudget { bytes: 0, items: 0 };
     for failure in failures {

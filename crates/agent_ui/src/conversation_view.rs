@@ -6483,8 +6483,6 @@ pub(crate) mod tests {
             assert_eq!(
                 native_names,
                 [
-                    "doctor",
-                    "schedules",
                     "recipes",
                     "compact",
                     "clear",

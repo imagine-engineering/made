@@ -7125,6 +7125,9 @@ impl Render for ProjectPanel {
                 .track_focus(&self.focus_handle(cx))
                 .child(
                     v_flex()
+                        .size_full()
+                        .min_h_0()
+                        .overflow_hidden()
                         .child(
                             uniform_list("entries", item_count, {
                                 cx.processor(|this, range: Range<usize>, window, cx| {
@@ -7342,6 +7345,7 @@ impl Render for ProjectPanel {
                                     sticky_items
                                 })
                             })
+                            .min_h_0()
                             .with_sizing_behavior(ListSizingBehavior::Infer)
                             .with_horizontal_sizing_behavior(if horizontal_scroll {
                                 ListHorizontalSizingBehavior::Unconstrained

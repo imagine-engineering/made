@@ -965,6 +965,7 @@ mod tests {
             revision: 1,
             input_fingerprint: 2,
             failures: Vec::new(),
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Complete,
             workspaces: vec![CargoWorkspaceModel {
                 key: CargoWorkspaceKey { root: path("") },

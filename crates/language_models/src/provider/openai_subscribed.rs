@@ -1,32 +1,27 @@
 use anyhow::Result;
-use credentials_provider::CredentialsProvider;
-use futures::future::Shared;
 use gpui::{App, Context, Entity, SharedString, Task, Window};
 use http_client::HttpClient;
 use language_model::{
-    AuthenticateError, FastModeConfirmation, IconOrSvg, InlineDescription, LanguageModel,
-    LanguageModelProvider, LanguageModelProviderId, LanguageModelProviderName,
-    LanguageModelProviderState, ProviderSettingsView,
+    AuthenticateError, IconOrSvg, InlineDescription, LanguageModel, LanguageModelProvider,
+    LanguageModelProviderId, LanguageModelProviderName, LanguageModelProviderState,
+    ModelDiscoveryStatus, ProviderSettingsView,
 };
-use openai_subscribed::{ChatGptModel, PROVIDER_ID, PROVIDER_NAME, State, create_language_model};
+pub use openai_subscribed::PROVIDER_ID;
+use openai_subscribed::{PROVIDER_NAME, State};
 use std::sync::Arc;
-use ui::{ConfiguredApiCard, prelude::*};
+use ui::{ButtonLink, prelude::*};
 
-const SUBSCRIPTION_DESCRIPTION: &str =
-    "Sign in with your ChatGPT Plus or Pro subscription to use OpenAI models in Zed's agent.";
+const SUBSCRIPTION_DESCRIPTION: &str = "Use your ChatGPT plan for eligible requests.";
 
 pub struct OpenAiSubscribedProvider {
     state: Entity<State>,
 }
 
 impl OpenAiSubscribedProvider {
-    pub fn new(
-        http_client: Arc<dyn HttpClient>,
-        credentials_provider: Arc<dyn CredentialsProvider>,
-        cx: &mut App,
-    ) -> Self {
-        let state = cx.new(|cx| State::new(http_client, credentials_provider, cx));
-        Self { state }
+    pub fn new(http_client: Arc<dyn HttpClient>, cx: &mut App) -> Self {
+        Self {
+            state: cx.new(|cx| State::new(http_client, cx)),
+        }
     }
 }
 
@@ -52,65 +47,56 @@ impl LanguageModelProvider for OpenAiSubscribedProvider {
     }
 
     fn default_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>> {
-        Some(create_language_model(
-            ChatGptModel::Gpt56Sol,
-            &self.state,
-            cx,
-        ))
+        self.provided_models(cx).into_iter().next()
     }
 
-    fn default_fast_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>> {
-        Some(create_language_model(
-            ChatGptModel::Gpt56Luna,
-            &self.state,
-            cx,
-        ))
+    fn default_fast_model(&self, _: &App) -> Option<Arc<dyn LanguageModel>> {
+        None
     }
 
     fn provided_models(&self, cx: &App) -> Vec<Arc<dyn LanguageModel>> {
-        ChatGptModel::all()
-            .into_iter()
-            .map(|model| create_language_model(model, &self.state, cx))
-            .collect()
-    }
-
-    fn recommended_models(&self, cx: &App) -> Vec<Arc<dyn LanguageModel>> {
-        vec![create_language_model(
-            ChatGptModel::Gpt56Sol,
-            &self.state,
-            cx,
-        )]
+        State::account_models(&self.state, cx)
     }
 
     fn is_authenticated(&self, cx: &App) -> bool {
-        self.state.read(cx).is_authenticated()
+        self.state.read(cx).has_chatgpt_plan_permission()
     }
 
     fn authenticate(&self, cx: &mut App) -> Task<Result<(), AuthenticateError>> {
-        if self.is_authenticated(cx) {
-            return Task::ready(Ok(()));
-        }
-        let load_task: Option<Shared<_>> = self.state.read(cx).load_task();
-        if let Some(load_task) = load_task {
-            let weak_state = self.state.downgrade();
-            cx.spawn(async move |cx| {
-                let _ = load_task.await;
-                let is_auth = weak_state
-                    .read_with(&*cx, |state, _| state.is_authenticated())
-                    .unwrap_or(false);
-                if is_auth {
-                    Ok(())
-                } else {
-                    Err(AuthenticateError::CredentialsNotFound)
+        Task::ready(
+            self.is_authenticated(cx)
+                .then_some(())
+                .ok_or(AuthenticateError::CredentialsNotFound),
+        )
+    }
+
+    fn model_discovery_status(&self, cx: &App) -> Option<ModelDiscoveryStatus> {
+        let state = self.state.read(cx);
+        Some(
+            if state.chatgpt_plan_busy() || state.chatgpt_catalog_loading() {
+                ModelDiscoveryStatus::Loading
+            } else if let Some(error) = state.chatgpt_catalog_error() {
+                ModelDiscoveryStatus::Failed {
+                    message: error,
+                    can_retry: state.has_chatgpt_plan_permission(),
                 }
-            })
-        } else {
-            Task::ready(Err(AuthenticateError::CredentialsNotFound))
-        }
+            } else if !state.has_chatgpt_plan_permission() {
+                ModelDiscoveryStatus::SignIn
+            } else if !state.has_chatgpt_catalog() {
+                ModelDiscoveryStatus::Empty
+            } else {
+                return None;
+            },
+        )
+    }
+
+    fn refresh_models(&self, cx: &mut App) {
+        self.state
+            .update(cx, |state, cx| state.refresh_chatgpt_catalog(cx));
     }
 
     fn settings_view(&self, cx: &mut App) -> Option<ProviderSettingsView> {
-        let is_authenticated = self.state.read(cx).is_authenticated();
+        let is_authenticated = self.is_authenticated(cx);
         let title = if is_authenticated {
             None
         } else {
@@ -129,11 +115,8 @@ impl LanguageModelProvider for OpenAiSubscribedProvider {
                 create_view: Arc::new({
                     let state = self.state.clone();
                     move |_window, cx| {
-                        cx.new(|_cx| ConfigurationView {
-                            state: state.clone(),
-                            compact: true,
-                        })
-                        .into()
+                        cx.new(|cx| ConfigurationView::new(state.clone(), cx))
+                            .into()
                     }
                 }),
             },
@@ -151,180 +134,144 @@ impl LanguageModelProvider for OpenAiSubscribedProvider {
         Sign in via Settings > AI > LLM Providers to continue."
             .into()
     }
-
-    fn fast_mode_confirmation(&self, _cx: &App) -> Option<FastModeConfirmation> {
-        Some(FastModeConfirmation {
-            title: "Enable Fast Mode for OpenAI?".into(),
-            message: "Fast mode sends requests using OpenAI's Priority processing tier, which \
-                targets significantly lower latency than the standard tier and is billed at a \
-                premium per-token rate."
-                .into(),
-        })
-    }
 }
 
 struct ConfigurationView {
     state: Entity<State>,
-    /// When `true`, the description is rendered elsewhere (the settings row's
-    /// left column), so it's omitted here to avoid duplication.
-    compact: bool,
+    _subscription: gpui::Subscription,
+}
+
+impl ConfigurationView {
+    fn new(state: Entity<State>, cx: &mut Context<Self>) -> Self {
+        let subscription = cx.observe(&state, |_, _, cx| cx.notify());
+        Self {
+            state,
+            _subscription: subscription,
+        }
+    }
 }
 
 impl Render for ConfigurationView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.read(cx);
-
-        if state.is_authenticated() {
-            let label = state
-                .email()
-                .map(|e| format!("Signed in as {e}"))
-                .unwrap_or_else(|| "Signed in".to_string());
-
-            let state_entity = self.state.clone();
-
-            return v_flex()
-                .child(
-                    ConfiguredApiCard::new("openai-subscribed-sign-out", SharedString::from(label))
-                        .button_label("Sign Out")
-                        .on_click(cx.listener(move |_this, _, _window, cx| {
-                            state_entity
-                                .update(cx, |state, cx| state.sign_out(cx))
-                                .detach_and_log_err(cx);
-                        })),
-                )
-                .into_any_element();
-        }
-
-        let last_auth_error = state.last_auth_error();
-        let provider_state = self.state.clone();
-
-        let is_signing_in = state.is_signing_in();
-        let button_label = if is_signing_in {
-            "Signing in…"
-        } else {
-            "Sign In"
-        };
+        let profiles = state.chatgpt_profiles();
+        let active = profiles.iter().find(|account| account.selected);
+        let busy = state.chatgpt_plan_busy();
+        let refreshing = state.chatgpt_catalog_loading();
 
         v_flex()
             .gap_2()
-            .when(!self.compact, |this| {
-                this.child(Label::new(SUBSCRIPTION_DESCRIPTION))
-            })
             .child(
-                Button::new("sign-in", button_label)
-                    .when(!self.compact, |this| this.full_width())
-                    .style(ButtonStyle::Outlined)
-                    .size(ButtonSize::Medium)
-                    .loading(is_signing_in)
-                    .disabled(is_signing_in)
-                    .on_click(move |_, _window, cx| {
-                        provider_state.update(cx, |state, cx| state.sign_in(cx));
-                    }),
-            )
-            .when_some(last_auth_error, |this, error| {
-                this.child(
-                    h_flex()
-                        .gap_1()
-                        .justify_center()
-                        .child(
-                            Icon::new(IconName::XCircle)
-                                .color(Color::Error)
-                                .size(IconSize::Small),
-                        )
-                        .child(Label::new(error).color(Color::Muted)),
+                Button::new(
+                    "chatgpt-plan-sign-in",
+                    if profiles.is_empty() {
+                        "Continue with ChatGPT"
+                    } else {
+                        "Add ChatGPT Account"
+                    },
                 )
+                .start_icon(Icon::new(IconName::AiOpenAiGptSub))
+                .style(ButtonStyle::Outlined)
+                .disabled(busy)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.state
+                        .update(cx, |state, cx| state.sign_in_chatgpt_plan(None, cx));
+                })),
+            )
+            .children(profiles.iter().map(|account| {
+                let id = account.id.clone();
+                let label = match (account.selected, account.can_use_plan) {
+                    (true, true) => format!("{} · Using ChatGPT plan", account.label),
+                    (true, false) if account.connected => {
+                        format!("{} · Plan usage disabled", account.label)
+                    }
+                    _ => account.label.clone(),
+                };
+                let action = if !account.connected {
+                    "Sign In"
+                } else if account.selected && !account.can_use_plan {
+                    "Enable Plan Usage"
+                } else if account.selected && state.chatgpt_catalog_error().is_some() {
+                    "Reconnect"
+                } else if account.selected {
+                    "Selected"
+                } else {
+                    "Switch"
+                };
+                let reconnect = action == "Reconnect";
+                h_flex().gap_2().child(Label::new(label)).child(
+                    Button::new(format!("chatgpt-account-{}", account.id), action)
+                        .disabled(busy || action == "Selected")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.state.update(cx, |state, cx| {
+                                if reconnect {
+                                    state.sign_in_chatgpt_plan(Some(id.clone()), cx);
+                                } else {
+                                    state.select_chatgpt_account(id.clone(), cx);
+                                }
+                            });
+                        })),
+                )
+            }))
+            .when_some(
+                active.filter(|account| account.connected),
+                |view, account| {
+                    view.child(
+                        h_flex()
+                            .gap_2()
+                            .when(account.can_use_plan, |row| {
+                                row.child(
+                                    Button::new(
+                                        "chatgpt-refresh-models",
+                                        if refreshing {
+                                            "Refreshing Models…"
+                                        } else {
+                                            "Refresh Models"
+                                        },
+                                    )
+                                    .disabled(busy || refreshing)
+                                    .on_click(cx.listener(
+                                        |this, _, _, cx| {
+                                            this.state.update(cx, |state, cx| {
+                                                state.refresh_chatgpt_catalog(cx)
+                                            });
+                                        },
+                                    )),
+                                )
+                                .child(ButtonLink::new(
+                                    "Manage Usage",
+                                    "https://chatgpt.com/#settings/usage",
+                                ))
+                            })
+                            .child(
+                                Button::new("chatgpt-plan-sign-out", "Sign Out")
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.state.update(cx, |state, cx| {
+                                            state.sign_out_chatgpt_plan(cx)
+                                        });
+                                    })),
+                            ),
+                    )
+                },
+            )
+            .when_some(state.chatgpt_catalog_error(), |view, error| {
+                view.child(Label::new(error).color(Color::Error))
             })
-            .into_any_element()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::{AsyncApp, TestAppContext};
-    use http_client::FakeHttpClient;
-    use parking_lot::Mutex;
-    use std::future::Future;
-    use std::pin::Pin;
-
-    #[gpui::test]
-    async fn test_authenticate_awaits_initial_load(cx: &mut TestAppContext) {
-        let creds_json = serde_json::json!({
-            "access_token": "fresh_access",
-            "refresh_token": "fresh_refresh",
-            "expires_at_ms": u64::MAX,
-            "account_id": null,
-            "email": null,
-        });
-        let creds_provider = Arc::new(FakeCredentialsProvider::new());
-        creds_provider.storage.lock().replace((
-            "Bearer".to_string(),
-            serde_json::to_vec(&creds_json).unwrap(),
-        ));
-
-        let http_client = FakeHttpClient::create(|_| async {
-            Ok(http_client::Response::builder()
-                .status(200)
-                .body(http_client::AsyncBody::default())?)
-        });
-
-        let provider =
-            cx.update(|cx| OpenAiSubscribedProvider::new(http_client, creds_provider, cx));
-
-        // Before load completes, authenticate should still await the load.
-        let auth_task = cx.update(|cx| provider.authenticate(cx));
-
-        // Drive the load to completion.
-        cx.run_until_parked();
-
-        let result = auth_task.await;
-        assert!(
-            result.is_ok(),
-            "authenticate should succeed after load completes with valid credentials"
-        );
-    }
-
-    struct FakeCredentialsProvider {
-        storage: Mutex<Option<(String, Vec<u8>)>>,
-    }
-
-    impl FakeCredentialsProvider {
-        fn new() -> Self {
-            Self {
-                storage: Mutex::new(None),
-            }
-        }
-    }
-
-    impl CredentialsProvider for FakeCredentialsProvider {
-        fn read_credentials<'a>(
-            &'a self,
-            _url: &'a str,
-            _cx: &'a AsyncApp,
-        ) -> Pin<Box<dyn Future<Output = Result<Option<(String, Vec<u8>)>>> + 'a>> {
-            Box::pin(async { Ok(self.storage.lock().clone()) })
-        }
-
-        fn write_credentials<'a>(
-            &'a self,
-            _url: &'a str,
-            username: &'a str,
-            password: &'a [u8],
-            _cx: &'a AsyncApp,
-        ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
-            self.storage
-                .lock()
-                .replace((username.to_string(), password.to_vec()));
-            Box::pin(async { Ok(()) })
-        }
-
-        fn delete_credentials<'a>(
-            &'a self,
-            _url: &'a str,
-            _cx: &'a AsyncApp,
-        ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
-            *self.storage.lock() = None;
-            Box::pin(async { Ok(()) })
-        }
+            .when_some(state.chatgpt_plan_error(), |view, error| {
+                view.child(Label::new(error).color(Color::Error))
+            })
+            .when(
+                state.has_chatgpt_plan_permission()
+                    && !refreshing
+                    && !state.has_chatgpt_catalog()
+                    && state.chatgpt_catalog_error().is_none(),
+                |view| {
+                    view.child(
+                        Label::new("No models are available for this ChatGPT account.")
+                            .color(Color::Muted),
+                    )
+                },
+            )
     }
 }

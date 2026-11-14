@@ -100,6 +100,7 @@ fn tool_call(
         sandbox_authorization_details: None,
         sandbox_fallback_authorization_details: None,
         sandbox_not_applied: None,
+        tool_working_directory: None,
     }
 }
 

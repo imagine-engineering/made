@@ -376,7 +376,7 @@ async fn test_terminal_tool_timeout_kills_handle(cx: &mut TestAppContext) {
     let deadline = std::time::Instant::now() + Duration::from_millis(500);
     loop {
         if let Some(result) = task_future.as_mut().now_or_never() {
-            let result = result.expect("terminal tool task should complete");
+            let result = result.expect_err("a timed out terminal returns a tool error");
 
             assert!(
                 handle.was_killed(),
@@ -965,14 +965,14 @@ async fn test_tool_authorization(cx: &mut TestAppContext) {
                 tool_use_id: "tool_id_2".into(),
                 tool_name: ToolRequiringPermission::NAME.into(),
                 is_error: true,
-                content: vec!["Permission to run tool denied by user".into()],
+                content: vec!["`tool_requiring_permission` Permission denied. Execution start could not be confirmed. No automatic correction is available.\n\n".into(), "Permission to run tool denied by user".into()],
                 output: Some("Permission to run tool denied by user".into())
             }),
             language_model::MessageContent::ToolResult(LanguageModelToolResult {
                 tool_use_id: "tool_id_interrupted".into(),
                 tool_name: ToolRequiringPermission::NAME.into(),
                 is_error: true,
-                content: vec!["Permission denied: user sent a follow-up message instead of approving the tool call.".into()],
+                content: vec!["`tool_requiring_permission` Permission denied. Execution start could not be confirmed. No automatic correction is available.\n\n".into(), "Permission denied: user sent a follow-up message instead of approving the tool call.".into()],
                 output: Some("Permission denied: user sent a follow-up message instead of approving the tool call.".into())
             })
         ]
@@ -4655,8 +4655,7 @@ async fn test_streaming_tool_completes_when_llm_stream_ends_without_final_input(
         is_input_complete: false,
         thought_signature: None,
     };
-    fake_model
-        .send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(tool_use.clone()));
+    fake_model.send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(tool_use));
     cx.run_until_parked();
 
     // Send a stream error WITHOUT ever sending is_input_complete = true.
@@ -4682,36 +4681,13 @@ async fn test_streaming_tool_completes_when_llm_stream_ends_without_final_input(
         .pending_completions()
         .pop()
         .expect("No running turn");
-    assert_eq!(
-        completion.messages[1..],
-        vec![
-            LanguageModelRequestMessage {
-                role: Role::User,
-                content: vec!["Use the streaming_echo tool".into()],
-                cache: false,
-                reasoning_details: None,
-            },
-            LanguageModelRequestMessage {
-                role: Role::Assistant,
-                content: vec![language_model::MessageContent::ToolUse(tool_use.clone())],
-                cache: false,
-                reasoning_details: None,
-            },
-            LanguageModelRequestMessage {
-                role: Role::User,
-                content: vec![language_model::MessageContent::ToolResult(
-                    LanguageModelToolResult {
-                        tool_use_id: tool_use.id.clone(),
-                        tool_name: tool_use.name,
-                        is_error: true,
-                        content: vec!["tool input was not fully received".into(),],
-                        output: Some("tool input was not fully received".into()),
-                    }
-                )],
-                cache: true,
-                reasoning_details: None,
-            },
-        ]
+    let result = tool_result_from_request(&completion, "tool_1");
+    assert!(result.is_error);
+    assert!(result.text_contents().contains("Input stream interrupted"));
+    assert!(
+        result
+            .text_contents()
+            .contains("Execution start could not be confirmed")
     );
 
     // Finish the retry round so the turn completes cleanly.
@@ -4819,7 +4795,7 @@ async fn test_streaming_tool_json_parse_error_is_forwarded_to_running_tool(
         "Expected forwarded JSON parse error, got: {content_text}"
     );
     assert!(
-        !content_text.contains("tool input was not fully received"),
+        !content_text.contains("Input stream interrupted"),
         "Should not contain orphaned sender error, got: {content_text}"
     );
 
@@ -4833,6 +4809,308 @@ async fn test_streaming_tool_json_parse_error_is_forwarded_to_running_tool(
             "Thread should not be stuck; the turn should have completed",
         );
     });
+}
+
+fn tool_result_from_request<'a>(
+    request: &'a LanguageModelRequest,
+    id: &str,
+) -> &'a LanguageModelToolResult {
+    request
+        .messages
+        .iter()
+        .flat_map(|message| &message.content)
+        .find_map(|content| match content {
+            MessageContent::ToolResult(result)
+                if result.tool_use_id == language_model::LanguageModelToolUseId::from(id) =>
+            {
+                Some(result)
+            }
+            _ => None,
+        })
+        .expect("tool result should be in the model request")
+}
+
+fn send_test_tool_call(
+    model: &FakeLanguageModel,
+    id: &str,
+    name: &str,
+    arguments: serde_json::Value,
+    complete: bool,
+) {
+    model.send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(
+        LanguageModelToolUse {
+            id: id.to_owned().into(),
+            name: name.to_owned().into(),
+            raw_input: arguments.to_string(),
+            input: language_model::LanguageModelToolUseInput::Json(arguments),
+            is_input_complete: complete,
+            thought_signature: None,
+        },
+    ));
+}
+
+#[gpui::test]
+async fn test_tool_input_correction_runs_once_without_replaying_batch_sibling(
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+    let ThreadTest { model, thread, .. } = setup(cx, TestModel::Fake).await;
+    always_allow_tools(cx);
+    disable_sandboxing(cx);
+    let fake_model = model.as_fake();
+    let environment = Rc::new(cx.update(|cx| {
+        FakeThreadEnvironment::default()
+            .with_terminal(FakeTerminalHandle::new_with_immediate_exit(cx, 0))
+    }));
+    thread.update(cx, |thread, _| {
+        thread.add_tool(TerminalTool::new(
+            thread.project().clone(),
+            environment.clone(),
+        ));
+    });
+    let mut events = thread
+        .update(cx, |thread, cx| {
+            thread.send(ClientUserMessageId::new(), ["Run the commands"], cx)
+        })
+        .expect("start turn");
+    cx.run_until_parked();
+
+    let sibling = json!({"command":"echo sibling", "cd":"."});
+    send_test_tool_call(
+        fake_model,
+        "invalid",
+        "terminal",
+        json!({"command":"echo corrected"}),
+        true,
+    );
+    send_test_tool_call(fake_model, "sibling", "terminal", sibling.clone(), true);
+    fake_model.end_last_completion_stream();
+    cx.run_until_parked();
+    assert_eq!(environment.terminal_creation_count(), 1);
+
+    let request = fake_model
+        .pending_completions()
+        .pop()
+        .expect("correction request");
+    let error = tool_result_from_request(&request, "invalid").text_contents();
+    assert!(
+        error.contains("terminal") && error.contains("/cd") && error.contains("project root"),
+        "{error}"
+    );
+    assert!(
+        error.contains("Execution did not start") && error.contains("one new tool call"),
+        "{error}"
+    );
+    assert!(!tool_result_from_request(&request, "sibling").is_error);
+
+    cx.update(|cx| {
+        let mut settings = agent_settings::AgentSettings::get_global(cx).clone();
+        settings.tool_permissions.default = settings::ToolPermissionMode::Confirm;
+        settings.tool_permissions.tools.remove("terminal");
+        agent_settings::AgentSettings::override_global(settings, cx);
+    });
+    let correction = json!({"command":"echo corrected", "cd":"."});
+    send_test_tool_call(fake_model, "sibling-again", "terminal", sibling, true);
+    send_test_tool_call(
+        fake_model,
+        "corrected",
+        "terminal",
+        correction.clone(),
+        true,
+    );
+    send_test_tool_call(fake_model, "duplicate", "terminal", correction, true);
+    fake_model.end_last_completion_stream();
+    cx.run_until_parked();
+    assert_eq!(environment.terminal_creation_count(), 1);
+    let approval = next_tool_call_authorization(&mut events).await;
+    assert_eq!(
+        approval.tool_call.fields.title.as_deref(),
+        Some("echo corrected")
+    );
+    assert!(approval.tool_call.meta.as_ref().is_some_and(|meta| {
+        meta.get(acp_thread::TOOL_WORKING_DIRECTORY_META_KEY)
+            .and_then(serde_json::Value::as_str)
+            == Some(path!("/test"))
+    }));
+    approval
+        .response
+        .send(acp_thread::SelectedPermissionOutcome::new(
+            "allow".into(),
+            acp::PermissionOptionKind::AllowOnce,
+        ))
+        .expect("corrected call must still require permission");
+    cx.run_until_parked();
+    assert_eq!(environment.terminal_creation_count(), 2);
+    let request = fake_model
+        .pending_completions()
+        .pop()
+        .expect("tool results request");
+    assert!(!tool_result_from_request(&request, "corrected").is_error);
+    for id in ["sibling-again", "duplicate"] {
+        assert!(
+            tool_result_from_request(&request, id)
+                .text_contents()
+                .contains("outside the scope")
+        );
+    }
+    fake_model.send_last_completion_stream_text_chunk("Done.");
+    fake_model.end_last_completion_stream();
+    cx.run_until_parked();
+    assert!(thread.read_with(cx, |thread, _| thread.is_turn_complete()));
+}
+
+#[gpui::test]
+async fn test_tool_input_rejections_and_no_retry_for_nonterminal(cx: &mut TestAppContext) {
+    init_test(cx);
+    let ThreadTest { model, thread, .. } = setup(cx, TestModel::Fake).await;
+    always_allow_tools(cx);
+    disable_sandboxing(cx);
+    let fake_model = model.as_fake();
+    thread.update(cx, |thread, cx| {
+        thread.add_default_tools(Rc::new(FakeThreadEnvironment::default()), cx);
+        thread.add_tool(EchoTool);
+    });
+    let mut events = thread
+        .update(cx, |thread, cx| {
+            thread.send(ClientUserMessageId::new(), ["Read a file"], cx)
+        })
+        .expect("start turn");
+    cx.run_until_parked();
+
+    send_test_tool_call(fake_model, "missing", "read_file", json!({}), true);
+    send_test_tool_call(
+        fake_model,
+        "partial",
+        EchoTool::NAME,
+        json!({"text":"unfinished"}),
+        false,
+    );
+    fake_model.send_last_completion_stream_event(
+        LanguageModelCompletionEvent::ToolUseJsonParseError {
+            id: "malformed".into(),
+            tool_name: "read_file".into(),
+            raw_input: "{invalid}".into(),
+            json_parse_error: "expected object key".into(),
+        },
+    );
+    fake_model.end_last_completion_stream();
+    cx.run_until_parked();
+
+    let request = fake_model
+        .pending_completions()
+        .pop()
+        .expect("correction request");
+    for (id, expected) in [
+        ("missing", "path"),
+        ("partial", "Input stream interrupted"),
+        ("malformed", "Error parsing input JSON: expected object key"),
+    ] {
+        let result = tool_result_from_request(&request, id);
+        assert!(result.is_error);
+        assert!(result.text_contents().contains(expected), "{result:?}");
+        assert!(result.text_contents().contains("Execution did not start"));
+    }
+
+    fake_model.send_last_completion_stream_text_chunk("I will retry.");
+    fake_model.end_last_completion_stream();
+    cx.run_until_parked();
+    let event_count = events
+        .by_ref()
+        .filter_map(|event| async move {
+            match event.ok()? {
+                ThreadEvent::ToolCallUpdate(acp_thread::ToolCallUpdate::UpdateFields(update))
+                    if update
+                        .fields
+                        .title
+                        .as_ref()
+                        .is_some_and(|title| title.contains("No retry occurred")) =>
+                {
+                    Some(())
+                }
+                _ => None,
+            }
+        })
+        .count()
+        .await;
+    assert_eq!(event_count, 3);
+}
+
+#[gpui::test]
+async fn test_tool_terminal_denied_or_exits_nonzero(cx: &mut TestAppContext) {
+    init_test(cx);
+    let ThreadTest { model, thread, .. } = setup(cx, TestModel::Fake).await;
+    disable_sandboxing(cx);
+    let fake_model = model.as_fake();
+    let environment = Rc::new(cx.update(|cx| {
+        FakeThreadEnvironment::default().with_terminal(
+            FakeTerminalHandle::new_with_immediate_exit(cx, 7)
+                .with_output(acp::TerminalOutputResponse::new("useful stderr", false)),
+        )
+    }));
+    thread.update(cx, |thread, _| {
+        thread.add_tool(TerminalTool::new(
+            thread.project().clone(),
+            environment.clone(),
+        ));
+    });
+
+    for (mode, expected_count, expected_text) in [
+        (
+            settings::ToolPermissionMode::Deny,
+            0,
+            ["Permission denied", "Execution did not start"],
+        ),
+        (
+            settings::ToolPermissionMode::Allow,
+            1,
+            ["exit code 7", "useful stderr"],
+        ),
+    ] {
+        cx.update(|cx| {
+            let mut settings = agent_settings::AgentSettings::get_global(cx).clone();
+            settings.tool_permissions.default = mode;
+            settings.tool_permissions.tools.remove("terminal");
+            agent_settings::AgentSettings::override_global(settings, cx);
+        });
+        let _events = thread
+            .update(cx, |thread, cx| {
+                thread.send(ClientUserMessageId::new(), ["Run the command"], cx)
+            })
+            .expect("start turn");
+        cx.run_until_parked();
+
+        let id = if expected_count == 0 {
+            "denied"
+        } else {
+            "nonzero"
+        };
+        send_test_tool_call(
+            fake_model,
+            id,
+            "terminal",
+            json!({"command":"exit 7", "cd":"."}),
+            true,
+        );
+        fake_model.end_last_completion_stream();
+        cx.run_until_parked();
+        assert_eq!(environment.terminal_creation_count(), expected_count);
+
+        let request = fake_model
+            .pending_completions()
+            .pop()
+            .expect("tool results request");
+        let result = tool_result_from_request(&request, id);
+        assert!(result.is_error);
+        let content = result.text_contents();
+        for expected in expected_text {
+            assert!(content.contains(expected), "{content}");
+        }
+        assert!(content.contains("No automatic correction"), "{content}");
+
+        fake_model.send_last_completion_stream_text_chunk("Done.");
+        fake_model.end_last_completion_stream();
+        cx.run_until_parked();
+    }
 }
 
 /// Filters out the stop events for asserting against in tests
@@ -4895,6 +5173,7 @@ async fn setup(cx: &mut TestAppContext, model: TestModel) -> ThreadTest {
                             StreamingJsonErrorContextTool::NAME: true,
                             StreamingFailingEchoTool::NAME: true,
                             TerminalTool::NAME: true,
+                            ReadFileTool::NAME: true,
                         }
                     }
                 }
@@ -8486,7 +8765,7 @@ async fn test_streaming_tool_error_breaks_stream_loop_immediately(cx: &mut TestA
                         tool_use_id: tool_use.id.clone(),
                         tool_name: tool_use.name,
                         is_error: true,
-                        content: vec!["failed".into()],
+                        content: vec!["`streaming_failing_echo` Failed. Execution start could not be confirmed. No automatic correction is available.\n\n".into(), "failed".into()],
                         output: Some("failed".into()),
                     }
                 )],
@@ -8597,7 +8876,7 @@ async fn test_streaming_tool_error_waits_for_prior_tools_to_complete(cx: &mut Te
                         tool_use_id: second_tool_use.id.clone(),
                         tool_name: second_tool_use.name,
                         is_error: true,
-                        content: vec!["failed".into()],
+                        content: vec!["`streaming_failing_echo` Failed. Execution start could not be confirmed. No automatic correction is available.\n\n".into(), "failed".into()],
                         output: Some("failed".into()),
                     }),
                     language_model::MessageContent::ToolResult(LanguageModelToolResult {

@@ -351,6 +351,16 @@ impl Default for IconOrSvg {
     }
 }
 
+pub enum ModelDiscoveryStatus {
+    Loading,
+    Empty,
+    Failed {
+        message: SharedString,
+        can_retry: bool,
+    },
+    SignIn,
+}
+
 pub trait LanguageModelProvider: 'static {
     fn id(&self) -> LanguageModelProviderId;
     fn name(&self) -> LanguageModelProviderName;
@@ -366,6 +376,12 @@ pub trait LanguageModelProvider: 'static {
     fn is_authenticated(&self, cx: &App) -> bool;
     fn authenticate(&self, cx: &mut App) -> Task<Result<(), AuthenticateError>>;
     fn settings_view(&self, cx: &mut App) -> Option<ProviderSettingsView>;
+
+    fn model_discovery_status(&self, _cx: &App) -> Option<ModelDiscoveryStatus> {
+        None
+    }
+
+    fn refresh_models(&self, _cx: &mut App) {}
 
     fn set_api_key(&self, _key: Option<String>, _cx: &mut App) -> Task<Result<()>> {
         Task::ready(Ok(()))

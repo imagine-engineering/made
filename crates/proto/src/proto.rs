@@ -2173,6 +2173,9 @@ mod tests {
             request_id: 41,
             revision: 7,
             input_fingerprint: 11,
+            omitted_candidates: 0,
+            omitted_workspaces: 0,
+            omitted_failures: 0,
             workspaces: vec![CargoWorkspace {
                 root: Some(ProjectPath {
                     worktree_id: 3,

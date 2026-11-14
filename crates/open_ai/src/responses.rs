@@ -1,7 +1,8 @@
 use anyhow::{Context as _, Result, anyhow};
 use futures::{AsyncBufReadExt, AsyncReadExt, StreamExt, io::BufReader, stream::BoxStream};
 use http_client::{
-    AsyncBody, CustomHeaders, HttpClient, Method, Request as HttpRequest, RequestBuilderExt,
+    AsyncBody, CustomHeaders, HttpClient, HttpRequestExt as _, Method, Request as HttpRequest,
+    RequestBuilderExt,
 };
 use serde::{Deserialize, Serialize, ser::SerializeSeq as _};
 use serde_json::Value;
@@ -349,6 +350,11 @@ pub enum ReasoningSummaryMode {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolDefinition {
+    Namespace {
+        name: String,
+        description: String,
+        tools: Vec<ToolDefinition>,
+    },
     Function {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -771,6 +777,7 @@ pub async fn stream_response(
     let request = HttpRequest::builder()
         .method(Method::POST)
         .uri(uri)
+        .follow_redirects(http_client::RedirectPolicy::NoFollow)
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", api_key.trim()))
         .extra_headers(extra_headers)

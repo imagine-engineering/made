@@ -68,6 +68,14 @@ impl std::error::Error for MaxOutputTokensError {}
 /// Key used in ACP ToolCall meta to store the tool's programmatic name.
 /// This is a workaround since ACP's ToolCall doesn't have a dedicated name field.
 pub const TOOL_NAME_META_KEY: &str = "tool_name";
+pub const TOOL_WORKING_DIRECTORY_META_KEY: &str = "tool_working_directory";
+
+fn tool_working_directory_from_meta(meta: &Option<acp::Meta>) -> Option<SharedString> {
+    meta.as_ref()?
+        .get(TOOL_WORKING_DIRECTORY_META_KEY)?
+        .as_str()
+        .map(SharedString::new)
+}
 
 /// Helper to extract tool name from ACP meta
 pub fn tool_name_from_meta(meta: &Option<acp::Meta>) -> Option<SharedString> {
@@ -873,6 +881,7 @@ pub struct ToolCall {
     pub raw_input_markdown: Option<Entity<Markdown>>,
     pub raw_output: Option<serde_json::Value>,
     pub tool_name: Option<SharedString>,
+    pub tool_working_directory: Option<SharedString>,
     pub subagent_session_info: Option<SubagentSessionInfo>,
     pub sandbox_authorization_details: Option<SandboxAuthorizationDetails>,
     pub sandbox_fallback_authorization_details: Option<SandboxFallbackAuthorizationDetails>,
@@ -919,6 +928,7 @@ impl ToolCall {
             .and_then(|input| markdown_for_raw_output(input, &language_registry, cx));
 
         let tool_name = tool_name_from_meta(&tool_call.meta);
+        let tool_working_directory = tool_working_directory_from_meta(&tool_call.meta);
 
         let subagent_session_info = subagent_session_info_from_meta(&tool_call.meta);
         let sandbox_authorization_details =
@@ -945,6 +955,7 @@ impl ToolCall {
             raw_input_markdown,
             raw_output: tool_call.raw_output,
             tool_name,
+            tool_working_directory,
             subagent_session_info,
             sandbox_authorization_details,
             sandbox_fallback_authorization_details,
@@ -979,6 +990,9 @@ impl ToolCall {
 
         if let Some(status) = status {
             self.update_acp_status(status);
+        }
+        if let Some(directory) = tool_working_directory_from_meta(&meta) {
+            self.tool_working_directory = Some(directory);
         }
 
         if let Some(subagent_session_info) = subagent_session_info_from_meta(&meta) {
@@ -1312,9 +1326,12 @@ impl ToolCallStatus {
         }
     }
 
-    fn status_after_permission_grant(status: acp::ToolCallStatus) -> ToolCallStatus {
+    fn status_after_permission_grant(
+        status: acp::ToolCallStatus,
+        native_tool: bool,
+    ) -> ToolCallStatus {
         match ToolCallStatus::from(status) {
-            ToolCallStatus::Pending => ToolCallStatus::InProgress,
+            ToolCallStatus::Pending if !native_tool => ToolCallStatus::InProgress,
             status => status,
         }
     }
@@ -3232,6 +3249,7 @@ impl AcpThread {
                     sandbox_authorization_details: None,
                     sandbox_fallback_authorization_details: None,
                     sandbox_not_applied: None,
+                    tool_working_directory: None,
                 };
                 self.push_entry(AgentThreadEntry::ToolCall(failed_tool_call), cx);
                 return Ok(());
@@ -3530,17 +3548,27 @@ impl AcpThread {
             match &call.status {
                 ToolCallStatus::WaitingForConfirmation {
                     kind: AuthorizationKind::ActionChoice,
+                    current_status,
                     ..
-                } => ToolCallStatus::InProgress,
+                } => ToolCallStatus::status_after_permission_grant(
+                    *current_status,
+                    call.tool_name.is_some(),
+                ),
                 ToolCallStatus::WaitingForConfirmation { current_status, .. } => {
                     match outcome.option_kind {
                         acp::PermissionOptionKind::RejectOnce
                         | acp::PermissionOptionKind::RejectAlways => ToolCallStatus::Rejected,
                         acp::PermissionOptionKind::AllowOnce
                         | acp::PermissionOptionKind::AllowAlways => {
-                            ToolCallStatus::status_after_permission_grant(*current_status)
+                            ToolCallStatus::status_after_permission_grant(
+                                *current_status,
+                                call.tool_name.is_some(),
+                            )
                         }
-                        _ => ToolCallStatus::status_after_permission_grant(*current_status),
+                        _ => ToolCallStatus::status_after_permission_grant(
+                            *current_status,
+                            call.tool_name.is_some(),
+                        ),
                     }
                 }
                 _ => match outcome.option_kind {

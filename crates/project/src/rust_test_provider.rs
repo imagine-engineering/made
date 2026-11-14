@@ -5623,6 +5623,7 @@ esac
             input_fingerprint: 1,
             workspaces,
             failures: Vec::new(),
+            omitted: Default::default(),
             completeness: CargoSnapshotCompleteness::Complete,
         }
     }

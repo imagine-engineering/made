@@ -334,6 +334,24 @@ impl AnyAgentTool for ContextServerTool {
         acp::ToolKind::Other
     }
 
+    fn reports_execution_start(&self) -> bool {
+        true
+    }
+
+    fn validate_input(
+        &self,
+        input: &serde_json::Value,
+    ) -> Result<(), crate::thread::InvalidToolArguments> {
+        let schema = &self.tool.input_schema;
+        if schema.is_null() {
+            return crate::thread::validate_tool_schema(
+                &serde_json::json!({"type": "object"}),
+                input,
+            );
+        }
+        crate::thread::validate_tool_schema(schema, input)
+    }
+
     fn initial_title(&self, input: serde_json::Value, _cx: &mut App) -> SharedString {
         format_mcp_initial_title(&self.tool.name, &input).into()
     }
@@ -366,6 +384,7 @@ impl AnyAgentTool for ContextServerTool {
             .read(cx)
             .get_authorized_running_server(&self.server_id, cx)
         else {
+            event_stream.report_failure("Context server unavailable");
             return Task::ready(Err(anyhow::anyhow!("Context server not found").into()));
         };
         let tool_name = self.tool.name.clone();
@@ -373,14 +392,13 @@ impl AnyAgentTool for ContextServerTool {
         let display_name = self.tool.name.clone();
         let initial_title = self.initial_title(serde_json::Value::Null, cx);
         cx.spawn(async move |cx| {
-            let authorize = cx.update(|cx| {
-                event_stream.authorize_third_party_tool(initial_title, tool_id, display_name, cx)
-            });
             let input = input
                 .recv()
                 .await
                 .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
+            let authorize = cx.update(|cx| {
+                event_stream.authorize_third_party_tool(initial_title, tool_id, display_name, cx)
+            });
             authorize
                 .await
                 .map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -390,9 +408,11 @@ impl AnyAgentTool for ContextServerTool {
                     .is_some_and(|current| Arc::ptr_eq(&current, &server))
             });
             if !authorized {
+                event_stream.report_failure("Permission denied");
                 return Err(anyhow::anyhow!("Context server authority changed while awaiting permission").into());
             }
             let Some(protocol) = server.client() else {
+                event_stream.report_failure("Context server unavailable");
                 return Err(anyhow::anyhow!("Context server not initialized").into());
             };
 
@@ -408,6 +428,13 @@ impl AnyAgentTool for ContextServerTool {
                 arguments
             );
 
+            if event_stream.was_cancelled_by_user() {
+                return Err(anyhow::anyhow!("MCP tool cancelled before dispatch").into());
+            }
+            event_stream.mark_execution_started();
+            event_stream.update_fields(
+                acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::InProgress),
+            );
             let request = protocol.request::<context_server::types::requests::CallTool>(
                 context_server::types::CallToolParams {
                     name: tool_name,

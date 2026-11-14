@@ -336,11 +336,7 @@ fn register_language_model_providers(
     );
     registry.register_provider(Arc::new(CopilotChatLanguageModelProvider::new(cx)), cx);
     registry.register_provider(
-        Arc::new(OpenAiSubscribedProvider::new(
-            client.http_client(),
-            credentials_provider,
-            cx,
-        )),
+        Arc::new(OpenAiSubscribedProvider::new(client.http_client(), cx)),
         cx,
     );
 }

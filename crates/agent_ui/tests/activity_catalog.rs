@@ -154,6 +154,7 @@ fn tool_call(id: &str, kind: acp::ToolKind, label: &str, cx: &mut gpui::App) -> 
         sandbox_authorization_details: None,
         sandbox_fallback_authorization_details: None,
         sandbox_not_applied: None,
+        tool_working_directory: None,
     }
 }
 

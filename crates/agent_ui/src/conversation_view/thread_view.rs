@@ -9205,7 +9205,7 @@ impl ThreadView {
     fn render_collapsible_command(
         &self,
         group: SharedString,
-        is_preview: bool,
+        status_label: Option<&'static str>,
         command: Entity<Markdown>,
         window: &Window,
         cx: &Context<Self>,
@@ -9232,20 +9232,16 @@ impl ThreadView {
         style.code_block_overflow_x_scroll = false;
 
         let header_bg = self.tool_card_header_bg(cx);
-        let run_command_label = if is_preview {
-            Some(
-                h_flex()
-                    .font_ui(cx)
-                    .min_h(rems_from_px(ui::fractal::CONTROL_SMALL))
-                    .child(
-                        Label::new("Run Command")
-                            .size(LabelSize::Small)
-                            .color(Color::Muted),
-                    ),
-            )
-        } else {
-            None
-        };
+        let run_command_label = status_label.map(|status_label| {
+            h_flex()
+                .font_ui(cx)
+                .min_h(rems_from_px(ui::fractal::CONTROL_SMALL))
+                .child(
+                    Label::new(status_label)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                )
+        });
         // Suppress the code block's built-in copy button so we don't stack two
         // copy buttons on top of each other; the outer button below is the one
         // we want, because it copies the unfenced command text.
@@ -9266,7 +9262,7 @@ impl ThreadView {
             .relative()
             .p_1p5()
             .bg(header_bg)
-            .when(is_preview, |this| this.pt_1().children(run_command_label))
+            .when_some(run_command_label, |this, label| this.pt_1().child(label))
             .child(markdown_element)
             .child(div().absolute().top_1().right_1().child(copy_button))
     }
@@ -9298,11 +9294,7 @@ impl ThreadView {
         let needs_confirmation = confirmation_options.is_some();
 
         let output = terminal_data.output();
-        let command_finished = output.is_some()
-            && !matches!(
-                tool_call.status,
-                ToolCallStatus::InProgress | ToolCallStatus::Pending
-            );
+        let command_finished = tool_failed || matches!(tool_call.status, ToolCallStatus::Completed);
         let truncated_output =
             output.is_some_and(|output| output.original_content_len > output.content.len());
         let output_line_count = output.map(|output| output.content_line_count).unwrap_or(0);
@@ -9329,7 +9321,7 @@ impl ThreadView {
 
         let command_element = self.render_collapsible_command(
             header_group.clone(),
-            false,
+            None,
             tool_call.label.clone(),
             window,
             cx,
@@ -9397,7 +9389,7 @@ impl ThreadView {
             header.failed(
                 output
                     .and_then(|o| o.exit_status)
-                    .map(|status| status.code().unwrap_or(-1)),
+                    .and_then(|status| status.code()),
             )
         })
         .when_some(tool_call.sandbox_not_applied.as_ref(), |header, reason| {
@@ -9679,7 +9671,7 @@ impl ThreadView {
             .read(cx)
             .is_tool_call_expanded(&tool_call.id);
 
-        is_open |= needs_confirmation;
+        is_open |= needs_confirmation || (is_terminal_tool && failed_or_canceled);
 
         let input_output_header = |label: SharedString| {
             div()
@@ -9920,9 +9912,24 @@ impl ThreadView {
         let body = v_flex()
             .map(|this| {
                 if is_terminal_tool {
-                    this.child(self.render_collapsible_command(
+                    this.when_some(tool_call.tool_working_directory.clone(), |this, directory| {
+                        this.child(
+                            div()
+                                .px_2()
+                                .pt_1()
+                                .child(Label::new(directory).size(LabelSize::Small).color(Color::Muted)),
+                        )
+                    }).child(self.render_collapsible_command(
                         card_header_id.clone(),
-                        true,
+                        Some(match tool_call.status {
+                            ToolCallStatus::Pending => "Preparing command",
+                            ToolCallStatus::WaitingForConfirmation { .. } => "Awaiting approval",
+                            ToolCallStatus::InProgress => "Running command",
+                            ToolCallStatus::Completed => "Finished",
+                            ToolCallStatus::Failed => "Command failed",
+                            ToolCallStatus::Rejected => "Permission denied",
+                            ToolCallStatus::Canceled => "Command cancelled",
+                        }),
                         tool_call.label.clone(),
                         window,
                         cx,

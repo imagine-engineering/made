@@ -907,6 +907,7 @@ fn doctor_cargo_graph_retains_transitive_multiple_versions_sources_features_and_
         input_fingerprint: 2,
         workspaces: vec![workspace],
         failures: Vec::new(),
+        omitted: Default::default(),
         completeness: CargoSnapshotCompleteness::Complete,
     })
     .expect("Bounded snapshot");
@@ -987,6 +988,7 @@ fn doctor_cargo_graph_invalid_and_oversized_metadata_are_rejected_before_retenti
         input_fingerprint: 2,
         workspaces: vec![workspace],
         failures: Vec::new(),
+        omitted: Default::default(),
         completeness: CargoSnapshotCompleteness::Complete,
     };
     assert!(validate_cargo_snapshot_bounds(&snapshot).is_err());
@@ -1095,4 +1097,98 @@ fn doctor_cargo_graph_public_sparse_lock_identity_is_canonical_and_private_remai
             .lock_status,
         CargoDependencyLockStatus::NotLocked
     );
+}
+
+#[gpui::test]
+async fn cargo_workspace_limits_and_no_git_ignore_rules(cx: &mut TestAppContext) {
+    crate::init_test(cx);
+    for (name, workspace_count, failure_count, workspace_limit, failure_limit) in [
+        ("workspace-overflow", 131, 0, 3, 0),
+        ("failure-overflow", 1, 133, 0, 5),
+    ] {
+        let root = format!("/{name}");
+        let fs = FakeFs::new(cx.executor());
+        let mut entries = serde_json::Map::from_iter([
+            (".gitignore".to_owned(), json!(".cargo/vendor\n.tools\n")),
+            (
+                ".cargo".to_owned(),
+                json!({"vendor": {"dependency":{"Cargo.toml":"[package]"}}}),
+            ),
+            (
+                ".tools".to_owned(),
+                json!({"cargo-web":{"Cargo.toml":"[package]"}}),
+            ),
+        ]);
+        for index in 0..workspace_count {
+            entries.insert(
+                format!("valid-{index:03}"),
+                json!({"Cargo.toml":"[package]\nname = \"standalone\"\nversion = \"1.0.0\""}),
+            );
+        }
+        for index in 0..failure_count {
+            entries.insert(
+                format!("failure-{index:03}"),
+                json!({"Cargo.toml":"invalid"}),
+            );
+        }
+        fs.insert_tree(root.as_str(), serde_json::Value::Object(entries))
+            .await;
+        let project = Project::test(fs, [Path::new(&root)], cx).await;
+        let runner = Arc::new(DiscoveryLimitRunner::default());
+        let store = project.read_with(cx, |project, _| project.cargo_workspace_store().clone());
+        store.update(cx, |store, _| {
+            store
+                .set_local_runners_for_test(
+                    runner.clone(),
+                    Arc::new(FixtureConfigurationProbe {
+                        output: Ok(
+                            include_bytes!("../../test_data/cargo_workspace/rustc-vv.txt").to_vec(),
+                        ),
+                        requests: Default::default(),
+                    }),
+                )
+                .expect("install discovery fixture runners");
+        });
+        let snapshot = store
+            .update(cx, |store, cx| store.refresh(cx))
+            .await
+            .expect("retain useful discovery results");
+        assert_eq!(snapshot.workspaces.len(), workspace_count.min(128));
+        assert_eq!(snapshot.failures.len(), failure_count.min(128));
+        assert_eq!(snapshot.omitted.workspaces, workspace_limit);
+        assert_eq!(snapshot.omitted.failures, failure_limit);
+        assert_eq!(snapshot.omitted.candidates, 0);
+        let calls = runner.manifests.lock();
+        assert_eq!(calls.len(), workspace_count + failure_count);
+        assert!(calls.iter().all(|path| {
+            !path.components().any(|component| {
+                matches!(component.as_os_str().to_str(), Some(".cargo" | ".tools"))
+            })
+        }));
+    }
+}
+
+#[derive(Default)]
+struct DiscoveryLimitRunner {
+    manifests: parking_lot::Mutex<Vec<std::path::PathBuf>>,
+}
+
+#[async_trait]
+impl CargoMetadataRunner for DiscoveryLimitRunner {
+    async fn run(&self, request: CargoMetadataRequest) -> Result<Vec<u8>> {
+        self.manifests.lock().push(request.manifest_path);
+        anyhow::ensure!(
+            request
+                .working_directory
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("valid-")),
+            "fixture metadata failure"
+        );
+        Ok(
+            include_str!("../../test_data/cargo_workspace/standalone-v1.json")
+                .replace("/standalone", &request.working_directory.to_string_lossy())
+                .into_bytes(),
+        )
+    }
 }

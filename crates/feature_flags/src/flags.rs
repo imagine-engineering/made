@@ -231,3 +231,45 @@ impl FeatureFlag for RustExactDoctestActionsExperimentalFeatureFlag {
     }
 }
 register_feature_flag!(RustExactDoctestActionsExperimentalFeatureFlag);
+
+pub struct CopperDoctor;
+
+impl FeatureFlag for CopperDoctor {
+    const NAME: &'static str = "copper-doctor";
+    type Value = PresenceFlag;
+
+    fn enabled_for_staff() -> bool {
+        false
+    }
+    fn allow_local_override() -> bool {
+        true
+    }
+    fn requires_local_opt_in() -> bool {
+        true
+    }
+    fn description() -> &'static str {
+        "Enable Copper Doctor and the /doctor command."
+    }
+}
+register_feature_flag!(CopperDoctor);
+
+pub struct CopperSchedules;
+
+impl FeatureFlag for CopperSchedules {
+    const NAME: &'static str = "copper-schedules";
+    type Value = PresenceFlag;
+
+    fn enabled_for_staff() -> bool {
+        false
+    }
+    fn allow_local_override() -> bool {
+        true
+    }
+    fn requires_local_opt_in() -> bool {
+        true
+    }
+    fn description() -> &'static str {
+        "Enable /schedules and its schedule management commands."
+    }
+}
+register_feature_flag!(CopperSchedules);

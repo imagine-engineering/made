@@ -115,6 +115,55 @@ async fn test_visible_list(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+async fn test_expanded_project_tree_leaves_room_for_status_bar(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    let files =
+        serde_json::Map::from_iter((0..50).map(|index| (format!("file-{index:02}.rs"), json!(""))));
+    fs.insert_tree(
+        "/citybound",
+        json!({"cb_simulation": {"src": {"economy": {"households": {"household_kinds": files}}}}}),
+    )
+    .await;
+    let project = Project::test(fs, ["/citybound".as_ref()], cx).await;
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let workspace = window
+        .read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone())
+        .expect("workspace");
+    let mut visual = VisualTestContext::from_window(window.into(), cx);
+    let panel = workspace.update_in(&mut visual, ProjectPanel::new);
+    workspace.update_in(&mut visual, |workspace, window, cx| {
+        workspace.add_panel(panel.clone(), window, cx);
+        workspace.focus_panel::<ProjectPanel>(window, cx);
+    });
+    visual.simulate_resize(gpui::size(px(850.), px(310.)));
+    visual.run_until_parked();
+    panel.update_in(&mut visual, |panel, window, cx| {
+        let root = panel
+            .state
+            .last_worktree_root_id
+            .expect("project tree root");
+        let worktree_id = panel
+            .project
+            .read(cx)
+            .worktree_id_for_entry(root, cx)
+            .expect("worktree");
+        panel.expand_all_for_entry(worktree_id, root, cx);
+        panel.update_visible_entries(Some((worktree_id, root)), false, false, window, cx);
+    });
+    visual.run_until_parked();
+    visual.refresh().expect("render expanded project tree");
+    let bar = visual
+        .debug_bounds("WORKSPACE-STATUS-BAR")
+        .expect("status bar bounds");
+    assert!(
+        bar.size.height > px(0.) && bar.bottom() <= px(310.),
+        "{bar:?}"
+    );
+    assert!(panel.read_with(&visual, |panel, _| panel.scroll_handle.is_scrollable()));
+}
+
+#[gpui::test]
 async fn test_opening_file(cx: &mut gpui::TestAppContext) {
     init_test_with_editor(cx);
 

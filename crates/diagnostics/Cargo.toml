@@ -20,6 +20,8 @@ jvm-tools = ["dep:quick-xml", "dep:dap", "project/jvm-tools", "dep:flate2", "dep
 agentic = ["dep:git", "dep:git_hosting_providers", "dep:http_client", "dep:context_server", "dep:agent_settings", "dep:agent", "dep:language_model", "dep:extension_host", "dep:chrono", "extension_host/agentic", "zed_actions/agentic"]
 
 [dependencies]
+command_palette_hooks.workspace = true
+feature_flags.workspace = true
 git = { workspace = true, optional = true }
 git_hosting_providers = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }

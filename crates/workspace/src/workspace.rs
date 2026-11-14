@@ -10646,7 +10646,8 @@ impl Render for Workspace {
             })
             .child(
                 div()
-                    .size_full()
+                    .w_full()
+                    .min_h_0()
                     .relative()
                     .flex_1()
                     .flex()
@@ -10657,6 +10658,7 @@ impl Render for Workspace {
                             .bg(colors.background)
                             .relative()
                             .flex_1()
+                            .min_h_0()
                             .w_full()
                             .flex()
                             .flex_col()
@@ -11030,7 +11032,7 @@ impl Render for Workspace {
                             .children(self.render_notifications(window, cx)),
                     )
                     .when(self.status_bar_visible(cx) && self.workspace_presentation() == WorkspacePresentation::Editor, |parent| {
-                        parent.child(self.status_bar.clone())
+                        parent.child(div().w_full().flex_none().child(self.status_bar.clone()))
                     })
                     .child(self.toast_layer.clone()),
             )
