@@ -129,6 +129,52 @@ struct AdmittedJvmOperation {
     manifests: Vec<Option<worktree::Entry>>,
     launch_inputs: Vec<(Arc<RelPath>, Option<worktree::Entry>)>,
     settings: serde_json::Value,
+    host_inputs: Vec<JvmHostInput>,
+    host_identity: Arc<std::sync::OnceLock<Vec<JvmHostInputIdentity>>>,
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct JvmHostInput {
+    path: PathBuf,
+    directory: bool,
+    executable: bool,
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct JvmHostInputIdentity {
+    canonical_path: PathBuf,
+    inode: u64,
+    file_version: Option<(fs::MTime, u64)>,
+}
+
+#[cfg(feature = "jvm-tools")]
+impl JvmHostInput {
+    async fn identity(&self, fs: &dyn fs::Fs) -> Result<JvmHostInputIdentity> {
+        use anyhow::Context as _;
+
+        let canonical_path = fs.canonicalize(&self.path).await?;
+        let metadata = fs
+            .metadata(&canonical_path)
+            .await?
+            .context("Missing host input")?;
+        anyhow::ensure!(
+            !metadata.is_symlink
+                && if self.directory {
+                    metadata.is_dir
+                } else {
+                    fs.is_file(&canonical_path).await
+                        && (!self.executable || metadata.is_executable)
+                },
+            "Invalid host input"
+        );
+        Ok(JvmHostInputIdentity {
+            canonical_path,
+            inode: metadata.inode,
+            file_version: (!self.directory).then_some((metadata.mtime, metadata.len)),
+        })
+    }
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -335,7 +381,7 @@ fn jvm_operation_plan(
     current: bool,
     path_style: PathStyle,
     cx: &App,
-) -> Result<crate::jvm_project::JvmBuildOperationPlan> {
+) -> Result<(crate::jvm_project::JvmBuildOperationPlan, Vec<JvmHostInput>)> {
     let mut plan = receipt.plan(snapshot, current, path_style)?;
     let location = settings::SettingsLocation {
         worktree_id: receipt.worktree_id,
@@ -347,12 +393,50 @@ fn jvm_operation_plan(
         cx,
     )
     .and_then(|settings| settings.settings.as_ref());
-    if matches!(plan.wrapper.path.file_name(), Some("mvnw" | "mvnw.cmd")) {
+    let maven = matches!(plan.wrapper.path.file_name(), Some("mvnw" | "mvnw.cmd"));
+    if maven {
         apply_maven_task_settings(&mut plan, preferences, path_style)?;
     } else if let Some(preferences) = preferences {
         apply_gradle_task_settings(&mut plan, preferences, path_style)?;
     }
-    Ok(plan)
+    let mut host_inputs = Vec::new();
+    if let Some(preferences) = preferences {
+        let paths: &[(&str, Option<&str>)] = if maven {
+            &[
+                ("java.configuration.maven.globalSettings", None),
+                ("java.configuration.maven.userSettings", None),
+            ]
+        } else {
+            let (gradle, java) = if path_style.is_windows() {
+                ("bin/gradle.bat", "bin/java.exe")
+            } else {
+                ("bin/gradle", "bin/java")
+            };
+            &[
+                ("java.import.gradle.home", Some(gradle)),
+                ("java.import.gradle.java.home", Some(java)),
+                ("java.import.gradle.user.home", Some("")),
+            ]
+        };
+        for &(key, launcher) in paths {
+            if let Some(path) = jdtls_task_path(preferences, key, path_style)? {
+                let path = PathBuf::from(path);
+                host_inputs.push(JvmHostInput {
+                    path: path.clone(),
+                    directory: launcher.is_some(),
+                    executable: false,
+                });
+                if let Some(launcher) = launcher.filter(|launcher| !launcher.is_empty()) {
+                    host_inputs.push(JvmHostInput {
+                        path: path.join(launcher),
+                        directory: false,
+                        executable: !path_style.is_windows(),
+                    });
+                }
+            }
+        }
+    }
+    Ok((plan, host_inputs))
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -1325,7 +1409,8 @@ impl Inventory {
             worktree.is_local() && worktree.is_visible(),
             "Discovered build operations currently require a visible local project; remote execution is not qualified"
         );
-        let plan = jvm_operation_plan(&receipt, snapshot, current, worktree.path_style(), cx)?;
+        let (plan, host_inputs) =
+            jvm_operation_plan(&receipt, snapshot, current, worktree.path_style(), cx)?;
         ensure!(
             worktree.abs_path().to_str().is_some(),
             "The build root needs a valid Unicode path; reopen it under a supported path"
@@ -1387,6 +1472,7 @@ impl Inventory {
         };
         let resolved = plan.template.resolve_task_with_literal_arguments(&id_base,&context)
             .context("Build operation arguments cannot be resolved safely; repair the project path and refresh")?;
+        let previous = self.jvm_operations.get(&resolved.id);
         let admitted = AdmittedJvmOperation {
             receipt,
             plan,
@@ -1398,16 +1484,51 @@ impl Inventory {
             manifests,
             launch_inputs,
             settings,
+            host_inputs,
+            host_identity: previous
+                .map(|previous| previous.host_identity.clone())
+                .unwrap_or_default(),
         };
         ensure!(
-            self.jvm_operations
-                .get(&resolved.id)
-                .is_none_or(|existing| existing == &admitted),
+            previous.is_none_or(|existing| existing == &admitted),
             "Build operation identity conflicts with a held action; reopen the project and refresh"
         );
         self.prune_jvm_operations(Some(&resolved.id));
         self.jvm_operations.insert(resolved.id.clone(), admitted);
         Ok((source, resolved))
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn verify_jvm_operation_host_inputs(&self, id: &TaskId, cx: &App) -> Task<Result<()>> {
+        let Some(admitted) = self.jvm_operations.get(id) else {
+            return Task::ready(Err(anyhow::anyhow!(
+                "Select the current JVM operation again"
+            )));
+        };
+        if admitted.host_inputs.is_empty() {
+            return Task::ready(Ok(()));
+        }
+        let Some(fs) = self
+            .worktree_store
+            .as_ref()
+            .and_then(WeakEntity::upgrade)
+            .and_then(|store| store.read(cx).fs())
+        else {
+            return Task::ready(Err(anyhow::anyhow!("The JVM build host is unavailable")));
+        };
+        let inputs = admitted.host_inputs.clone();
+        let expected = admitted.host_identity.clone();
+        cx.background_spawn(async move {
+            let identities = futures::future::try_join_all(inputs.iter().map(|input| input.identity(fs.as_ref())))
+                .await
+                .map_err(|_| anyhow::anyhow!("Configured JVM tools or settings are unavailable; check the project host settings and refresh"))?;
+            // All attempts for the same admitted Task share its first observed host identity.
+            anyhow::ensure!(
+                expected.get_or_init(|| identities.clone()) == &identities,
+                "Configured JVM tools or settings changed; refresh and select the operation again"
+            );
+            Ok(())
+        })
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -1457,7 +1578,7 @@ impl Inventory {
             worktree.path_style(),
             cx,
         )
-        .is_ok_and(|plan| plan == admitted.plan)
+        .is_ok_and(|(plan, inputs)| plan == admitted.plan && inputs == admitted.host_inputs)
         {
             return false;
         }
@@ -1877,6 +1998,42 @@ mod tests {
     use super::*;
 
     #[cfg(all(feature = "jvm-tools", unix))]
+    #[gpui::test]
+    async fn gradle_task_cache_identity_survives_writes_but_detects_alias_replacement(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let fs = fs::FakeFs::new(cx.executor());
+        fs.insert_tree("/host", serde_json::json!({"first": {}, "second": {}}))
+            .await;
+        let path = PathBuf::from("/host/cache");
+        fs.insert_symlink(&path, PathBuf::from("/host/first")).await;
+        let input = JvmHostInput {
+            path: path.clone(),
+            directory: true,
+            executable: false,
+        };
+        let initial = input.identity(fs.as_ref()).await.expect("cache input");
+        fs.insert_tree("/host/first", serde_json::json!({"cache-entry": "value"}))
+            .await;
+        assert_eq!(
+            input.identity(fs.as_ref()).await.expect("updated cache"),
+            initial
+        );
+        fs::Fs::remove_file(fs.as_ref(), &path, Default::default())
+            .await
+            .expect("remove owned alias");
+        fs.insert_symlink(&path, PathBuf::from("/host/second"))
+            .await;
+        assert_ne!(
+            input
+                .identity(fs.as_ref())
+                .await
+                .expect("replacement cache"),
+            initial
+        );
+    }
+
+    #[cfg(all(feature = "jvm-tools", unix))]
     #[test]
     fn gradle_task_uses_explicit_host_installation_java_and_cache() {
         let mut plan = crate::jvm_project::JvmBuildOperationPlan {
@@ -2198,6 +2355,33 @@ mod tests {
             ]
         );
         assert_eq!(updated_settings.resolved.literal_prefix_args, 8);
+        let verify_host = |task: &ResolvedTask, cx: &mut gpui::TestAppContext| {
+            inventory.read_with(cx, |inventory, cx| {
+                inventory.verify_jvm_operation_host_inputs(&task.id, cx)
+            })
+        };
+        assert!(verify_host(&updated_settings, cx).await.is_err());
+        fs.insert_tree(
+            "/fixture",
+            serde_json::json!({
+                "global settings.xml": "<settings/>",
+                "user $ZED_FILE settings.xml": "<settings/>"
+            }),
+        )
+        .await;
+        verify_host(&updated_settings, cx)
+            .await
+            .expect("configured settings are present");
+        fs.insert_tree(
+            "/fixture",
+            serde_json::json!({"user $ZED_FILE settings.xml": "<settings><offline>true</offline></settings>"}),
+        )
+        .await;
+        let error = verify_host(&updated_settings, cx)
+            .await
+            .expect_err("settings at the same path changed");
+        assert!(error.to_string().contains("changed"));
+        assert!(!error.to_string().contains("/fixture"));
         fs.insert_tree(
             "/operation project/.mvn",
             serde_json::json!({"wrapper":{"maven-wrapper.properties":"distributionUrl=first"}}),

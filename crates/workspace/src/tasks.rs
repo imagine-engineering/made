@@ -188,6 +188,23 @@ fn groovy_jvm_operation_block_reason(
 }
 
 #[cfg(feature = "jvm-tools")]
+fn verify_groovy_jvm_host_inputs(
+    project: &Entity<project::Project>,
+    task: &ResolvedTask,
+    cx: &gpui::App,
+) -> Task<Result<()>> {
+    let task_store = project.read(cx).task_store();
+    let Some(inventory) = task_store.read(cx).task_inventory() else {
+        return Task::ready(Err(anyhow::anyhow!(
+            "The build Task inventory is unavailable"
+        )));
+    };
+    inventory
+        .read(cx)
+        .verify_jvm_operation_host_inputs(&task.id, cx)
+}
+
+#[cfg(feature = "jvm-tools")]
 fn groovy_jvm_task_block_reason(
     project: &Entity<project::Project>,
     worktree_id: WorktreeId,
@@ -1222,6 +1239,10 @@ impl Workspace {
             }
             return;
         }
+        #[cfg(feature = "jvm-tools")]
+        let jvm_host_input_check = groovy_jvm_operation_task
+            .as_ref()
+            .map(|operation| verify_groovy_jvm_host_inputs(&self.project, operation, cx));
         let native_build = resolved_task.stdout_report().cloned();
         let mut experimental_admission =
             || -> Result<Option<project::task_store::PendingExperimentalTaskLaunch>> {
@@ -1552,6 +1573,11 @@ impl Workspace {
                     Some(lock) => Some(lock.lock().await),
                     None => None,
                 };
+                #[cfg(feature = "jvm-tools")]
+                let jvm_host_input_result = match jvm_host_input_check {
+                    Some(check) => check.await,
+                    None => Ok(()),
+                };
                 if let Some(is_owned) = admission_preflight {
                     let owned = match workspace.update(cx, |workspace, cx| is_owned(workspace, cx)) {
                         Ok(owned) => owned,
@@ -1636,7 +1662,19 @@ impl Workspace {
                 }
 
                 #[cfg(feature = "jvm-tools")]
-                if let Some(message) = groovy_jvm_task_worktree.and_then(|worktree_id| {
+                let jvm_host_input_result = match (jvm_host_input_result, groovy_jvm_operation_task.as_ref()) {
+                    (Ok(()), Some(operation)) => {
+                        match workspace.read_with(cx, |workspace, cx| {
+                            verify_groovy_jvm_host_inputs(&workspace.project, operation, cx)
+                        }) {
+                            Ok(check) => check.await,
+                            Err(_) => Err(anyhow::anyhow!("The JVM build project is no longer available")),
+                        }
+                    }
+                    (result, _) => result,
+                };
+                #[cfg(feature = "jvm-tools")]
+                if let Some(message) = jvm_host_input_result.err().map(|error| error.to_string()).or_else(|| groovy_jvm_task_worktree.and_then(|worktree_id| {
                     workspace
                         .update(cx, |workspace, cx| {
                             if let Some(operation)=groovy_jvm_operation_task.as_ref() {
@@ -1650,9 +1688,10 @@ impl Workspace {
                             )
                         })
                         .unwrap_or(Some("The JVM build project is no longer available"))
-                }) {
+                        .map(str::to_owned)
+                })) {
                     if let Some(handle) = structured_handle.as_ref() {
-                        if let Err(error) = cx.update(|_, cx| handle.mark_spawn_error(message, cx)) {
+                        if let Err(error) = cx.update(|_, cx| handle.mark_spawn_error(message.as_str(), cx)) {
                             log::debug!("JVM build could not report blocked trust: {error:#}");
                         }
                     }
@@ -3391,6 +3430,10 @@ mod tests {
         let (fixture, cx) = create_fixture(cx, SaveStrategy::None).await;
         fixture
             .fs
+            .insert_tree("/host", json!({"maven-settings.xml":"<settings/>"}))
+            .await;
+        fixture
+            .fs
             .insert_tree(
                 "/root/application",
                 json!({"pom.xml":"<project/>","Main.java":"class Main {}"}),
@@ -3413,6 +3456,18 @@ mod tests {
         });
         let trust = cx.read(|cx| {
             project::trusted_worktrees::TrustedWorktrees::try_get_global(cx).expect("trust")
+        });
+        cx.update(|_, cx| {
+            cx.update_global::<settings::SettingsStore, _>(|settings, cx| {
+                settings.set_local_settings(
+                    worktree_id,
+                    settings::LocalSettingsPath::InWorktree(util::rel_path::RelPath::empty_arc()),
+                    settings::LocalSettingsKind::Settings,
+                    Some(r#"{"lsp":{"jdtls":{"settings":{"java.configuration.maven.userSettings":"/host/maven-settings.xml"}}}}"#),
+                    cx,
+                )
+            })
+            .expect("Maven host settings");
         });
         trust.update(cx, |trust, cx| {
             trust.trust(
@@ -3514,9 +3569,16 @@ mod tests {
         assert_eq!(spawns.lock().len(), 1);
         assert_eq!(
             spawns.lock()[0].args,
-            ["--offline", "--file", "application/pom.xml", "verify"]
+            [
+                "--offline",
+                "--settings",
+                "/host/maven-settings.xml",
+                "--file",
+                "application/pom.xml",
+                "verify",
+            ]
         );
-        assert_eq!(spawns.lock()[0].literal_prefix_args, 4);
+        assert_eq!(spawns.lock()[0].literal_prefix_args, 6);
         let (source, resolved) = inventory
             .update(cx, |inventory, cx| {
                 inventory.register_jvm_operation(receipt, &snapshot, true, cx)
@@ -3595,6 +3657,31 @@ mod tests {
                 assert!(!message.contains("canary") && !message.contains("terminal setup"));
             }
             state => panic!("expected sanitized spawn failure, got {state:?}"),
+        }
+        assert_eq!(spawns.lock().len(), 3);
+        fixture
+            .fs
+            .insert_tree(
+                "/host",
+                json!({"maven-settings.xml":"<settings><offline>true</offline></settings>"}),
+            )
+            .await;
+        let changed = fixture.workspace.update_in(cx, |workspace, window, cx| {
+            workspace.schedule_resolved_task_with_structured_handle(
+                source.clone(),
+                replacement_task.clone(),
+                false,
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        match changed.state() {
+            task::StructuredTaskState::SpawnError { message } => {
+                assert!(message.contains("settings changed"));
+                assert!(!message.contains("/host"));
+            }
+            state => panic!("expected host input change to block spawn, got {state:?}"),
         }
         assert_eq!(spawns.lock().len(), 3);
         trust.update(cx, |trust, cx| {
