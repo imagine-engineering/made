@@ -3242,6 +3242,26 @@ pub enum JvmBuildOperation {
     GradleTask {
         path: String,
     },
+    GradleTaskWithOptions {
+        path: String,
+        options: Vec<GradleOperationOption>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GradleOperationOption {
+    pub name: String,
+    pub value: Option<String>,
+}
+
+impl JvmBuildOperation {
+    pub fn gradle_task_path(&self) -> Option<&str> {
+        match self {
+            Self::GradleTask { path } | Self::GradleTaskWithOptions { path, .. } => Some(path),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3416,7 +3436,8 @@ impl JvmBuildOperationReceipt {
                             );
                             format!("{group}:{artifact}:{version}:{goal}")
                         }
-                        JvmBuildOperation::GradleTask { .. } => {
+                        JvmBuildOperation::GradleTask { .. }
+                        | JvmBuildOperation::GradleTaskWithOptions { .. } => {
                             anyhow::bail!("Select operations from one build system")
                         }
                     };
@@ -3439,18 +3460,70 @@ impl JvmBuildOperationReceipt {
                         && self.module_root.path.starts_with(&gradle.build_root.path),
                     "The selected Gradle build root does not own the module; refresh before running tasks"
                 );
+                if self.operations.iter().any(|operation| {
+                    matches!(operation, JvmBuildOperation::GradleTaskWithOptions { .. })
+                }) {
+                    // Gradle then parses these names as task options even when they match a global flag.
+                    arguments.push("--".into());
+                }
                 for operation in &self.operations {
-                    let JvmBuildOperation::GradleTask { path } = operation else {
-                        anyhow::bail!("Select operations from one build system");
-                    };
+                    let path = operation
+                        .gradle_task_path()
+                        .context("Select operations from one build system")?;
                     ensure!(
                         path.starts_with(':')
                             && path.len() <= 4096
-                            && !path.chars().any(char::is_control)
-                            && gradle.tasks.iter().any(|task| task.path == *path),
+                            && !path.chars().any(char::is_control),
                         "The selected Gradle task is unavailable; refresh and select a discovered task"
                     );
-                    arguments.push(path.clone());
+                    let task = gradle.tasks.iter().find(|task| task.path == path)
+                        .context("The selected Gradle task is unavailable; refresh and select a discovered task")?;
+                    arguments.push(path.to_owned());
+                    if let JvmBuildOperation::GradleTaskWithOptions { options, .. } = operation {
+                        ensure!(
+                            self.operations
+                                .iter()
+                                .filter(|candidate| candidate.gradle_task_path() == Some(path))
+                                .count()
+                                == 1,
+                            "A Gradle task with options can appear only once in an ordered run"
+                        );
+                        ensure!(
+                            !options.is_empty() && options.len() <= 32,
+                            "Configure between one and 32 Gradle task options"
+                        );
+                        for option in options {
+                            ensure!(
+                                !option.name.is_empty()
+                                    && option.name.len() <= 128
+                                    && option
+                                        .name
+                                        .as_bytes()
+                                        .first()
+                                        .is_some_and(u8::is_ascii_alphanumeric)
+                                    && option.name.bytes().all(|byte| byte.is_ascii_alphanumeric()
+                                        || matches!(byte, b'-' | b'_'))
+                                    && task.options.iter().any(|declaration| declaration.name
+                                        == option.name
+                                        && (option.value.is_some()
+                                            || matches!(
+                                                declaration.declared_type.as_str(),
+                                                "boolean" | "java.lang.Boolean"
+                                            ))),
+                                "Use a declared option for the selected Gradle task and supply its value if required"
+                            );
+                            let mut argument = format!("--{}", option.name);
+                            if let Some(value) = &option.value {
+                                ensure!(
+                                    value.len() <= 4096 && !value.chars().any(char::is_control),
+                                    "Gradle task option values must be bounded and contain no control characters"
+                                );
+                                argument.push('=');
+                                argument.push_str(value);
+                            }
+                            arguments.push(argument);
+                        }
+                    }
                 }
                 let build_files = [
                     "settings.gradle",
@@ -11048,6 +11121,98 @@ mod tests {
             task.resolved.cwd.as_deref(),
             Some(Path::new("/work/$ZED_FILE/included ${ZED_FILE} $$"))
         );
+    }
+
+    #[test]
+    fn gradle_task_options_bind_to_the_current_task_and_stay_after_global_arguments() {
+        let mut snapshot = operation_snapshot(true);
+        let module = snapshot.projects.first_mut().expect("module");
+        let module_root = module.module_root.clone();
+        let task = module
+            .gradle
+            .as_mut()
+            .expect("Gradle")
+            .tasks
+            .first_mut()
+            .expect("verify task");
+        let path = task.path.clone();
+        task.options = [("project-dir", "java.lang.String"), ("probe", "boolean")]
+            .into_iter()
+            .map(|(name, declared_type)| GradleTaskOption {
+                name: name.into(),
+                declared_type: declared_type.into(),
+                description: "Fixture".into(),
+                enum_constants: None,
+            })
+            .collect();
+        let configured = JvmBuildOperation::GradleTaskWithOptions {
+            path: path.clone(),
+            options: vec![
+                GradleOperationOption {
+                    name: "project-dir".into(),
+                    value: Some("a=b $ZED_FILE :other".into()),
+                },
+                GradleOperationOption {
+                    name: "probe".into(),
+                    value: None,
+                },
+            ],
+        };
+        let receipt = JvmBuildOperationReceipt::new(
+            &snapshot,
+            true,
+            module_root,
+            vec![configured],
+            PathStyle::Unix,
+        )
+        .expect("current declared options");
+        let plan = receipt
+            .plan(&snapshot, true, PathStyle::Unix)
+            .expect("option plan");
+        assert_eq!(
+            plan.template.args,
+            [
+                "--offline",
+                "--",
+                ":application:verify",
+                "--project-dir=a=b $ZED_FILE :other",
+                "--probe"
+            ]
+        );
+        let mut repeated = receipt.clone();
+        repeated
+            .operations
+            .push(JvmBuildOperation::GradleTask { path });
+        assert!(repeated.plan(&snapshot, true, PathStyle::Unix).is_err());
+        let mut changed = snapshot.clone();
+        changed.projects[0].gradle.as_mut().expect("Gradle").tasks[0]
+            .options
+            .clear();
+        assert!(receipt.plan(&changed, true, PathStyle::Unix).is_err());
+        assert!(receipt.plan(&snapshot, false, PathStyle::Unix).is_err());
+        for option in [
+            GradleOperationOption {
+                name: "project-dir".into(),
+                value: None,
+            },
+            GradleOperationOption {
+                name: "project-dir".into(),
+                value: Some("two\nlines".into()),
+            },
+            GradleOperationOption {
+                name: "include-build".into(),
+                value: Some("unrelated".into()),
+            },
+        ] {
+            let mut invalid = receipt.clone();
+            let [JvmBuildOperation::GradleTaskWithOptions { options, .. }] =
+                invalid.operations.as_mut_slice()
+            else {
+                panic!("fixture has one configured task");
+            };
+            options.push(option);
+            assert!(invalid.plan(&snapshot, true, PathStyle::Unix).is_err());
+        }
     }
 
     #[test]
