@@ -617,18 +617,12 @@ async fn jdtls_saved_import_controls_follow_shared_startup_restart_and_configura
     )
     .await;
     cx.run_until_parked();
-    let configuration = maven_controlled
-        .try_receive_notification::<lsp::notification::DidChangeConfiguration>()
-        .await
-        .expect("dynamic settings publish configuration on the current server")
-        .settings;
-    assert_eq!(
-        configuration.pointer("/java/import/maven/enabled"),
-        Some(&json!(false))
-    );
-    assert_eq!(
-        configuration.pointer("/java/import/gradle/enabled"),
-        Some(&json!(true))
+    assert!(
+        maven_controlled
+            .try_receive_notification::<lsp::notification::DidChangeConfiguration>()
+            .now_or_never()
+            .is_none(),
+        "the fake adapter's effective configuration is unchanged"
     );
     assert_eq!(initialized_options.lock().len(), 1);
     assert!(
@@ -678,7 +672,11 @@ async fn jdtls_saved_import_controls_follow_shared_startup_restart_and_configura
             .zip([(false, true), (true, false), (true, true)])
     {
         let options = options.as_ref().expect("initialization options");
-        assert!(options.get("projectConfigurations").is_none());
+        if maven && gradle {
+            assert!(options.get("projectConfigurations").is_none());
+        } else {
+            assert_eq!(options.get("projectConfigurations"), Some(&json!([])));
+        }
         assert_eq!(options["bundles"], json!(["fixture-bundle"]));
         assert_eq!(
             options.pointer("/settings/java/import/maven/enabled"),

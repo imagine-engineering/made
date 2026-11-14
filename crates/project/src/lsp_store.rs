@@ -11524,14 +11524,14 @@ impl LspStore {
         maybe!(async move {
             let mut refreshed_servers = HashSet::default();
             let servers = lsp_store
-                .update(cx, |lsp_store, cx| {
-                    let local = lsp_store.as_local()?;
+                .update(cx, |store, cx| {
+                    let local = store.as_local()?;
 
                     let servers = local
                         .language_server_ids
                         .iter()
                         .filter_map(|(seed, state)| {
-                            let worktree = lsp_store
+                            let worktree = store
                                 .worktree_store
                                 .read(cx)
                                 .worktree_for_id(seed.worktree_id, cx);
@@ -11562,6 +11562,10 @@ impl LspStore {
                                     let toolchain = seed.toolchain.clone();
                                     #[cfg(feature = "jvm-tools")]
                                     let jvm_startup = seed.settings.jvm_startup.clone();
+                                    #[cfg(feature = "jvm-tools")]
+                                    let jdtls_owner = (server.name()
+                                        == LanguageServerName::new_static("jdtls"))
+                                    .then(|| (lsp_store.clone(), seed.clone()));
                                     Some(cx.spawn(async move |_, cx| {
                                         let settings =
                                             LocalLspStore::workspace_configuration_for_adapter(
@@ -11577,6 +11581,17 @@ impl LspStore {
                                             )
                                             .await
                                             .ok()?;
+                                        #[cfg(feature = "jvm-tools")]
+                                        if let Some((owner, seed)) = jdtls_owner {
+                                            return owner
+                                                .update(cx, |store, _| {
+                                                    store.notify_jdtls_configuration(
+                                                        &seed, server_id, settings,
+                                                    )
+                                                })
+                                                .ok()
+                                                .flatten();
+                                        }
                                         server
                                             .notify::<lsp::notification::DidChangeConfiguration>(
                                                 lsp::DidChangeConfigurationParams { settings },
@@ -11604,6 +11619,39 @@ impl LspStore {
             Some(())
         })
         .await;
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn notify_jdtls_configuration(
+        &mut self,
+        seed: &LanguageServerSeed,
+        server_id: LanguageServerId,
+        settings: Value,
+    ) -> Option<()> {
+        let local = self.as_local_mut()?;
+        if local.language_server_ids.get(seed)?.id != server_id {
+            return None;
+        }
+        let LanguageServerState::Running {
+            server,
+            last_jdtls_configuration,
+            ..
+        } = local.language_servers.get_mut(&server_id)?
+        else {
+            return None;
+        };
+        // JDTLS replaces its preferences instance even for identical notifications.
+        if last_jdtls_configuration.as_ref() != Some(&settings) {
+            server
+                .notify::<lsp::notification::DidChangeConfiguration>(
+                    lsp::DidChangeConfigurationParams {
+                        settings: settings.clone(),
+                    },
+                )
+                .log_err()?;
+            *last_jdtls_configuration = Some(settings);
+        }
+        Some(())
     }
 
     fn maintain_workspace_config(
@@ -19646,6 +19694,10 @@ impl LspStore {
                 server: language_server.clone(),
                 simulate_disk_based_diagnostics_completion: None,
                 #[cfg(feature = "jvm-tools")]
+                last_jdtls_configuration: (language_server.name()
+                    == LanguageServerName::new_static("jdtls"))
+                .then(|| language_server.configuration().clone()),
+                #[cfg(feature = "jvm-tools")]
                 pending_startup_default,
                 #[cfg(feature = "jvm-tools")]
                 pending_maven_startup,
@@ -21782,6 +21834,8 @@ pub enum LanguageServerState {
         server: Arc<LanguageServer>,
         simulate_disk_based_diagnostics_completion: Option<Task<()>>,
         workspace_diagnostics_refresh_tasks: HashMap<Option<String>, WorkspaceRefreshTask>,
+        #[cfg(feature = "jvm-tools")]
+        last_jdtls_configuration: Option<Value>,
         #[cfg(feature = "jvm-tools")]
         pending_startup_default: Option<jvm_project::JdtlsStartupDefault>,
         #[cfg(feature = "jvm-tools")]
@@ -26098,6 +26152,87 @@ mod tests {
             expected.push("groovy.gradle.importSelected");
         }
         assert_eq!(calls.lock().as_slice(), expected);
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jdtls_workspace_configuration_only_notifies_on_effective_changes(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let mut server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let initial = server
+            .receive_notification::<lsp::notification::DidChangeConfiguration>()
+            .await
+            .settings;
+        for _ in 0..2 {
+            fixture
+                .store
+                .update(cx, |store, _| store.request_workspace_config_refresh());
+            ProjectLanguageFixture::pump(cx);
+        }
+        assert!(
+            server
+                .try_receive_notification::<lsp::notification::DidChangeConfiguration>()
+                .now_or_never()
+                .is_none()
+        );
+
+        let languages = fixture
+            .project
+            .read_with(cx, |project, _| project.languages().clone());
+        languages.register_fake_lsp_adapter(
+            "Kotlin",
+            language::FakeLspAdapter {
+                name: "gradle-settings-contributor",
+                additional_workspace_configuration: HashMap::from_iter([(
+                    LanguageServerName::new_static("jdtls"),
+                    serde_json::json!({"java":{"import":{"gradle":{"offline":{"enabled":true}}}}}),
+                )]),
+                ..Default::default()
+            },
+        );
+        fixture
+            .store
+            .update(cx, |store, _| store.request_workspace_config_refresh());
+        ProjectLanguageFixture::pump(cx);
+        let changed = server
+            .try_receive_notification::<lsp::notification::DidChangeConfiguration>()
+            .now_or_never()
+            .flatten()
+            .expect("changed effective configuration")
+            .settings;
+        assert_eq!(
+            changed.pointer("/java/import/gradle/offline/enabled"),
+            Some(&Value::Bool(true))
+        );
+        languages.remove_lsp_adapter(
+            &LanguageName::new_static("Kotlin"),
+            &LanguageServerName::new_static("gradle-settings-contributor"),
+        );
+        fixture
+            .store
+            .update(cx, |store, _| store.request_workspace_config_refresh());
+        ProjectLanguageFixture::pump(cx);
+        assert_eq!(
+            server
+                .try_receive_notification::<lsp::notification::DidChangeConfiguration>()
+                .now_or_never()
+                .flatten()
+                .expect("restored effective configuration")
+                .settings,
+            initial
+        );
+        assert!(
+            server
+                .try_receive_notification::<lsp::notification::DidChangeConfiguration>()
+                .now_or_never()
+                .is_none()
+        );
+        assert_eq!(fixture.running_ids(cx), [server.server.server_id()]);
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
