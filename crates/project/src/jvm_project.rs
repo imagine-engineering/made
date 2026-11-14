@@ -3257,6 +3257,7 @@ pub struct JvmBuildOperationReceipt {
 pub struct JvmBuildOperationPlan {
     pub template: task::TaskTemplate,
     pub wrapper: ProjectPath,
+    pub uses_wrapper: bool,
     pub build_files: Vec<ProjectPath>,
 }
 
@@ -3473,6 +3474,7 @@ impl JvmBuildOperationReceipt {
                 ..Default::default()
             },
             wrapper,
+            uses_wrapper: true,
             build_files,
         })
     }

@@ -125,9 +125,279 @@ struct AdmittedJvmOperation {
     worktree_entity: gpui::EntityId,
     root: Arc<std::path::Path>,
     root_entry: worktree::Entry,
-    wrapper: worktree::Entry,
+    wrapper: Option<worktree::Entry>,
     manifests: Vec<Option<worktree::Entry>>,
+    launch_inputs: Vec<(Arc<RelPath>, Option<worktree::Entry>)>,
     settings: serde_json::Value,
+}
+
+#[cfg(feature = "jvm-tools")]
+fn jvm_operation_settings(worktree_id: WorktreeId, cx: &App) -> Result<serde_json::Value> {
+    let location = settings::SettingsLocation {
+        worktree_id,
+        path: RelPath::empty(),
+    };
+    let project_settings = crate::project_settings::ProjectSettings::get(Some(location), cx);
+    project_settings.jvm_build_selection_intent(settings::SettingsStore::global(cx), location)?;
+    Ok(serde_json::to_value((
+        &project_settings.jvm_builds,
+        crate::lsp_store::language_server_settings_for(
+            location,
+            &LanguageServerName::new_static("jdtls"),
+            cx,
+        ),
+    ))?)
+}
+
+#[cfg(feature = "jvm-tools")]
+fn jdtls_preference<'a>(
+    preferences: &'a serde_json::Value,
+    key: &str,
+) -> Option<&'a serde_json::Value> {
+    preferences
+        .get(key)
+        .filter(|value| !value.is_null())
+        .or_else(|| {
+            key.split('.')
+                .try_fold(preferences, |value, part| value.get(part))
+        })
+        .filter(|value| !value.is_null())
+}
+
+#[cfg(feature = "jvm-tools")]
+fn jdtls_task_path<'a>(
+    preferences: &'a serde_json::Value,
+    key: &str,
+    path_style: PathStyle,
+) -> Result<Option<&'a str>> {
+    let Some(value) = jdtls_preference(preferences, key) else {
+        return Ok(None);
+    };
+    if value.as_str() == Some("") {
+        return Ok(None);
+    }
+    value
+        .as_str()
+        .filter(|path| {
+            path.len() <= 4096
+                && path_style.is_absolute(path)
+                && std::path::Path::new(path).is_absolute()
+                && !path.chars().any(char::is_control)
+        })
+        .map(Some)
+        .ok_or_else(|| anyhow::anyhow!("Configure {key} as an absolute path on the project host"))
+}
+
+#[cfg(feature = "jvm-tools")]
+fn apply_maven_task_settings(
+    plan: &mut crate::jvm_project::JvmBuildOperationPlan,
+    preferences: Option<&serde_json::Value>,
+    path_style: PathStyle,
+) -> Result<()> {
+    let Some(preferences) = preferences else {
+        return Ok(());
+    };
+    let mut arguments = Vec::new();
+    for (key, flag) in [
+        ("globalSettings", "--global-settings"),
+        ("userSettings", "--settings"),
+    ] {
+        if let Some(path) = jdtls_task_path(
+            preferences,
+            &format!("java.configuration.maven.{key}"),
+            path_style,
+        )? {
+            arguments.extend([flag.to_owned(), path.to_owned()]);
+        }
+    }
+    plan.template.args.splice(1..1, arguments);
+    Ok(())
+}
+
+#[cfg(feature = "jvm-tools")]
+fn gradle_task_jvm_argument(preferences: &serde_json::Value) -> Result<Option<String>> {
+    let Some(value) = jdtls_preference(preferences, "java.import.gradle.jvmArguments") else {
+        return Ok(None);
+    };
+    let configured = value.as_array().ok_or_else(|| {
+        anyhow::anyhow!("Set java.import.gradle.jvmArguments to an array of JVM argument strings")
+    })?;
+    anyhow::ensure!(
+        configured.len() <= 32,
+        "Configure at most 32 Gradle JVM arguments for selected Tasks"
+    );
+    let mut property = String::from("-Dorg.gradle.jvmargs=");
+    for (index, value) in configured.iter().enumerate() {
+        let argument = value
+            .as_str()
+            .filter(|argument| {
+                !argument.is_empty()
+                    && argument.len() <= 4096
+                    && !argument.chars().any(char::is_control)
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Gradle JVM arguments must be nonempty strings without control characters"
+                )
+            })?;
+        if index > 0 {
+            property.push(' ');
+        }
+        // Gradle's ArgumentsSplitter concatenates adjacent quoted segments and treats backslashes literally.
+        property.push('"');
+        property.push_str(&argument.replace('"', "\"'\"'\""));
+        property.push('"');
+    }
+    Ok(Some(property))
+}
+
+#[cfg(feature = "jvm-tools")]
+fn apply_gradle_task_settings(
+    plan: &mut crate::jvm_project::JvmBuildOperationPlan,
+    preferences: &serde_json::Value,
+    path_style: PathStyle,
+) -> Result<()> {
+    let mut arguments = Vec::new();
+    if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.home", path_style)? {
+        let executable = std::path::Path::new(home).join(if path_style.is_windows() {
+            "bin/gradle.bat"
+        } else {
+            "bin/gradle"
+        });
+        let executable = executable
+            .to_str()
+            .filter(|path| !path.contains('$'))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Use a Gradle installation path without dollar signs")
+            })?;
+        plan.template.command = executable.into();
+        plan.uses_wrapper = false;
+    }
+    if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.java.home", path_style)? {
+        anyhow::ensure!(
+            !home.contains('$'),
+            "Use a Gradle Java home without dollar signs"
+        );
+        plan.template.env.insert("JAVA_HOME".into(), home.into());
+        arguments.push(format!("-Dorg.gradle.java.home={home}"));
+    }
+    if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.user.home", path_style)? {
+        arguments.extend(["--gradle-user-home".into(), home.into()]);
+    }
+    arguments.extend(gradle_task_jvm_argument(preferences)?);
+    if let Some(value) = jdtls_preference(preferences, "java.import.gradle.arguments") {
+        let configured = value.as_array().ok_or_else(|| {
+            anyhow::anyhow!("Set java.import.gradle.arguments to an array of -Pname=value strings for selected Gradle Tasks")
+        })?;
+        anyhow::ensure!(
+            configured.len() <= 32,
+            "Configure at most 32 Gradle arguments for selected Tasks"
+        );
+        for value in configured {
+            let argument = value.as_str().ok_or_else(|| {
+                anyhow::anyhow!("Gradle Task arguments must be -Pname=value strings")
+            })?;
+            if argument == "--offline" {
+                continue;
+            }
+            let valid_project_property = argument
+                .strip_prefix("-P")
+                .and_then(|property| property.split_once('='))
+                .is_some_and(|(name, _)| {
+                    !name.is_empty()
+                        && name.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-')
+                        })
+                });
+            anyhow::ensure!(
+                valid_project_property
+                    && argument.len() <= 4096
+                    && !argument.chars().any(char::is_control),
+                "Selected Gradle Tasks accept -Pname=value project properties and --offline in java.import.gradle.arguments"
+            );
+            arguments.push(argument.to_owned());
+        }
+    }
+    anyhow::ensure!(
+        plan.template
+            .args
+            .iter()
+            .chain(&arguments)
+            .map(String::len)
+            .sum::<usize>()
+            <= 64 * 1024,
+        "Selected Gradle Task arguments exceed the supported size"
+    );
+    plan.template.args.splice(1..1, arguments);
+    Ok(())
+}
+
+#[cfg(feature = "jvm-tools")]
+fn jvm_operation_plan(
+    receipt: &crate::jvm_project::JvmBuildOperationReceipt,
+    snapshot: &crate::jvm_project::JdtlsProjectSnapshot,
+    current: bool,
+    path_style: PathStyle,
+    cx: &App,
+) -> Result<crate::jvm_project::JvmBuildOperationPlan> {
+    let mut plan = receipt.plan(snapshot, current, path_style)?;
+    let location = settings::SettingsLocation {
+        worktree_id: receipt.worktree_id,
+        path: RelPath::empty(),
+    };
+    let preferences = crate::lsp_store::language_server_settings_for(
+        location,
+        &LanguageServerName::new_static("jdtls"),
+        cx,
+    )
+    .and_then(|settings| settings.settings.as_ref());
+    if matches!(plan.wrapper.path.file_name(), Some("mvnw" | "mvnw.cmd")) {
+        apply_maven_task_settings(&mut plan, preferences, path_style)?;
+    } else if let Some(preferences) = preferences {
+        apply_gradle_task_settings(&mut plan, preferences, path_style)?;
+    }
+    Ok(plan)
+}
+
+#[cfg(feature = "jvm-tools")]
+fn jvm_operation_launch_inputs(
+    plan: &crate::jvm_project::JvmBuildOperationPlan,
+    snapshot: &worktree::Snapshot,
+) -> Result<Vec<(Arc<RelPath>, Option<worktree::Entry>)>> {
+    let wrapper = &plan.wrapper.path;
+    let names: &[&str] = match wrapper.file_name() {
+        Some("mvnw" | "mvnw.cmd") => &[
+            ".mvn/wrapper/maven-wrapper.properties",
+            ".mvn/wrapper/maven-wrapper.jar",
+            ".mvn/wrapper/MavenWrapperDownloader.java",
+            ".mvn/maven.config",
+            ".mvn/jvm.config",
+            ".mvn/extensions.xml",
+        ],
+        Some("gradlew" | "gradlew.bat") if plan.uses_wrapper => &[
+            "gradle/wrapper/gradle-wrapper.properties",
+            "gradle/wrapper/gradle-wrapper.jar",
+            "gradle.properties",
+            "gradle/gradle-daemon-jvm.properties",
+        ],
+        Some("gradlew" | "gradlew.bat") => {
+            &["gradle.properties", "gradle/gradle-daemon-jvm.properties"]
+        }
+        _ => anyhow::bail!("The selected build wrapper is unavailable; refresh the build metadata"),
+    };
+    let root = wrapper.parent().unwrap_or(RelPath::empty());
+    names
+        .iter()
+        .map(|name| {
+            let path: Arc<RelPath> = root.join(RelPath::from_unix_str(name)?).into();
+            let entry = snapshot.entry_for_path(&path);
+            anyhow::ensure!(
+                entry.is_none_or(jvm_build_entry_is_available),
+                "A build wrapper input is unavailable; restore the trusted wrapper files and refresh"
+            );
+            Ok((path, entry.cloned()))
+        })
+        .collect()
 }
 
 impl std::fmt::Debug for Inventory {
@@ -1059,7 +1329,7 @@ impl Inventory {
             worktree.is_local() && worktree.is_visible(),
             "Discovered build operations currently require a visible local project; remote execution is not qualified"
         );
-        let plan = receipt.plan(snapshot, current, worktree.path_style())?;
+        let plan = jvm_operation_plan(&receipt, snapshot, current, worktree.path_style(), cx)?;
         ensure!(
             worktree.abs_path().to_str().is_some(),
             "The build root needs a valid Unicode path; reopen it under a supported path"
@@ -1070,9 +1340,13 @@ impl Inventory {
             .filter(|entry| entry.is_dir())
             .context("The selected build root is unavailable; reopen the project and refresh")?
             .clone();
-        let wrapper = worktree.snapshot().entry_for_path(&plan.wrapper.path)
-            .filter(|entry| jvm_build_entry_is_available(entry))
-            .context("The project wrapper is missing or unavailable; restore the trusted local wrapper and refresh")?.clone();
+        let wrapper = if plan.uses_wrapper {
+            Some(worktree.snapshot().entry_for_path(&plan.wrapper.path)
+                .filter(|entry| jvm_build_entry_is_available(entry))
+                .context("The project wrapper is missing or unavailable; restore the trusted local wrapper and refresh")?.clone())
+        } else {
+            None
+        };
         let manifests = plan
             .build_files
             .iter()
@@ -1085,14 +1359,8 @@ impl Inventory {
                 && manifests.iter().flatten().all(jvm_build_entry_is_available),
             "Build files are missing or unavailable; restore the trusted project files and refresh"
         );
-        let location = settings::SettingsLocation {
-            worktree_id: receipt.worktree_id,
-            path: RelPath::empty(),
-        };
-        let project_settings = crate::project_settings::ProjectSettings::get(Some(location), cx);
-        project_settings
-            .jvm_build_selection_intent(settings::SettingsStore::global(cx), location)?;
-        let settings = serde_json::to_value(&project_settings.jvm_builds)?;
+        let launch_inputs = jvm_operation_launch_inputs(&plan, &worktree.snapshot())?;
+        let settings = jvm_operation_settings(receipt.worktree_id, cx)?;
         let source = TaskSourceKind::groovy_jvm_operation(receipt.worktree_id);
         let binding = serde_json::to_vec(&(
             receipt.server_id.0,
@@ -1105,7 +1373,7 @@ impl Inventory {
                 "{:?}",
                 (&root_entry.id, root_entry.inode, &root_entry.canonical_path)
             ),
-            format!("{:?}", (&wrapper, &manifests)),
+            format!("{:?}", (&wrapper, &manifests, &launch_inputs)),
             &settings,
         ))?;
         let id_base = format!("{}_{:x}", source.to_id_base(), Sha256::digest(binding));
@@ -1132,6 +1400,7 @@ impl Inventory {
             root_entry,
             wrapper,
             manifests,
+            launch_inputs,
             settings,
         };
         ensure!(
@@ -1185,38 +1454,33 @@ impl Inventory {
         {
             return false;
         }
-        if !admitted
-            .receipt
-            .plan(snapshot, current, worktree.path_style())
-            .is_ok_and(|plan| plan == admitted.plan)
+        if !jvm_operation_plan(
+            &admitted.receipt,
+            snapshot,
+            current,
+            worktree.path_style(),
+            cx,
+        )
+        .is_ok_and(|plan| plan == admitted.plan)
         {
             return false;
         }
-        let location = settings::SettingsLocation {
-            worktree_id,
-            path: RelPath::empty(),
-        };
-        let settings = crate::project_settings::ProjectSettings::get(Some(location), cx);
-        if settings
-            .jvm_build_selection_intent(settings::SettingsStore::global(cx), location)
-            .is_err()
-            || !serde_json::to_value(&settings.jvm_builds)
-                .is_ok_and(|value| value == admitted.settings)
-        {
+        if !jvm_operation_settings(worktree_id, cx).is_ok_and(|value| value == admitted.settings) {
             return false;
         }
-        worktree
-            .snapshot()
-            .entry_for_path(&admitted.plan.wrapper.path)
-            == Some(&admitted.wrapper)
+        (!admitted.plan.uses_wrapper
+            || worktree_snapshot.entry_for_path(&admitted.plan.wrapper.path)
+                == admitted.wrapper.as_ref())
             && admitted
                 .plan
                 .build_files
                 .iter()
                 .zip(&admitted.manifests)
-                .all(|(path, entry)| {
-                    worktree.snapshot().entry_for_path(&path.path) == entry.as_ref()
-                })
+                .all(|(path, entry)| worktree_snapshot.entry_for_path(&path.path) == entry.as_ref())
+            && admitted
+                .launch_inputs
+                .iter()
+                .all(|(path, entry)| worktree_snapshot.entry_for_path(path) == entry.as_ref())
     }
 
     /// Updates in-memory task metadata from the JSON string given.
@@ -1616,6 +1880,100 @@ impl ContextProvider for ContextProviderWithTasks {
 mod tests {
     use super::*;
 
+    #[cfg(all(feature = "jvm-tools", unix))]
+    #[test]
+    fn gradle_task_uses_explicit_host_installation_java_and_cache() {
+        let mut plan = crate::jvm_project::JvmBuildOperationPlan {
+            template: TaskTemplate {
+                label: "Run Gradle".into(),
+                command: "$ZED_WORKTREE_ROOT/gradlew".into(),
+                args: vec!["--offline".into(), ":verify".into()],
+                ..Default::default()
+            },
+            wrapper: crate::ProjectPath {
+                worktree_id: WorktreeId::from_usize(1),
+                path: RelPath::from_unix_str("gradlew")
+                    .expect("wrapper path")
+                    .into(),
+            },
+            uses_wrapper: true,
+            build_files: Vec::new(),
+        };
+        let settings = serde_json::json!({
+            "java": {"import": {"gradle": {"java": {"home": "/host/unused JDK"}}}},
+            "java.import.gradle.home": "/host/Gradle 8",
+            "java.import.gradle.java.home": "/host/Gradle JDK",
+            "java.import.gradle.user.home": "/host/gradle $ZED_FILE cache",
+            "java.import.gradle.arguments": ["--offline", "-Pflavor=dev $ZED_FILE", "-Pempty=", "-Pflavor=last value"],
+            "java.import.gradle.jvmArguments": ["-Xmx384m", "-Dprobe=space $ZED_FILE \"quote\" 'single' \\literal", "-Dempty="]
+        });
+        apply_gradle_task_settings(&mut plan, &settings, PathStyle::Unix).expect("host settings");
+        assert!(!plan.uses_wrapper);
+        let task = plan
+            .template
+            .resolve_task_with_literal_arguments("gradle fixture", &TaskContext::default())
+            .expect("literal Gradle task");
+        assert_eq!(
+            task.resolved.command.as_deref(),
+            Some("/host/Gradle 8/bin/gradle")
+        );
+        assert_eq!(
+            task.resolved.env.get("JAVA_HOME").map(String::as_str),
+            Some("/host/Gradle JDK")
+        );
+        assert_eq!(
+            task.resolved.args,
+            [
+                "--offline",
+                "-Dorg.gradle.java.home=/host/Gradle JDK",
+                "--gradle-user-home",
+                "/host/gradle $ZED_FILE cache",
+                r#"-Dorg.gradle.jvmargs="-Xmx384m" "-Dprobe=space $ZED_FILE "'"'"quote"'"'" 'single' \literal" "-Dempty=""#,
+                "-Pflavor=dev $ZED_FILE",
+                "-Pempty=",
+                "-Pflavor=last value",
+                ":verify",
+            ]
+        );
+        assert_eq!(task.resolved.literal_prefix_args, 9);
+        assert_eq!(
+            gradle_task_jvm_argument(&serde_json::json!({"java.import.gradle.jvmArguments": []}))
+                .expect("empty list is explicit")
+                .as_deref(),
+            Some("-Dorg.gradle.jvmargs=")
+        );
+        for invalid in [
+            serde_json::json!("-Xmx384m"),
+            serde_json::json!([""]),
+            serde_json::json!(["-Dline=\n"]),
+        ] {
+            assert!(
+                gradle_task_jvm_argument(
+                    &serde_json::json!({"java.import.gradle.jvmArguments": invalid})
+                )
+                .is_err()
+            );
+        }
+        for invalid in [
+            serde_json::json!(["--include-build", "/other"]),
+            serde_json::json!([":otherTask"]),
+            serde_json::json!(["-P=empty"]),
+            serde_json::json!(["-Pbad=\n"]),
+            serde_json::json!("-Pname=value"),
+            serde_json::json!(vec!["-Pname=value"; 33]),
+        ] {
+            let mut plan = plan.clone();
+            assert!(
+                apply_gradle_task_settings(
+                    &mut plan,
+                    &serde_json::json!({"java":{"import":{"gradle":{"arguments": invalid}}}}),
+                    PathStyle::Unix,
+                )
+                .is_err()
+            );
+        }
+    }
+
     #[cfg(feature = "jvm-tools")]
     #[gpui::test]
     async fn jvm_operation_admission_binds_current_wrapper_history_and_literal_data(
@@ -1794,6 +2152,86 @@ mod tests {
                 &snapshot,
                 true,
                 cx
+            ));
+        });
+        cx.update(|cx| {
+            cx.update_global::<settings::SettingsStore, _>(|store, cx| {
+                store.set_local_settings(
+                    worktree_id,
+                    settings::LocalSettingsPath::InWorktree(RelPath::empty_arc()),
+                    settings::LocalSettingsKind::Settings,
+                    Some(r#"{"lsp":{"jdtls":{"settings":{
+                        "java":{"configuration":{"maven":{"userSettings":"/fixture/ignored.xml","globalSettings":"/fixture/global settings.xml"}}},
+                        "java.configuration.maven.userSettings":"/fixture/user $ZED_FILE settings.xml"
+                    }}}}"#),
+                    cx,
+                )
+            })
+            .expect("set Maven provider settings");
+        });
+        inventory.read_with(cx, |inventory, cx| {
+            assert!(!inventory.jvm_operation_is_current(
+                worktree_id,
+                &resolved,
+                &snapshot,
+                true,
+                cx,
+            ));
+        });
+        let (_, updated_settings) = inventory
+            .update(cx, |inventory, cx| {
+                inventory.register_jvm_operation(receipt.clone(), &snapshot, true, cx)
+            })
+            .expect("admit under updated provider settings");
+        assert_ne!(resolved.id, updated_settings.id);
+        assert_eq!(
+            updated_settings.resolved.args,
+            [
+                "--offline",
+                "--global-settings",
+                "/fixture/global settings.xml",
+                "--settings",
+                "/fixture/user $ZED_FILE settings.xml",
+                "--file",
+                "application/pom.xml",
+                "verify",
+            ]
+        );
+        assert_eq!(updated_settings.resolved.literal_prefix_args, 8);
+        fs.insert_tree(
+            "/operation project/.mvn",
+            serde_json::json!({"wrapper":{"maven-wrapper.properties":"distributionUrl=first"}}),
+        )
+        .await;
+        cx.run_until_parked();
+        inventory.read_with(cx, |inventory, cx| {
+            assert!(!inventory.jvm_operation_is_current(
+                worktree_id,
+                &updated_settings,
+                &snapshot,
+                true,
+                cx,
+            ));
+        });
+        let (_, updated_input) = inventory
+            .update(cx, |inventory, cx| {
+                inventory.register_jvm_operation(receipt.clone(), &snapshot, true, cx)
+            })
+            .expect("admit under updated wrapper configuration");
+        assert_ne!(updated_settings.id, updated_input.id);
+        fs.insert_file(
+            "/operation project/.mvn/wrapper/maven-wrapper.properties",
+            b"distributionUrl=second".to_vec(),
+        )
+        .await;
+        cx.run_until_parked();
+        inventory.read_with(cx, |inventory, cx| {
+            assert!(!inventory.jvm_operation_is_current(
+                worktree_id,
+                &updated_input,
+                &snapshot,
+                true,
+                cx,
             ));
         });
         fs.insert_file(
