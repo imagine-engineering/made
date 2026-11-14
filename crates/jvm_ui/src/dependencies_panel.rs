@@ -10528,10 +10528,14 @@ mod tests {
                 servers.next().now_or_never().is_none(),
                 "settings removal keeps the same JDTLS process"
             );
-            release.send(()).expect("release held query");
+            if release.send(()).is_err() {
+                assert!(lsp_store.read_with(cx, |store, _| {
+                    store.jdtls_project_import_token(worktree_id).is_none()
+                }));
+            }
             pump(cx);
             assert!(lsp_store.read_with(cx, |store, _| {
-                store.jdtls_project_import_failed(worktree_id)
+                store.jdtls_project_import_token(worktree_id).is_none()
             }));
             assert!(commands.lock().expect("commands").is_empty());
             lsp_store.update(cx, |store, cx| {
@@ -11716,7 +11720,7 @@ mod tests {
                     if release.send(()).is_err() {
                         assert!(matches!(
                             outcome,
-                            "settings" | "cancel" | "visibility" | "new-input"
+                            "settings" | "lsp-settings" | "cancel" | "visibility" | "new-input"
                         ));
                     }
                     let error = format!(
@@ -12143,7 +12147,24 @@ mod tests {
         assert!(
             error.contains("refresh") && !error.contains(".env") && !error.contains("saved-maven")
         );
-        assert_eq!(commands.lock().expect("commands").len(), 2);
+        {
+            let observed = commands.lock().expect("commands");
+            assert_eq!(
+                observed.last().expect("rejected reactor").command,
+                "groovy.maven.importReactor"
+            );
+            assert_eq!(
+                observed.last().expect("rejected reactor").arguments[0]["pomUri"],
+                "file:///saved-maven/pom.xml"
+            );
+            assert_eq!(
+                observed
+                    .iter()
+                    .filter(|request| request.command == "groovy.maven.importReactor")
+                    .count(),
+                1
+            );
+        }
         assert!(!lsp_store.read_with(cx, |store, _| {
             store
                 .jdtls_project_snapshot(worktree_id)
@@ -12151,6 +12172,7 @@ mod tests {
         }));
         private_reply.store(false, Ordering::SeqCst);
         ignored_present.store(true, Ordering::SeqCst);
+        refresh(cx);
         refresh(cx);
         commands.lock().expect("commands").clear();
         lsp_store
