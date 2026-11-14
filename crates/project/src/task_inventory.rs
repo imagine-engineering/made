@@ -266,19 +266,15 @@ fn apply_gradle_task_settings(
         });
         let executable = executable
             .to_str()
-            .filter(|path| !path.contains('$'))
-            .ok_or_else(|| {
-                anyhow::anyhow!("Use a Gradle installation path without dollar signs")
-            })?;
-        plan.template.command = executable.into();
+            .ok_or_else(|| anyhow::anyhow!("Use a Gradle installation with a Unicode path"))?;
+        // Task resolution still expands variables in the command and environment.
+        plan.template.command = executable.replace('$', "$$");
         plan.uses_wrapper = false;
     }
     if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.java.home", path_style)? {
-        anyhow::ensure!(
-            !home.contains('$'),
-            "Use a Gradle Java home without dollar signs"
-        );
-        plan.template.env.insert("JAVA_HOME".into(), home.into());
+        plan.template
+            .env
+            .insert("JAVA_HOME".into(), home.replace('$', "$$"));
         arguments.push(format!("-Dorg.gradle.java.home={home}"));
     }
     if let Some(home) = jdtls_task_path(preferences, "java.import.gradle.user.home", path_style)? {
@@ -1901,31 +1897,35 @@ mod tests {
         };
         let settings = serde_json::json!({
             "java": {"import": {"gradle": {"java": {"home": "/host/unused JDK"}}}},
-            "java.import.gradle.home": "/host/Gradle 8",
-            "java.import.gradle.java.home": "/host/Gradle JDK",
+            "java.import.gradle.home": "/host/Gradle $ZED_FILE $$ 8",
+            "java.import.gradle.java.home": "/host/Gradle ${ZED_FILE} JDK",
             "java.import.gradle.user.home": "/host/gradle $ZED_FILE cache",
             "java.import.gradle.arguments": ["--offline", "-Pflavor=dev $ZED_FILE", "-Pempty=", "-Pflavor=last value"],
             "java.import.gradle.jvmArguments": ["-Xmx384m", "-Dprobe=space $ZED_FILE \"quote\" 'single' \\literal", "-Dempty="]
         });
         apply_gradle_task_settings(&mut plan, &settings, PathStyle::Unix).expect("host settings");
         assert!(!plan.uses_wrapper);
+        let mut context = TaskContext::default();
+        context
+            .task_variables
+            .insert(VariableName::File, "/unrelated/buffer.java".into());
         let task = plan
             .template
-            .resolve_task_with_literal_arguments("gradle fixture", &TaskContext::default())
+            .resolve_task_with_literal_arguments("gradle fixture", &context)
             .expect("literal Gradle task");
         assert_eq!(
             task.resolved.command.as_deref(),
-            Some("/host/Gradle 8/bin/gradle")
+            Some("/host/Gradle $ZED_FILE $$ 8/bin/gradle")
         );
         assert_eq!(
             task.resolved.env.get("JAVA_HOME").map(String::as_str),
-            Some("/host/Gradle JDK")
+            Some("/host/Gradle ${ZED_FILE} JDK")
         );
         assert_eq!(
             task.resolved.args,
             [
                 "--offline",
-                "-Dorg.gradle.java.home=/host/Gradle JDK",
+                "-Dorg.gradle.java.home=/host/Gradle ${ZED_FILE} JDK",
                 "--gradle-user-home",
                 "/host/gradle $ZED_FILE cache",
                 r#"-Dorg.gradle.jvmargs="-Xmx384m" "-Dprobe=space $ZED_FILE "'"'"quote"'"'" 'single' \literal" "-Dempty=""#,

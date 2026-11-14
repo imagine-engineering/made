@@ -3441,10 +3441,8 @@ impl JvmBuildOperationReceipt {
         ensure!(
             [root.as_unix_str(), wrapper.path.as_unix_str()]
                 .into_iter()
-                .all(|path| path.len() <= 4096
-                    && !path.contains('$')
-                    && !path.chars().any(char::is_control)),
-            "This build path cannot be resolved safely; use a path without controls or dollar signs"
+                .all(|path| path.len() <= 4096 && !path.chars().any(char::is_control)),
+            "This build path cannot be resolved safely; use a bounded path without control characters"
         );
         ensure!(
             arguments.iter().map(String::len).sum::<usize>() <= 64 * 1024
@@ -3460,15 +3458,18 @@ impl JvmBuildOperationReceipt {
         let cwd = if root.is_empty() {
             "$ZED_WORKTREE_ROOT".to_string()
         } else {
-            format!("$ZED_WORKTREE_ROOT{separator}{}", root.display(path_style))
+            let directory = root.display(path_style).to_string().replace('$', "$$");
+            format!("$ZED_WORKTREE_ROOT{separator}{directory}")
         };
+        let wrapper_path = wrapper
+            .path
+            .display(path_style)
+            .to_string()
+            .replace('$', "$$");
         Ok(JvmBuildOperationPlan {
             template: task::TaskTemplate {
                 label: label.into(),
-                command: format!(
-                    "$ZED_WORKTREE_ROOT{separator}{}",
-                    wrapper.path.display(path_style)
-                ),
+                command: format!("$ZED_WORKTREE_ROOT{separator}{wrapper_path}"),
                 args: arguments,
                 cwd: Some(cwd),
                 ..Default::default()
@@ -10940,6 +10941,44 @@ mod tests {
                 .as_unix_str(),
             "included build/gradlew.bat"
         );
+        let mut gradle = gradle;
+        let project = &mut gradle.projects[0];
+        let root = RelPath::from_unix_str("included ${ZED_FILE} $$").expect("build root");
+        project.module_root.path = root
+            .join(RelPath::from_unix_str("application").expect("module"))
+            .into();
+        project.gradle.as_mut().expect("Gradle").build_root.path = root.into();
+        let receipt = JvmBuildOperationReceipt::new(
+            &gradle,
+            true,
+            gradle.projects[0].module_root.clone(),
+            vec![JvmBuildOperation::GradleTask {
+                path: ":application:verify".into(),
+            }],
+            PathStyle::Unix,
+        )
+        .expect("literal build root");
+        let mut context = task::TaskContext::default();
+        context
+            .task_variables
+            .insert(task::VariableName::WorktreeRoot, "/work/$ZED_FILE".into());
+        context
+            .task_variables
+            .insert(task::VariableName::File, "/unrelated/buffer.java".into());
+        let task = receipt
+            .plan(&gradle, true, PathStyle::Unix)
+            .expect("current Gradle plan")
+            .template
+            .resolve_task_with_literal_arguments("literal Gradle root", &context)
+            .expect("resolved Gradle plan");
+        assert_eq!(
+            task.resolved.command.as_deref(),
+            Some("/work/$ZED_FILE/included ${ZED_FILE} $$/gradlew")
+        );
+        assert_eq!(
+            task.resolved.cwd.as_deref(),
+            Some(Path::new("/work/$ZED_FILE/included ${ZED_FILE} $$"))
+        );
     }
 
     #[test]
@@ -11108,9 +11147,10 @@ mod tests {
             create(&gradle, vec![operation]).is_err(),
             "overlong known task rejected"
         );
-        for root in ["included $ZED_FILE", "included\nprivate-canary"] {
+        {
             let mut changed = operation_snapshot(true);
-            let root = RelPath::from_unix_str(root).expect("relative fixture");
+            let root =
+                RelPath::from_unix_str("included\nprivate-canary").expect("relative fixture");
             changed.projects[0].module_root.path = root
                 .join(RelPath::from_unix_str("application").expect("module"))
                 .into();
@@ -11131,7 +11171,7 @@ mod tests {
             )
             .expect_err("unsafe template path")
             .to_string();
-            assert!(!error.contains("canary") && !error.contains("ZED_FILE"));
+            assert!(!error.contains("canary"));
         }
         let mut maven = operation_snapshot(false);
         maven.projects[0].module_root.path = RelPath::empty_arc();
