@@ -210,10 +210,12 @@ pub fn show_onboarding_view(app_state: Arc<AppState>, cx: &mut App) -> Task<anyh
 
 struct Onboarding {
     workspace: WeakEntity<Workspace>,
+    project: Entity<project::Project>,
     focus_handle: FocusHandle,
     user_store: Entity<UserStore>,
     scroll_handle: ScrollHandle,
     _settings_subscription: Subscription,
+    _worktree_subscription: Option<Subscription>,
 }
 
 impl Onboarding {
@@ -270,11 +272,13 @@ impl Onboarding {
 
             Self {
                 workspace: workspace.weak_handle(),
+                project: workspace.project().clone(),
                 focus_handle: cx.focus_handle(),
                 scroll_handle: ScrollHandle::new(),
                 user_store: workspace.user_store().clone(),
                 _settings_subscription: cx
                     .observe_global::<SettingsStore>(move |_, cx| cx.notify()),
+                _worktree_subscription: Self::observe_wrapper_changes(workspace.project(), cx),
             }
         })
     }
@@ -303,7 +307,21 @@ impl Onboarding {
     }
 
     fn render_page(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        crate::basics_page::render_basics_page(&self.user_store, cx).into_any_element()
+        let wrappers = (product_flavor::TOOLCHAIN_ONBOARDING == "jdk")
+            .then(|| crate::basics_page::JvmProjectWrappers::detect(self.project.read(cx), cx))
+            .unwrap_or_default();
+        crate::basics_page::render_basics_page(&self.user_store, wrappers, cx).into_any_element()
+    }
+
+    fn observe_wrapper_changes(
+        project: &Entity<project::Project>,
+        cx: &mut Context<Self>,
+    ) -> Option<Subscription> {
+        if product_flavor::TOOLCHAIN_ONBOARDING != "jdk" {
+            return None;
+        }
+        let worktree_store = project.read(cx).worktree_store();
+        Some(cx.subscribe(&worktree_store, |_, _, _, cx| cx.notify()))
     }
 }
 
@@ -439,10 +457,12 @@ impl Item for Onboarding {
     ) -> Task<Option<Entity<Self>>> {
         Task::ready(Some(cx.new(|cx| Onboarding {
             workspace: self.workspace.clone(),
+            project: self.project.clone(),
             user_store: self.user_store.clone(),
             scroll_handle: ScrollHandle::new(),
             focus_handle: cx.focus_handle(),
             _settings_subscription: cx.observe_global::<SettingsStore>(move |_, cx| cx.notify()),
+            _worktree_subscription: Self::observe_wrapper_changes(&self.project, cx),
         })))
     }
 

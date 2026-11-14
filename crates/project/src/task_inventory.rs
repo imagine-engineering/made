@@ -20,7 +20,6 @@ use language::{
     language_settings::LanguageSettings,
 };
 use lsp::{LanguageServerId, LanguageServerName};
-#[cfg(feature = "jvm-tools")]
 use path::PathStyle;
 use paths::{debug_task_file_name, task_file_name};
 #[cfg(feature = "jvm-tools")]
@@ -38,13 +37,51 @@ use crate::{git_store::GitStore, task_store::TaskSettingsLocation, worktree_stor
 
 pub const GIT_COMMAND_TASK_TAG: &str = "git-command";
 
-#[cfg(feature = "jvm-tools")]
 pub(crate) fn jvm_build_entry_is_available(entry: &worktree::Entry) -> bool {
     entry.is_file()
         && !entry.is_ignored
         && !entry.is_private
         && !entry.is_external
         && !entry.is_fifo
+}
+
+#[derive(Clone, Copy)]
+pub enum JvmBuildTool {
+    Maven,
+    Gradle,
+}
+
+impl JvmBuildTool {
+    fn wrapper(self, path_style: PathStyle) -> (&'static str, &'static str) {
+        match (self, path_style) {
+            (Self::Maven, PathStyle::Unix) => ("mvnw", "./mvnw"),
+            (Self::Maven, PathStyle::Windows) => ("mvnw.cmd", ".\\mvnw.cmd"),
+            (Self::Gradle, PathStyle::Unix) => ("gradlew", "./gradlew"),
+            (Self::Gradle, PathStyle::Windows) => ("gradlew.bat", ".\\gradlew.bat"),
+        }
+    }
+
+    pub fn wrapper_detected(self, worktree: &worktree::Worktree) -> Option<bool> {
+        let has_file = |name: &str| {
+            RelPath::from_unix_str(name)
+                .ok()
+                .and_then(|path| worktree.entry_for_path(path))
+                .is_some_and(jvm_build_entry_is_available)
+        };
+        let manifests: &[&str] = match self {
+            Self::Maven => &["pom.xml"],
+            Self::Gradle => &[
+                "settings.gradle",
+                "settings.gradle.kts",
+                "build.gradle",
+                "build.gradle.kts",
+            ],
+        };
+        manifests
+            .iter()
+            .any(|name| has_file(name))
+            .then(|| has_file(self.wrapper(worktree.path_style()).0))
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -939,55 +976,26 @@ impl Inventory {
             return Vec::new();
         };
         let worktree = worktree.read(cx);
-        let has_file = |name: &str| {
-            RelPath::from_unix_str(name)
-                .ok()
-                .and_then(|path| worktree.entry_for_path(path))
-                .is_some_and(jvm_build_entry_is_available)
-        };
         let path_style = worktree.path_style();
-        let mut tasks = Vec::new();
-
-        let maven_wrapper = match path_style {
-            PathStyle::Unix => ("mvnw", "./mvnw"),
-            PathStyle::Windows => ("mvnw.cmd", ".\\mvnw.cmd"),
-        };
-        if has_file("pom.xml") && has_file(maven_wrapper.0) {
-            tasks.push(("Build Maven project", maven_wrapper.1, "package"));
-        }
-
-        let gradle_wrapper = match path_style {
-            PathStyle::Unix => ("gradlew", "./gradlew"),
-            PathStyle::Windows => ("gradlew.bat", ".\\gradlew.bat"),
-        };
-        if [
-            "settings.gradle",
-            "settings.gradle.kts",
-            "build.gradle",
-            "build.gradle.kts",
+        [
+            (JvmBuildTool::Maven, "Build Maven project", "package"),
+            (JvmBuildTool::Gradle, "Build Gradle project", "build"),
         ]
-        .iter()
-        .any(|name| has_file(name))
-            && has_file(gradle_wrapper.0)
-        {
-            tasks.push(("Build Gradle project", gradle_wrapper.1, "build"));
-        }
-
-        tasks
-            .into_iter()
-            .map(|(label, command, argument)| {
-                (
-                    TaskSourceKind::groovy_jvm_build(worktree_id),
-                    TaskTemplate {
-                        label: label.to_string(),
-                        command: command.to_string(),
-                        args: vec![argument.to_string()],
-                        cwd: Some("$ZED_WORKTREE_ROOT".to_string()),
-                        ..TaskTemplate::default()
-                    },
-                )
-            })
-            .collect()
+        .into_iter()
+        .filter(|(tool, _, _)| tool.wrapper_detected(worktree) == Some(true))
+        .map(|(tool, label, argument)| {
+            (
+                TaskSourceKind::groovy_jvm_build(worktree_id),
+                TaskTemplate {
+                    label: label.to_string(),
+                    command: tool.wrapper(path_style).1.to_string(),
+                    args: vec![argument.to_string()],
+                    cwd: Some("$ZED_WORKTREE_ROOT".to_string()),
+                    ..TaskTemplate::default()
+                },
+            )
+        })
+        .collect()
     }
 
     #[cfg(feature = "jvm-tools")]

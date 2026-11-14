@@ -135,15 +135,22 @@ mod test_inventory {
 #[cfg(feature = "jvm-tools")]
 #[gpui::test]
 async fn groovy_build_tasks_require_detected_project_wrappers(cx: &mut TestAppContext) {
+    use project::task_inventory::JvmBuildTool;
+
     crate::init_test(cx);
     let fs = FakeFs::new(cx.executor());
+    let (maven_wrapper, gradle_wrapper, maven_command, gradle_command) = if cfg!(windows) {
+        ("mvnw.cmd", "gradlew.bat", ".\\mvnw.cmd", ".\\gradlew.bat")
+    } else {
+        ("mvnw", "gradlew", "./mvnw", "./gradlew")
+    };
     fs.insert_tree(
         path!("/jvm"),
         json!({
             "pom.xml": "<project/>",
-            "mvnw": "#!/bin/sh\n",
+            (maven_wrapper): "",
             "build.gradle.kts": "plugins { java }",
-            "gradlew": "#!/bin/sh\n"
+            (gradle_wrapper): ""
         }),
     )
     .await;
@@ -155,9 +162,9 @@ async fn groovy_build_tasks_require_detected_project_wrappers(cx: &mut TestAppCo
     fs.insert_tree(
         path!("/ignored-wrapper"),
         json!({
-            ".gitignore": "mvnw\n",
+            ".gitignore": format!("{maven_wrapper}\n"),
             "pom.xml": "<project/>",
-            "mvnw": "#!/bin/sh\n"
+            (maven_wrapper): ""
         }),
     )
     .await;
@@ -185,6 +192,18 @@ async fn groovy_build_tasks_require_detected_project_wrappers(cx: &mut TestAppCo
             .worktrees()
             .map(|worktree| {
                 let worktree = worktree.read(cx);
+                let expected = if worktree.root_name_str() == "jvm" {
+                    (Some(true), Some(true))
+                } else {
+                    (Some(false), None)
+                };
+                assert_eq!(
+                    (
+                        JvmBuildTool::Maven.wrapper_detected(worktree),
+                        JvmBuildTool::Gradle.wrapper_detected(worktree)
+                    ),
+                    expected
+                );
                 (worktree.root_name_str().to_string(), worktree.id())
             })
             .collect::<std::collections::HashMap<_, _>>();
@@ -204,13 +223,13 @@ async fn groovy_build_tasks_require_detected_project_wrappers(cx: &mut TestAppCo
     assert_eq!(builds.len(), 2);
     assert!(builds.iter().any(|(_, task)| {
         task.label == "Build Maven project"
-            && task.command == "./mvnw"
+            && task.command == maven_command
             && task.args == ["package"]
             && task.cwd.as_deref() == Some("$ZED_WORKTREE_ROOT")
     }));
     assert!(builds.iter().any(|(_, task)| {
         task.label == "Build Gradle project"
-            && task.command == "./gradlew"
+            && task.command == gradle_command
             && task.args == ["build"]
             && task.cwd.as_deref() == Some("$ZED_WORKTREE_ROOT")
     }));

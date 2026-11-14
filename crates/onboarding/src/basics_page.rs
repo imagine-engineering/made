@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 #[cfg(feature = "agentic")]
@@ -18,6 +19,7 @@ use gpui::{Animation, AnimationExt, TaskExt, pulsating_between};
 #[cfg(feature = "agentic")]
 use project::agent_server_store::AllAgentServersSettings;
 use project::project_settings::ProjectSettings;
+use project::task_inventory::JvmBuildTool;
 #[cfg(feature = "agentic")]
 use project::{AgentRegistryStore, RegistryAgent};
 use settings::{BaseKeymap, Settings, update_settings_file};
@@ -137,17 +139,81 @@ struct JvmToolchainStatus {
     gradle_available: bool,
 }
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct JvmProjectWrappers {
+    maven: Option<bool>,
+    gradle: Option<bool>,
+}
+
+impl JvmProjectWrappers {
+    pub(crate) fn detect(project: &project::Project, cx: &App) -> Self {
+        let mut wrappers = Self::default();
+        if project.is_local() {
+            for worktree in project.visible_worktrees(cx) {
+                let worktree = worktree.read(cx);
+                if worktree.is_local() {
+                    wrappers.observe(
+                        JvmBuildTool::Maven.wrapper_detected(worktree),
+                        JvmBuildTool::Gradle.wrapper_detected(worktree),
+                    );
+                }
+            }
+        }
+        wrappers
+    }
+
+    fn observe(&mut self, maven: Option<bool>, gradle: Option<bool>) {
+        for (status, observed) in [(&mut self.maven, maven), (&mut self.gradle, gradle)] {
+            if let Some(observed) = observed {
+                *status = Some(status.unwrap_or(false) || observed);
+            }
+        }
+    }
+
+    fn summary(&self) -> String {
+        let status = |tool, detected| match detected {
+            Some(true) => format!("{tool} wrapper detected"),
+            Some(false) => format!("No {tool} wrapper detected in the open project roots"),
+            None => format!("No local {tool} project detected"),
+        };
+        format!(
+            "{} · {}",
+            status("Maven", self.maven),
+            status("Gradle", self.gradle)
+        )
+    }
+}
+
 fn major_java_version(release: &str) -> Option<u32> {
     let value = release
         .lines()
         .find_map(|line| line.strip_prefix("JAVA_VERSION="))?
         .trim_matches('"');
-    let major = value.split('.').next()?.parse::<u32>().ok()?;
+    let major = value.split(['.', '-', '+']).next()?.parse::<u32>().ok()?;
     if major == 1 {
         value.split('.').nth(1)?.parse().ok()
     } else {
         Some(major)
     }
+}
+
+fn jdk_release_version(java_home: &Path) -> Option<u32> {
+    const MAX_RELEASE_BYTES: u64 = 64 * 1024;
+    let release = java_home.join("release");
+    let metadata = release.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_RELEASE_BYTES {
+        return None;
+    }
+    let mut content = String::new();
+    std::fs::File::open(release)
+        .ok()?
+        .take(MAX_RELEASE_BYTES + 1)
+        .read_to_string(&mut content)
+        .ok()?;
+    if content.len() as u64 > MAX_RELEASE_BYTES {
+        return None;
+    }
+    major_java_version(&content)
 }
 
 fn classify_jdk(java_available: bool, javac_available: bool, version: Option<u32>) -> JdkStatus {
@@ -181,11 +247,19 @@ fn jdk_status_for_java_path(java_path: &Path) -> JdkStatus {
     let Some(bin_directory) = java_path.parent() else {
         return JdkStatus::VersionUnknown;
     };
-    let compiler_available = command_in_directory("javac", bin_directory).is_some();
-    let version = bin_directory
+    let Ok(resolved_java) = java_path.canonicalize() else {
+        return JdkStatus::VersionUnknown;
+    };
+    let Some(resolved_bin_directory) = resolved_java.parent() else {
+        return JdkStatus::VersionUnknown;
+    };
+    // PATH entries such as /usr/bin can link to different Java installations.
+    let compiler_available = command_in_directory("javac", bin_directory)
+        .and_then(|compiler| compiler.canonicalize().ok())
+        .is_some_and(|compiler| compiler.parent() == Some(resolved_bin_directory));
+    let version = resolved_bin_directory
         .parent()
-        .and_then(|java_home| std::fs::read_to_string(java_home.join("release")).ok())
-        .and_then(|release| major_java_version(&release));
+        .and_then(jdk_release_version);
     classify_jdk(true, compiler_available, version)
 }
 
@@ -203,7 +277,10 @@ fn jvm_toolchain_status() -> JvmToolchainStatus {
     }
 }
 
-fn render_jvm_toolchain_section(status: JvmToolchainStatus) -> impl IntoElement {
+fn render_jvm_toolchain_section(
+    status: JvmToolchainStatus,
+    wrappers: JvmProjectWrappers,
+) -> impl IntoElement {
     let jdtls_status = match status.jdk {
         JdkStatus::Missing => "Local JDK candidate: missing".to_string(),
         JdkStatus::InvalidJavaHome => {
@@ -230,8 +307,9 @@ fn render_jvm_toolchain_section(status: JvmToolchainStatus) -> impl IntoElement 
     } else {
         "Gradle not detected"
     };
+    let wrapper_status = wrappers.summary();
     let accessibility_summary = format!(
-        "Groovy JVM setup. {jdtls_status}. {maven_status}. {gradle_status}. Local tool check only; an overridden JDTLS path or remote host is not checked. Setup does not install tools or run build scripts."
+        "Groovy JVM setup. {jdtls_status}. {maven_status}. {gradle_status}. {wrapper_status}. Local tool check only; an overridden JDTLS path or remote host is not checked. Setup does not install tools or run build scripts."
     );
 
     v_flex()
@@ -242,6 +320,7 @@ fn render_jvm_toolchain_section(status: JvmToolchainStatus) -> impl IntoElement 
         .child(Label::new("Groovy JVM setup").size(LabelSize::Large))
         .child(Label::new(jdtls_status).color(Color::Muted))
         .child(Label::new(format!("{maven_status} · {gradle_status}")).color(Color::Muted))
+        .child(Label::new(wrapper_status).color(Color::Muted))
         .child(
             Label::new(
                 "Use a JDK 21+ with java and javac in JAVA_HOME or the same PATH directory to verify the local JDTLS candidate. This does not check an overridden JDTLS path or a remote host. Project wrappers may supply Maven or Gradle; the build JDK and target JDK can differ. Setup does not install tools or run build scripts.",
@@ -259,7 +338,7 @@ fn render_jvm_toolchain_section(status: JvmToolchainStatus) -> impl IntoElement 
                             .on_click(|_, _, cx| cx.open_url("https://adoptium.net/installation")),
                     ),
                 )
-                .when(!status.maven_available, |this| {
+                .when(!status.maven_available && wrappers.maven != Some(true), |this| {
                     this.child(
                         div().debug_selector(|| "groovy-maven-guide".to_string()).child(
                             Button::new("groovy-maven-guide-button", "Open Maven guide")
@@ -268,7 +347,7 @@ fn render_jvm_toolchain_section(status: JvmToolchainStatus) -> impl IntoElement 
                         ),
                     )
                 })
-                .when(!status.gradle_available, |this| {
+                .when(!status.gradle_available && wrappers.gradle != Some(true), |this| {
                     this.child(
                         div().debug_selector(|| "groovy-gradle-guide".to_string()).child(
                             Button::new("groovy-gradle-guide-button", "Open Gradle guide")
@@ -1015,7 +1094,11 @@ fn render_ai_section(user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoE
         .child(grid)
 }
 
-pub(crate) fn render_basics_page(user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {
+pub(crate) fn render_basics_page(
+    user_store: &Entity<UserStore>,
+    wrappers: JvmProjectWrappers,
+    cx: &mut App,
+) -> impl IntoElement {
     let mut tab_index = 0;
 
     let page = v_flex()
@@ -1029,7 +1112,10 @@ pub(crate) fn render_basics_page(user_store: &Entity<UserStore>, cx: &mut App) -
             this.child(render_rust_toolchain_section())
         })
         .when(product_flavor::TOOLCHAIN_ONBOARDING == "jdk", |this| {
-            this.child(render_jvm_toolchain_section(jvm_toolchain_status()))
+            this.child(render_jvm_toolchain_section(
+                jvm_toolchain_status(),
+                wrappers,
+            ))
         })
         .child(render_theme_section(&mut tab_index, cx))
         .child(render_base_keymap_section(&mut tab_index, cx));
@@ -1047,14 +1133,15 @@ pub(crate) fn render_basics_page(user_store: &Entity<UserStore>, cx: &mut App) -
 #[cfg(test)]
 mod tests {
     use super::{
-        BASE_KEYMAP_OPTION_LABELS, JdkStatus, JvmToolchainStatus, classify_jdk, command_candidates,
-        command_path, is_usable_command, jdk_status_for_paths, major_java_version,
-        render_jvm_toolchain_section,
+        BASE_KEYMAP_OPTION_LABELS, JdkStatus, JvmProjectWrappers, JvmToolchainStatus, classify_jdk,
+        command_candidates, command_path, is_usable_command, jdk_status_for_paths,
+        major_java_version, render_jvm_toolchain_section,
     };
     use gpui::{Context, Modifiers, Render, TestAppContext, Window};
 
     struct JvmToolchainTestView {
         status: JvmToolchainStatus,
+        wrappers: JvmProjectWrappers,
     }
 
     impl Render for JvmToolchainTestView {
@@ -1063,7 +1150,7 @@ mod tests {
             _window: &mut Window,
             _cx: &mut Context<Self>,
         ) -> impl gpui::IntoElement {
-            render_jvm_toolchain_section(self.status.clone())
+            render_jvm_toolchain_section(self.status.clone(), self.wrappers)
         }
     }
 
@@ -1075,6 +1162,7 @@ mod tests {
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
         let (_, cx) = cx.add_window_view(|_, _| JvmToolchainTestView {
+            wrappers: JvmProjectWrappers::default(),
             status: JvmToolchainStatus {
                 jdk: JdkStatus::Missing,
                 maven_available: false,
@@ -1115,6 +1203,7 @@ mod tests {
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
         let (_, cx) = cx.add_window_view(|_, _| JvmToolchainTestView {
+            wrappers: JvmProjectWrappers::default(),
             status: JvmToolchainStatus {
                 jdk: JdkStatus::Ready(21),
                 maven_available: true,
@@ -1125,6 +1214,34 @@ mod tests {
         assert!(cx.debug_bounds("groovy-jdk-guide").is_some());
         assert!(cx.debug_bounds("groovy-maven-guide").is_none());
         assert!(cx.debug_bounds("groovy-gradle-guide").is_none());
+    }
+
+    #[gpui::test]
+    fn jvm_setup_distinguishes_project_wrappers_from_path_tools(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+        let mut wrappers = JvmProjectWrappers::default();
+        wrappers.observe(Some(true), None);
+        wrappers.observe(Some(false), Some(false));
+        assert_eq!(
+            wrappers.summary(),
+            "Maven wrapper detected · No Gradle wrapper detected in the open project roots"
+        );
+        let (_, cx) = cx.add_window_view(|_, _| JvmToolchainTestView {
+            wrappers,
+            status: JvmToolchainStatus {
+                jdk: JdkStatus::Ready(21),
+                maven_available: false,
+                gradle_available: false,
+            },
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(cx.debug_bounds("groovy-maven-guide").is_none());
+        assert!(cx.debug_bounds("groovy-gradle-guide").is_some());
+        assert_eq!(cx.opened_url(), None);
     }
 
     #[test]
@@ -1138,6 +1255,8 @@ mod tests {
         assert_eq!(major_java_version("JAVA_VERSION=\"1.8.0_402\""), Some(8));
         assert_eq!(major_java_version("JAVA_VERSION=\"17.0.19\""), Some(17));
         assert_eq!(major_java_version("JAVA_VERSION=\"21.0.6\""), Some(21));
+        assert_eq!(major_java_version("JAVA_VERSION=\"25-ea\""), Some(25));
+        assert_eq!(major_java_version("JAVA_VERSION=\"26+8\""), Some(26));
         assert_eq!(major_java_version("NOT_A_RELEASE=\"21\""), None);
     }
 
@@ -1219,6 +1338,45 @@ mod tests {
             jdk_status_for_paths(None, Some(&jdk_path)),
             JdkStatus::Ready(21)
         );
+        let release = jdk_home.join("release");
+        std::fs::write(
+            &release,
+            format!("JAVA_VERSION=\"21\"\n{}", "x".repeat(64 * 1024)),
+        )
+        .expect("oversized release metadata");
+        assert_eq!(
+            jdk_status_for_paths(None, Some(&jdk_path)),
+            JdkStatus::VersionUnknown
+        );
+        std::fs::remove_file(&release).expect("remove oversized metadata");
+        std::fs::create_dir(&release).expect("non-file metadata");
+        assert_eq!(
+            jdk_status_for_paths(None, Some(&jdk_path)),
+            JdkStatus::VersionUnknown
+        );
+        std::fs::remove_dir(&release).expect("remove non-file metadata");
+        std::fs::write(&release, "JAVA_VERSION=\"21.0.6\"\n").expect("restore release metadata");
+
+        let linked_bin = directory.path().join("links");
+        std::fs::create_dir(&linked_bin).expect("linked toolchain directory");
+        let linked_java = linked_bin.join("java");
+        let linked_javac = linked_bin.join("javac");
+        std::os::unix::fs::symlink(jdk_bin.join("java"), &linked_java).expect("linked java");
+        std::os::unix::fs::symlink(compiler_bin.join("javac"), &linked_javac)
+            .expect("linked compiler from a different installation");
+        let linked_path = std::env::join_paths([&linked_bin]).expect("linked toolchain PATH");
+        assert_eq!(
+            jdk_status_for_paths(None, Some(&linked_path)),
+            JdkStatus::RuntimeOnly
+        );
+        std::fs::remove_file(&linked_javac).expect("remove mismatched compiler link");
+        std::os::unix::fs::symlink(jdk_bin.join("javac"), &linked_javac)
+            .expect("linked compiler from the same installation");
+        assert_eq!(
+            jdk_status_for_paths(None, Some(&linked_path)),
+            JdkStatus::Ready(21)
+        );
+
         assert_eq!(
             jdk_status_for_paths(Some(&runtime_home), Some(&jdk_path)),
             JdkStatus::RuntimeOnly,
