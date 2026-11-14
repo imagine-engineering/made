@@ -1,0 +1,816 @@
+{
+  "cached": {
+    "version": 1,
+    "rootUri": "file:///groovy-composite-fixture/primary/",
+    "projects": [
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/",
+        "javaNature": false,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/application/",
+        "javaNature": true,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/included/",
+        "javaNature": false,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/library/",
+        "javaNature": true,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      }
+    ],
+    "cachedOnly": true,
+    "readOnly": true,
+    "partial": false,
+    "fullSynchronizationKnown": false
+  },
+  "namespace": {
+    "version": 1,
+    "rootUri": "file:///groovy-composite-fixture/primary/",
+    "projects": [
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/",
+        "javaNature": false
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/application/",
+        "javaNature": true
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/included/",
+        "javaNature": false
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/library/",
+        "javaNature": true
+      }
+    ],
+    "partial": false,
+    "fullSynchronizationKnown": false
+  },
+  "details": {
+    "workspaceRootUri": "file:///groovy-composite-fixture/primary/",
+    "model": {
+      "version": 2,
+      "rootUri": "file:///groovy-composite-fixture/primary/",
+      "projects": [
+        {
+          "buildRootUri": "file:/groovy-composite-fixture/primary/",
+          "moduleUri": "file:/groovy-composite-fixture/primary/",
+          "projectPath": ":",
+          "name": "selection-primary",
+          "tasks": [
+            {
+              "path": ":artifactTransforms",
+              "name": "artifactTransforms",
+              "group": "help",
+              "description": "Displays the Artifact Transforms that can be executed in root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":assemble",
+              "name": "assemble",
+              "group": "build",
+              "description": "Assembles the outputs of this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":build",
+              "name": "build",
+              "group": "build",
+              "description": "Assembles and tests this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":buildEnvironment",
+              "name": "buildEnvironment",
+              "group": "help",
+              "description": "Displays all buildscript dependencies declared in root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":check",
+              "name": "check",
+              "group": "verification",
+              "description": "Runs all checks.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":clean",
+              "name": "clean",
+              "group": "build",
+              "description": "Deletes the build directory.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":components",
+              "name": "components",
+              "description": "Displays the components produced by root project 'selection-primary'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":dependencies",
+              "name": "dependencies",
+              "group": "help",
+              "description": "Displays all dependencies declared in root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":dependencyInsight",
+              "name": "dependencyInsight",
+              "group": "help",
+              "description": "Displays the insight into a specific dependency in root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":dependentComponents",
+              "name": "dependentComponents",
+              "description": "Displays the dependent components of components in root project 'selection-primary'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":help",
+              "name": "help",
+              "group": "help",
+              "description": "Displays a help message.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":init",
+              "name": "init",
+              "group": "Build Setup",
+              "description": "Initializes a new Gradle build.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":javaToolchains",
+              "name": "javaToolchains",
+              "group": "help",
+              "description": "Displays the detected java toolchains.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":model",
+              "name": "model",
+              "description": "Displays the configuration model of root project 'selection-primary'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":outgoingVariants",
+              "name": "outgoingVariants",
+              "group": "help",
+              "description": "Displays the outgoing variants of root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":prepareKotlinBuildScriptModel",
+              "name": "prepareKotlinBuildScriptModel",
+              "optionsKnown": false
+            },
+            {
+              "path": ":projects",
+              "name": "projects",
+              "group": "help",
+              "description": "Displays the sub-projects of root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":properties",
+              "name": "properties",
+              "group": "help",
+              "description": "Displays the properties of root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":resolvableConfigurations",
+              "name": "resolvableConfigurations",
+              "group": "help",
+              "description": "Displays the configurations that can be resolved in root project 'selection-primary'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":tasks",
+              "name": "tasks",
+              "group": "help",
+              "description": "Displays the tasks runnable from root project 'selection-primary' (some of the displayed tasks may belong to subprojects).",
+              "optionsKnown": false
+            },
+            {
+              "path": ":unrequestedCompositeDefault",
+              "name": "unrequestedCompositeDefault",
+              "optionsKnown": false
+            },
+            {
+              "path": ":updateDaemonJvm",
+              "name": "updateDaemonJvm",
+              "group": "Build Setup",
+              "description": "Generates or updates the Gradle Daemon JVM criteria.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":wrapper",
+              "name": "wrapper",
+              "group": "Build Setup",
+              "description": "Generates Gradle wrapper files.",
+              "optionsKnown": false
+            }
+          ],
+          "detailsJson": "{\"javaSourceSetsKnown\":false,\"sourceSets\":[],\"configurationsKnown\":true,\"configurations\":[{\"name\":\"archives\",\"description\":\"Configuration for archive artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"default\",\"description\":\"Configuration for default artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]}],\"dependencyGraphKnown\":false,\"tasks\":[{\"path\":\":artifactTransforms\",\"options\":[{\"name\":\"type\",\"description\":\"The type of Transform to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":assemble\",\"options\":[],\"optionsComplete\":true},{\"path\":\":build\",\"options\":[],\"optionsComplete\":true},{\"path\":\":buildEnvironment\",\"options\":[],\"optionsComplete\":true},{\"path\":\":check\",\"options\":[],\"optionsComplete\":true},{\"path\":\":clean\",\"options\":[],\"optionsComplete\":true},{\"path\":\":components\",\"options\":[],\"optionsComplete\":true},{\"path\":\":dependencies\",\"options\":[{\"name\":\"configuration\",\"description\":\"The configuration to generate the report for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":dependencyInsight\",\"options\":[{\"name\":\"all-variants\",\"description\":\"Show all variants of each dependency\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"Looks for the dependency in given configuration.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"dependency\",\"description\":\"Shows the details of given dependency.\",\"declaredType\":\"java.lang.Object\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"single-path\",\"description\":\"Show at most one path to each dependency\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":dependentComponents\",\"options\":[{\"name\":\"all\",\"description\":\"Show all components (non-buildable and test suites).\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"component\",\"description\":\"Component to generate the report for (can be specified more than once).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"non-buildable\",\"description\":\"Show non-buildable components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-suites\",\"description\":\"Show test suites components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":help\",\"options\":[{\"name\":\"task\",\"description\":\"The task to show help for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":init\",\"options\":[{\"name\":\"comments\",\"description\":\"Include clarifying comments in files.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"dsl\",\"description\":\"Set the build script DSL to be used in generated scripts.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"incubating\",\"description\":\"Allow the generated build to use new features and APIs.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"insecure-protocol\",\"description\":\"How to handle insecure URLs used for Maven Repositories.\",\"declaredType\":\"org.gradle.api.provider.Property<org.gradle.buildinit.InsecureProtocolOption>\",\"enumConstantsKnown\":true,\"enumConstants\":[\"ALLOW\",\"FAIL\",\"UPGRADE\",\"WARN\"]},{\"name\":\"java-version\",\"description\":\"Provides java version to use in the project.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"overwrite\",\"description\":\"Allow existing files in the build directory to be overwritten?\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"package\",\"description\":\"Set the package for source files.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"project-name\",\"description\":\"Set the project name.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"split-project\",\"description\":\"Split functionality across multiple subprojects?\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-framework\",\"description\":\"Set the test framework to be used.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"type\",\"description\":\"Set the type of project to generate.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"use-defaults\",\"description\":\"Use default values for options not configured explicitly\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":javaToolchains\",\"options\":[],\"optionsComplete\":true},{\"path\":\":model\",\"options\":[{\"name\":\"format\",\"description\":\"Output format (full, short)\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"showHidden\",\"description\":\"Show hidden model elements.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":outgoingVariants\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all variants, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"variant\",\"description\":\"The name of the single variant to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":prepareKotlinBuildScriptModel\",\"options\":[],\"optionsComplete\":true},{\"path\":\":projects\",\"options\":[],\"optionsComplete\":true},{\"path\":\":properties\",\"options\":[{\"name\":\"property\",\"description\":\"A specific property to output\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":resolvableConfigurations\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all resolvable configurations, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"The name of the configuration to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"recursive\",\"description\":\"Lists all extended configurations of the reported configurations, including any which are extended transitively\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":tasks\",\"options\":[{\"name\":\"all\",\"description\":\"Show additional tasks and detail.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"group\",\"description\":\"Show tasks for a specific group.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"groups\",\"description\":\"Show tasks for specific groups (can be used multiple times to specify multiple groups).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"types\",\"description\":\"Show task class types\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":unrequestedCompositeDefault\",\"options\":[],\"optionsComplete\":true},{\"path\":\":updateDaemonJvm\",\"options\":[{\"name\":\"jvm-vendor\",\"description\":\"The vendor of the JVM required to run the Gradle Daemon.\",\"declaredType\":\"org.gradle.api.provider.Property<org.gradle.jvm.toolchain.JvmVendorSpec>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"jvm-version\",\"description\":\"The version of the JVM required to run the Gradle Daemon.\",\"declaredType\":\"org.gradle.api.provider.Property<org.gradle.jvm.toolchain.JavaLanguageVersion>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":wrapper\",\"options\":[{\"name\":\"distribution-type\",\"description\":\"The type of the Gradle distribution to be used by the wrapper.\",\"declaredType\":\"org.gradle.api.tasks.wrapper.Wrapper$DistributionType\",\"enumConstantsKnown\":true,\"enumConstants\":[\"ALL\",\"BIN\"]},{\"name\":\"gradle-distribution-sha256-sum\",\"description\":\"The SHA-256 hash sum of the gradle distribution.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"gradle-distribution-url\",\"description\":\"The URL to download the Gradle distribution from.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"gradle-version\",\"description\":\"The version of the Gradle distribution required by the wrapper. The following labels are allowed: latest, release-candidate, nightly, and release-nightly.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"network-timeout\",\"description\":\"Timeout in ms to use when the wrapper is performing network operations.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Integer>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"validate-url\",\"description\":\"Sets task to validate the configured distribution url.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true}]}"
+        },
+        {
+          "buildRootUri": "file:/groovy-composite-fixture/primary/",
+          "moduleUri": "file:/groovy-composite-fixture/primary/application/",
+          "projectPath": ":application",
+          "name": "application",
+          "tasks": [
+            {
+              "path": ":application:artifactTransforms",
+              "name": "artifactTransforms",
+              "group": "help",
+              "description": "Displays the Artifact Transforms that can be executed in project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:assemble",
+              "name": "assemble",
+              "group": "build",
+              "description": "Assembles the outputs of this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:build",
+              "name": "build",
+              "group": "build",
+              "description": "Assembles and tests this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:buildDependents",
+              "name": "buildDependents",
+              "group": "build",
+              "description": "Assembles and tests this project and all projects that depend on it.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:buildEnvironment",
+              "name": "buildEnvironment",
+              "group": "help",
+              "description": "Displays all buildscript dependencies declared in project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:buildNeeded",
+              "name": "buildNeeded",
+              "group": "build",
+              "description": "Assembles and tests this project and all projects it depends on.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:check",
+              "name": "check",
+              "group": "verification",
+              "description": "Runs all checks.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:classes",
+              "name": "classes",
+              "group": "build",
+              "description": "Assembles main classes.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:clean",
+              "name": "clean",
+              "group": "build",
+              "description": "Deletes the build directory.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:compileJava",
+              "name": "compileJava",
+              "description": "Compiles main Java source.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:compileTestJava",
+              "name": "compileTestJava",
+              "description": "Compiles test Java source.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:components",
+              "name": "components",
+              "description": "Displays the components produced by project ':application'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:dependencies",
+              "name": "dependencies",
+              "group": "help",
+              "description": "Displays all dependencies declared in project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:dependencyInsight",
+              "name": "dependencyInsight",
+              "group": "help",
+              "description": "Displays the insight into a specific dependency in project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:dependentComponents",
+              "name": "dependentComponents",
+              "description": "Displays the dependent components of components in project ':application'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:help",
+              "name": "help",
+              "group": "help",
+              "description": "Displays a help message.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:jar",
+              "name": "jar",
+              "group": "build",
+              "description": "Assembles a jar archive containing the classes of the 'main' feature.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:javaToolchains",
+              "name": "javaToolchains",
+              "group": "help",
+              "description": "Displays the detected java toolchains.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:javadoc",
+              "name": "javadoc",
+              "group": "documentation",
+              "description": "Generates Javadoc API documentation for the 'main' feature.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:model",
+              "name": "model",
+              "description": "Displays the configuration model of project ':application'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:outgoingVariants",
+              "name": "outgoingVariants",
+              "group": "help",
+              "description": "Displays the outgoing variants of project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:processResources",
+              "name": "processResources",
+              "description": "Processes main resources.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:processTestResources",
+              "name": "processTestResources",
+              "description": "Processes test resources.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:projects",
+              "name": "projects",
+              "group": "help",
+              "description": "Displays the sub-projects of project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:properties",
+              "name": "properties",
+              "group": "help",
+              "description": "Displays the properties of project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:resolvableConfigurations",
+              "name": "resolvableConfigurations",
+              "group": "help",
+              "description": "Displays the configurations that can be resolved in project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:tasks",
+              "name": "tasks",
+              "group": "help",
+              "description": "Displays the tasks runnable from project ':application'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:test",
+              "name": "test",
+              "group": "verification",
+              "description": "Runs the test suite.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:testClasses",
+              "name": "testClasses",
+              "group": "build",
+              "description": "Assembles test classes.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":application:unrequestedCompositeDefault",
+              "name": "unrequestedCompositeDefault",
+              "optionsKnown": false
+            }
+          ],
+          "detailsJson": "{\"javaSourceSetsKnown\":true,\"sourceSets\":[{\"name\":\"main\",\"roots\":[\"file:///groovy-composite-fixture/primary/application/src/main/java/\",\"file:///groovy-composite-fixture/primary/application/src/main/resources\"],\"generatednessKnown\":false,\"annotationProcessorOutputKnown\":true,\"annotationProcessorOutputUri\":\"file:///groovy-composite-fixture/primary/application/build/generated/sources/annotationProcessor/java/main\"},{\"name\":\"test\",\"roots\":[\"file:///groovy-composite-fixture/primary/application/src/test/java\",\"file:///groovy-composite-fixture/primary/application/src/test/resources\"],\"generatednessKnown\":false,\"annotationProcessorOutputKnown\":true,\"annotationProcessorOutputUri\":\"file:///groovy-composite-fixture/primary/application/build/generated/sources/annotationProcessor/java/test\"}],\"configurationsKnown\":true,\"configurations\":[{\"name\":\"annotationProcessor\",\"description\":\"Annotation processors and their dependencies for source set 'main'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"apiElements\",\"description\":\"API elements for the 'main' feature.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"archives\",\"description\":\"Configuration for archive artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"compileClasspath\",\"description\":\"Compile classpath for source set 'main'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"compileOnly\",\"implementation\"]},{\"name\":\"compileOnly\",\"description\":\"Compile-only dependencies for the 'main' feature.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"default\",\"description\":\"Configuration for default artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[\"runtimeElements\"]},{\"name\":\"implementation\",\"description\":\"Implementation dependencies for the 'main' feature.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"mainSourceElements\",\"description\":\"List of source directories contained in the Main SourceSet.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[\"implementation\"]},{\"name\":\"runtimeClasspath\",\"description\":\"Runtime classpath of source set 'main'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"implementation\",\"runtimeOnly\"]},{\"name\":\"runtimeElements\",\"description\":\"Runtime elements for the 'main' feature.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[\"implementation\",\"runtimeOnly\"]},{\"name\":\"runtimeOnly\",\"description\":\"Runtime-only dependencies for the 'main' feature.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"testAnnotationProcessor\",\"description\":\"Annotation processors and their dependencies for source set 'test'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"testCompileClasspath\",\"description\":\"Compile classpath for source set 'test'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"testCompileOnly\",\"testImplementation\"]},{\"name\":\"testCompileOnly\",\"description\":\"Compile only dependencies for source set 'test'.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"testImplementation\",\"description\":\"Implementation only dependencies for source set 'test'.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[\"implementation\"]},{\"name\":\"testResultsElementsForTest\",\"description\":\"Binary results obtained from running all targets in the 'test' Test Suite.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"testRuntimeClasspath\",\"description\":\"Runtime classpath of source set 'test'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"testImplementation\",\"testRuntimeOnly\"]},{\"name\":\"testRuntimeOnly\",\"description\":\"Runtime only dependencies for source set 'test'.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[\"runtimeOnly\"]}],\"dependencyGraphKnown\":false,\"tasks\":[{\"path\":\":application:artifactTransforms\",\"options\":[{\"name\":\"type\",\"description\":\"The type of Transform to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:assemble\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:build\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:buildDependents\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:buildEnvironment\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:buildNeeded\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:check\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:classes\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:clean\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:compileJava\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:compileTestJava\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:components\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:dependencies\",\"options\":[{\"name\":\"configuration\",\"description\":\"The configuration to generate the report for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:dependencyInsight\",\"options\":[{\"name\":\"all-variants\",\"description\":\"Show all variants of each dependency\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"Looks for the dependency in given configuration.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"dependency\",\"description\":\"Shows the details of given dependency.\",\"declaredType\":\"java.lang.Object\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"single-path\",\"description\":\"Show at most one path to each dependency\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:dependentComponents\",\"options\":[{\"name\":\"all\",\"description\":\"Show all components (non-buildable and test suites).\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"component\",\"description\":\"Component to generate the report for (can be specified more than once).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"non-buildable\",\"description\":\"Show non-buildable components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-suites\",\"description\":\"Show test suites components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:help\",\"options\":[{\"name\":\"task\",\"description\":\"The task to show help for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:jar\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:javaToolchains\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:javadoc\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:model\",\"options\":[{\"name\":\"format\",\"description\":\"Output format (full, short)\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"showHidden\",\"description\":\"Show hidden model elements.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:outgoingVariants\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all variants, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"variant\",\"description\":\"The name of the single variant to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:processResources\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:processTestResources\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:projects\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:properties\",\"options\":[{\"name\":\"property\",\"description\":\"A specific property to output\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:resolvableConfigurations\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all resolvable configurations, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"The name of the configuration to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"recursive\",\"description\":\"Lists all extended configurations of the reported configurations, including any which are extended transitively\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:tasks\",\"options\":[{\"name\":\"all\",\"description\":\"Show additional tasks and detail.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"group\",\"description\":\"Show tasks for a specific group.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"groups\",\"description\":\"Show tasks for specific groups (can be used multiple times to specify multiple groups).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"types\",\"description\":\"Show task class types\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:test\",\"options\":[{\"name\":\"debug-jvm\",\"description\":\"Enable debugging for the test process. The process is started suspended and listening on port 5005.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"fail-fast\",\"description\":\"Stops test execution after the first failed test.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-dry-run\",\"description\":\"Simulate test execution.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"tests\",\"description\":\"Sets test class or method name to be included (in addition to the test task filters), '*' is supported.\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":application:testClasses\",\"options\":[],\"optionsComplete\":true},{\"path\":\":application:unrequestedCompositeDefault\",\"options\":[],\"optionsComplete\":true}]}"
+        },
+        {
+          "buildRootUri": "file:/groovy-composite-fixture/primary/",
+          "moduleUri": "file:/groovy-composite-fixture/primary/library/",
+          "projectPath": ":library",
+          "name": "library",
+          "tasks": [
+            {
+              "path": ":library:artifactTransforms",
+              "name": "artifactTransforms",
+              "group": "help",
+              "description": "Displays the Artifact Transforms that can be executed in project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:assemble",
+              "name": "assemble",
+              "group": "build",
+              "description": "Assembles the outputs of this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:build",
+              "name": "build",
+              "group": "build",
+              "description": "Assembles and tests this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:buildDependents",
+              "name": "buildDependents",
+              "group": "build",
+              "description": "Assembles and tests this project and all projects that depend on it.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:buildEnvironment",
+              "name": "buildEnvironment",
+              "group": "help",
+              "description": "Displays all buildscript dependencies declared in project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:buildNeeded",
+              "name": "buildNeeded",
+              "group": "build",
+              "description": "Assembles and tests this project and all projects it depends on.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:check",
+              "name": "check",
+              "group": "verification",
+              "description": "Runs all checks.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:classes",
+              "name": "classes",
+              "group": "build",
+              "description": "Assembles main classes.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:clean",
+              "name": "clean",
+              "group": "build",
+              "description": "Deletes the build directory.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:compileJava",
+              "name": "compileJava",
+              "description": "Compiles main Java source.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:compileTestJava",
+              "name": "compileTestJava",
+              "description": "Compiles test Java source.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:components",
+              "name": "components",
+              "description": "Displays the components produced by project ':library'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:dependencies",
+              "name": "dependencies",
+              "group": "help",
+              "description": "Displays all dependencies declared in project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:dependencyInsight",
+              "name": "dependencyInsight",
+              "group": "help",
+              "description": "Displays the insight into a specific dependency in project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:dependentComponents",
+              "name": "dependentComponents",
+              "description": "Displays the dependent components of components in project ':library'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:help",
+              "name": "help",
+              "group": "help",
+              "description": "Displays a help message.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:jar",
+              "name": "jar",
+              "group": "build",
+              "description": "Assembles a jar archive containing the classes of the 'main' feature.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:javaToolchains",
+              "name": "javaToolchains",
+              "group": "help",
+              "description": "Displays the detected java toolchains.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:javadoc",
+              "name": "javadoc",
+              "group": "documentation",
+              "description": "Generates Javadoc API documentation for the 'main' feature.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:model",
+              "name": "model",
+              "description": "Displays the configuration model of project ':library'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:outgoingVariants",
+              "name": "outgoingVariants",
+              "group": "help",
+              "description": "Displays the outgoing variants of project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:processResources",
+              "name": "processResources",
+              "description": "Processes main resources.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:processTestResources",
+              "name": "processTestResources",
+              "description": "Processes test resources.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:projects",
+              "name": "projects",
+              "group": "help",
+              "description": "Displays the sub-projects of project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:properties",
+              "name": "properties",
+              "group": "help",
+              "description": "Displays the properties of project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:resolvableConfigurations",
+              "name": "resolvableConfigurations",
+              "group": "help",
+              "description": "Displays the configurations that can be resolved in project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:tasks",
+              "name": "tasks",
+              "group": "help",
+              "description": "Displays the tasks runnable from project ':library'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:test",
+              "name": "test",
+              "group": "verification",
+              "description": "Runs the test suite.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:testClasses",
+              "name": "testClasses",
+              "group": "build",
+              "description": "Assembles test classes.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":library:unrequestedCompositeDefault",
+              "name": "unrequestedCompositeDefault",
+              "optionsKnown": false
+            }
+          ],
+          "detailsJson": "{\"javaSourceSetsKnown\":true,\"sourceSets\":[{\"name\":\"main\",\"roots\":[\"file:///groovy-composite-fixture/primary/library/src/main/java/\",\"file:///groovy-composite-fixture/primary/library/src/main/resources\"],\"generatednessKnown\":false,\"annotationProcessorOutputKnown\":true,\"annotationProcessorOutputUri\":\"file:///groovy-composite-fixture/primary/library/build/generated/sources/annotationProcessor/java/main\"},{\"name\":\"test\",\"roots\":[\"file:///groovy-composite-fixture/primary/library/src/test/java\",\"file:///groovy-composite-fixture/primary/library/src/test/resources\"],\"generatednessKnown\":false,\"annotationProcessorOutputKnown\":true,\"annotationProcessorOutputUri\":\"file:///groovy-composite-fixture/primary/library/build/generated/sources/annotationProcessor/java/test\"}],\"configurationsKnown\":true,\"configurations\":[{\"name\":\"annotationProcessor\",\"description\":\"Annotation processors and their dependencies for source set 'main'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"apiElements\",\"description\":\"API elements for the 'main' feature.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"archives\",\"description\":\"Configuration for archive artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"compileClasspath\",\"description\":\"Compile classpath for source set 'main'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"compileOnly\",\"implementation\"]},{\"name\":\"compileOnly\",\"description\":\"Compile-only dependencies for the 'main' feature.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"default\",\"description\":\"Configuration for default artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[\"runtimeElements\"]},{\"name\":\"implementation\",\"description\":\"Implementation dependencies for the 'main' feature.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"mainSourceElements\",\"description\":\"List of source directories contained in the Main SourceSet.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[\"implementation\"]},{\"name\":\"runtimeClasspath\",\"description\":\"Runtime classpath of source set 'main'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"implementation\",\"runtimeOnly\"]},{\"name\":\"runtimeElements\",\"description\":\"Runtime elements for the 'main' feature.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[\"implementation\",\"runtimeOnly\"]},{\"name\":\"runtimeOnly\",\"description\":\"Runtime-only dependencies for the 'main' feature.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"testAnnotationProcessor\",\"description\":\"Annotation processors and their dependencies for source set 'test'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"testCompileClasspath\",\"description\":\"Compile classpath for source set 'test'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"testCompileOnly\",\"testImplementation\"]},{\"name\":\"testCompileOnly\",\"description\":\"Compile only dependencies for source set 'test'.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[]},{\"name\":\"testImplementation\",\"description\":\"Implementation only dependencies for source set 'test'.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[\"implementation\"]},{\"name\":\"testResultsElementsForTest\",\"description\":\"Binary results obtained from running all targets in the 'test' Test Suite.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"testRuntimeClasspath\",\"description\":\"Runtime classpath of source set 'test'.\",\"resolvable\":true,\"consumable\":false,\"extendsFrom\":[\"testImplementation\",\"testRuntimeOnly\"]},{\"name\":\"testRuntimeOnly\",\"description\":\"Runtime only dependencies for source set 'test'.\",\"resolvable\":false,\"consumable\":false,\"extendsFrom\":[\"runtimeOnly\"]}],\"dependencyGraphKnown\":false,\"tasks\":[{\"path\":\":library:artifactTransforms\",\"options\":[{\"name\":\"type\",\"description\":\"The type of Transform to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:assemble\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:build\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:buildDependents\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:buildEnvironment\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:buildNeeded\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:check\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:classes\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:clean\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:compileJava\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:compileTestJava\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:components\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:dependencies\",\"options\":[{\"name\":\"configuration\",\"description\":\"The configuration to generate the report for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:dependencyInsight\",\"options\":[{\"name\":\"all-variants\",\"description\":\"Show all variants of each dependency\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"Looks for the dependency in given configuration.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"dependency\",\"description\":\"Shows the details of given dependency.\",\"declaredType\":\"java.lang.Object\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"single-path\",\"description\":\"Show at most one path to each dependency\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:dependentComponents\",\"options\":[{\"name\":\"all\",\"description\":\"Show all components (non-buildable and test suites).\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"component\",\"description\":\"Component to generate the report for (can be specified more than once).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"non-buildable\",\"description\":\"Show non-buildable components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-suites\",\"description\":\"Show test suites components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:help\",\"options\":[{\"name\":\"task\",\"description\":\"The task to show help for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:jar\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:javaToolchains\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:javadoc\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:model\",\"options\":[{\"name\":\"format\",\"description\":\"Output format (full, short)\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"showHidden\",\"description\":\"Show hidden model elements.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:outgoingVariants\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all variants, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"variant\",\"description\":\"The name of the single variant to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:processResources\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:processTestResources\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:projects\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:properties\",\"options\":[{\"name\":\"property\",\"description\":\"A specific property to output\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:resolvableConfigurations\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all resolvable configurations, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"The name of the configuration to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"recursive\",\"description\":\"Lists all extended configurations of the reported configurations, including any which are extended transitively\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:tasks\",\"options\":[{\"name\":\"all\",\"description\":\"Show additional tasks and detail.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"group\",\"description\":\"Show tasks for a specific group.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"groups\",\"description\":\"Show tasks for specific groups (can be used multiple times to specify multiple groups).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"types\",\"description\":\"Show task class types\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:test\",\"options\":[{\"name\":\"debug-jvm\",\"description\":\"Enable debugging for the test process. The process is started suspended and listening on port 5005.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"fail-fast\",\"description\":\"Stops test execution after the first failed test.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-dry-run\",\"description\":\"Simulate test execution.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"tests\",\"description\":\"Sets test class or method name to be included (in addition to the test task filters), '*' is supported.\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":library:testClasses\",\"options\":[],\"optionsComplete\":true},{\"path\":\":library:unrequestedCompositeDefault\",\"options\":[],\"optionsComplete\":true}]}"
+        },
+        {
+          "buildRootUri": "file:/groovy-composite-fixture/primary/included/",
+          "moduleUri": "file:/groovy-composite-fixture/primary/included/",
+          "projectPath": ":",
+          "name": "selection-included",
+          "tasks": [
+            {
+              "path": ":artifactTransforms",
+              "name": "artifactTransforms",
+              "group": "help",
+              "description": "Displays the Artifact Transforms that can be executed in project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":assemble",
+              "name": "assemble",
+              "group": "build",
+              "description": "Assembles the outputs of this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":build",
+              "name": "build",
+              "group": "build",
+              "description": "Assembles and tests this project.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":buildEnvironment",
+              "name": "buildEnvironment",
+              "group": "help",
+              "description": "Displays all buildscript dependencies declared in project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":check",
+              "name": "check",
+              "group": "verification",
+              "description": "Runs all checks.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":clean",
+              "name": "clean",
+              "group": "build",
+              "description": "Deletes the build directory.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":components",
+              "name": "components",
+              "description": "Displays the components produced by project ':included'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":dependencies",
+              "name": "dependencies",
+              "group": "help",
+              "description": "Displays all dependencies declared in project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":dependencyInsight",
+              "name": "dependencyInsight",
+              "group": "help",
+              "description": "Displays the insight into a specific dependency in project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":dependentComponents",
+              "name": "dependentComponents",
+              "description": "Displays the dependent components of components in project ':included'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":help",
+              "name": "help",
+              "group": "help",
+              "description": "Displays a help message.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":init",
+              "name": "init",
+              "group": "Build Setup",
+              "description": "Initializes a new Gradle build.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":javaToolchains",
+              "name": "javaToolchains",
+              "group": "help",
+              "description": "Displays the detected java toolchains.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":model",
+              "name": "model",
+              "description": "Displays the configuration model of project ':included'. [deprecated]",
+              "optionsKnown": false
+            },
+            {
+              "path": ":outgoingVariants",
+              "name": "outgoingVariants",
+              "group": "help",
+              "description": "Displays the outgoing variants of project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":prepareKotlinBuildScriptModel",
+              "name": "prepareKotlinBuildScriptModel",
+              "optionsKnown": false
+            },
+            {
+              "path": ":projects",
+              "name": "projects",
+              "group": "help",
+              "description": "Displays the sub-projects of project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":properties",
+              "name": "properties",
+              "group": "help",
+              "description": "Displays the properties of project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":resolvableConfigurations",
+              "name": "resolvableConfigurations",
+              "group": "help",
+              "description": "Displays the configurations that can be resolved in project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":tasks",
+              "name": "tasks",
+              "group": "help",
+              "description": "Displays the tasks runnable from project ':included'.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":unrequestedCompositeDefault",
+              "name": "unrequestedCompositeDefault",
+              "optionsKnown": false
+            },
+            {
+              "path": ":updateDaemonJvm",
+              "name": "updateDaemonJvm",
+              "group": "Build Setup",
+              "description": "Generates or updates the Gradle Daemon JVM criteria.",
+              "optionsKnown": false
+            },
+            {
+              "path": ":wrapper",
+              "name": "wrapper",
+              "group": "Build Setup",
+              "description": "Generates Gradle wrapper files.",
+              "optionsKnown": false
+            }
+          ],
+          "detailsJson": "{\"javaSourceSetsKnown\":false,\"sourceSets\":[],\"configurationsKnown\":true,\"configurations\":[{\"name\":\"archives\",\"description\":\"Configuration for archive artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]},{\"name\":\"default\",\"description\":\"Configuration for default artifacts.\",\"resolvable\":false,\"consumable\":true,\"extendsFrom\":[]}],\"dependencyGraphKnown\":false,\"tasks\":[{\"path\":\":artifactTransforms\",\"options\":[{\"name\":\"type\",\"description\":\"The type of Transform to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":assemble\",\"options\":[],\"optionsComplete\":true},{\"path\":\":build\",\"options\":[],\"optionsComplete\":true},{\"path\":\":buildEnvironment\",\"options\":[],\"optionsComplete\":true},{\"path\":\":check\",\"options\":[],\"optionsComplete\":true},{\"path\":\":clean\",\"options\":[],\"optionsComplete\":true},{\"path\":\":components\",\"options\":[],\"optionsComplete\":true},{\"path\":\":dependencies\",\"options\":[{\"name\":\"configuration\",\"description\":\"The configuration to generate the report for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":dependencyInsight\",\"options\":[{\"name\":\"all-variants\",\"description\":\"Show all variants of each dependency\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"Looks for the dependency in given configuration.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"dependency\",\"description\":\"Shows the details of given dependency.\",\"declaredType\":\"java.lang.Object\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"single-path\",\"description\":\"Show at most one path to each dependency\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":dependentComponents\",\"options\":[{\"name\":\"all\",\"description\":\"Show all components (non-buildable and test suites).\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"component\",\"description\":\"Component to generate the report for (can be specified more than once).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"non-buildable\",\"description\":\"Show non-buildable components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-suites\",\"description\":\"Show test suites components.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":help\",\"options\":[{\"name\":\"task\",\"description\":\"The task to show help for.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":init\",\"options\":[{\"name\":\"comments\",\"description\":\"Include clarifying comments in files.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"dsl\",\"description\":\"Set the build script DSL to be used in generated scripts.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"incubating\",\"description\":\"Allow the generated build to use new features and APIs.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"insecure-protocol\",\"description\":\"How to handle insecure URLs used for Maven Repositories.\",\"declaredType\":\"org.gradle.api.provider.Property<org.gradle.buildinit.InsecureProtocolOption>\",\"enumConstantsKnown\":true,\"enumConstants\":[\"ALLOW\",\"FAIL\",\"UPGRADE\",\"WARN\"]},{\"name\":\"java-version\",\"description\":\"Provides java version to use in the project.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"overwrite\",\"description\":\"Allow existing files in the build directory to be overwritten?\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"package\",\"description\":\"Set the package for source files.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"project-name\",\"description\":\"Set the project name.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"split-project\",\"description\":\"Split functionality across multiple subprojects?\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"test-framework\",\"description\":\"Set the test framework to be used.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"type\",\"description\":\"Set the type of project to generate.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"use-defaults\",\"description\":\"Use default values for options not configured explicitly\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":javaToolchains\",\"options\":[],\"optionsComplete\":true},{\"path\":\":model\",\"options\":[{\"name\":\"format\",\"description\":\"Output format (full, short)\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"showHidden\",\"description\":\"Show hidden model elements.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":outgoingVariants\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all variants, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"variant\",\"description\":\"The name of the single variant to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":prepareKotlinBuildScriptModel\",\"options\":[],\"optionsComplete\":true},{\"path\":\":projects\",\"options\":[],\"optionsComplete\":true},{\"path\":\":properties\",\"options\":[{\"name\":\"property\",\"description\":\"A specific property to output\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":resolvableConfigurations\",\"options\":[{\"name\":\"all\",\"description\":\"Shows all resolvable configurations, including legacy and deprecated configurations\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"configuration\",\"description\":\"The name of the configuration to report\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"recursive\",\"description\":\"Lists all extended configurations of the reported configurations, including any which are extended transitively\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":tasks\",\"options\":[{\"name\":\"all\",\"description\":\"Show additional tasks and detail.\",\"declaredType\":\"boolean\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"group\",\"description\":\"Show tasks for a specific group.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"groups\",\"description\":\"Show tasks for specific groups (can be used multiple times to specify multiple groups).\",\"declaredType\":\"java.util.List<java.lang.String>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"types\",\"description\":\"Show task class types\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":unrequestedCompositeDefault\",\"options\":[],\"optionsComplete\":true},{\"path\":\":updateDaemonJvm\",\"options\":[{\"name\":\"jvm-vendor\",\"description\":\"The vendor of the JVM required to run the Gradle Daemon.\",\"declaredType\":\"org.gradle.api.provider.Property<org.gradle.jvm.toolchain.JvmVendorSpec>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"jvm-version\",\"description\":\"The version of the JVM required to run the Gradle Daemon.\",\"declaredType\":\"org.gradle.api.provider.Property<org.gradle.jvm.toolchain.JavaLanguageVersion>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true},{\"path\":\":wrapper\",\"options\":[{\"name\":\"distribution-type\",\"description\":\"The type of the Gradle distribution to be used by the wrapper.\",\"declaredType\":\"org.gradle.api.tasks.wrapper.Wrapper$DistributionType\",\"enumConstantsKnown\":true,\"enumConstants\":[\"ALL\",\"BIN\"]},{\"name\":\"gradle-distribution-sha256-sum\",\"description\":\"The SHA-256 hash sum of the gradle distribution.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"gradle-distribution-url\",\"description\":\"The URL to download the Gradle distribution from.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"gradle-version\",\"description\":\"The version of the Gradle distribution required by the wrapper. The following labels are allowed: latest, release-candidate, nightly, and release-nightly.\",\"declaredType\":\"java.lang.String\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"network-timeout\",\"description\":\"Timeout in ms to use when the wrapper is performing network operations.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Integer>\",\"enumConstantsKnown\":false,\"enumConstants\":[]},{\"name\":\"validate-url\",\"description\":\"Sets task to validate the configured distribution url.\",\"declaredType\":\"org.gradle.api.provider.Property<java.lang.Boolean>\",\"enumConstantsKnown\":false,\"enumConstants\":[]}],\"optionsComplete\":true}]}"
+        }
+      ],
+      "sourceSetsKnown": false
+    },
+    "buildRootUri": "file:///groovy-composite-fixture/primary/",
+    "modelQueryComplete": true,
+    "fullSynchronizationKnown": false,
+    "version": 4
+  }
+}

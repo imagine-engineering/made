@@ -9234,10 +9234,11 @@ fn merge_gradle_model_with_admission(
         let module = file_uri_path(&project.module_uri)?;
         if let Some(admitted_modules) = admitted_modules {
             ensure!(
-                build == root
+                (build == root || admitted_modules.contains(&build))
                     && gradle_model_identity_path(&project.build_root_uri)? == build
                     && gradle_model_identity_path(&project.module_uri)? == module
-                    && admitted_modules.contains(&module),
+                    && admitted_modules.contains(&module)
+                    && (project.project_path != ":" || module == build),
                 "Gradle model contains a project outside current cached build ownership"
             );
         }
@@ -9397,6 +9398,12 @@ fn merge_gradle_model_with_admission(
                     .iter()
                     .all(|module| modules.contains(module)),
             "Gradle model does not cover current cached build ownership"
+        );
+        ensure!(
+            identities.iter().all(|(build, _)| {
+                build == root || identities.contains(&(build.clone(), ":".to_owned()))
+            }),
+            "Gradle included build has no current captured root project"
         );
     }
     let additional = model
@@ -18179,6 +18186,200 @@ mod tests {
                 "moduleUri":url::Url::from_directory_path(root.join("application")).expect("Module URI"),
                 "projectPath":":application", "name":"application", "tasks":[],
                 "detailsJson":json!({"javaSourceSetsKnown":true,"sourceSets":[source],"tasks":[]}).to_string()}]})
+    }
+
+    fn scoped_gradle_composite_fixture() -> Value {
+        let root = selected_import_uri(Path::new(util::path!("/groovy-composite-fixture")), true)
+            .expect("fixture root")
+            .to_string();
+        let fixture = include_str!("../test_data/groovy_jvm_gradle/cached-composite-v1.json")
+            .replace("file:///groovy-composite-fixture/", &root)
+            .replace(
+                "file:/groovy-composite-fixture/",
+                &root.replacen("file://", "file:", 1),
+            );
+        serde_json::from_str(&fixture).expect("qualified SDK fixture with platform URI root")
+    }
+
+    #[test]
+    fn scoped_gradle_composite_preserves_verified_connection_and_participant_identities() {
+        let fixture = scoped_gradle_composite_fixture();
+        let root = imported_build_identity_path(
+            fixture["cached"]["rootUri"].as_str().expect("cached root"),
+        )
+        .expect("connection root");
+        let records = fixture["cached"]["projects"]
+            .as_array()
+            .expect("cached modules");
+        let admitted = records
+            .iter()
+            .map(|record| {
+                assert_eq!(record["buildRootUri"], fixture["cached"]["rootUri"]);
+                imported_build_identity_path(record["projectUri"].as_str().expect("module URI"))
+                    .expect("cached module")
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(admitted.len(), 4);
+        assert_eq!(
+            records
+                .iter()
+                .filter(|record| record["javaNature"] == true)
+                .count(),
+            2
+        );
+        let namespace = fixture["namespace"]["projects"]
+            .as_array()
+            .expect("namespace");
+        assert_eq!(namespace.len(), records.len());
+        for (record, independent) in records.iter().zip(namespace) {
+            assert_eq!(record["projectUri"], independent["projectUri"]);
+            assert_eq!(record["javaNature"], independent["javaNature"]);
+        }
+        let model = fixture["details"]["model"].clone();
+        let mut projects = Vec::new();
+        merge_gradle_model_with_admission(
+            &mut projects,
+            model.clone(),
+            &root,
+            &root,
+            Some(&admitted),
+        )
+        .expect("current captured composite");
+        assert_eq!(projects.len(), 4);
+        let included = root.join("included");
+        let (_, settings) = projects
+            .iter()
+            .find(|(uri, _)| file_uri_path(uri).is_ok_and(|module| module == included))
+            .expect("included non-Java resource");
+        assert_eq!(settings.membership, JdtlsProjectMembership::MetadataOnly);
+        let included_model = settings.gradle.as_ref().expect("included metadata");
+        assert_eq!(
+            file_uri_path(&included_model.build_root_uri).expect("participant root"),
+            included
+        );
+        assert_eq!(included_model.project_path, ":");
+        assert_eq!(
+            projects
+                .iter()
+                .filter(|(_, settings)| settings
+                    .gradle
+                    .as_ref()
+                    .is_some_and(|model| model.project_path == ":"))
+                .count(),
+            2
+        );
+        assert_eq!(
+            projects
+                .iter()
+                .filter(|(_, settings)| settings
+                    .gradle
+                    .as_ref()
+                    .and_then(|model| model.details.as_ref())
+                    .is_some_and(|details| details.java_source_sets_known))
+                .count(),
+            2
+        );
+        let before = format!("{projects:?}");
+        merge_gradle_model_with_admission(&mut projects, model, &root, &root, Some(&admitted))
+            .expect("same captured composite refresh");
+        assert_eq!(
+            format!("{projects:?}"),
+            before,
+            "stable module/participant identities on refresh"
+        );
+    }
+
+    #[test]
+    fn scoped_gradle_composite_refuses_incomplete_or_forged_participants_atomically() {
+        let fixture = scoped_gradle_composite_fixture();
+        let root =
+            imported_build_identity_path(fixture["cached"]["rootUri"].as_str().expect("root"))
+                .expect("connection root");
+        let admitted = fixture["cached"]["projects"]
+            .as_array()
+            .expect("cached modules")
+            .iter()
+            .map(|record| {
+                imported_build_identity_path(record["projectUri"].as_str().expect("module"))
+                    .expect("identity")
+            })
+            .collect::<BTreeSet<_>>();
+        let model = fixture["details"]["model"].clone();
+        for mode in 0..9 {
+            let mut changed = model.clone();
+            let projects = changed["projects"].as_array_mut().expect("model projects");
+            let included_index = projects
+                .iter()
+                .position(|record| {
+                    record["moduleUri"]
+                        .as_str()
+                        .is_some_and(|uri| uri.ends_with("/included/"))
+                })
+                .expect("included record");
+            match mode {
+                0 => {
+                    projects.remove(included_index);
+                }
+                1 => {
+                    projects.push(projects[included_index].clone());
+                }
+                2 => {
+                    projects[included_index]["buildRootUri"] =
+                        json!("file:/groovy-composite-fixture/primary/uncaptured/");
+                }
+                3 => {
+                    projects[included_index]["moduleUri"] =
+                        json!("file:/groovy-composite-fixture/primary/unknown/");
+                }
+                4 => {
+                    projects[included_index]["buildRootUri"] = json!("file:/private-canary/");
+                }
+                5 => {
+                    projects[included_index]["projectPath"] = json!(":included");
+                }
+                6 => {
+                    let child = projects
+                        .iter_mut()
+                        .find(|record| record["projectPath"] == ":application")
+                        .expect("child");
+                    child["projectPath"] = json!(":");
+                }
+                7 => {
+                    projects[included_index]["moduleUri"] =
+                        json!("file:/groovy-composite-fixture/primary/included/../included/");
+                }
+                8 => {
+                    projects[included_index]["buildRootUri"] =
+                        json!("file:/groovy-composite-fixture/primary/application/");
+                }
+                _ => unreachable!(),
+            }
+            let mut original = vec![("file:///preserved-maven/".into(), settings())];
+            let before = format!("{original:?}");
+            merge_gradle_model_with_admission(
+                &mut original,
+                changed,
+                &root,
+                &root,
+                Some(&admitted),
+            )
+            .expect_err("invalid participant must refuse before publication");
+            assert_eq!(format!("{original:?}"), before, "atomic refusal for {mode}");
+        }
+        for removed in [&root.join("included"), &root.join("application")] {
+            let mut current = admitted.clone();
+            current.remove(removed);
+            let mut original = Vec::new();
+            merge_gradle_model_with_admission(
+                &mut original,
+                model.clone(),
+                &root,
+                &root,
+                Some(&current),
+            )
+            .expect_err("closed or unknown cached module");
+            assert!(original.is_empty());
+        }
     }
 
     fn scoped_gradle_metadata_reply(workspace: &Path, build: &Path) -> Value {

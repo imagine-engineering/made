@@ -12195,27 +12195,42 @@ mod tests {
     async fn scoped_gradle_metadata_selected_and_default_builds_use_shared_refresh(
         cx: &mut TestAppContext,
     ) {
-        scoped_gradle_metadata_lifecycle(cx, false, true).await;
+        scoped_gradle_metadata_lifecycle(cx, false, true, false).await;
     }
 
     #[gpui::test]
     async fn scoped_gradle_metadata_rejects_late_module_and_permission_changes(
         cx: &mut TestAppContext,
     ) {
-        scoped_gradle_metadata_lifecycle(cx, true, true).await;
+        scoped_gradle_metadata_lifecycle(cx, true, true, false).await;
     }
 
     #[gpui::test]
     async fn scoped_gradle_metadata_v3_only_nested_provider_refuses_before_configuration(
         cx: &mut TestAppContext,
     ) {
-        scoped_gradle_metadata_lifecycle(cx, false, false).await;
+        scoped_gradle_metadata_lifecycle(cx, false, false, false).await;
+    }
+
+    #[gpui::test]
+    async fn scoped_gradle_composite_metadata_uses_shared_refresh_and_stable_tree(
+        cx: &mut TestAppContext,
+    ) {
+        scoped_gradle_metadata_lifecycle(cx, false, true, true).await;
+    }
+
+    #[gpui::test]
+    async fn scoped_gradle_composite_metadata_rejects_late_participant_and_permission_changes(
+        cx: &mut TestAppContext,
+    ) {
+        scoped_gradle_metadata_lifecycle(cx, true, true, true).await;
     }
 
     async fn scoped_gradle_metadata_lifecycle(
         cx: &mut TestAppContext,
         faults: bool,
         module_fence: bool,
+        composite: bool,
     ) {
         use project::Fs as _;
         use settings::SettingsStore;
@@ -12234,6 +12249,13 @@ mod tests {
             "first":{"build.gradle":"plugins {}","child":{"build.gradle":"plugins {}","C.java":"class C {}"}},
             "second":{"settings.gradle":"rootProject.name='second'"}
         })).await;
+        if composite {
+            fs.insert_tree(
+                "/scoped-metadata/first/included",
+                serde_json::json!({"build.gradle":"plugins {}"}),
+            )
+            .await;
+        }
         let project =
             Project::test_with_worktree_trust(fs.clone(), ["/scoped-metadata".as_ref()], cx).await;
         let worktrees = project.read_with(cx, |project, _| project.worktree_store());
@@ -12278,14 +12300,18 @@ mod tests {
                             let models=models.clone();let gate=gate.clone();let namespace_changed=namespace_changed.clone();let entered=entered.clone();
                             async move {
                                 let uri = |module:&str| format!("file:///scoped-metadata/{module}/");
-                                let gradle = ["first", "first/child", "second"];
+                                let gradle = if composite {vec!["first", "first/child", "first/included", "second"]} else {vec!["first", "first/child", "second"]};
                                 let scope = parameters.arguments.first().and_then(|value|value.get("rootUri")).and_then(serde_json::Value::as_str).unwrap_or("file:///scoped-metadata/").to_owned();
                                 match parameters.command.as_str() {
-                                    "java.project.getAll" => Ok(Some(serde_json::json!(gradle.into_iter().chain(["plain","maven"]).map(uri).collect::<Vec<_>>()))),
+                                    "java.project.getAll" => {
+                                        let resources = parameters.arguments == [serde_json::json!(r#"{"includeNonJava":true}"#)];
+                                        assert!(parameters.arguments.is_empty() || resources);
+                                        Ok(Some(serde_json::json!(gradle.into_iter().filter(|module| resources || (*module != "first/included" && (!composite || *module != "first"))).chain(["plain","maven"]).map(uri).collect::<Vec<_>>())))
+                                    }
                                     "java.project.getSettings" => Ok(Some(serde_json::json!({"org.eclipse.jdt.ls.core.sourcePaths":[],"org.eclipse.jdt.ls.core.classpathEntries":[]}))),
-                                    "groovy.maven.importedProjects" | "groovy.gradle.importedProjects" => Ok(Some(serde_json::json!({"version":1,"rootUri":scope,"projects":if parameters.command.contains("maven") {if uri("maven").starts_with(&scope) {vec![serde_json::json!({"projectUri":uri("maven"),"javaNature":true})]}else{vec![]}} else {gradle.into_iter().filter(|module|uri(module).starts_with(&scope)).map(|module| serde_json::json!({"projectUri":uri(module),"javaNature":true})).collect()},"partial":false,"fullSynchronizationKnown":false}))),
+                                    "groovy.maven.importedProjects" | "groovy.gradle.importedProjects" => Ok(Some(serde_json::json!({"version":1,"rootUri":scope,"projects":if parameters.command.contains("maven") {if uri("maven").starts_with(&scope) {vec![serde_json::json!({"projectUri":uri("maven"),"javaNature":true})]}else{vec![]}} else {gradle.into_iter().filter(|module|uri(module).starts_with(&scope)).map(|module| serde_json::json!({"projectUri":uri(module),"javaNature":module != "first/included" && (!composite || module != "first")})).collect()},"partial":false,"fullSynchronizationKnown":false}))),
                                     "groovy.gradle.importedBuildRoots" => Ok(Some(serde_json::json!({"version":1,"rootUri":scope,"cachedOnly":true,"readOnly":true,"partial":false,"fullSynchronizationKnown":false,
-                                        "projects":gradle.into_iter().filter(|module| uri(module).starts_with(&scope) && (!namespace_changed.load(Ordering::SeqCst) || *module != "first/child")).map(|module|serde_json::json!({"projectUri":uri(module),"buildRootUri":uri(if module.starts_with("first") {"first"} else {"second"}),"javaNature":true})).collect::<Vec<_>>()}))),
+                                        "projects":gradle.into_iter().filter(|module| uri(module).starts_with(&scope) && (!namespace_changed.load(Ordering::SeqCst) || *module != "first/child")).map(|module|serde_json::json!({"projectUri":uri(module),"buildRootUri":uri(if module.starts_with("first") {"first"} else {"second"}),"javaNature":module != "first/included" && (!composite || module != "first")})).collect::<Vec<_>>()}))),
                                     "groovy.gradle.projectDetails.v4" => {
                                         let build = parameters.arguments[0]["buildRootUri"].as_str().expect("build").to_owned();
                                         let workspace=parameters.arguments[0]["workspaceRootUri"].as_str().expect("workspace").to_owned();
@@ -12295,12 +12321,15 @@ mod tests {
                                         models.lock().expect("models").push(build.clone());
                                         let held = gate.lock().expect("gate").take();
                                         if let Some(held)=held {entered.unbounded_send(()).expect("observer");held.await.expect("release metadata");}
-                                        let modules = if build == uri("first") {vec![("first",":"),("first/child",":child")]} else {vec![("second",":")]};
+                                        let mut modules = if build == uri("first") {vec![("first",":"),("first/child",":child")]} else {vec![("second",":")]};
+                                        if composite && build == uri("first") { modules.push(("first/included", ":")); }
                                         Ok(Some(serde_json::json!({"version":4,"workspaceRootUri":workspace,"buildRootUri":build,"modelQueryComplete":true,"fullSynchronizationKnown":false,
                                             "model":{"version":2,"rootUri":build,"sourceSetsKnown":false,"projects":modules.into_iter().map(|(module,project_path)| {
                                                 let task = if project_path == ":" {":verify".to_owned()} else {format!("{project_path}:verify")};
-                                                serde_json::json!({"buildRootUri":build.replacen("file://","file:",1),"moduleUri":uri(module).replacen("file://","file:",1),"projectPath":project_path,"name":module,"tasks":[{"path":task,"name":"verify","group":"verification","description":null,"optionsKnown":false}],
-                                                    "detailsJson":serde_json::json!({"javaSourceSetsKnown":true,"sourceSets":[{"name":"main","roots":[uri(module),uri("shared")],"generatednessKnown":false}],"tasks":[{"path":task,"optionsComplete":false,"options":[]}]}).to_string()})
+                                                let grouping = composite && matches!(module, "first" | "first/included");
+                                                let source_sets = if grouping {vec![]} else {vec![serde_json::json!({"name":"main","roots":[uri(module),uri("shared")],"generatednessKnown":false})]};
+                                                serde_json::json!({"buildRootUri":if module == "first/included" {uri(module).replacen("file://","file:",1)} else {build.replacen("file://","file:",1)},"moduleUri":uri(module).replacen("file://","file:",1),"projectPath":project_path,"name":module,"tasks":[{"path":task,"name":"verify","group":"verification","description":null,"optionsKnown":false}],
+                                                    "detailsJson":serde_json::json!({"javaSourceSetsKnown":!grouping,"sourceSets":source_sets,"tasks":[{"path":task,"optionsComplete":false,"options":[]}]}).to_string()})
                                             }).collect::<Vec<_>>()}})))
                                     }
                                     _ => anyhow::bail!("Unexpected metadata fixture command"),
@@ -12426,10 +12455,10 @@ mod tests {
                         .iter()
                         .filter(|project| project.gradle.is_some())
                         .count(),
-                    if expected.len() == 1 {
-                        2
+                    if expected.is_empty() {
+                        0
                     } else {
-                        expected.len() + usize::from(expected.len() == 2)
+                        expected.len() + 1 + usize::from(composite)
                     }
                 );
                 for project in snapshot
@@ -12438,15 +12467,37 @@ mod tests {
                     .filter(|project| project.gradle.is_some())
                 {
                     let gradle = project.gradle.as_ref().expect("model");
-                    assert!(gradle.source_sets_known);
-                    assert_eq!(gradle.source_sets.len(), 1);
-                    assert_eq!(gradle.source_sets[0].roots.len(), 2);
-                    assert_eq!(
-                        gradle.source_sets[0].roots[1].path,
-                        path(worktree_id, "shared")
-                    );
-                    assert_eq!(gradle.source_sets[0].roots[0].path, project.module_root);
+                    let grouping = composite
+                        && matches!(
+                            project.module_root.path.as_unix_str(),
+                            "first" | "first/included"
+                        );
+                    assert_eq!(gradle.source_sets_known, !grouping);
+                    if grouping {
+                        assert!(
+                            gradle.source_sets.is_empty(),
+                            "grouping resources retain unknown Java source-set coverage"
+                        );
+                    } else {
+                        assert_eq!(gradle.source_sets.len(), 1);
+                        assert_eq!(gradle.source_sets[0].roots.len(), 2);
+                        assert_eq!(
+                            gradle.source_sets[0].roots[1].path,
+                            path(worktree_id, "shared")
+                        );
+                        assert_eq!(gradle.source_sets[0].roots[0].path, project.module_root);
+                    }
                     assert_eq!(gradle.tasks.len(), 1);
+                }
+                if composite && !expected.is_empty() {
+                    for grouping in ["first", "first/included"] {
+                        let resource = snapshot
+                            .projects
+                            .iter()
+                            .find(|project| project.module_root.path.as_unix_str() == grouping)
+                            .expect("non-Java grouping metadata");
+                        assert_eq!(resource.membership, JdtlsProjectMembership::ImportedNonJava);
+                    }
                 }
                 assert!(
                     snapshot
@@ -12514,8 +12565,8 @@ mod tests {
         );
         store.read_with(cx,|store,_|{
             let (snapshot,current)=store.jdtls_project_snapshot(worktree_id).expect("per-build snapshot");assert!(current);
-            assert_eq!(snapshot.projects.iter().filter(|project|project.gradle.is_some()).count(),3);
-            for gradle in snapshot.projects.iter().filter_map(|project|project.gradle.as_ref()) {
+            assert_eq!(snapshot.projects.iter().filter(|project|project.gradle.is_some()).count(),3 + usize::from(composite));
+            for gradle in snapshot.projects.iter().filter_map(|project|project.gradle.as_ref()).filter(|gradle|gradle.source_sets_known) {
                 assert_eq!(gradle.source_sets[0].roots[1].path,path(worktree_id,"shared"),"declared source remains within its trusted worktree, outside the narrower initialization scope");
             }
         });
@@ -12549,6 +12600,13 @@ mod tests {
             false
         };
         if faults {
+            let changed_module = if composite {
+                "/scoped-metadata/first/included"
+            } else {
+                "/scoped-metadata/first/child"
+            };
+            let changed_build = format!("{changed_module}/build.gradle");
+            let changed_settings = format!("{changed_module}/settings.gradle");
             for mode in 0..13 {
                 let client_server = store.read_with(cx, |store, _| {
                     store
@@ -12572,39 +12630,30 @@ mod tests {
                 assert!(wait_for_model(cx), "model entered for change mode {mode}");
                 match mode {
                     0 => {
-                        fs.insert_file(
-                            "/scoped-metadata/first/child/build.gradle",
-                            b"edited".to_vec(),
-                        )
-                        .await
+                        fs.insert_file(changed_build.as_str(), b"edited".to_vec())
+                            .await
                     }
                     1 => {
-                        fs.insert_file(
-                            "/scoped-metadata/first/child/settings.gradle",
-                            b"added".to_vec(),
-                        )
-                        .await
+                        fs.insert_file(changed_settings.as_str(), b"added".to_vec())
+                            .await
                     }
                     2 => fs
                         .remove_file(
-                            std::path::Path::new("/scoped-metadata/first/child/build.gradle"),
+                            std::path::Path::new(changed_build.as_str()),
                             Default::default(),
                         )
                         .await
                         .expect("remove"),
                     3 => {
                         fs.rename(
-                            std::path::Path::new("/scoped-metadata/first/child"),
+                            std::path::Path::new(changed_module),
                             std::path::Path::new("/scoped-metadata/first/old-child"),
                             Default::default(),
                         )
                         .await
                         .expect("move module");
-                        fs.insert_tree(
-                            "/scoped-metadata/first/child",
-                            serde_json::json!({"C.java":"class C {}"}),
-                        )
-                        .await;
+                        fs.insert_tree(changed_module, serde_json::json!({"C.java":"class C {}"}))
+                            .await;
                     }
                     4 => settings(cx, Some(vec!["second/settings.gradle"]), false),
                     5 => settings(cx, Some(vec!["first/build.gradle"]), true),
@@ -12668,22 +12717,19 @@ mod tests {
                 );
                 match mode {
                     0 | 2 => {
-                        fs.insert_file(
-                            "/scoped-metadata/first/child/build.gradle",
-                            b"plugins {}".to_vec(),
-                        )
-                        .await
+                        fs.insert_file(changed_build.as_str(), b"plugins {}".to_vec())
+                            .await
                     }
                     1 => fs
                         .remove_file(
-                            std::path::Path::new("/scoped-metadata/first/child/settings.gradle"),
+                            std::path::Path::new(changed_settings.as_str()),
                             Default::default(),
                         )
                         .await
                         .expect("restore absent descriptor"),
                     3 => {
                         fs.rename(
-                            std::path::Path::new("/scoped-metadata/first/child"),
+                            std::path::Path::new(changed_module),
                             std::path::Path::new("/scoped-metadata/first/discarded-child"),
                             Default::default(),
                         )
@@ -12691,7 +12737,7 @@ mod tests {
                         .expect("retire replacement");
                         fs.rename(
                             std::path::Path::new("/scoped-metadata/first/old-child"),
-                            std::path::Path::new("/scoped-metadata/first/child"),
+                            std::path::Path::new(changed_module),
                             Default::default(),
                         )
                         .await
@@ -12781,6 +12827,54 @@ mod tests {
                     .any(|row| row.label.contains("verify")),
                 "current provider tasks reach the shared tree"
             );
+        });
+        let row_identity = |panel: &DependenciesPanel| {
+            panel
+                .host
+                .visible_rows()
+                .iter()
+                .map(|row| {
+                    (
+                        row.id.clone(),
+                        row.label.clone(),
+                        row.accessibility_label.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let first_rows = panel.read_with(cx, |panel, _| row_identity(panel));
+        assert_eq!(
+            first_rows
+                .iter()
+                .map(|(id, _, _)| id)
+                .collect::<HashSet<_>>()
+                .len(),
+            first_rows.len(),
+            "shared tree identities remain distinct"
+        );
+        if composite {
+            assert!(
+                first_rows
+                    .iter()
+                    .any(|(_, label, accessibility)| label == ": (first/included)"
+                        && !accessibility.is_empty()),
+                "included participant reaches the shared accessible tree"
+            );
+            assert!(
+                first_rows.iter().any(|(_, label, _)| label == ": (first)"),
+                "connection root remains distinct"
+            );
+        }
+        panel.update(cx, |panel, cx| {
+            panel.rebuild(cx);
+            panel.host.expand_all();
+        });
+        panel.read_with(cx, |panel, _| {
+            assert_eq!(
+                row_identity(panel),
+                first_rows,
+                "same snapshot preserves shared tree identity and accessibility metadata"
+            )
         });
         assert_eq!(
             models.lock().expect("models").len(),
