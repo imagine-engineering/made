@@ -3264,6 +3264,18 @@ impl JvmBuildOperation {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+pub struct MavenOperationOptions {
+    pub profiles: Vec<MavenOperationProfile>,
+    pub skip_tests: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct MavenOperationProfile {
+    pub id: String,
+    pub active: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct JvmBuildOperationReceipt {
     pub server_id: LanguageServerId,
@@ -3271,6 +3283,7 @@ pub struct JvmBuildOperationReceipt {
     pub generation: u64,
     pub module_root: ProjectPath,
     pub operations: Vec<JvmBuildOperation>,
+    pub maven_options: MavenOperationOptions,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3295,6 +3308,7 @@ impl JvmBuildOperationReceipt {
             generation: snapshot.generation,
             module_root,
             operations,
+            maven_options: MavenOperationOptions::default(),
         };
         receipt.plan(snapshot, current, path_style)?;
         Ok(receipt)
@@ -3404,6 +3418,7 @@ impl JvmBuildOperationReceipt {
                     "--file".into(),
                     pom_argument.display(path_style).to_string(),
                 ]);
+                self.maven_options.append_arguments(maven, &mut arguments)?;
                 for operation in &self.operations {
                     let argument = match operation {
                         JvmBuildOperation::MavenPhase { lifecycle, phase } => {
@@ -3451,6 +3466,10 @@ impl JvmBuildOperationReceipt {
                 )
             }
             JdtlsImportedBuildKind::Gradle => {
+                ensure!(
+                    self.maven_options == MavenOperationOptions::default(),
+                    "Maven profiles and test settings apply only to Maven operations"
+                );
                 let gradle = project
                     .gradle
                     .as_ref()
@@ -3601,6 +3620,47 @@ impl JvmBuildOperationReceipt {
             uses_wrapper: true,
             build_files,
         })
+    }
+}
+
+impl MavenOperationOptions {
+    fn append_arguments(&self, maven: &MavenProject, arguments: &mut Vec<String>) -> Result<()> {
+        ensure!(
+            self.profiles.len() <= 32,
+            "Configure at most 32 Maven profiles"
+        );
+        let mut seen = HashSet::new();
+        let mut selectors = Vec::with_capacity(self.profiles.len());
+        for profile in &self.profiles {
+            let id = profile.id.as_str();
+            ensure!(
+                id.len() <= 256
+                    && id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                    && id
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric()
+                            || matches!(byte, b'-' | b'_' | b'.'))
+                    && (maven.profiles.contains_key(id)
+                        || maven
+                            .profile_definitions
+                            .iter()
+                            .any(|profile| profile.id == id)),
+                "Select a profile declared by the current Maven model"
+            );
+            ensure!(seen.insert(id), "Configure each Maven profile only once");
+            selectors.push(if profile.active {
+                id.to_owned()
+            } else {
+                format!("!{id}")
+            });
+        }
+        if !selectors.is_empty() {
+            arguments.extend(["--activate-profiles".into(), selectors.join(",")]);
+        }
+        if self.skip_tests {
+            arguments.push("-DskipTests".into());
+        }
+        Ok(())
     }
 }
 
@@ -10947,7 +11007,7 @@ mod tests {
                 "reactorOrderKnown":false,"unavailablePomUris":[],
                 "lifecycles":[{"id":"default","phases":["compile","verify"]},{"id":"clean","phases":["clean"]}],
                 "projects":[{"pomUri":"file:///fixture/application/pom.xml","groupId":"evidence",
-                    "artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{},
+                    "artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{"ci":false,"legacy":true},
                     "inheritedProfileDefinitionsKnown":false,"plugins":[
                         {"groupId":"org.apache.maven.plugins","artifactId":"maven-surefire-plugin","version":"3.5.2",
                             "managedOnly":false,"goalsKnown":true,"goals":[{"name":"test","phase":"test","description":null}]}]}]}),Path::new("/fixture"))
@@ -10976,6 +11036,82 @@ mod tests {
             projects: vec![project],
             partial: true,
         }
+    }
+
+    #[test]
+    fn current_maven_operation_plans_bind_profiles_and_test_settings() -> Result<()> {
+        let snapshot = operation_snapshot(false);
+        let module = snapshot
+            .projects
+            .first()
+            .context("Maven fixture module")?
+            .module_root
+            .clone();
+        let mut receipt = JvmBuildOperationReceipt::new(
+            &snapshot,
+            true,
+            module,
+            vec![JvmBuildOperation::MavenPhase {
+                lifecycle: "default".into(),
+                phase: "verify".into(),
+            }],
+            PathStyle::Unix,
+        )?;
+        receipt.maven_options = MavenOperationOptions {
+            profiles: vec![
+                MavenOperationProfile {
+                    id: "ci".into(),
+                    active: true,
+                },
+                MavenOperationProfile {
+                    id: "legacy".into(),
+                    active: false,
+                },
+            ],
+            skip_tests: true,
+        };
+        assert_eq!(
+            receipt
+                .plan(&snapshot, true, PathStyle::Unix)?
+                .template
+                .args,
+            [
+                "--offline",
+                "--file",
+                "application/pom.xml",
+                "--activate-profiles",
+                "ci,!legacy",
+                "-DskipTests",
+                "verify"
+            ]
+        );
+        assert!(receipt.plan(&snapshot, false, PathStyle::Unix).is_err());
+        for invalid in ["missing", "ci,!legacy", "!ci", "ci\n"] {
+            receipt.maven_options.profiles.push(MavenOperationProfile {
+                id: invalid.into(),
+                active: true,
+            });
+            let error = receipt
+                .plan(&snapshot, true, PathStyle::Unix)
+                .expect_err("invalid selectors must not enter Task arguments");
+            assert_eq!(
+                error.to_string(),
+                "Select a profile declared by the current Maven model"
+            );
+            receipt.maven_options.profiles.pop();
+        }
+        receipt.maven_options.profiles.push(MavenOperationProfile {
+            id: "ci".into(),
+            active: false,
+        });
+        assert_eq!(
+            receipt
+                .plan(&snapshot, true, PathStyle::Unix)
+                .expect_err("duplicate profile")
+                .to_string(),
+            "Configure each Maven profile only once"
+        );
+        Ok(())
     }
 
     #[test]

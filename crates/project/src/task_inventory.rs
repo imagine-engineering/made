@@ -1464,6 +1464,7 @@ impl Inventory {
             receipt.generation,
             receipt.module_root.path.as_unix_str(),
             &receipt.operations,
+            &receipt.maven_options,
             worktree.abs_path().as_ref(),
             format!("{:?}", worktree_entity.entity_id()),
             format!(

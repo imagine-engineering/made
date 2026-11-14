@@ -18,7 +18,8 @@ use project::{
     jvm_project::{
         GradleAnnotationProcessorOutput, GradleProject, JdtlsProjectMembership,
         JdtlsProjectSnapshot, JvmBuildOperation, JvmBuildOperationReceipt, KotlinBuildSystem,
-        KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
+        KotlinWorkspaceDependency, KotlinWorkspaceSnapshot, MavenOperationOptions,
+        MavenOperationProfile,
     },
     trusted_worktrees::TrustedWorktrees,
 };
@@ -459,8 +460,8 @@ pub struct DependenciesPanel {
     operation_selections: HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
     operation_notice: Option<String>,
     ordered_operations: Vec<JvmBuildOperationReceipt>,
-    gradle_option_target: Option<JvmBuildOperationReceipt>,
-    gradle_option_editor: Entity<Editor>,
+    operation_option_target: Option<JvmBuildOperationReceipt>,
+    operation_option_editor: Entity<Editor>,
     graph_query_token: Option<project::jvm_project::ProviderRefreshToken>,
     graph_query: Option<gpui::Task<()>>,
     graph_notice: Option<String>,
@@ -1390,11 +1391,7 @@ impl DependenciesPanel {
                     editor.set_placeholder_text("Search admitted graph facts", window, cx);
                     editor
                 });
-                let gradle_option_editor = cx.new(|cx| {
-                    let mut editor = Editor::single_line(window, cx);
-                    editor.set_placeholder_text(r#"["--option=value", "--flag"]"#, window, cx);
-                    editor
-                });
+                let operation_option_editor = cx.new(|cx| Editor::single_line(window, cx));
                 let graph_search_subscription = cx.subscribe(&graph_search, |panel, _, event, cx| {
                     if matches!(event, EditorEvent::BufferEdited) {
                         panel.rebuild(cx);
@@ -1430,8 +1427,8 @@ impl DependenciesPanel {
                     operation_selections: HashMap::new(),
                     operation_notice: None,
                     ordered_operations: Vec::new(),
-                    gradle_option_target: None,
-                    gradle_option_editor,
+                    operation_option_target: None,
+                    operation_option_editor,
                     graph_query_token: None,
                     graph_query: None,
                     graph_notice: None,
@@ -1781,7 +1778,7 @@ impl DependenciesPanel {
             self.graph_diagram = None;
             self.graph_selections.clear();
             self.operation_selections.clear();
-            self.gradle_option_target = None;
+            self.operation_option_target = None;
             self.ordered_operations.clear();
             self.host.replace_snapshot(LanguageToolSnapshot {
                 roots: Vec::new(),
@@ -1800,7 +1797,7 @@ impl DependenciesPanel {
             self.graph_diagram = None;
             self.graph_selections.clear();
             self.operation_selections.clear();
-            self.gradle_option_target = None;
+            self.operation_option_target = None;
             self.ordered_operations.clear();
             self.host.replace_snapshot(LanguageToolSnapshot {
                 roots: Vec::new(),
@@ -2114,11 +2111,11 @@ impl DependenciesPanel {
             );
         }
         if self
-            .gradle_option_target
+            .operation_option_target
             .as_ref()
             .is_some_and(|receipt| !has_current_operation(receipt, &operation_selections))
         {
-            self.gradle_option_target = None;
+            self.operation_option_target = None;
         }
         if !self.ordered_operations.is_empty() {
             roots.push(ordered_operation_tree(&self.ordered_operations));
@@ -2246,52 +2243,61 @@ impl DependenciesPanel {
             .ok_or_else(|| {
                 anyhow::anyhow!("Select a current Maven phase, known plugin goal or Gradle task; refresh provider metadata if it is unavailable")
             })?;
-        if self.gradle_option_target.as_ref() != Some(&receipt) {
+        if self.operation_option_target.as_ref() != Some(&receipt) {
             return Ok(receipt);
         }
-        let options = parse_gradle_task_options(&self.gradle_option_editor.read(cx).text(cx))?;
-        if !options.is_empty()
-            && let [operation @ JvmBuildOperation::GradleTask { .. }] =
-                receipt.operations.as_mut_slice()
+        let input = self.operation_option_editor.read(cx).text(cx);
+        if let [operation @ JvmBuildOperation::GradleTask { .. }] =
+            receipt.operations.as_mut_slice()
             && let JvmBuildOperation::GradleTask { path } = operation
         {
-            *operation = JvmBuildOperation::GradleTaskWithOptions {
-                path: path.clone(),
-                options,
-            };
-            let project = self.project.read(cx);
-            let lsp_store = project.lsp_store();
-            let (snapshot, current) = lsp_store
-                .read(cx)
-                .jdtls_project_snapshot(receipt.worktree_id)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("Refresh Gradle task metadata before configuring options")
-                })?;
-            let worktree = project
-                .worktree_for_id(receipt.worktree_id, cx)
-                .ok_or_else(|| anyhow::anyhow!("The selected build folder is unavailable"))?;
-            receipt.plan(snapshot, current, worktree.read(cx).path_style())?;
+            let options = parse_gradle_task_options(&input)?;
+            if !options.is_empty() {
+                *operation = JvmBuildOperation::GradleTaskWithOptions {
+                    path: path.clone(),
+                    options,
+                };
+            }
+        } else {
+            receipt.maven_options = parse_maven_operation_options(&input)?;
         }
+        let project = self.project.read(cx);
+        let lsp_store = project.lsp_store();
+        let (snapshot, current) = lsp_store
+            .read(cx)
+            .jdtls_project_snapshot(receipt.worktree_id)
+            .ok_or_else(|| anyhow::anyhow!("Refresh build metadata before configuring options"))?;
+        let worktree = project
+            .worktree_for_id(receipt.worktree_id, cx)
+            .ok_or_else(|| anyhow::anyhow!("The selected build folder is unavailable"))?;
+        receipt.plan(snapshot, current, worktree.read(cx).path_style())?;
         Ok(receipt)
     }
 
-    fn configure_selected_gradle_task(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn configure_selected_operation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let target = self
             .host
             .selected()
-            .and_then(|id| self.operation_selections.get(id))
-            .filter(|receipt| {
-                matches!(
-                    receipt.operations.as_slice(),
-                    [JvmBuildOperation::GradleTask { .. }]
-                )
-            });
-        self.gradle_option_target = target
+            .and_then(|id| self.operation_selections.get(id));
+        self.operation_option_target = target
             .cloned()
-            .filter(|target| self.gradle_option_target.as_ref() != Some(target));
-        if self.gradle_option_target.is_some() {
-            self.gradle_option_editor.update(cx, |editor, cx| {
+            .filter(|target| self.operation_option_target.as_ref() != Some(target));
+        if let Some(target) = &self.operation_option_target {
+            let gradle = target
+                .operations
+                .iter()
+                .any(|operation| operation.gradle_task_path().is_some());
+            self.operation_option_editor.update(cx, |editor, cx| {
                 editor.set_text("", window, cx);
+                editor.set_placeholder_text(
+                    if gradle {
+                        r#"["--option=value", "--flag"]"#
+                    } else {
+                        r#"["-Pprofile", "-P!profile", "-DskipTests"]"#
+                    },
+                    window,
+                    cx,
+                );
                 window.focus(&editor.focus_handle(cx), cx);
             });
         }
@@ -3817,26 +3823,25 @@ fn ordered_operation_root_id() -> LanguageToolNodeId {
     LanguageToolNodeId("groovy-ordered-operations".into())
 }
 
-fn parse_gradle_task_options(
-    value: &str,
-) -> anyhow::Result<Vec<project::jvm_project::GradleOperationOption>> {
+fn parse_operation_option_arguments(value: &str, example: &str) -> anyhow::Result<Vec<String>> {
     let value = value.trim();
     if value.is_empty() {
         return Ok(Vec::new());
     }
     anyhow::ensure!(
         value.len() <= 64 * 1024,
-        "Gradle task options exceed the supported size"
+        "Build options exceed the supported size"
     );
-    let arguments: Vec<String> = serde_json::from_str(value).map_err(|_| {
-        anyhow::anyhow!(
-            r#"Enter Gradle task options as a JSON array like ["--option=value", "--flag"]"#
-        )
-    })?;
-    anyhow::ensure!(
-        arguments.len() <= 32,
-        "Configure at most 32 Gradle task options"
-    );
+    let arguments: Vec<String> = serde_json::from_str(value)
+        .map_err(|_| anyhow::anyhow!("Enter build options as a JSON array like {example}"))?;
+    anyhow::ensure!(arguments.len() <= 32, "Configure at most 32 build options");
+    Ok(arguments)
+}
+
+fn parse_gradle_task_options(
+    value: &str,
+) -> anyhow::Result<Vec<project::jvm_project::GradleOperationOption>> {
+    let arguments = parse_operation_option_arguments(value, r#"["--option=value", "--flag"]"#)?;
     arguments
         .into_iter()
         .map(|argument| {
@@ -3856,16 +3861,40 @@ fn parse_gradle_task_options(
         .collect()
 }
 
+fn parse_maven_operation_options(value: &str) -> anyhow::Result<MavenOperationOptions> {
+    let arguments =
+        parse_operation_option_arguments(value, r#"["-Pprofile", "-P!profile", "-DskipTests"]"#)?;
+    let mut options = MavenOperationOptions::default();
+    for argument in arguments {
+        if argument == "-DskipTests" {
+            anyhow::ensure!(!options.skip_tests, "Configure skipping tests only once");
+            options.skip_tests = true;
+        } else {
+            let profile = argument.strip_prefix("-P").ok_or_else(|| {
+                anyhow::anyhow!("Use -Pprofile to activate a declared Maven profile, -P!profile to deactivate it, or -DskipTests")
+            })?;
+            let (id, active) = profile
+                .strip_prefix('!')
+                .map_or((profile, true), |id| (id, false));
+            options.profiles.push(MavenOperationProfile {
+                id: id.into(),
+                active,
+            });
+        }
+    }
+    Ok(options)
+}
+
 fn has_current_operation(
     receipt: &JvmBuildOperationReceipt,
     current: &HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
 ) -> bool {
+    let mut target = receipt.clone();
+    target.maven_options = MavenOperationOptions::default();
     if let [JvmBuildOperation::GradleTaskWithOptions { path, .. }] = receipt.operations.as_slice() {
-        let mut target = receipt.clone();
         target.operations = vec![JvmBuildOperation::GradleTask { path: path.clone() }];
-        return current.values().any(|candidate| candidate == &target);
     }
-    current.values().any(|candidate| candidate == receipt)
+    current.values().any(|candidate| candidate == &target)
 }
 
 fn compose_ordered_operations(
@@ -3883,6 +3912,7 @@ fn compose_ordered_operations(
         anyhow::anyhow!("Operation metadata is unavailable; refresh and select it again")
     })?;
     let gradle = first_operation.gradle_task_path().is_some();
+    let mut maven_options = None;
     for receipt in ordered {
         anyhow::ensure!(
             receipt.operations.len() == 1
@@ -3903,8 +3933,16 @@ fn compose_ordered_operations(
                 .all(|operation| operation.gradle_task_path().is_some() == gradle),
             "Maven and Gradle operations cannot share an ordered run"
         );
+        if receipt.maven_options != MavenOperationOptions::default() {
+            anyhow::ensure!(
+                maven_options.is_none_or(|options| options == &receipt.maven_options),
+                "Choose the same Maven profiles and test settings for the entire ordered run"
+            );
+            maven_options = Some(&receipt.maven_options);
+        }
     }
     Ok(JvmBuildOperationReceipt {
+        maven_options: maven_options.cloned().unwrap_or_default(),
         operations: ordered
             .iter()
             .flat_map(|receipt| receipt.operations.clone())
@@ -3935,7 +3973,13 @@ fn ordered_operation_tree(ordered: &[JvmBuildOperationReceipt]) -> LanguageToolN
                 }
                 None => "Unavailable operation; clear and select again".into(),
             };
-            let label = format!("{}. {name}", index + 1);
+            let maven_option_count = receipt.maven_options.profiles.len()
+                + usize::from(receipt.maven_options.skip_tests);
+            let label = if maven_option_count == 0 {
+                format!("{}. {name}", index + 1)
+            } else {
+                format!("{}. {name} ({maven_option_count} Maven options)", index + 1)
+            };
             LanguageToolNode {
                 id: LanguageToolNodeId(format!("groovy-ordered-operation:{index}")),
                 label: label.clone(),
@@ -4546,17 +4590,17 @@ impl Render for DependenciesPanel {
             .is_some_and(|id| self.operation_selections.contains_key(id))
             && !self.host_unavailable(cx)
             && !self.project.read(cx).is_remote();
-        let selected_gradle_task = selected
+        let selected_operation = selected
             .as_ref()
-            .and_then(|id| self.operation_selections.get(id))
-            .filter(|receipt| {
-                matches!(
-                    receipt.operations.as_slice(),
-                    [JvmBuildOperation::GradleTask { .. }]
-                )
-            });
-        let show_gradle_options = selected_gradle_task.is_some()
-            && selected_gradle_task == self.gradle_option_target.as_ref();
+            .and_then(|id| self.operation_selections.get(id));
+        let selected_gradle_task = selected_operation.is_some_and(|receipt| {
+            receipt
+                .operations
+                .iter()
+                .any(|operation| operation.gradle_task_path().is_some())
+        });
+        let show_operation_options =
+            can_run_operation && selected_operation == self.operation_option_target.as_ref();
         let can_run_ordered = !self.host_unavailable(cx)
             && !self.project.read(cx).is_remote()
             && compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
@@ -4772,20 +4816,28 @@ impl Render for DependenciesPanel {
                                 else{"Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"})
                             .disabled(!can_run_operation).tab_index(0_isize)
                             .on_click(cx.listener(|panel,_,window,cx|panel.run_selected_offline_operation(window,cx)))))
-                    .when(can_run_operation && selected_gradle_task.is_some(), |header| header.child(
-                        Button::new("groovy-configure-gradle-task", "Task options")
-                            .aria_label("Configure declared options for the selected Gradle task")
-                            .toggle_state(show_gradle_options)
+                    .when(can_run_operation, |header| header.child(
+                        Button::new("groovy-configure-operation", "Task options")
+                            .aria_label(if selected_gradle_task {
+                                "Configure declared options for the selected Gradle task"
+                            } else {
+                                "Configure profiles and test settings for the selected Maven operation"
+                            })
+                            .toggle_state(show_operation_options)
                             .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, window, cx| panel.configure_selected_gradle_task(window, cx)))))
-                    .when(show_gradle_options, |header| header.child(
-                        div().id("groovy-gradle-task-options")
+                            .on_click(cx.listener(|panel, _, window, cx| panel.configure_selected_operation(window, cx)))))
+                    .when(show_operation_options, |header| header.child(
+                        div().id("groovy-operation-options")
                             .role(Role::TextInput)
-                            .aria_label("Gradle task options")
-                            .aria_value(self.gradle_option_editor.read(cx).text(cx))
-                            .aria_description(r#"Enter a JSON array of --option=value or --flag strings. Gradle validates the values."#)
+                            .aria_label(if selected_gradle_task { "Gradle task options" } else { "Maven operation options" })
+                            .aria_value(self.operation_option_editor.read(cx).text(cx))
+                            .aria_description(if selected_gradle_task {
+                                "Enter a JSON array of --option=value or --flag strings. Gradle validates the values."
+                            } else {
+                                "Enter a JSON array with -Pprofile to activate, -P!profile to deactivate, or -DskipTests. Maven options apply to the entire run."
+                            })
                             .on_a11y_action(gpui::AccessibleAction::SetValue, {
-                                let editor = self.gradle_option_editor.downgrade();
+                                let editor = self.operation_option_editor.downgrade();
                                 move |data, window, cx| {
                                     let Some(gpui::accesskit::ActionData::Value(text)) = data else { return; };
                                     if let Some(editor) = editor.upgrade() {
@@ -4793,9 +4845,9 @@ impl Render for DependenciesPanel {
                                     }
                                 }
                             })
-                            .track_focus(&self.gradle_option_editor.read(cx).focus_handle(cx))
+                            .track_focus(&self.operation_option_editor.read(cx).focus_handle(cx))
                             .tab_index(0_isize)
-                            .child(self.gradle_option_editor.clone())))
+                            .child(self.operation_option_editor.clone())))
                     .when(self.view != BuildToolView::Dependencies, |header| header.child(
                         v_flex().id("groovy-ordered-operation-controls").role(Role::Group).aria_label("Ordered offline operation controls")
                             .child(Button::new("groovy-add-ordered-operation", "Add selected operation")
@@ -7640,6 +7692,7 @@ mod tests {
             worktree_id,
             generation: 1,
             module_root: path(worktree_id, ""),
+            maven_options: MavenOperationOptions::default(),
             operations: vec![project::jvm_project::JvmBuildOperation::MavenPhase {
                 lifecycle: "default".into(),
                 phase: "verify".into(),
@@ -8100,6 +8153,11 @@ mod tests {
                         .any(|row| row.id == ordered_operation_root_id())
                 );
             });
+            panel.update(cx, |panel, cx| {
+                panel.host.select(ordered_operation_root_id());
+                panel.host.reveal_selection(ScrollStrategy::Center);
+                cx.notify();
+            });
             for _ in 0..2 {
                 cx.update(|window, cx| {
                     window.draw(cx).clear(cx);
@@ -8159,7 +8217,7 @@ mod tests {
                 );
                 press(cx);
                 panel.update_in(cx, |panel, window, cx| {
-                    let input = panel.gradle_option_editor.clone();
+                    let input = panel.operation_option_editor.clone();
                     input.update(cx, |editor, cx| {
                         editor.set_text(r#"["--init-script=private-canary"]"#, window, cx)
                     });
@@ -8172,6 +8230,31 @@ mod tests {
                             window,
                             cx,
                         )
+                    });
+                });
+                assert!(events.lock().expect("events").is_empty());
+            } else {
+                panel.update(cx, |panel, cx| {
+                    panel
+                        .host
+                        .select(selections.first().expect("Maven operation").0.clone());
+                    cx.notify();
+                });
+                focus(
+                    cx,
+                    "Configure profiles and test settings for the selected Maven operation",
+                );
+                press(cx);
+                panel.update_in(cx, |panel, window, cx| {
+                    let input = panel.operation_option_editor.clone();
+                    input.update(cx, |editor, cx| {
+                        editor.set_text(r#"["-Pci,!private-canary"]"#, window, cx)
+                    });
+                    panel.run_selected_offline_operation(window, cx);
+                    let error = panel.operation_notice.as_deref().expect("profile error");
+                    assert!(error.contains("declared") && !error.contains("private-canary"));
+                    input.update(cx, |editor, cx| {
+                        editor.set_text(r#"["-Pci","-P!legacy","-DskipTests"]"#, window, cx);
                     });
                 });
                 assert!(events.lock().expect("events").is_empty());
@@ -8204,6 +8287,11 @@ mod tests {
                             "--project-dir=literal $ZED_FILE value",
                             "--probe"
                         ]));
+                } else {
+                    assert_eq!(
+                        task.args.get(3..6).expect("Maven arguments"),
+                        ["--activate-profiles", "ci,!legacy", "-DskipTests",]
+                    );
                 }
             }
             let held = panel.read_with(cx, |panel, _| panel.ordered_operations.clone());
@@ -8657,7 +8745,7 @@ mod tests {
                                         Ok(Some(serde_json::json!({"version":1,"rootUri":"file:///groovy-graph/","projects":if parameters.command == if provider == GraphFixtureProvider::Maven { "groovy.maven.importedProjects" } else { "groovy.gradle.importedProjects" } {vec![serde_json::json!({"projectUri":"file:///groovy-graph/application/","javaNature":true})]} else {vec![]},"partial":false,"fullSynchronizationKnown":false})))
                                     }
                                     "groovy.maven.projects" => Ok(Some(serde_json::json!({"version":1,"rootUri":"file:///groovy-graph/","cachedOnly":true,"unavailablePomUris":[],"lifecycles":if matches!(outcome, MavenGraphOutcome::OperationControls | MavenGraphOutcome::OrderedOperationControls) {vec![serde_json::json!({"id":"default","phases":["verify"]})]}else{vec![]},"reactorOrderKnown":false,
-                                        "projects": if provider == GraphFixtureProvider::Maven {vec![serde_json::json!({"pomUri":"file:///groovy-graph/application/pom.xml","groupId":"dev.made.groovy.fixture.graph","artifactId":"application","version":version.load(Ordering::SeqCst).to_string(),"packaging":"pom","moduleUris":[],"profiles":{},"inheritedProfileDefinitionsKnown":false,"plugins":if matches!(outcome, MavenGraphOutcome::OperationControls | MavenGraphOutcome::OrderedOperationControls) {vec![serde_json::json!({"groupId":"org.apache.maven.plugins","artifactId":"maven-surefire-plugin","version":if version.load(Ordering::SeqCst)==2 {None}else{Some("3.5.2")},"managedOnly":false,"goalsKnown":true,"goals":[{"name":"test","phase":"test","description":null}]})]}else{vec![]}})]} else {vec![]}}))),
+                                        "projects": if provider == GraphFixtureProvider::Maven {vec![serde_json::json!({"pomUri":"file:///groovy-graph/application/pom.xml","groupId":"dev.made.groovy.fixture.graph","artifactId":"application","version":version.load(Ordering::SeqCst).to_string(),"packaging":"pom","moduleUris":[],"profiles":{"ci":false,"legacy":true},"inheritedProfileDefinitionsKnown":false,"plugins":if matches!(outcome, MavenGraphOutcome::OperationControls | MavenGraphOutcome::OrderedOperationControls) {vec![serde_json::json!({"groupId":"org.apache.maven.plugins","artifactId":"maven-surefire-plugin","version":if version.load(Ordering::SeqCst)==2 {None}else{Some("3.5.2")},"managedOnly":false,"goalsKnown":true,"goals":[{"name":"test","phase":"test","description":null}]})]}else{vec![]}})]} else {vec![]}}))),
                                     "groovy.gradle.projectDetails" => {
                                         let details = serde_json::json!({"javaSourceSetsKnown":true,"sourceSets":[],"tasks":if matches!(outcome, MavenGraphOutcome::OperationControls | MavenGraphOutcome::OrderedOperationControls) {vec![serde_json::json!({"path":":application:verify","optionsComplete":true,"options":[
                                             {"name":"project-dir","description":"Fixture option","declaredType":"java.lang.String"},
