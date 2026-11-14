@@ -1409,7 +1409,7 @@ def qualify_unlink_wait(client, root, selection, command, receipt, journey, repl
         elif importing and during_wait is not None:
             if str(root) in json.dumps(response) or "Selected Maven import cancelled" not in error.get("message", ""):
                 raise AssertionError("Changed Maven settings did not produce a sanitized cancellation")
-            receipt["checks"].append("held Maven reactor rejects changed host settings without a success receipt")
+            receipt["checks"].append(f"held {command} rejects changed host settings without a success receipt")
         else:
             journey["cancelledUnlinkResponse"] = response
             receipt["checks"].append(f"in-flight held {phase_name} cancellation rejects a success receipt")
@@ -2429,6 +2429,17 @@ def probe_reactor_root(arguments):
                     deactivated_settings_contents = settings_contents.replace(
                         "<activeProfiles><activeProfile>active-reactor</activeProfile></activeProfiles>", "")
                     empty_profile_settings.write_text(deactivated_settings_contents)
+                    exact_request = {"rootUri": unrelated.as_uri(), "pomUris": [(unrelated / "pom.xml").as_uri()], "offline": True}
+                    try:
+                        qualify_unlink_wait(
+                            client, unrelated, exact_request, "groovy.maven.importSelected", receipt, journey,
+                            during_wait=lambda: settings_path.write_text(deactivated_settings_contents),
+                        )
+                        if membership() != expected_all:
+                            raise AssertionError("Rejected exact Maven import mutated resource membership")
+                    finally:
+                        settings_path.write_text(settings_contents)
+                    invoke("groovy.maven.importSelected", exact_request, {unrelated / "pom.xml"}, "recovered exact POM import")
                     try:
                         qualify_unlink_wait(
                             client, reactor, root_request, "groovy.maven.importReactor", receipt, journey,

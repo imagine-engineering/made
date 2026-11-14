@@ -79,7 +79,7 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
             if (!MavenPlugin.getMavenConfiguration().isOffline()) {
                 throw new IllegalStateException("Selected Maven import requires the host Maven offline setting. Check settings and retry.");
             }
-            ReactorSettings reactorSettings = reactor ? ReactorSettings.capture() : null;
+            HostSettings hostSettings = HostSettings.capture();
             Set<Path> poms = new LinkedHashSet<>();
             Set<Path> excluded = new LinkedHashSet<>();
             Path reactorPom = null;
@@ -194,9 +194,7 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
                             || !MavenPlugin.getMavenConfiguration().isOffline()) {
                         throw new OperationCanceledException();
                     }
-                    if (reactorSettings != null) {
-                        reactorSettings.validateCurrent();
-                    }
+                    hostSettings.validateCurrent();
                     for (Path directory : excluded) {
                         if (!directory.toRealPath().equals(directory) || !Files.isDirectory(directory)) {
                             throw new OperationCanceledException();
@@ -279,9 +277,7 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
                     || !MavenPlugin.getMavenConfiguration().isOffline()) {
                 throw new OperationCanceledException();
             }
-            if (reactorSettings != null) {
-                reactorSettings.validateCurrent();
-            }
+            hostSettings.validateCurrent();
             for (Path directory : excluded) {
                 if (!directory.toRealPath().equals(directory) || !Files.isDirectory(directory)) {
                     throw new OperationCanceledException();
@@ -328,14 +324,14 @@ public final class MavenImportHandler implements IDelegateCommandHandler {
         return File.separatorChar == '\\' ? path.replace('\\', '/') : path;
     }
 
-    private record ReactorSettings(MavenSettingsLocations locations, String globalDigest, String userDigest) {
-        private static ReactorSettings capture() throws IOException, NoSuchAlgorithmException {
+    private record HostSettings(MavenSettingsLocations locations, String globalDigest, String userDigest) {
+        private static HostSettings capture() throws IOException, NoSuchAlgorithmException {
             var locations = MavenPlugin.getMavenConfiguration().getSettingsLocations();
-            return new ReactorSettings(locations, settingsDigest(locations.globalSettings()), settingsDigest(locations.userSettings()));
+            return new HostSettings(locations, settingsDigest(locations.globalSettings()), settingsDigest(locations.userSettings()));
         }
 
         private void validateCurrent() {
-            ReactorSettings current;
+            HostSettings current;
             try {
                 current = capture();
             } catch (IOException | NoSuchAlgorithmException failure) {
