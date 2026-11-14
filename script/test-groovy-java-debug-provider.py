@@ -86,7 +86,14 @@ def probe(launcher, java_home, debug_jar, expected_sha256):
         raise AssertionError(f"Java Debug jar SHA-256 differs: {digest}")
     with tempfile.TemporaryDirectory(prefix="groovy-java-debug-") as directory:
         root = Path(directory) / "fixture"
-        shutil.copytree(FIXTURE, root)
+        root.mkdir()
+        # JDTLS scans all POMs, including the intentionally cyclic parity fixture.
+        for name in ["application", "library"]:
+            shutil.copytree(FIXTURE / name, root / name)
+        shutil.copy2(FIXTURE / "pom.xml", root)
+        java_settings = {
+            "import": {"maven": {"enabled": True, "offline": {"enabled": True}}}
+        }
         source = root / "application/src/main/java/evidence/DebugMain.java"
         subprocess.run(
             [
@@ -112,7 +119,7 @@ def probe(launcher, java_home, debug_jar, expected_sha256):
                     },
                     "initializationOptions": {
                         "bundles": [str(debug_jar)],
-                        "settings": {"java": {"import": {"maven": {"enabled": True}}}},
+                        "settings": {"java": java_settings},
                     },
                 },
                 timeout=90,
@@ -123,7 +130,7 @@ def probe(launcher, java_home, debug_jar, expected_sha256):
             client.notify("initialized", {})
             client.notify(
                 "workspace/didChangeConfiguration",
-                {"settings": {"java": {"import": {"maven": {"enabled": True}}}}},
+                {"settings": {"java": java_settings}},
             )
             main_classes = client.request(
                 "workspace/executeCommand",
