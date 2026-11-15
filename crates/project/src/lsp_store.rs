@@ -32,7 +32,7 @@ use self::code_lens::CodeLensData;
 use self::document_colors::DocumentColorData;
 use self::document_links::DocumentLinksData;
 use self::document_symbols::DocumentSymbolsData;
-use self::dynamic_registration::{DynamicRegistrations, RegistrationSource};
+use self::dynamic_registration::{DocumentSyncTarget, DynamicRegistrations, RegistrationSource};
 use self::inlay_hints::BufferInlayHints;
 #[cfg(feature = "jvm-tools")]
 use crate::jvm_project::{
@@ -11284,7 +11284,7 @@ impl LspStore {
             Some(
                 self.as_local()?
                     .language_servers_for_buffer(buffer, cx)
-                    .map(|i| i.1.clone())
+                    .map(|(adapter, server)| (adapter.clone(), server.clone()))
                     .collect(),
             )
         })?;
@@ -11296,12 +11296,42 @@ impl LspStore {
             .ok()
             .with_context(|| format!("Failed to convert path to URI: {}", abs_path.display()))
             .log_err()?;
+        let language = buffer.language()?.name();
         let next_snapshot = buffer.text_snapshot();
-        for language_server in language_servers {
-            let language_server = language_server.clone();
+        for (adapter, language_server) in language_servers {
+            let local = self.as_local_mut()?;
+            let registrations = local
+                .language_server_dynamic_registrations
+                .get(&language_server.server_id())
+                .map(|registrations| &registrations.did_change)
+                .filter(|registrations| !registrations.is_empty());
+            let document_sync_kind = match registrations {
+                Some(registrations) => registrations.matching_options(DocumentSyncTarget {
+                    uri: &uri,
+                    absolute_path: &abs_path,
+                    worktree_path: file.path().as_unix_str(),
+                    language_id: Some(&adapter.language_id(&language)),
+                    matches_client_selector: true,
+                }),
+                None => {
+                    let kind = language_server
+                        .capabilities()
+                        .text_document_sync
+                        .as_ref()
+                        .and_then(|sync| match sync {
+                            lsp::TextDocumentSyncCapability::Kind(kind) => Some(*kind),
+                            lsp::TextDocumentSyncCapability::Options(options) => options.change,
+                        });
+                    #[cfg(any(test, feature = "test-support"))]
+                    let kind = kind.or(Some(lsp::TextDocumentSyncKind::INCREMENTAL));
+                    kind
+                }
+            };
+            let Some(document_sync_kind) = document_sync_kind else {
+                continue;
+            };
 
-            let buffer_snapshots = self
-                .as_local_mut()?
+            let buffer_snapshots = local
                 .buffer_snapshots
                 .get_mut(&buffer.remote_id())
                 .and_then(|m| m.get_mut(&language_server.server_id()))?;
@@ -11330,35 +11360,16 @@ impl LspStore {
                     .collect()
             };
 
-            let document_sync_kind = language_server
-                .capabilities()
-                .text_document_sync
-                .as_ref()
-                .and_then(|sync| match sync {
-                    lsp::TextDocumentSyncCapability::Kind(kind) => Some(*kind),
-                    lsp::TextDocumentSyncCapability::Options(options) => options.change,
-                });
-
             let content_changes: Vec<_> = match document_sync_kind {
-                Some(lsp::TextDocumentSyncKind::FULL) => {
+                lsp::TextDocumentSyncKind::FULL => {
                     vec![lsp::TextDocumentContentChangeEvent {
                         range: None,
                         range_length: None,
                         text: next_snapshot.text(),
                     }]
                 }
-                Some(lsp::TextDocumentSyncKind::INCREMENTAL) => build_incremental_change(),
-                _ => {
-                    #[cfg(any(test, feature = "test-support"))]
-                    {
-                        build_incremental_change()
-                    }
-
-                    #[cfg(not(any(test, feature = "test-support")))]
-                    {
-                        continue;
-                    }
-                }
+                lsp::TextDocumentSyncKind::INCREMENTAL => build_incremental_change(),
+                _ => continue,
             };
 
             let next_version = previous_snapshot.version + 1;
@@ -11391,14 +11402,45 @@ impl LspStore {
     ) -> Option<()> {
         let file = File::from_dyn(buffer.read(cx).file())?;
         let worktree_id = file.worktree_id(cx);
+        let worktree_path = file.path().clone();
         let abs_path = file.as_local()?.abs_path(cx);
         let text_document = lsp::TextDocumentIdentifier {
             uri: file_path_to_lsp_url(&abs_path).log_err()?,
         };
         let local = self.as_local()?;
+        let language_servers = buffer.update(cx, |buffer, cx| {
+            local.language_server_ids_for_buffer(buffer, cx)
+        });
+        let language = buffer.read(cx).language().map(|language| language.name());
 
         for server in local.language_servers_for_worktree(worktree_id) {
-            if let Some(include_text) = include_text(server.as_ref()) {
+            let server_id = server.server_id();
+            let registrations = local
+                .language_server_dynamic_registrations
+                .get(&server_id)
+                .map(|registrations| &registrations.did_save)
+                .filter(|registrations| !registrations.is_empty());
+            let include_text = match registrations {
+                Some(registrations) => {
+                    let Some(LanguageServerState::Running { adapter, .. }) =
+                        local.language_servers.get(&server_id)
+                    else {
+                        continue;
+                    };
+                    let language_id = language
+                        .as_ref()
+                        .map(|language| adapter.language_id(language));
+                    registrations.matching_options(DocumentSyncTarget {
+                        uri: &text_document.uri,
+                        absolute_path: &abs_path,
+                        worktree_path: worktree_path.as_unix_str(),
+                        language_id: language_id.as_deref(),
+                        matches_client_selector: language_servers.contains(&server_id),
+                    })
+                }
+                None => include_text(server.as_ref()),
+            };
+            if let Some(include_text) = include_text {
                 let text = if include_text {
                     Some(buffer.read(cx).text())
                 } else {
@@ -11415,9 +11457,6 @@ impl LspStore {
             }
         }
 
-        let language_servers = buffer.update(cx, |buffer, cx| {
-            local.language_server_ids_for_buffer(buffer, cx)
-        });
         for language_server_id in language_servers {
             self.simulate_disk_based_diagnostics_events_if_needed(language_server_id, cx);
         }
