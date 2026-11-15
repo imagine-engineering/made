@@ -109,14 +109,16 @@ pub struct LanguageServerBinaryOptions {
     pub pre_release: bool,
 }
 
-struct NotificationSerializer(Box<dyn FnOnce() -> String + Send + Sync>);
+enum OutboundMessage {
+    Serialized(String),
+    Deferred(Box<dyn FnOnce() -> serde_json::Result<String> + Send + Sync>),
+}
 
 /// A running language server process.
 pub struct LanguageServer {
     server_id: LanguageServerId,
     next_id: AtomicI32,
-    outbound_tx: async_channel::Sender<String>,
-    notification_tx: async_channel::Sender<NotificationSerializer>,
+    outbound_tx: async_channel::Sender<OutboundMessage>,
     name: LanguageServerName,
     version: Option<SharedString>,
     process_name: Arc<str>,
@@ -515,7 +517,7 @@ impl LanguageServer {
         Stderr: AsyncRead + Unpin + Send + 'static,
         F: Fn(&NotificationOrRequest) -> bool + 'static + Send + Sync + Clone,
     {
-        let (outbound_tx, outbound_rx) = async_channel::unbounded::<String>();
+        let (outbound_tx, outbound_rx) = async_channel::unbounded::<OutboundMessage>();
         let (output_done_tx, output_done_rx) = barrier::channel();
         let notification_handlers =
             Arc::new(Mutex::new(HashMap::<_, NotificationHandler>::default()));
@@ -541,7 +543,10 @@ impl LanguageServer {
                             result: None,
                         };
                         if let Ok(response) = serde_json::to_string(&response) {
-                            response_channel.send(response).await.ok();
+                            response_channel
+                                .send(OutboundMessage::Serialized(response))
+                                .await
+                                .ok();
                         }
                     }
                 }
@@ -595,25 +600,9 @@ impl LanguageServer {
         }
         .into();
 
-        let (notification_tx, notification_rx) =
-            async_channel::unbounded::<NotificationSerializer>();
-        cx.background_spawn({
-            let outbound_tx = outbound_tx.clone();
-            async move {
-                while let Ok(serializer) = notification_rx.recv().await {
-                    let serialized = (serializer.0)();
-                    let Ok(_) = outbound_tx.send(serialized).await else {
-                        return;
-                    };
-                }
-                outbound_tx.close();
-            }
-        })
-        .detach();
         Self {
             server_id,
             notification_handlers,
-            notification_tx,
             response_handlers,
             pending_respond_tasks,
             io_handlers,
@@ -741,7 +730,7 @@ impl LanguageServer {
 
     async fn handle_outgoing_messages<Stdin>(
         stdin: Stdin,
-        outbound_rx: async_channel::Receiver<String>,
+        outbound_rx: async_channel::Receiver<OutboundMessage>,
         output_done_tx: barrier::Sender,
         response_handlers: Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
         io_handlers: Arc<Mutex<HashMap<i32, IoHandler>>>,
@@ -758,6 +747,16 @@ impl LanguageServer {
         });
         let mut content_len_buffer = Vec::new();
         while let Ok(message) = outbound_rx.recv().await {
+            // Serialize notifications here so a later request cannot overtake them.
+            let message = match message {
+                OutboundMessage::Serialized(message) => message,
+                OutboundMessage::Deferred(serialize) => {
+                    let Some(message) = serialize().log_err() else {
+                        continue;
+                    };
+                    message
+                }
+            };
             log::trace!("outgoing message:{}", message);
             for handler in io_handlers.lock().values_mut() {
                 handler(IoKind::StdIn, &message);
@@ -1115,13 +1114,11 @@ impl LanguageServer {
         let next_id = AtomicI32::new(self.next_id.load(SeqCst));
         let outbound_tx = self.outbound_tx.clone();
         let executor = self.executor.clone();
-        let notification_serializers = self.notification_tx.clone();
         let mut output_done = self.output_done_rx.lock().take().unwrap();
         let shutdown_request = Self::request_internal::<request::Shutdown>(
             &next_id,
             &response_handlers,
             &outbound_tx,
-            &notification_serializers,
             &executor,
             SERVER_SHUTDOWN_TIMEOUT,
             (),
@@ -1156,9 +1153,15 @@ impl LanguageServer {
             }
 
             response_handlers.lock().take();
-            Self::notify_internal::<notification::Exit>(&notification_serializers, ()).ok();
-            notification_serializers.close();
-            output_done.recv().await;
+            Self::notify_internal::<notification::Exit>(&outbound_tx, ()).log_err();
+            outbound_tx.close();
+            // A server that has stopped reading can also stall the final flush.
+            select! {
+                _ = output_done.recv().fuse() => {}
+                _ = executor.timer(SERVER_SHUTDOWN_TIMEOUT).fuse() => {
+                    log::warn!("timeout flushing language server {name} (id {server_id}) output");
+                }
+            }
             server.lock().take().map(|mut child| child.kill());
             drop(tasks);
             log::debug!("language server shutdown finished");
@@ -1286,7 +1289,9 @@ impl LanguageServer {
                                     if let Some(response) =
                                         serde_json::to_string(&response).log_err()
                                     {
-                                        outbound_tx.try_send(response).ok();
+                                        outbound_tx
+                                            .try_send(OutboundMessage::Serialized(response))
+                                            .ok();
                                     }
                                     pending_respond_tasks.lock().remove(&id);
                                 }
@@ -1307,7 +1312,9 @@ impl LanguageServer {
                                 }),
                             };
                             if let Some(response) = serde_json::to_string(&response).log_err() {
-                                outbound_tx.try_send(response).ok();
+                                outbound_tx
+                                    .try_send(OutboundMessage::Serialized(response))
+                                    .ok();
                             }
                         }
                     }
@@ -1417,7 +1424,6 @@ impl LanguageServer {
             &self.next_id,
             &self.response_handlers,
             &self.outbound_tx,
-            &self.notification_tx,
             &self.executor,
             request_timeout,
             params,
@@ -1440,7 +1446,6 @@ impl LanguageServer {
             &self.next_id,
             &self.response_handlers,
             &self.outbound_tx,
-            &self.notification_tx,
             &self.executor,
             timer,
             params,
@@ -1450,8 +1455,7 @@ impl LanguageServer {
     fn request_internal_with_timer<T, U>(
         next_id: &AtomicI32,
         response_handlers: &Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
-        outbound_tx: &async_channel::Sender<String>,
-        notification_serializers: &async_channel::Sender<NotificationSerializer>,
+        outbound_tx: &async_channel::Sender<OutboundMessage>,
         executor: &BackgroundExecutor,
         timer: U,
         params: T::Params,
@@ -1499,11 +1503,11 @@ impl LanguageServer {
             });
 
         let send = outbound_tx
-            .try_send(message)
+            .try_send(OutboundMessage::Serialized(message))
             .context("failed to write to language server's stdin");
 
         let response_handlers = Arc::clone(response_handlers);
-        let notification_serializers = notification_serializers.downgrade();
+        let outbound_tx = outbound_tx.downgrade();
         let started = Instant::now();
         LspRequest::new(id, async move {
             if let Err(e) = handle_response {
@@ -1514,9 +1518,9 @@ impl LanguageServer {
             }
 
             let cancel_on_drop = gpui_util::defer(move || {
-                if let Some(notification_serializers) = notification_serializers.upgrade() {
+                if let Some(outbound_tx) = outbound_tx.upgrade() {
                     Self::notify_internal::<notification::Cancel>(
-                        &notification_serializers,
+                        &outbound_tx,
                         CancelParams {
                             id: NumberOrString::Number(id),
                         },
@@ -1560,8 +1564,7 @@ impl LanguageServer {
     fn request_internal<T>(
         next_id: &AtomicI32,
         response_handlers: &Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
-        outbound_tx: &async_channel::Sender<String>,
-        notification_serializers: &async_channel::Sender<NotificationSerializer>,
+        outbound_tx: &async_channel::Sender<OutboundMessage>,
         executor: &BackgroundExecutor,
         request_timeout: Duration,
         params: T::Params,
@@ -1574,7 +1577,6 @@ impl LanguageServer {
             next_id,
             response_handlers,
             outbound_tx,
-            notification_serializers,
             executor,
             Self::request_timeout_future(executor.clone(), request_timeout),
             params,
@@ -1607,24 +1609,24 @@ impl LanguageServer {
     ///
     /// [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#notificationMessage)
     pub fn notify<T: notification::Notification>(&self, params: T::Params) -> Result<()> {
-        let outbound = self.notification_tx.clone();
-        Self::notify_internal::<T>(&outbound, params)
+        Self::notify_internal::<T>(&self.outbound_tx, params)
     }
 
     fn notify_internal<T: notification::Notification>(
-        outbound_tx: &async_channel::Sender<NotificationSerializer>,
+        outbound_tx: &async_channel::Sender<OutboundMessage>,
         params: T::Params,
     ) -> Result<()> {
-        let serializer = NotificationSerializer(Box::new(move || {
+        let message = OutboundMessage::Deferred(Box::new(move || {
             serde_json::to_string(&Notification {
                 jsonrpc: JSON_RPC_VERSION,
                 method: T::METHOD,
                 params,
             })
-            .unwrap()
         }));
 
-        outbound_tx.send_blocking(serializer)?;
+        outbound_tx
+            .try_send(message)
+            .map_err(|_| anyhow!("failed to write to language server's stdin"))?;
         Ok(())
     }
 
@@ -2100,6 +2102,108 @@ mod tests {
     #[ctor::ctor(unsafe)]
     fn init_logger() {
         zlog::init_test();
+    }
+
+    #[gpui::test(iterations = 16)]
+    async fn test_document_change_precedes_formatting_and_shutdown(cx: &mut TestAppContext) {
+        let (server, mut fake) = FakeLanguageServer::new(
+            LanguageServerId(0),
+            LanguageServerBinary {
+                path: "test-lsp".into(),
+                arguments: vec![],
+                env: None,
+            },
+            "test-lsp".to_string(),
+            Default::default(),
+            &mut cx.to_async(),
+        );
+        fake.set_request_handler::<request::Formatting, _, _>(|_, _| async move { Ok(None) });
+
+        let methods = Arc::new(Mutex::new(Vec::new()));
+        let _subscription = server.on_io({
+            let methods = methods.clone();
+            move |kind, message| {
+                if matches!(kind, IoKind::StdIn) {
+                    let message: NotificationOrRequest =
+                        serde_json::from_str(message).expect("valid LSP call");
+                    methods.lock().push(message.method);
+                }
+            }
+        });
+        let uri: Uri = "file:///test.rs".parse().expect("valid file URI");
+
+        // Queue both calls before yielding so notification serialization is still pending.
+        server
+            .notify::<notification::DidChangeTextDocument>(DidChangeTextDocumentParams {
+                text_document: VersionedTextDocumentIdentifier::new(uri.clone(), 1),
+                content_changes: vec![TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: "fn updated() {}".into(),
+                }],
+            })
+            .expect("queue change");
+        let format = server.request::<request::Formatting>(
+            DocumentFormattingParams {
+                text_document: TextDocumentIdentifier::new(uri),
+                options: FormattingOptions::default(),
+                work_done_progress_params: Default::default(),
+            },
+            DEFAULT_LSP_REQUEST_TIMEOUT,
+        );
+        assert!(matches!(format.await, ConnectionResult::Result(Ok(None))));
+        assert_eq!(
+            methods.lock().clone(),
+            ["textDocument/didChange", "textDocument/formatting"],
+        );
+
+        drop(server);
+        fake.receive_notification::<notification::Exit>().await;
+        assert_eq!(
+            methods.lock().clone(),
+            [
+                "textDocument/didChange",
+                "textDocument/formatting",
+                "shutdown",
+                "exit"
+            ],
+        );
+    }
+
+    #[gpui::test]
+    async fn test_shutdown_finishes_when_server_stops_reading(cx: &mut TestAppContext) {
+        let (stdin, _unread_stdin) = async_pipe::pipe();
+        let (_open_stdout, stdout) = async_pipe::pipe();
+        let server = LanguageServer::new_internal(
+            LanguageServerId(0),
+            "test-lsp".into(),
+            stdin,
+            stdout,
+            None::<async_pipe::PipeReader>,
+            Arc::new(Mutex::new(None)),
+            None,
+            None,
+            LanguageServerBinary {
+                path: "test-lsp".into(),
+                arguments: vec![],
+                env: None,
+            },
+            FakeLanguageServer::root_path(),
+            None,
+            &mut cx.to_async(),
+            |_| false,
+        );
+        let shutdown = server.shutdown().expect("first shutdown starts");
+        futures::pin_mut!(shutdown);
+        assert!(futures::poll!(shutdown.as_mut()).is_pending());
+        cx.run_until_parked();
+
+        cx.executor().advance_clock(SERVER_SHUTDOWN_TIMEOUT);
+        assert!(futures::poll!(shutdown.as_mut()).is_pending());
+        cx.run_until_parked();
+
+        cx.executor().advance_clock(SERVER_SHUTDOWN_TIMEOUT);
+        assert_eq!(futures::poll!(shutdown.as_mut()), Poll::Ready(Some(())));
     }
 
     #[gpui::test]
