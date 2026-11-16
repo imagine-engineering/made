@@ -1112,9 +1112,24 @@ impl Language {
         text: &'a Rope,
         range: Range<usize>,
     ) -> Vec<(Range<usize>, HighlightId)> {
+        self.highlight_text_with_options(text, range, None)
+    }
+
+    fn highlight_text_with_options(
+        self: &Arc<Self>,
+        text: &Rope,
+        range: Range<usize>,
+        parse_options: Option<tree_sitter::ParseOptions<'_>>,
+    ) -> Vec<(Range<usize>, HighlightId)> {
         let mut result = Vec::new();
         if let Some(grammar) = &self.grammar {
-            let tree = parse_text(grammar, text, None);
+            let tree = match parse_text(grammar, text, parse_options) {
+                Ok(tree) => tree,
+                Err(error) => {
+                    log::warn!("Could not highlight {} text: {error:#}", self.name());
+                    return result;
+                }
+            };
             let captures =
                 SyntaxSnapshot::single_tree_captures(range.clone(), text, &tree, self, |grammar| {
                     grammar
@@ -1372,11 +1387,15 @@ impl Debug for Language {
     }
 }
 
-pub(crate) fn parse_text(grammar: &Grammar, text: &Rope, old_tree: Option<Tree>) -> Tree {
+fn parse_text(
+    grammar: &Grammar,
+    text: &Rope,
+    options: Option<tree_sitter::ParseOptions<'_>>,
+) -> Result<Tree> {
     with_parser(|parser| {
         parser
             .set_language(&grammar.ts_language)
-            .expect("incompatible grammar");
+            .context("incompatible Tree-sitter grammar")?;
         let mut chunks = text.chunks_in_range(0..text.len());
         parser
             .parse_with_options(
@@ -1384,10 +1403,10 @@ pub(crate) fn parse_text(grammar: &Grammar, text: &Rope, old_tree: Option<Tree>)
                     chunks.seek(offset);
                     chunks.peek_bytes().unwrap_or_default()
                 },
-                old_tree.as_ref(),
                 None,
+                options,
             )
-            .unwrap()
+            .context("Tree-sitter returned no parse tree")
     })
 }
 
@@ -1689,6 +1708,31 @@ mod tests {
             theme.get_capture_name(map.get(2).unwrap()),
             Some("variable.builtin")
         );
+    }
+
+    #[test]
+    fn test_standalone_highlighting_recovers_from_missing_tree() {
+        let language = rust_lang();
+        let theme = SyntaxTheme::new([("keyword".to_owned(), rgba(0x100000ff).into())]);
+        language.set_theme(&theme);
+        let text = Rope::from(format!("fn example() {{ {} }}", "one(two); ".repeat(5000)).as_str());
+        let range = 0..text.len();
+        let expected = language.highlight_text(&text, range.clone());
+        assert!(
+            !expected.is_empty(),
+            "the valid grammar should produce spans"
+        );
+
+        let mut cancel_parse = |_: &_| std::ops::ControlFlow::Break(());
+        let highlights = language.highlight_text_with_options(
+            &text,
+            range.clone(),
+            Some(tree_sitter::ParseOptions {
+                progress_callback: Some(&mut cancel_parse),
+            }),
+        );
+        assert!(highlights.is_empty());
+        assert_eq!(language.highlight_text(&text, range), expected);
     }
 
     #[test]
