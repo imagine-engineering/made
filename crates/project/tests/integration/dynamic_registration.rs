@@ -1925,6 +1925,60 @@ async fn test_dynamic_document_save_selectors(cx: &mut gpui::TestAppContext) {
     assert_eq!(saves[0].text, None);
 }
 
+#[gpui::test]
+async fn test_dynamic_formatting_matches_document_selector(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, matching, other, _handles) = setup_document_sync_test(cx).await;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    server.set_request_handler::<lsp::request::Formatting, _, _>({
+        let requests = requests.clone();
+        move |params, _| {
+            requests.lock().push(params.text_document.uri);
+            async { Ok(Some(Vec::new())) }
+        }
+    });
+    let method = "textDocument/formatting";
+    register_capability(
+        &server,
+        method,
+        "scoped-formatting",
+        Some(json!({"documentSelector": [{"pattern": "**/a.rs"}]})),
+    )
+    .await;
+
+    let format = |buffer, cx: &mut gpui::TestAppContext| {
+        project.update(cx, |project, cx| {
+            project.format(
+                [buffer].into_iter().collect(),
+                project::lsp_store::LspFormatTarget::Buffers,
+                false,
+                project::lsp_store::FormatTrigger::Manual,
+                cx,
+            )
+        })
+    };
+    format(matching.clone(), cx)
+        .await
+        .expect("format matching buffer");
+    format(other.clone(), cx)
+        .await
+        .expect("skip unrelated buffer");
+    let matching_uri = Uri::from_file_path(path!("/the-root/a.rs")).expect("matching URI");
+    assert_eq!(*requests.lock(), [matching_uri]);
+
+    unregister_capabilities(&server, method, &["scoped-formatting"]).await;
+    format(matching, cx)
+        .await
+        .expect("skip after unregistering");
+    assert_eq!(requests.lock().len(), 1);
+
+    register_capability(&server, method, "unscoped-formatting", None).await;
+    format(other, cx).await.expect("format without a selector");
+    let other_uri = Uri::from_file_path(path!("/the-root/b.rs")).expect("other URI");
+    assert_eq!(requests.lock().get(1), Some(&other_uri));
+    assert_eq!(requests.lock().len(), 2);
+}
+
 async fn setup_document_sync_test(
     cx: &mut gpui::TestAppContext,
 ) -> (

@@ -32,7 +32,9 @@ use self::code_lens::CodeLensData;
 use self::document_colors::DocumentColorData;
 use self::document_links::DocumentLinksData;
 use self::document_symbols::DocumentSymbolsData;
-use self::dynamic_registration::{DocumentSyncTarget, DynamicRegistrations, RegistrationSource};
+use self::dynamic_registration::{
+    DocumentSelectorTarget, DynamicRegistrations, RegistrationSource,
+};
 use self::inlay_hints::BufferInlayHints;
 #[cfg(feature = "jvm-tools")]
 use crate::jvm_project::{
@@ -2351,10 +2353,27 @@ impl LocalLspStore {
                             }
                         })
                     }
-                    settings::LanguageServerFormatterSpecifier::Current => adapters_and_servers
-                        .iter()
-                        .find(|(_, server)| Self::server_supports_formatting(server))
-                        .map(|(_, server)| server.clone()),
+                    settings::LanguageServerFormatterSpecifier::Current => {
+                        let uri = file_path_to_lsp_url(buffer_path_abs)?;
+                        lsp_store.read_with(cx, |store, cx| {
+                            let local = store.as_local()?;
+                            let buffer = buffer.handle.read(cx);
+                            adapters_and_servers
+                                .iter()
+                                .find(|(_, server)| {
+                                    local.server_supports_document_formatting(
+                                        buffer,
+                                        server,
+                                        &uri,
+                                        buffer_path_abs,
+                                        cx,
+                                    ) || server_capabilities_support_range_formatting(
+                                        &server.capabilities(),
+                                    )
+                                })
+                                .map(|(_, server)| server.clone())
+                        })?
+                    }
                 };
 
                 let Some(language_server) = language_server else {
@@ -2884,11 +2903,51 @@ impl LocalLspStore {
         }
     }
 
-    fn server_supports_formatting(server: &Arc<LanguageServer>) -> bool {
-        let capabilities = server.capabilities();
-        let formatting = capabilities.document_formatting_provider.as_ref();
-        matches!(formatting, Some(p) if *p != OneOf::Left(false))
-            || server_capabilities_support_range_formatting(&capabilities)
+    fn server_supports_document_formatting(
+        &self,
+        buffer: &Buffer,
+        server: &LanguageServer,
+        uri: &lsp::Uri,
+        abs_path: &Path,
+        cx: &App,
+    ) -> bool {
+        let server_id = server.server_id();
+        if let Some(registrations) = self.language_server_dynamic_registrations.get(&server_id)
+            && !registrations.formatting_selectors.is_empty()
+        {
+            let Some(file) = File::from_dyn(buffer.file()) else {
+                return false;
+            };
+            if file
+                .as_local()
+                .is_none_or(|file| file.abs_path(cx).as_path() != abs_path)
+            {
+                return false;
+            }
+            let Some(LanguageServerState::Running { adapter, .. }) =
+                self.language_servers.get(&server_id)
+            else {
+                return false;
+            };
+            let language_id = buffer
+                .language()
+                .map(|language| adapter.language_id(&language.name()));
+            return registrations
+                .formatting_selectors
+                .matching_options(DocumentSelectorTarget {
+                    uri,
+                    absolute_path: abs_path,
+                    worktree_path: file.path().as_unix_str(),
+                    language_id: language_id.as_deref(),
+                    matches_client_selector: true,
+                })
+                .is_some();
+        }
+
+        matches!(
+            server.capabilities().document_formatting_provider,
+            Some(OneOf::Left(true) | OneOf::Right(_))
+        )
     }
 
     async fn format_via_lsp(
@@ -2903,10 +2962,20 @@ impl LocalLspStore {
         zlog::debug!(logger => "Formatting via LSP");
 
         let uri = file_path_to_lsp_url(abs_path)?;
+        let supports_document_formatting = this.read_with(cx, |store, cx| {
+            store.as_local().is_some_and(|local| {
+                local.server_supports_document_formatting(
+                    buffer.read(cx),
+                    language_server,
+                    &uri,
+                    abs_path,
+                    cx,
+                )
+            })
+        })?;
         let text_document = lsp::TextDocumentIdentifier::new(uri);
         let capabilities = &language_server.capabilities();
 
-        let formatting_provider = capabilities.document_formatting_provider.as_ref();
         let range_formatting_provider = capabilities.document_range_formatting_provider.as_ref();
 
         let request_timeout = cx.update(|app| {
@@ -2915,7 +2984,7 @@ impl LocalLspStore {
                 .get_request_timeout()
         });
 
-        let lsp_edits = if matches!(formatting_provider, Some(p) if *p != OneOf::Left(false)) {
+        let lsp_edits = if supports_document_formatting {
             let _timer = zlog::time!(logger => "format-full");
             language_server
                 .request::<lsp::request::Formatting>(
@@ -11306,7 +11375,7 @@ impl LspStore {
                 .map(|registrations| &registrations.did_change)
                 .filter(|registrations| !registrations.is_empty());
             let document_sync_kind = match registrations {
-                Some(registrations) => registrations.matching_options(DocumentSyncTarget {
+                Some(registrations) => registrations.matching_options(DocumentSelectorTarget {
                     uri: &uri,
                     absolute_path: &abs_path,
                     worktree_path: file.path().as_unix_str(),
@@ -11430,7 +11499,7 @@ impl LspStore {
                     let language_id = language
                         .as_ref()
                         .map(|language| adapter.language_id(language));
-                    registrations.matching_options(DocumentSyncTarget {
+                    registrations.matching_options(DocumentSelectorTarget {
                         uri: &text_document.uri,
                         absolute_path: &abs_path,
                         worktree_path: worktree_path.as_unix_str(),
