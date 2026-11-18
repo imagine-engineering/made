@@ -263,6 +263,10 @@ fn copper_tests() -> NamedJob {
             .add_step(steps::cargo_install_nextest())
             .add_step(named::bash(rust_product_nextest_command(false)))
             .add_step(
+                Step::new("Verify Linux native and polling watcher delivery")
+                    .run("cargo test --locked -p fs --lib fs_watcher::tests::nested_ -- --test-threads=1"),
+            )
+            .add_step(
                 Step::new("Measure Copper foreground budgets")
                     .run(rust_product_nextest_command(true)),
             )
@@ -428,6 +432,11 @@ fn windows_jvm_validation() -> NamedJob {
             .add_step(named::pwsh(
                 "cargo test --locked -p fs --features test-support --test integration real_fs_confined_file_rejects_replaced_paths",
             ))
+            .add_step(
+                Step::new("Verify Windows native watcher delivery")
+                    .run("cargo test --locked -p fs --features test-support --lib fs_watcher::tests::nested_native_watch_delivers_events_after_parent_removal -- --exact")
+                    .shell(steps::PWSH_SHELL),
+            )
             .add_step(named::pwsh(
                 "cargo test --locked -p project --features jvm-tools,test-support --test integration collects_windows_maven_report_and_rejects_parent_junction",
             ))

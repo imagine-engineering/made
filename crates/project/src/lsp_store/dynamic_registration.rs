@@ -60,8 +60,8 @@ impl CapabilityUnregistration {
 #[derive(Default, Debug)]
 pub(super) struct DynamicRegistrations {
     pub(super) did_change_watched_files: HashSet<String>,
-    pub(super) did_change: DocumentSyncRegistrations<lsp::TextDocumentSyncKind>,
-    pub(super) did_save: DocumentSyncRegistrations<bool>,
+    pub(super) did_change: DocumentSelectorRegistrations<lsp::TextDocumentSyncKind>,
+    pub(super) did_save: DocumentSelectorRegistrations<bool>,
     pub(super) diagnostics: CapabilityRegistrations<DiagnosticServerCapabilities>,
     workspace_folders: CapabilityRegistrations<lsp::WorkspaceFoldersServerCapabilities>,
     workspace_symbol: CapabilityRegistrations<OneOf<bool, lsp::WorkspaceSymbolOptions>>,
@@ -70,6 +70,10 @@ pub(super) struct DynamicRegistrations {
     range_formatting: CapabilityRegistrations<OneOf<bool, lsp::DocumentRangeFormattingOptions>>,
     on_type_formatting: CapabilityRegistrations<lsp::DocumentOnTypeFormattingOptions>,
     formatting: CapabilityRegistrations<OneOf<bool, lsp::DocumentFormattingOptions>>,
+    pub(super) range_formatting_selectors: DocumentSelectorRegistrations<()>,
+    pub(super) on_type_formatting_selectors:
+        DocumentSelectorRegistrations<lsp::DocumentOnTypeFormattingOptions>,
+    pub(super) formatting_selectors: DocumentSelectorRegistrations<()>,
     rename: CapabilityRegistrations<OneOf<bool, lsp::RenameOptions>>,
     code_action: CapabilityRegistrations<lsp::CodeActionProviderCapability>,
     definition: CapabilityRegistrations<OneOf<bool, lsp::DefinitionOptions>>,
@@ -93,29 +97,30 @@ struct ChangeRegistrationOptions {
 }
 
 #[derive(Debug)]
-pub(super) struct DocumentSyncRegistrations<T>(Vec<DocumentSyncRegistration<T>>);
+pub(super) struct DocumentSelectorRegistrations<T>(Vec<DocumentSelectorRegistration<T>>);
 
-impl<T> Default for DocumentSyncRegistrations<T> {
+impl<T> Default for DocumentSelectorRegistrations<T> {
     fn default() -> Self {
         Self(Vec::new())
     }
 }
 
 #[derive(Debug)]
-struct DocumentSyncRegistration<T> {
+struct DocumentSelectorRegistration<T> {
     id: String,
-    selector: Option<Vec<DocumentSyncFilter>>,
+    selector: Option<Vec<DocumentSelectorFilter>>,
     options: T,
 }
 
 #[derive(Debug)]
-struct DocumentSyncFilter {
+struct DocumentSelectorFilter {
     language: Option<String>,
     scheme: Option<String>,
     pattern: Option<GlobMatcher>,
 }
 
-pub(super) struct DocumentSyncTarget<'a> {
+#[derive(Clone, Copy)]
+pub(super) struct DocumentSelectorTarget<'a> {
     pub uri: &'a lsp::Uri,
     pub absolute_path: &'a Path,
     pub worktree_path: &'a str,
@@ -123,7 +128,7 @@ pub(super) struct DocumentSyncTarget<'a> {
     pub matches_client_selector: bool,
 }
 
-impl<T: Copy> DocumentSyncRegistrations<T> {
+impl<T: Clone> DocumentSelectorRegistrations<T> {
     fn register(
         &mut self,
         id: String,
@@ -148,7 +153,7 @@ impl<T: Copy> DocumentSyncRegistrations<T> {
                                     })
                             })
                             .transpose()?;
-                        Ok(DocumentSyncFilter {
+                        Ok(DocumentSelectorFilter {
                             language: filter.language,
                             scheme: filter.scheme,
                             pattern,
@@ -161,7 +166,7 @@ impl<T: Copy> DocumentSyncRegistrations<T> {
             registration.selector = selector;
             registration.options = options;
         } else {
-            self.0.push(DocumentSyncRegistration {
+            self.0.push(DocumentSelectorRegistration {
                 id,
                 selector,
                 options,
@@ -178,7 +183,7 @@ impl<T: Copy> DocumentSyncRegistrations<T> {
         self.0.is_empty()
     }
 
-    pub(super) fn matching_options(&self, target: DocumentSyncTarget<'_>) -> Option<T> {
+    pub(super) fn matching_options(&self, target: DocumentSelectorTarget<'_>) -> Option<T> {
         self.0.iter().rev().find_map(|registration| {
             let matches = match &registration.selector {
                 Some(filters) => filters.iter().any(|filter| {
@@ -197,12 +202,44 @@ impl<T: Copy> DocumentSyncRegistrations<T> {
                 }),
                 None => target.matches_client_selector,
             };
-            matches.then_some(registration.options)
+            matches.then(|| registration.options.clone())
         })
     }
 }
 
 impl LspStore {
+    fn register_formatting_selector<T: Clone>(
+        &mut self,
+        server_id: LanguageServerId,
+        id: String,
+        selector: Option<lsp::DocumentSelector>,
+        options: T,
+        selectors: impl FnOnce(&mut DynamicRegistrations) -> &mut DocumentSelectorRegistrations<T>,
+    ) -> Result<()> {
+        let registrations = self
+            .as_local_mut()
+            .context("Expected LSP Store to be local")?
+            .language_server_dynamic_registrations
+            .entry(server_id)
+            .or_default();
+        selectors(registrations).register(id, selector, options)
+    }
+
+    fn unregister_formatting_selector<T: Clone>(
+        &mut self,
+        server_id: LanguageServerId,
+        id: &str,
+        selectors: impl FnOnce(&mut DynamicRegistrations) -> &mut DocumentSelectorRegistrations<T>,
+    ) {
+        if let Some(registrations) = self.as_local_mut().and_then(|local| {
+            local
+                .language_server_dynamic_registrations
+                .get_mut(&server_id)
+        }) {
+            selectors(registrations).unregister(id);
+        }
+    }
+
     /// Returns `true` when the registration changed the server's active capability value:
     /// duplicate-ID replacements of non-active registrations and (re-)registrations with
     /// options identical to the active ones do not.
@@ -461,7 +498,15 @@ impl LspStore {
                     }
                 }
                 "textDocument/rangeFormatting" => {
+                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_formatting_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        (),
+                        |registrations| &mut registrations.range_formatting_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -473,11 +518,19 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/onTypeFormatting" => {
+                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
                     if let Some(options) = reg
                         .register_options
-                        .map(serde_json::from_value)
+                        .map(serde_json::from_value::<lsp::DocumentOnTypeFormattingOptions>)
                         .transpose()?
                     {
+                        self.register_formatting_selector(
+                            server_id,
+                            reg.id.clone(),
+                            selector,
+                            options.clone(),
+                            |registrations| &mut registrations.on_type_formatting_selectors,
+                        )?;
                         self.register_dynamic_capability(
                             &server,
                             &reg.method,
@@ -490,7 +543,15 @@ impl LspStore {
                     }
                 }
                 "textDocument/formatting" => {
+                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_formatting_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        (),
+                        |registrations| &mut registrations.formatting_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -895,6 +956,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rangeFormatting" => {
+                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.range_formatting_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -904,6 +968,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/onTypeFormatting" => {
+                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.on_type_formatting_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -913,6 +980,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/formatting" => {
+                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.formatting_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -1133,6 +1203,17 @@ impl LspStore {
 
         Ok(())
     }
+}
+
+fn parse_formatting_selector(
+    options: Option<&serde_json::Value>,
+) -> Result<Option<lsp::DocumentSelector>> {
+    Ok(options
+        .and_then(|options| options.get("documentSelector"))
+        .cloned()
+        .map(serde_json::from_value::<Option<lsp::DocumentSelector>>)
+        .transpose()?
+        .flatten())
 }
 
 // Registration with registerOptions as null, should fallback to true.

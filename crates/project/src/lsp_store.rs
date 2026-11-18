@@ -32,7 +32,9 @@ use self::code_lens::CodeLensData;
 use self::document_colors::DocumentColorData;
 use self::document_links::DocumentLinksData;
 use self::document_symbols::DocumentSymbolsData;
-use self::dynamic_registration::{DocumentSyncTarget, DynamicRegistrations, RegistrationSource};
+use self::dynamic_registration::{
+    DocumentSelectorTarget, DynamicRegistrations, RegistrationSource,
+};
 use self::inlay_hints::BufferInlayHints;
 #[cfg(feature = "jvm-tools")]
 use crate::jvm_project::{
@@ -2341,21 +2343,33 @@ impl LocalLspStore {
                     return Ok(());
                 };
 
-                let language_server = match specifier {
-                    settings::LanguageServerFormatterSpecifier::Specific { name } => {
-                        adapters_and_servers.iter().find_map(|(adapter, server)| {
-                            if adapter.name.0.as_ref() == name {
-                                Some(server.clone())
-                            } else {
-                                None
-                            }
-                        })
-                    }
-                    settings::LanguageServerFormatterSpecifier::Current => adapters_and_servers
-                        .iter()
-                        .find(|(_, server)| Self::server_supports_formatting(server))
-                        .map(|(_, server)| server.clone()),
-                };
+                let uri = file_path_to_lsp_url(buffer_path_abs)?;
+                let allow_document_formatting = buffer.ranges.is_none()
+                    || (trigger == FormatTrigger::Save
+                        && settings.format_on_save == FormatOnSave::ModificationsIfAvailable);
+                let language_server = lsp_store.read_with(cx, |store, cx| {
+                    let local = store.as_local()?;
+                    let buffer = buffer.handle.read(cx);
+                    adapters_and_servers.iter().find_map(|(adapter, server)| {
+                        if let settings::LanguageServerFormatterSpecifier::Specific { name } =
+                            specifier
+                            && adapter.name.0.as_ref() != name
+                        {
+                            return None;
+                        }
+                        let capabilities = local.formatting_capabilities_for_buffer(
+                            buffer,
+                            server,
+                            &uri,
+                            buffer_path_abs,
+                            cx,
+                        );
+                        (server_capabilities_support_range_formatting(&capabilities)
+                            || (allow_document_formatting
+                                && server_supports_document_formatting(&capabilities)))
+                        .then(|| server.clone())
+                    })
+                })?;
 
                 let Some(language_server) = language_server else {
                     zlog::debug!(
@@ -2809,21 +2823,26 @@ impl LocalLspStore {
         settings: &LanguageSettings,
         cx: &mut AsyncApp,
     ) -> Result<Option<Vec<(Range<Anchor>, Arc<str>)>>> {
-        let capabilities = &language_server.capabilities();
-        let range_formatting_provider = capabilities.document_range_formatting_provider.as_ref();
-        if !matches!(
-            range_formatting_provider,
-            Some(OneOf::Left(true) | OneOf::Right(_))
-        ) {
-            log::debug!(
-                "Skipping range formatting: language server {} does not support range formatting",
-                language_server.name()
-            );
+        let uri = file_path_to_lsp_url(abs_path)?;
+        let supports_range_formatting = |cx: &AsyncApp| {
+            this.read_with(cx, |store, cx| {
+                store.as_local().is_some_and(|local| {
+                    server_capabilities_support_range_formatting(
+                        &local.formatting_capabilities_for_buffer(
+                            buffer_handle.read(cx),
+                            language_server,
+                            &uri,
+                            abs_path,
+                            cx,
+                        ),
+                    )
+                })
+            })
+        };
+        if !supports_range_formatting(cx)? {
             return Ok(None);
         }
-
-        let uri = file_path_to_lsp_url(abs_path)?;
-        let text_document = lsp::TextDocumentIdentifier::new(uri);
+        let text_document = lsp::TextDocumentIdentifier::new(uri.clone());
 
         let request_timeout = cx.update(|app| {
             ProjectSettings::get_global(app)
@@ -2848,6 +2867,9 @@ impl LocalLspStore {
 
             let mut edits = None;
             for range in lsp_ranges {
+                if !supports_range_formatting(cx)? {
+                    break;
+                }
                 if let Some(mut edit) = language_server
                     .request::<lsp::request::RangeFormatting>(
                         lsp::DocumentRangeFormattingParams {
@@ -2884,11 +2906,70 @@ impl LocalLspStore {
         }
     }
 
-    fn server_supports_formatting(server: &Arc<LanguageServer>) -> bool {
-        let capabilities = server.capabilities();
-        let formatting = capabilities.document_formatting_provider.as_ref();
-        matches!(formatting, Some(p) if *p != OneOf::Left(false))
-            || server_capabilities_support_range_formatting(&capabilities)
+    fn formatting_capabilities_for_buffer(
+        &self,
+        buffer: &Buffer,
+        server: &LanguageServer,
+        uri: &lsp::Uri,
+        abs_path: &Path,
+        cx: &App,
+    ) -> lsp::ServerCapabilities {
+        let mut capabilities = server.capabilities();
+        let server_id = server.server_id();
+        let Some(registrations) = self.language_server_dynamic_registrations.get(&server_id) else {
+            return capabilities;
+        };
+        let target = (|| {
+            let file = File::from_dyn(buffer.file())?;
+            if file.as_local()?.abs_path(cx) != abs_path {
+                return None;
+            }
+            let LanguageServerState::Running { adapter, .. } =
+                self.language_servers.get(&server_id)?
+            else {
+                return None;
+            };
+            let language_id = buffer
+                .language()
+                .map(|language| adapter.language_id(&language.name()));
+            Some((file, language_id))
+        })();
+        let target = target
+            .as_ref()
+            .map(|(file, language_id)| DocumentSelectorTarget {
+                uri,
+                absolute_path: abs_path,
+                worktree_path: file.path().as_unix_str(),
+                language_id: language_id.as_deref(),
+                matches_client_selector: true,
+            });
+
+        if !registrations.formatting_selectors.is_empty()
+            && target
+                .and_then(|target| registrations.formatting_selectors.matching_options(target))
+                .is_none()
+        {
+            capabilities.document_formatting_provider = None;
+        }
+        if !registrations.range_formatting_selectors.is_empty()
+            && target
+                .and_then(|target| {
+                    registrations
+                        .range_formatting_selectors
+                        .matching_options(target)
+                })
+                .is_none()
+        {
+            capabilities.document_range_formatting_provider = None;
+        }
+        if !registrations.on_type_formatting_selectors.is_empty() {
+            capabilities.document_on_type_formatting_provider = target.and_then(|target| {
+                registrations
+                    .on_type_formatting_selectors
+                    .matching_options(target)
+            });
+        }
+        capabilities
     }
 
     async fn format_via_lsp(
@@ -2903,11 +2984,20 @@ impl LocalLspStore {
         zlog::debug!(logger => "Formatting via LSP");
 
         let uri = file_path_to_lsp_url(abs_path)?;
+        let capabilities = this
+            .read_with(cx, |store, cx| {
+                store.as_local().map(|local| {
+                    local.formatting_capabilities_for_buffer(
+                        buffer.read(cx),
+                        language_server,
+                        &uri,
+                        abs_path,
+                        cx,
+                    )
+                })
+            })?
+            .context("Expected local LSP store for formatting")?;
         let text_document = lsp::TextDocumentIdentifier::new(uri);
-        let capabilities = &language_server.capabilities();
-
-        let formatting_provider = capabilities.document_formatting_provider.as_ref();
-        let range_formatting_provider = capabilities.document_range_formatting_provider.as_ref();
 
         let request_timeout = cx.update(|app| {
             ProjectSettings::get_global(app)
@@ -2915,7 +3005,7 @@ impl LocalLspStore {
                 .get_request_timeout()
         });
 
-        let lsp_edits = if matches!(formatting_provider, Some(p) if *p != OneOf::Left(false)) {
+        let lsp_edits = if server_supports_document_formatting(&capabilities) {
             let _timer = zlog::time!(logger => "format-full");
             language_server
                 .request::<lsp::request::Formatting>(
@@ -2928,7 +3018,7 @@ impl LocalLspStore {
                 )
                 .await
                 .into_response()?
-        } else if matches!(range_formatting_provider, Some(p) if *p != OneOf::Left(false)) {
+        } else if server_capabilities_support_range_formatting(&capabilities) {
             let _timer = zlog::time!(logger => "format-range");
             let buffer_start = lsp::Position::new(0, 0);
             let buffer_end = buffer.read_with(cx, |b, _| point_to_lsp(b.max_point_utf16()));
@@ -6581,6 +6671,29 @@ impl LspStore {
             .collect()
     }
 
+    fn check_on_type_formatting_capability(
+        &self,
+        buffer: &Buffer,
+        server: &LanguageServer,
+        request: &impl LspCommand,
+        cx: &App,
+    ) -> bool {
+        let Some(file) = File::from_dyn(buffer.file()).and_then(File::as_local) else {
+            return false;
+        };
+        let Some(local) = self.as_local() else {
+            return false;
+        };
+        let abs_path = file.abs_path(cx);
+        let Ok(uri) = file_path_to_lsp_url(&abs_path) else {
+            return false;
+        };
+        let mut capabilities = server.adapter_server_capabilities();
+        capabilities.server_capabilities =
+            local.formatting_capabilities_for_buffer(buffer, server, &uri, &abs_path, cx);
+        request.check_capabilities(capabilities)
+    }
+
     pub fn request_lsp<R>(
         &mut self,
         buffer: Entity<Buffer>,
@@ -6603,23 +6716,50 @@ impl LspStore {
             );
         }
 
-        let Some(language_server) = buffer.update(cx, |buffer, cx| match server {
-            LanguageServerToQuery::FirstCapable => self.as_local().and_then(|local| {
-                local
-                    .language_servers_for_buffer(buffer, cx)
-                    .find(|(_, server)| {
-                        request.check_capabilities(server.adapter_server_capabilities())
-                    })
-                    .map(|(_, server)| server.clone())
-            }),
-            LanguageServerToQuery::Other(id) => self
-                .language_server_for_local_buffer(buffer, id, cx)
-                .and_then(|(_, server)| {
-                    request
-                        .check_capabilities(server.adapter_server_capabilities())
-                        .then(|| Arc::clone(server))
-                }),
-        }) else {
+        let is_on_type_formatting = <R::LspRequest as lsp::request::Request>::METHOD
+            == <lsp::request::OnTypeFormatting as lsp::request::Request>::METHOD;
+        let language_server = buffer.update(cx, |buffer, cx| {
+            if is_on_type_formatting {
+                let candidates = match server {
+                    LanguageServerToQuery::FirstCapable => self
+                        .as_local()
+                        .map(|local| {
+                            local
+                                .language_servers_for_buffer(buffer, cx)
+                                .map(|(_, server)| server.clone())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default(),
+                    LanguageServerToQuery::Other(id) => self
+                        .language_server_for_local_buffer(buffer, id, cx)
+                        .map(|(_, server)| server.clone())
+                        .into_iter()
+                        .collect(),
+                };
+                candidates.into_iter().find(|server| {
+                    self.check_on_type_formatting_capability(buffer, server, &request, cx)
+                })
+            } else {
+                match server {
+                    LanguageServerToQuery::FirstCapable => self.as_local().and_then(|local| {
+                        local
+                            .language_servers_for_buffer(buffer, cx)
+                            .find(|(_, server)| {
+                                request.check_capabilities(server.adapter_server_capabilities())
+                            })
+                            .map(|(_, server)| server.clone())
+                    }),
+                    LanguageServerToQuery::Other(id) => self
+                        .language_server_for_local_buffer(buffer, id, cx)
+                        .and_then(|(_, server)| {
+                            request
+                                .check_capabilities(server.adapter_server_capabilities())
+                                .then(|| server.clone())
+                        }),
+                }
+            }
+        });
+        let Some(language_server) = language_server else {
             return Task::ready(Ok(Default::default()));
         };
 
@@ -6629,8 +6769,9 @@ impl LspStore {
             return Task::ready(Ok(Default::default()));
         };
 
+        let abs_path = file.abs_path(cx);
         let lsp_params = match request.to_lsp_params_or_response(
-            &file.abs_path(cx),
+            &abs_path,
             buffer.read(cx),
             &language_server,
             cx,
@@ -6657,6 +6798,22 @@ impl LspStore {
             .get_request_timeout();
 
         cx.spawn(async move |this, cx| {
+            if is_on_type_formatting
+                && !this.read_with(cx, |store, cx| {
+                    let buffer = buffer.read(cx);
+                    File::from_dyn(buffer.file())
+                        .and_then(File::as_local)
+                        .is_some_and(|file| file.abs_path(cx) == abs_path)
+                        && store.check_on_type_formatting_capability(
+                            buffer,
+                            &language_server,
+                            &request,
+                            cx,
+                        )
+                })?
+            {
+                return Ok(Default::default());
+            }
             let lsp_request = language_server.request::<R::LspRequest>(lsp_params, request_timeout);
 
             let id = lsp_request.id();
@@ -11306,7 +11463,7 @@ impl LspStore {
                 .map(|registrations| &registrations.did_change)
                 .filter(|registrations| !registrations.is_empty());
             let document_sync_kind = match registrations {
-                Some(registrations) => registrations.matching_options(DocumentSyncTarget {
+                Some(registrations) => registrations.matching_options(DocumentSelectorTarget {
                     uri: &uri,
                     absolute_path: &abs_path,
                     worktree_path: file.path().as_unix_str(),
@@ -11430,7 +11587,7 @@ impl LspStore {
                     let language_id = language
                         .as_ref()
                         .map(|language| adapter.language_id(language));
-                    registrations.matching_options(DocumentSyncTarget {
+                    registrations.matching_options(DocumentSelectorTarget {
                         uri: &text_document.uri,
                         absolute_path: &abs_path,
                         worktree_path: worktree_path.as_unix_str(),
@@ -20264,6 +20421,13 @@ impl LspStore {
         }
         lsp_data
     }
+}
+
+fn server_supports_document_formatting(capabilities: &lsp::ServerCapabilities) -> bool {
+    matches!(
+        capabilities.document_formatting_provider,
+        Some(OneOf::Left(true) | OneOf::Right(_))
+    )
 }
 
 fn server_capabilities_support_range_formatting(capabilities: &lsp::ServerCapabilities) -> bool {
