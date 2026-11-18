@@ -27,6 +27,7 @@ impl WatcherMode {
 }
 
 pub struct FsWatcher {
+    watcher: Arc<GlobalWatcher>,
     executor: BackgroundExecutor,
     tx: async_channel::Sender<()>,
     pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
@@ -46,6 +47,7 @@ impl FsWatcher {
         pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
     ) -> Self {
         Self {
+            watcher: global_watcher().clone(),
             executor,
             tx,
             pending_path_events,
@@ -62,6 +64,7 @@ impl FsWatcher {
             return Ok(());
         }
         match register_existing_path(
+            &self.watcher,
             path.clone(),
             case_insensitive,
             self.tx.clone(),
@@ -89,6 +92,7 @@ impl FsWatcher {
 
         let task = self.executor.spawn(poll_path_until_created(
             self.executor.clone(),
+            self.watcher.clone(),
             path.clone(),
             self.tx.clone(),
             self.pending_path_events.clone(),
@@ -113,9 +117,10 @@ impl Drop for FsWatcher {
             Reverse(path.components().count())
         });
 
-        let global_watcher = global_watcher();
         for (_, registration) in registrations {
-            global_watcher.remove(registration.id).log_err();
+            self.watcher
+                .remove_registration(registration.id, false)
+                .log_err();
         }
     }
 }
@@ -147,14 +152,13 @@ impl Watcher for FsWatcher {
         self.pending_registrations.lock().remove(path);
 
         let sanitized = SanitizedPath::new(path);
-        let registration = {
-            let mut registrations = self.registrations.lock();
-            registrations
-                .remove(&WatchKey::exact(sanitized))
-                .or_else(|| registrations.remove(&WatchKey::folded(sanitized)))
-        };
-        if let Some(registration) = registration {
-            global_watcher().remove(registration.id)?;
+        let mut registrations = self.registrations.lock();
+        for key in [WatchKey::exact(sanitized), WatchKey::folded(sanitized)] {
+            if let Some(registration) = registrations.get(&key) {
+                self.watcher.remove(registration.id)?;
+                registrations.remove(&key);
+                break;
+            }
         }
         Ok(())
     }
@@ -192,6 +196,7 @@ pub fn requires_poll_watcher(path: &Path) -> bool {
 }
 
 fn register_existing_path(
+    watcher: &GlobalWatcher,
     path: Arc<Path>,
     case_insensitive: bool,
     tx: async_channel::Sender<()>,
@@ -208,9 +213,11 @@ fn register_existing_path(
     } else {
         WatcherMode::Native
     };
+    #[cfg(test)]
+    let mode = watcher.forced_mode.unwrap_or(mode);
     let root_path = SanitizedPath::new_arc(path.as_ref());
     let path_for_callback = path.clone();
-    let Some(registration_id) = global_watcher().add(
+    let Some(registration_id) = watcher.add(
         path,
         mode,
         case_insensitive,
@@ -501,6 +508,7 @@ impl WatchKey {
 
 async fn poll_path_until_created(
     executor: BackgroundExecutor,
+    watcher: Arc<GlobalWatcher>,
     path: Arc<Path>,
     tx: async_channel::Sender<()>,
     pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
@@ -529,6 +537,7 @@ async fn poll_path_until_created(
         }
 
         match register_existing_path(
+            &watcher,
             path.clone(),
             case_insensitive,
             tx.clone(),
@@ -538,7 +547,9 @@ async fn poll_path_until_created(
                 {
                     let mut pending_registrations = pending_registrations.lock();
                     if pending_registrations.remove(path.as_ref()).is_none() {
-                        global_watcher().remove(registration.id).log_err();
+                        watcher
+                            .remove_registration(registration.id, false)
+                            .log_err();
                         return;
                     }
                     registrations.lock().insert(key, registration);
@@ -746,14 +757,20 @@ impl WatchPaths {
 
     /// True if a recursive registration on a strict ancestor already covers
     /// `path`. Only poll watches and native macOS/Windows watches are recursive.
-    fn covered_by_recursive_ancestor(&self, path: &SanitizedPath, mode: WatcherMode) -> bool {
+    fn covered_by_recursive_ancestor(
+        &self,
+        path: &SanitizedPath,
+        mode: WatcherMode,
+        removing: Option<&WatchKey>,
+    ) -> bool {
         if !mode.is_recursive() {
             return false;
         }
         path.as_path().ancestors().skip(1).any(|ancestor| {
             let ancestor = SanitizedPath::unchecked_new(ancestor);
-            self.has_os_watcher(&WatchKey::exact(ancestor))
-                || self.has_os_watcher(&WatchKey::folded(ancestor))
+            [WatchKey::exact(ancestor), WatchKey::folded(ancestor)]
+                .iter()
+                .any(|key| Some(key) != removing && self.has_os_watcher(key))
         })
     }
 
@@ -794,22 +811,17 @@ impl WatcherState {
         }
     }
 
-    fn remove_registration(
-        &mut self,
-        id: WatcherRegistrationId,
-    ) -> Option<(WatchKey, Arc<SanitizedPath>, WatcherMode)> {
-        let registration_state = self.watchers.remove(&id)?;
+    fn remove_registration(&mut self, id: WatcherRegistrationId) {
+        let Some(registration_state) = self.watchers.remove(&id) else {
+            return;
+        };
         let path_registrations = self.path_registrations(registration_state.mode);
-        let path_state = path_registrations.get_mut(&registration_state.key)?;
-        path_state.watcher_ids.retain(|&existing| existing != id);
-        if !path_state.watcher_ids.is_empty() {
-            return None;
+        if let Some(path_state) = path_registrations.get_mut(&registration_state.key) {
+            path_state.watcher_ids.retain(|&existing| existing != id);
+            if path_state.watcher_ids.is_empty() {
+                path_registrations.remove(&registration_state.key);
+            }
         }
-
-        let watched_path = path_state.has_os_watcher.then(|| path_state.path.clone());
-        path_registrations.remove(&registration_state.key);
-
-        watched_path.map(|path| (registration_state.key, path, registration_state.mode))
     }
 }
 
@@ -831,6 +843,8 @@ impl<T: notify::Watcher + Send> WatchBackend for T {
 type DispatchEvent = (WatcherMode, Result<notify::Event, notify::Error>);
 
 pub struct GlobalWatcher {
+    #[cfg(test)]
+    forced_mode: Option<WatcherMode>,
     state: Mutex<WatcherState>,
 
     // Backend calls must release state before invoking notify. Serialize mutations
@@ -864,7 +878,7 @@ impl GlobalWatcher {
         let (path_already_covered, path_already_watched) = {
             let registrations_for_mode = state.path_registrations(mode);
             (
-                registrations_for_mode.covered_by_recursive_ancestor(&path, mode),
+                registrations_for_mode.covered_by_recursive_ancestor(&path, mode, None),
                 registrations_for_mode.has_os_watcher(&key),
             )
         };
@@ -1026,14 +1040,31 @@ impl GlobalWatcher {
     }
 
     pub fn remove(&self, id: WatcherRegistrationId) -> anyhow::Result<()> {
+        self.remove_registration(id, true)
+    }
+
+    fn remove_registration(
+        &self,
+        id: WatcherRegistrationId,
+        preserve_coverage: bool,
+    ) -> anyhow::Result<()> {
         let _registrations_guard = self.registrations_guard.lock();
         let mut state = self.state.lock();
-        let Some((key, path, mode)) = state.remove_registration(id) else {
+        let Some(registration) = state.watchers.get(&id) else {
+            return Ok(());
+        };
+        let parent_key = registration.key.clone();
+        let mode = registration.mode;
+        let paths = state.path_registrations(mode);
+        let Some(path) = paths.0.get(&parent_key).and_then(|entry| {
+            (entry.has_os_watcher && entry.watcher_ids.len() == 1).then(|| entry.path.clone())
+        }) else {
+            state.remove_registration(id);
             return Ok(());
         };
         let mut candidates = Vec::new();
         if mode.is_recursive() {
-            let case_insensitive = matches!(key, WatchKey::Folded(_));
+            let case_insensitive = matches!(parent_key, WatchKey::Folded(_));
             candidates.extend(
                 state
                     .path_registrations(mode)
@@ -1055,14 +1086,16 @@ impl GlobalWatcher {
                 .state
                 .lock()
                 .path_registrations(mode)
-                .covered_by_recursive_ancestor(&child, mode)
+                .covered_by_recursive_ancestor(&child, mode, Some(&parent_key))
             {
                 continue;
             }
             if let Err(error) = self.watch(child.as_path(), mode) {
                 let error =
                     error.context(format!("failed to preserve filesystem watch for {child:?}"));
-                if coverage_error.is_none() {
+                if preserve_coverage {
+                    return Err(error);
+                } else if coverage_error.is_none() {
                     coverage_error = Some(error);
                 } else {
                     log::warn!("{error:#}");
@@ -1073,6 +1106,7 @@ impl GlobalWatcher {
                 registration.has_os_watcher = true;
             }
         }
+        self.state.lock().remove_registration(id);
         let unwatch = self.unwatch(path.as_path(), mode);
         if let Some(error) = coverage_error {
             unwatch.log_err();
@@ -1200,9 +1234,9 @@ pub fn poll_interval() -> Duration {
     *POLL_INTERVAL
 }
 
-static FS_WATCHER_INSTANCE: OnceLock<GlobalWatcher> = OnceLock::new();
+static FS_WATCHER_INSTANCE: OnceLock<Arc<GlobalWatcher>> = OnceLock::new();
 
-fn global_watcher() -> &'static GlobalWatcher {
+fn global_watcher() -> &'static Arc<GlobalWatcher> {
     FS_WATCHER_INSTANCE.get_or_init(|| {
         let (event_tx, event_rx) = async_channel::unbounded::<DispatchEvent>();
         std::thread::Builder::new()
@@ -1213,7 +1247,7 @@ fn global_watcher() -> &'static GlobalWatcher {
                 }
             })
             .expect("failed to spawn fs watcher dispatch thread");
-        GlobalWatcher {
+        Arc::new(GlobalWatcher {
             registrations_guard: Mutex::new(()),
             state: Mutex::new(WatcherState {
                 watchers: Default::default(),
@@ -1225,7 +1259,9 @@ fn global_watcher() -> &'static GlobalWatcher {
             native_watcher: Mutex::new(None),
             poll_watcher: Mutex::new(None),
             event_tx,
-        }
+            #[cfg(test)]
+            forced_mode: None,
+        })
     })
 }
 
@@ -1314,6 +1350,7 @@ mod tests {
                 }),
             ),
             event_tx,
+            forced_mode: None,
         }
     }
 
@@ -1323,6 +1360,51 @@ mod tests {
         path_events: Vec<PathEvent>,
         expected_pending_paths: Vec<PathEvent>,
         expected_path_events: Vec<PathEvent>,
+    }
+
+    #[gpui::test]
+    fn fs_watcher_child_survives_failed_promotion(cx: &mut gpui::TestAppContext) {
+        let directory = tempfile::tempdir().expect("temporary watch root");
+        let parent = directory
+            .path()
+            .canonicalize()
+            .expect("canonical watch root");
+        let child = parent.join("child");
+        fs::create_dir(&child).expect("create child directory");
+        let backend = Arc::new(Mutex::new(FakeWatchBackend::default()));
+        let mut global = test_watcher(backend.clone());
+        global.forced_mode = Some(WatcherMode::Poll);
+        let (sender, receiver) = async_channel::unbounded();
+        let pending = Arc::new(Mutex::new(Vec::new()));
+        let mut watcher = FsWatcher::new(cx.executor(), sender, pending.clone());
+        watcher.watcher = Arc::new(global);
+        watcher.add(&parent).expect("subscribe to parent");
+        watcher.add(&child).expect("subscribe to child");
+        let child_key =
+            WatchKey::for_registration(SanitizedPath::new(&child), case_insensitive_path(&child));
+        let child_id = watcher.registrations.lock()[&child_key].id;
+
+        backend.lock().fail_with_watch_limit = true;
+        watcher.remove(&parent).expect_err("child promotion fails");
+        assert_eq!(
+            backend.lock().watched_paths,
+            HashSet::from([parent.clone()])
+        );
+        backend.lock().fail_with_watch_limit = false;
+        watcher.remove(&parent).expect("retry parent removal");
+        assert_eq!(watcher.registrations.lock()[&child_key].id, child_id);
+        assert_eq!(backend.lock().watched_paths, HashSet::from([child.clone()]));
+
+        let file = child.join("after.txt");
+        watcher.watcher.dispatch(
+            WatcherMode::Poll,
+            Ok(
+                notify::Event::new(EventKind::Modify(notify::event::ModifyKind::Any))
+                    .add_path(file.clone()),
+            ),
+        );
+        receiver.try_recv().expect("original subscriber notified");
+        assert_eq!(pending.lock()[0].path, file);
     }
 
     #[test]
@@ -1387,13 +1469,15 @@ mod tests {
             .remove(parent_registration)
             .expect_err("report lost coverage");
         assert!(format!("{error:#}").contains("/repo/child"));
-        assert!(backend.lock().watched_paths.is_empty());
+        assert_eq!(
+            backend.lock().watched_paths,
+            HashSet::from([parent.to_path_buf()])
+        );
 
         backend.lock().fail_with_watch_limit = false;
-        let recovered = watcher
-            .add(child.into(), WatcherMode::Poll, false, |_| {})
-            .expect("recover child watch")
-            .expect("watch registered");
+        watcher
+            .remove(parent_registration)
+            .expect("retry parent removal");
         assert_eq!(
             backend.lock().watched_paths,
             HashSet::from([child.to_path_buf()])
@@ -1401,36 +1485,36 @@ mod tests {
         watcher
             .remove(child_registration)
             .expect("remove original child registration");
-        watcher
-            .remove(recovered)
-            .expect("remove recovered child registration");
         assert!(backend.lock().watched_paths.is_empty());
     }
 
-    #[cfg(target_os = "macos")]
     #[test]
     fn nested_native_watch_delivers_events_after_parent_removal() {
+        check_nested_watch_delivery(WatcherMode::Native);
+    }
+
+    #[test]
+    fn nested_poll_watch_delivers_events_after_parent_removal() {
+        check_nested_watch_delivery(WatcherMode::Poll);
+    }
+
+    fn check_nested_watch_delivery(mode: WatcherMode) {
         let temp = tempfile::tempdir().expect("create temporary watch directory");
         let parent = std::fs::canonicalize(temp.path()).expect("canonical watch directory");
         let child = parent.join("nested");
         std::fs::create_dir(&child).expect("create nested directory");
         let watcher = global_watcher();
         let parent_registration = watcher
-            .add(parent.as_path().into(), WatcherMode::Native, false, |_| {})
+            .add(parent.as_path().into(), mode, false, |_| {})
             .expect("watch parent")
             .expect("parent watch registered");
         let (sender, receiver) = std::sync::mpsc::channel();
         let child_registration = watcher
-            .add(
-                child.as_path().into(),
-                WatcherMode::Native,
-                false,
-                move |event| {
-                    if let Err(error) = sender.send(event.clone()) {
-                        log::debug!("nested watch test receiver closed: {error}");
-                    }
-                },
-            )
+            .add(child.as_path().into(), mode, false, move |event| {
+                if let Err(error) = sender.send(event.clone()) {
+                    log::debug!("nested watch test receiver closed: {error}");
+                }
+            })
             .expect("watch child")
             .expect("child watch registered");
         let check_event = |name: &str| {
