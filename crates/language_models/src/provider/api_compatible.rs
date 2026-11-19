@@ -6,7 +6,7 @@ use convert_case::{Case, Casing};
 use credentials_provider::CredentialsProvider;
 use gpui::{App, AppContext as _, Context, Entity, SharedString, Task, TaskExt, Window};
 use language_model::{ApiKeyState, AuthenticateError, EnvVar};
-use settings::SettingsStore;
+use settings::{Settings, SettingsStore};
 use ui::{ElevationIndex, Tooltip, prelude::*};
 use ui_input::InputField;
 
@@ -32,6 +32,9 @@ impl<S: ApiCompatibleProviderSettings> ApiCompatibleProviderState<S> {
             format!("{}_API_KEY", id).to_case(Case::UpperSnake).into();
         cx.new(|cx| {
             cx.observe_global::<SettingsStore>(move |this: &mut Self, cx| {
+                if crate::AllLanguageModelSettings::get_global(cx).disable_ai {
+                    return;
+                }
                 let Some(settings) = resolve_settings(&this.id, cx).cloned() else {
                     return;
                 };

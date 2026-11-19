@@ -6716,8 +6716,59 @@ impl LspStore {
             );
         }
 
-        let is_on_type_formatting = <R::LspRequest as lsp::request::Request>::METHOD
-            == <lsp::request::OnTypeFormatting as lsp::request::Request>::METHOD;
+        let method = <R::LspRequest as lsp::request::Request>::METHOD;
+        let request_document = if matches!(method, "textDocument/hover" | "textDocument/definition")
+        {
+            File::from_dyn(buffer.read(cx).file())
+                .and_then(File::as_local)
+                .and_then(|file| {
+                    let absolute_path = file.abs_path(cx);
+                    let uri = file_path_to_lsp_url(&absolute_path).log_err()?;
+                    Some((uri, absolute_path, file.path().clone()))
+                })
+        } else {
+            None
+        };
+        let can_handle_request =
+            |buffer: &Buffer, adapter: &CachedLspAdapter, server: &LanguageServer| {
+                if !request.check_capabilities(server.adapter_server_capabilities()) {
+                    return false;
+                }
+                let Some(selectors) = self
+                    .as_local()
+                    .and_then(|local| {
+                        local
+                            .language_server_dynamic_registrations
+                            .get(&server.server_id())
+                    })
+                    .and_then(|registrations| match method {
+                        "textDocument/hover" => Some(&registrations.hover_selectors),
+                        "textDocument/definition" => Some(&registrations.definition_selectors),
+                        _ => None,
+                    })
+                    .filter(|selectors| !selectors.is_empty())
+                else {
+                    return true;
+                };
+                let Some((uri, absolute_path, worktree_path)) = &request_document else {
+                    return false;
+                };
+                let language_id = buffer
+                    .language()
+                    .map(|language| adapter.language_id(&language.name()));
+                selectors
+                    .matching_options(DocumentSelectorTarget {
+                        uri,
+                        absolute_path,
+                        worktree_path: worktree_path.as_unix_str(),
+                        language_id: language_id.as_deref(),
+                        matches_client_selector: true,
+                    })
+                    .is_some()
+            };
+
+        let is_on_type_formatting =
+            method == <lsp::request::OnTypeFormatting as lsp::request::Request>::METHOD;
         let language_server = buffer.update(cx, |buffer, cx| {
             if is_on_type_formatting {
                 let candidates = match server {
@@ -6744,18 +6795,13 @@ impl LspStore {
                     LanguageServerToQuery::FirstCapable => self.as_local().and_then(|local| {
                         local
                             .language_servers_for_buffer(buffer, cx)
-                            .find(|(_, server)| {
-                                request.check_capabilities(server.adapter_server_capabilities())
-                            })
+                            .find(|(adapter, server)| can_handle_request(buffer, adapter, server))
                             .map(|(_, server)| server.clone())
                     }),
                     LanguageServerToQuery::Other(id) => self
                         .language_server_for_local_buffer(buffer, id, cx)
-                        .and_then(|(_, server)| {
-                            request
-                                .check_capabilities(server.adapter_server_capabilities())
-                                .then(|| server.clone())
-                        }),
+                        .filter(|(adapter, server)| can_handle_request(buffer, adapter, server))
+                        .map(|(_, server)| server.clone()),
                 }
             }
         });

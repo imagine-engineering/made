@@ -1115,9 +1115,10 @@ impl RemoteClient {
             };
 
             let multiplex_task = Self::monitor(this.clone(), io_task, cx);
-            client.reconnect(incoming_rx, outgoing_tx, cx);
-
-            if let Err(error) = client.resync(HEARTBEAT_TIMEOUT).await {
+            if let Err(error) = client
+                .reconnect_and_resync(incoming_rx, outgoing_tx, cx)
+                .await
+            {
                 failed!(error, attempts, remote_connection, delegate);
             };
 
@@ -2890,6 +2891,57 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_reconnect_separates_readiness_and_resync_deadlines(cx: &mut TestAppContext) {
+        let (_initial_input, incoming) = mpsc::unbounded();
+        let (outgoing, _initial_output) = mpsc::unbounded();
+        let client = cx.update(|cx| ChannelClient::new(incoming, outgoing, cx, "readiness", false));
+        let async_context = cx.to_async();
+
+        for reply_to_flush in [true, false] {
+            let (proxy_input, incoming) = mpsc::unbounded();
+            let (outgoing, mut proxy_output) = mpsc::unbounded();
+            let mut reconnect =
+                Box::pin(client.reconnect_and_resync(incoming, outgoing, &async_context));
+            assert!(reconnect.as_mut().now_or_never().is_none());
+            let startup = proxy_output.next().await.expect("client handshake");
+            assert!(matches!(
+                startup.payload,
+                Some(proto::envelope::Payload::RemoteStarted(_))
+            ));
+            cx.executor()
+                .advance_clock(HEARTBEAT_TIMEOUT + Duration::from_secs(1));
+            assert!(reconnect.as_mut().now_or_never().is_none());
+            assert!(proxy_output.next().now_or_never().is_none());
+
+            proxy_input
+                .unbounded_send(proto::Ack {}.into_envelope(100, Some(startup.id), None))
+                .expect("the running server acknowledges the replacement proxy handshake");
+            cx.run_until_parked();
+            assert!(reconnect.as_mut().now_or_never().is_none());
+            let flush = proxy_output
+                .next()
+                .now_or_never()
+                .flatten()
+                .expect("the handshake acknowledgement must start resync");
+            assert!(matches!(
+                flush.payload,
+                Some(proto::envelope::Payload::FlushBufferedMessages(_))
+            ));
+
+            if reply_to_flush {
+                proxy_input
+                    .unbounded_send(proto::Ack {}.into_envelope(101, Some(flush.id), None))
+                    .expect("resync acknowledgment");
+                reconnect.await.expect("slow proxy still resyncs");
+            } else {
+                cx.executor().advance_clock(HEARTBEAT_TIMEOUT);
+                let error = reconnect.await.expect_err("unanswered flush must time out");
+                assert_eq!(error.to_string(), "Timed out resyncing remote client");
+            }
+        }
+    }
+
+    #[gpui::test]
     async fn test_channel_client_jvm_intent_does_not_replay_after_reconnect(
         cx: &mut TestAppContext,
     ) {
@@ -3657,6 +3709,7 @@ impl ChannelClient {
             task: Mutex::new(Self::start_handling_messages(
                 this.clone(),
                 incoming_rx,
+                true,
                 &cx.to_async(),
             )),
             remote_started: Signal::new(cx),
@@ -3671,10 +3724,11 @@ impl ChannelClient {
     fn start_handling_messages(
         this: Weak<Self>,
         mut incoming_rx: BoxStream<'static, (PeerId, Envelope)>,
+        announce_startup: bool,
         cx: &AsyncApp,
     ) -> Task<Result<()>> {
         cx.spawn(async move |cx| {
-            if let Some(this) = this.upgrade() {
+            if announce_startup && let Some(this) = this.upgrade() {
                 let envelope = proto::RemoteStarted {}.into_envelope(0, None, None);
                 this.outgoing_tx.lock().unbounded_send(envelope).ok();
             };
@@ -3823,6 +3877,31 @@ impl ChannelClient {
         })
     }
 
+    async fn reconnect_and_resync(
+        self: &Arc<Self>,
+        incoming: UnboundedReceiver<Envelope>,
+        outgoing: UnboundedSender<Envelope>,
+        cx: &AsyncApp,
+    ) -> Result<()> {
+        self.replace_input(
+            incoming
+                .map(|envelope| (PeerId { owner_id: 0, id: 0 }, envelope))
+                .boxed(),
+            outgoing,
+            false,
+            cx,
+        );
+        // An existing server acknowledges the new proxy's handshake without
+        // sending another startup notification of its own.
+        self.request_internal(proto::RemoteStarted {}, false)
+            .with_timeout(INITIAL_CONNECTION_TIMEOUT, &self.executor)
+            .await
+            .context("Timed out waiting for the reconnect proxy to become ready")?
+            .context("Reconnect proxy handshake failed")?;
+        self.resync(HEARTBEAT_TIMEOUT).await
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn reconnect(
         self: &Arc<Self>,
         incoming_rx: UnboundedReceiver<Envelope>,
@@ -3834,6 +3913,7 @@ impl ChannelClient {
                 .map(|envelope| (PeerId { owner_id: 0, id: 0 }, envelope))
                 .boxed(),
             outgoing_tx,
+            true,
             cx,
         );
     }
@@ -3850,6 +3930,7 @@ impl ChannelClient {
         self.replace_input(
             incoming.map(move |envelope| (peer, envelope)).boxed(),
             outgoing,
+            true,
             cx,
         );
     }
@@ -3858,10 +3939,12 @@ impl ChannelClient {
         self: &Arc<Self>,
         incoming: BoxStream<'static, (PeerId, Envelope)>,
         outgoing: UnboundedSender<Envelope>,
+        announce_startup: bool,
         cx: &AsyncApp,
     ) {
         *self.outgoing_tx.lock() = outgoing;
-        *self.task.lock() = Self::start_handling_messages(Arc::downgrade(self), incoming, cx);
+        *self.task.lock() =
+            Self::start_handling_messages(Arc::downgrade(self), incoming, announce_startup, cx);
     }
 
     fn request<T: RequestMessage>(

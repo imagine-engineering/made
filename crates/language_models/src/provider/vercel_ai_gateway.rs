@@ -131,6 +131,9 @@ impl VercelAiGatewayLanguageModelProvider {
             cx.observe_global::<SettingsStore>({
                 let mut last_settings = VercelAiGatewayLanguageModelProvider::settings(cx).clone();
                 move |this: &mut State, cx| {
+                    if crate::AllLanguageModelSettings::get_global(cx).disable_ai {
+                        return;
+                    }
                     let current_settings = VercelAiGatewayLanguageModelProvider::settings(cx);
                     if current_settings != &last_settings {
                         last_settings = current_settings.clone();
