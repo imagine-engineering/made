@@ -19,6 +19,7 @@ use settings::{InvalidSettingsError, SettingsLocation};
 use task::{TaskContext, TaskVariables, VariableName};
 use text::{BufferId, OffsetRangeExt};
 use util::ResultExt;
+use worktree::WorktreeId;
 
 use crate::{
     BasicContextProvider, Inventory, ProjectEnvironment, buffer_store::BufferStore,
@@ -318,6 +319,68 @@ impl TaskStore {
             inventory.update_file_based_scenarios(location, raw_tasks_json)
         })
     }
+}
+
+/// The bounded number of ordered before-launch dependencies one named
+/// configuration may declare.
+pub const MAX_BEFORE_LAUNCH_DEPENDENCIES: usize = 16;
+
+/// Resolves the ordered before-launch dependencies of one named configuration
+/// into the same saved-task identities the existing Tasks owner dispatches.
+/// Dependencies resolve in order through the existing saved task inventory;
+/// duplicates, self-references and missing saved tasks are rejected before any
+/// scheduling. The existing execution plumbing keeps ownership of running the
+/// returned plans, their cancellation and failure short-circuit policy.
+pub fn plan_before_launch_dependencies(
+    inventory: &Entity<Inventory>,
+    buffer: Option<Entity<language::Buffer>>,
+    worktree_id: Option<WorktreeId>,
+    launching_label: &str,
+    dependencies: &[String],
+    context: &TaskContext,
+    cx: &mut App,
+) -> anyhow::Result<Task<anyhow::Result<Vec<task::ResolvedTask>>>> {
+    anyhow::ensure!(
+        dependencies.len() <= MAX_BEFORE_LAUNCH_DEPENDENCIES,
+        "Before-launch dependencies exceed the {MAX_BEFORE_LAUNCH_DEPENDENCIES}-dependency limit"
+    );
+    let mut listed_labels = std::collections::HashSet::new();
+    for label in dependencies {
+        anyhow::ensure!(
+            listed_labels.insert(label.as_str()),
+            "Before-launch dependency '{label}' is listed more than once"
+        );
+        anyhow::ensure!(
+            label != launching_label,
+            "A before-launch dependency cannot reference its own configuration"
+        );
+    }
+    let templates = inventory.read(cx).list_tasks(buffer, None, worktree_id, cx);
+    let dependencies = dependencies.to_vec();
+    let context = context.clone();
+    Ok(cx.spawn(async move |_| {
+        let entries = templates.await;
+        let mut planned = Vec::with_capacity(dependencies.len());
+        for label in &dependencies {
+            let (kind, template) = entries
+                .iter()
+                .find(|(_, template)| &template.label == label)
+                .with_context(|| {
+                    format!("Before-launch dependency '{label}' is not a saved task")
+                })?;
+            let id_base = kind.to_id_base();
+            let resolved = if template.literal_arguments {
+                template.resolve_task_with_literal_arguments(&id_base, &context)
+            } else {
+                template.resolve_task(&id_base, &context)
+            }
+            .with_context(|| {
+                format!("Before-launch dependency '{label}' could not resolve in the launching task's context")
+            })?;
+            planned.push(resolved);
+        }
+        Ok(planned)
+    }))
 }
 
 fn local_task_context_for_location(

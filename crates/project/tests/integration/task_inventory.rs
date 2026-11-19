@@ -18,7 +18,7 @@ use task::{TaskContext, TaskVariables, VariableName};
 use util::path;
 use util::rel_path::rel_path;
 
-use project::task_store::{TaskSettingsLocation, TaskStore};
+use project::task_store::{TaskSettingsLocation, TaskStore, plan_before_launch_dependencies};
 
 #[cfg(feature = "jvm-tools")]
 use fs::FakeFs;
@@ -654,6 +654,97 @@ async fn test_saving_named_run_configurations(cx: &mut TestAppContext) {
         admitted.is_none(),
         "a worktree-saved configuration is not a user configuration"
     );
+}
+
+#[gpui::test]
+async fn test_planning_before_launch_dependencies(cx: &mut TestAppContext) {
+    init_test(cx);
+    let inventory = cx.update(|cx| Inventory::new(cx));
+    inventory.update(cx, |inventory, _| {
+        inventory
+            .update_file_based_tasks(
+                TaskSettingsLocation::Global(tasks_file()),
+                Some(&mock_tasks_from_names([
+                    "sync-first",
+                    "build-second",
+                    "standalone",
+                ])),
+            )
+            .unwrap();
+    });
+    let handle = inventory.clone();
+    let plan = |launching: &str,
+                dependencies: &[&str],
+                cx: &mut TestAppContext|
+     -> anyhow::Result<Task<anyhow::Result<Vec<task::ResolvedTask>>>> {
+        let dependencies: Vec<String> = dependencies.iter().map(|l| l.to_string()).collect();
+        cx.update(|cx| {
+            plan_before_launch_dependencies(
+                &handle,
+                None,
+                None,
+                launching,
+                &dependencies,
+                &task::TaskContext::default(),
+                cx,
+            )
+        })
+    };
+
+    // Ordered dependencies resolve in the declared order through the saved
+    // task inventory with the launching task's context.
+    let planned = plan("provider-build", &["sync-first", "build-second"], cx)
+        .unwrap()
+        .await
+        .unwrap();
+    assert_eq!(planned.len(), 2);
+    assert_eq!(planned[0].resolved_label, "sync-first");
+    assert_eq!(planned[1].resolved_label, "build-second");
+    assert_eq!(planned[0].original_task().label, "sync-first");
+
+    // An empty dependency list plans nothing.
+    assert!(
+        plan("provider-build", &[], cx)
+            .unwrap()
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // A missing saved task is an explicit error.
+    let error = plan("provider-build", &["missing-task"], cx)
+        .unwrap()
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("is not a saved task"), "{error}");
+
+    // Duplicates and self-references are rejected before scheduling.
+    let error = plan("provider-build", &["sync-first", "sync-first"], cx)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("listed more than once"), "{error}");
+    let error = plan("provider-build", &["provider-build"], cx)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("cannot reference its own configuration"),
+        "{error}"
+    );
+
+    // The dependency count is bounded.
+    let over_limit: Vec<String> = (0..plan_before_launch_dependencies_len_limit() + 1)
+        .map(|index| format!("dep-{index}"))
+        .collect();
+    let over_limit: Vec<&str> = over_limit.iter().map(String::as_str).collect();
+    let error = plan("provider-build", &over_limit, cx)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("-dependency limit"), "{error}");
+}
+
+fn plan_before_launch_dependencies_len_limit() -> usize {
+    project::task_store::MAX_BEFORE_LAUNCH_DEPENDENCIES
 }
 
 async fn test_reloading_debug_scenarios(cx: &mut TestAppContext) {
