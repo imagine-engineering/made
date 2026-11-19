@@ -17002,17 +17002,23 @@ async fn test_range_format_on_save_timeout(cx: &mut TestAppContext) {
     });
     assert!(cx.read(|cx| editor.is_dirty(cx)));
 
-    // Test that save still works when formatting hangs
-    fake_server.set_request_handler::<lsp::request::RangeFormatting, _, _>(
-        move |params, _| async move {
-            assert_eq!(
-                params.text_document.uri,
-                lsp::Uri::from_file_path(path!("/file.rs")).unwrap()
-            );
-            futures::future::pending::<()>().await;
-            unreachable!()
-        },
-    );
+    let (started_tx, started_rx) = oneshot::channel();
+    let mut started_tx = Some(started_tx);
+    let mut finished =
+        fake_server.set_request_handler::<lsp::request::RangeFormatting, _, _>(move |params, _| {
+            let started_tx = started_tx.take();
+            async move {
+                assert_eq!(
+                    params.text_document.uri,
+                    lsp::Uri::from_file_path(path!("/file.rs")).expect("valid file URI")
+                );
+                started_tx
+                    .expect("formatting requested once")
+                    .send(())
+                    .expect("the test waits for the request to start");
+                futures::future::pending().await
+            }
+        });
     let save = editor
         .update_in(cx, |editor, window, cx| {
             editor.save(
@@ -17027,8 +17033,14 @@ async fn test_range_format_on_save_timeout(cx: &mut TestAppContext) {
             )
         })
         .unwrap();
+    started_rx.await.expect("the server started formatting");
     cx.executor().advance_clock(super::FORMAT_TIMEOUT);
     save.await;
+    cx.run_until_parked();
+    assert_eq!(
+        futures::poll!(finished.next()),
+        std::task::Poll::Ready(Some(()))
+    );
     assert_eq!(
         editor.update(cx, |editor, cx| editor.text(cx)),
         "one\ntwo\nthree\n"
@@ -19045,7 +19057,7 @@ async fn test_concurrent_format_requests(cx: &mut TestAppContext) {
     "});
 }
 
-#[gpui::test]
+#[gpui::test(iterations = 8)]
 async fn test_strip_whitespace_and_format_via_lsp(cx: &mut TestAppContext) {
     init_test(cx, |settings| {
         settings.defaults.formatter = Some(FormatterList::default())
@@ -19054,73 +19066,45 @@ async fn test_strip_whitespace_and_format_via_lsp(cx: &mut TestAppContext) {
     let mut cx = EditorLspTestContext::new_rust(
         lsp::ServerCapabilities {
             document_formatting_provider: Some(lsp::OneOf::Left(true)),
+            text_document_sync: Some(lsp::TextDocumentSyncCapability::Kind(
+                lsp::TextDocumentSyncKind::FULL,
+            )),
             ..Default::default()
         },
         cx,
     )
     .await;
 
-    // Record which buffer changes have been sent to the language server
-    let buffer_changes = Arc::new(Mutex::new(Vec::new()));
+    let server_text = Arc::new(Mutex::new(String::new()));
     cx.lsp
         .handle_notification::<lsp::notification::DidChangeTextDocument, _>({
-            let buffer_changes = buffer_changes.clone();
+            let server_text = server_text.clone();
             move |params, _| {
-                buffer_changes.lock().extend(
-                    params
-                        .content_changes
-                        .into_iter()
-                        .map(|e| (e.range.unwrap(), e.text)),
-                );
+                let [change] = params.content_changes.as_slice() else {
+                    panic!("expected a single full-document update");
+                };
+                assert_eq!(change.range, None);
+                server_text.lock().clone_from(&change.text);
             }
         });
-    // Handle formatting requests to the language server.
     cx.lsp
-        .set_request_handler::<lsp::request::Formatting, _, _>({
-            move |_, _| {
-                // Insert blank lines between each line of the buffer.
-                async move {
-                    // TODO: this assertion is not reliably true. Currently nothing guarantees that we deliver
-                    // DidChangedTextDocument to the LSP before sending the formatting request.
-                    // assert_eq!(
-                    //     &buffer_changes.lock()[1..],
-                    //     &[
-                    //         (
-                    //             lsp::Range::new(lsp::Position::new(0, 3), lsp::Position::new(0, 4)),
-                    //             "".into()
-                    //         ),
-                    //         (
-                    //             lsp::Range::new(lsp::Position::new(2, 5), lsp::Position::new(2, 6)),
-                    //             "".into()
-                    //         ),
-                    //         (
-                    //             lsp::Range::new(lsp::Position::new(3, 4), lsp::Position::new(3, 4)),
-                    //             "\n".into()
-                    //         ),
-                    //     ]
-                    // );
-
-                    Ok(Some(vec![
-                        lsp::TextEdit {
-                            range: lsp::Range::new(
-                                lsp::Position::new(1, 0),
-                                lsp::Position::new(1, 0),
-                            ),
-                            new_text: "\n".into(),
-                        },
-                        lsp::TextEdit {
-                            range: lsp::Range::new(
-                                lsp::Position::new(2, 0),
-                                lsp::Position::new(2, 0),
-                            ),
-                            new_text: "\n".into(),
-                        },
-                    ]))
-                }
+        .set_request_handler::<lsp::request::Formatting, _, _>(move |_, _| {
+            let text = server_text.lock().clone();
+            async move {
+                assert_eq!(text, "one\ntwo\nthree\nfour\n");
+                Ok(Some(
+                    text.lines()
+                        .enumerate()
+                        .filter(|(_, line)| matches!(*line, "two" | "three"))
+                        .map(|(row, _)| {
+                            let point = lsp::Position::new(row as u32, 0);
+                            lsp::TextEdit::new(lsp::Range::new(point, point), "\n".into())
+                        })
+                        .collect(),
+                ))
             }
         });
 
-    // Set up a buffer white some trailing whitespace and no trailing newline.
     cx.set_state(
         &[
             "one ",   //

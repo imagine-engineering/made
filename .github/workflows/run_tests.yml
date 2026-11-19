@@ -129,6 +129,8 @@ jobs:
         tool: nextest
     - name: run_tests::copper_tests
       run: cargo nextest run --no-fail-fast --no-tests=warn --no-default-features --features zed/agentic-tools,zed/rust-tools,remote_server/rust-tools -p agent -p agent_ui -p auto_update -p call -p cargo_ui -p channel -p client -p collab_ui -p editor -p extension_host -p git -p git_ui -p language_model -p language_models -p language_tools -p languages -p project -p remote_server -p settings -p settings_content -p task -p tasks_ui -p terminal -p terminal_view -p worktree -p workspace -p zed -E 'not (test(foreground_budget) or (package(language_tools) and (test(=profile_view::tests::profile_view_large_flamegraph_paints_a_bounded_viewport) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=profile_view::tests::profile_view_large_denied_batch_releases_result) or test(=profile_view::tests::profile_view_completed_import_disposal_rejects_stale_result))))'
+    - name: Verify Linux native and polling watcher delivery
+      run: cargo test --locked -p fs --lib fs_watcher::tests::nested_ -- --test-threads=1
     - name: Measure Copper foreground budgets
       run: cargo nextest run --no-fail-fast --no-tests=fail --no-default-features --features zed/agentic-tools,zed/rust-tools,remote_server/rust-tools -p agent -p agent_ui -p auto_update -p call -p cargo_ui -p channel -p client -p collab_ui -p editor -p extension_host -p git -p git_ui -p language_model -p language_models -p language_tools -p languages -p project -p remote_server -p settings -p settings_content -p task -p tasks_ui -p terminal -p terminal_view -p worktree -p workspace -p zed -E '(test(foreground_budget) or (package(language_tools) and (test(=profile_view::tests::profile_view_large_flamegraph_paints_a_bounded_viewport) or test(=profile_view::tests::profile_view_deep_selection_expands_ancestors_in_one_batch) or test(=profile_view::tests::profile_view_large_denied_batch_releases_result) or test(=profile_view::tests::profile_view_completed_import_disposal_rejects_stale_result))))' --test-threads 1 --success-output immediate
     - name: steps::finalize_release_sccache
@@ -545,6 +547,9 @@ jobs:
         clean: false
     - name: run_tests::windows_jvm_validation
       run: cargo test --locked -p fs --features test-support --test integration real_fs_confined_file_rejects_replaced_paths
+      shell: pwsh
+    - name: Verify Windows native watcher delivery
+      run: cargo test --locked -p fs --features test-support --lib fs_watcher::tests::nested_native_watch_delivers_events_after_parent_removal -- --exact
       shell: pwsh
     - name: run_tests::windows_jvm_validation
       run: cargo test --locked -p project --features jvm-tools,test-support --test integration collects_windows_maven_report_and_rejects_parent_junction

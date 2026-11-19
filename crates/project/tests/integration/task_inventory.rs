@@ -747,6 +747,7 @@ fn plan_before_launch_dependencies_len_limit() -> usize {
     project::task_store::MAX_BEFORE_LAUNCH_DEPENDENCIES
 }
 
+#[gpui::test]
 async fn test_reloading_debug_scenarios(cx: &mut TestAppContext) {
     init_test(cx);
     let inventory = cx.update(|cx| Inventory::new(cx));
