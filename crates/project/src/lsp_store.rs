@@ -25876,19 +25876,19 @@ mod tests {
     async fn reload_maven_uses_provider_defaults_without_saved_selection(
         cx: &mut gpui::TestAppContext,
     ) {
-        check_jvm_reload(cx, false, false, None).await;
+        check_jvm_reload(cx, false, false, None, false).await;
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
     #[gpui::test]
     async fn reload_all_jvm_builds_serializes_maven_and_gradle(cx: &mut gpui::TestAppContext) {
-        check_jvm_reload(cx, true, false, None).await;
+        check_jvm_reload(cx, true, false, None, false).await;
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
     #[gpui::test]
     async fn reload_all_jvm_builds_cancellation_skips_gradle(cx: &mut gpui::TestAppContext) {
-        check_jvm_reload(cx, true, true, None).await;
+        check_jvm_reload(cx, true, true, None, false).await;
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
@@ -25899,6 +25899,7 @@ mod tests {
             true,
             false,
             Some((settings::JvmBuildReload::ExternalChanges, false)),
+            false,
         )
         .await;
     }
@@ -25911,6 +25912,7 @@ mod tests {
             true,
             false,
             Some((settings::JvmBuildReload::AllChanges, false)),
+            false,
         )
         .await;
     }
@@ -25925,6 +25927,7 @@ mod tests {
             true,
             false,
             Some((settings::JvmBuildReload::AllChanges, true)),
+            false,
         )
         .await;
     }
@@ -25937,6 +25940,22 @@ mod tests {
             true,
             false,
             Some((settings::JvmBuildReload::Manual, false)),
+            false,
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn automatic_jvm_reload_discards_queued_work_after_worktree_removal(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        check_jvm_reload(
+            cx,
+            true,
+            false,
+            Some((settings::JvmBuildReload::AllChanges, false)),
+            true,
         )
         .await;
     }
@@ -25947,6 +25966,7 @@ mod tests {
         reload_all: bool,
         cancel: bool,
         policy: Option<(settings::JvmBuildReload, bool)>,
+        unlink_pending: bool,
     ) {
         let mut fixture = ProjectLanguageFixture::new(cx).await;
         fixture
@@ -26049,6 +26069,27 @@ mod tests {
                 .update(cx, |project, cx| project.save_buffer(pom, cx))
                 .await
                 .expect("save POM");
+            if unlink_pending {
+                assert!(
+                    fixture.store.read_with(cx, |store, _| {
+                        store.pending_jvm_reloads.contains_key(&worktree_id)
+                    }),
+                    "the editor save must queue a coalesced reload"
+                );
+                fixture
+                    .project
+                    .update(cx, |project, cx| project.remove_worktree(worktree_id, cx));
+                ProjectLanguageFixture::pump(cx);
+                assert!(
+                    calls.lock().is_empty(),
+                    "a removed worktree cannot run its queued reload"
+                );
+                assert!(fixture.store.read_with(cx, |store, _| {
+                    store.pending_jvm_reloads.is_empty()
+                        && store.jdtls_project_snapshot(worktree_id).is_none()
+                }));
+                return;
+            }
             if disable_pending {
                 assert!(fixture.store.read_with(cx, |store, _| {
                     store.pending_jvm_reloads.contains_key(&worktree_id)
