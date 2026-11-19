@@ -1,3 +1,4 @@
+use collections::HashMap;
 #[cfg(feature = "jvm-tools")]
 use gpui::BorrowAppContext as _;
 use gpui::{AppContext, Entity, Task, TestAppContext};
@@ -10,6 +11,7 @@ use std::path::Path;
 #[cfg(feature = "jvm-tools")]
 use std::path::PathBuf;
 use std::sync::Arc;
+use task::{RevealStrategy, RevealTarget, TaskTemplate};
 #[cfg(feature = "jvm-tools")]
 use task::{TaskContext, TaskVariables, VariableName};
 #[cfg(feature = "jvm-tools")]
@@ -506,6 +508,154 @@ async fn test_task_list_sorting(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+#[gpui::test]
+async fn test_saving_named_run_configurations(cx: &mut TestAppContext) {
+    init_test(cx);
+    let inventory = cx.update(|cx| Inventory::new(cx));
+    inventory.update(cx, |inventory, _| {
+        inventory
+            .update_file_based_tasks(
+                TaskSettingsLocation::Global(tasks_file()),
+                Some(&mock_tasks_from_names(["other_task", "provider-build"])),
+            )
+            .unwrap();
+    });
+
+    let configuration = TaskTemplate {
+        label: "provider-build".into(),
+        command: "mvn".into(),
+        args: vec![
+            "--offline".into(),
+            "-Dmaven.repo.local=/cache".into(),
+            "-Djvm.options=-Xmx2g".into(),
+            "test".into(),
+        ],
+        env: HashMap::from_iter([("MAVEN_OPTS".into(), "-Xmx2g".into())]),
+        cwd: Some("target/".into()),
+        allow_concurrent_runs: false,
+        reveal: RevealStrategy::Never,
+        reveal_target: RevealTarget::Center,
+        show_summary: true,
+        show_command: false,
+        ..Default::default()
+    };
+    let saved_json = inventory.update(cx, |inventory, _| {
+        inventory
+            .save_named_run_configuration(
+                TaskSettingsLocation::Global(tasks_file()),
+                configuration.clone(),
+            )
+            .unwrap()
+    });
+    let saved = serde_json::from_str::<Vec<serde_json::Value>>(&saved_json).unwrap();
+    let labels: Vec<&str> = saved
+        .iter()
+        .map(|task| task["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(labels, ["other_task", "provider-build"]);
+    let entry = saved
+        .iter()
+        .find(|task| task["label"] == "provider-build")
+        .unwrap();
+    assert_eq!(entry["command"], "mvn");
+    assert_eq!(entry["cwd"], "target/");
+    assert_eq!(entry["allow_concurrent_runs"], false);
+    assert_eq!(entry["env"]["MAVEN_OPTS"], "-Xmx2g");
+    assert_eq!(entry["show_summary"], true);
+    assert_eq!(entry["show_command"], false);
+    assert_eq!(entry["reveal"], "never");
+    assert_eq!(entry["reveal_target"], "center");
+
+    // The existing file-based owner admitted the merged content; the saved
+    // configuration resolves to the same template without any field loss.
+    let admitted = inventory
+        .update(cx, |inventory, cx| {
+            inventory.task_template_by_label(None, None, "provider-build", cx)
+        })
+        .await;
+    assert_eq!(admitted.as_ref(), Some(&configuration));
+
+    // Saving again replaces the same-label entry in place.
+    let updated = TaskTemplate {
+        args: vec!["--offline".into(), "test".into()],
+        ..configuration.clone()
+    };
+    let resaved_json = inventory.update(cx, |inventory, _| {
+        inventory
+            .save_named_run_configuration(
+                TaskSettingsLocation::Global(tasks_file()),
+                updated.clone(),
+            )
+            .unwrap()
+    });
+    let resaved = serde_json::from_str::<Vec<serde_json::Value>>(&resaved_json).unwrap();
+    assert_eq!(
+        resaved
+            .iter()
+            .filter(|task| task["label"] == "provider-build")
+            .count(),
+        1
+    );
+    let admitted = inventory
+        .update(cx, |inventory, cx| {
+            inventory.task_template_by_label(None, None, "provider-build", cx)
+        })
+        .await;
+    assert_eq!(admitted.as_ref(), Some(&updated));
+
+    // A configuration that uses unknown variables is rejected before it can
+    // reach the shared owner.
+    let invalid = TaskTemplate {
+        label: "broken".into(),
+        command: "echo".into(),
+        args: vec!["${ZED_NOT_A_REAL_VARIABLE}".into()],
+        ..Default::default()
+    };
+    let error = inventory
+        .update(cx, |inventory, _| {
+            inventory
+                .save_named_run_configuration(TaskSettingsLocation::Global(tasks_file()), invalid)
+        })
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("uses unknown variables"), "{error}");
+
+    // Worktree-scope configurations are retained under their worktree only.
+    let worktree_id = WorktreeId::from_usize(0);
+    let worktree_configuration = TaskTemplate {
+        label: "provider-worktree-build".into(),
+        command: "gradle".into(),
+        args: vec!["--offline".into(), "test".into()],
+        ..Default::default()
+    };
+    inventory.update(cx, |inventory, _| {
+        inventory
+            .save_named_run_configuration(
+                TaskSettingsLocation::Worktree(SettingsLocation {
+                    worktree_id,
+                    path: rel_path(".zed"),
+                }),
+                worktree_configuration.clone(),
+            )
+            .unwrap();
+    });
+    let admitted = inventory
+        .update(cx, |inventory, cx| {
+            inventory.task_template_by_label(None, Some(worktree_id), "provider-worktree-build", cx)
+        })
+        .await;
+    assert_eq!(admitted.as_ref(), Some(&worktree_configuration));
+    let admitted = inventory
+        .update(cx, |inventory, cx| {
+            inventory.task_template_by_label(None, None, "provider-worktree-build", cx)
+        })
+        .await;
+    assert!(
+        admitted.is_none(),
+        "a worktree-saved configuration is not a user configuration"
+    );
+}
+
 async fn test_reloading_debug_scenarios(cx: &mut TestAppContext) {
     init_test(cx);
     let inventory = cx.update(|cx| Inventory::new(cx));

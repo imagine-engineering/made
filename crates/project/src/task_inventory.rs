@@ -1771,6 +1771,74 @@ impl Inventory {
         Ok(())
     }
 
+    /// Persists one named run configuration into the project or user task file
+    /// through the existing file-based owner: a saved task with the same label
+    /// is replaced in place, the other saved tasks are preserved, and the
+    /// merged content is admitted exactly like an edited tasks file. Returns
+    /// the complete JSON array for the caller to write back through the
+    /// existing task-file owner.
+    pub fn save_named_run_configuration(
+        &mut self,
+        location: TaskSettingsLocation<'_>,
+        template: TaskTemplate,
+    ) -> Result<String, InvalidSettingsError> {
+        let file_path = match &location {
+            TaskSettingsLocation::Global(path) => path.to_path_buf(),
+            TaskSettingsLocation::Worktree(location) => {
+                location.path.as_std_path().join(task_file_name())
+            }
+        };
+        let invalid = |message: String| InvalidSettingsError::Tasks {
+            path: file_path.clone(),
+            message,
+        };
+        let unknown_variables = template.unknown_variables();
+        if !unknown_variables.is_empty() {
+            let variables_list = unknown_variables
+                .iter()
+                .map(|variable| format!("${variable}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(invalid(format!(
+                "Task '{}' uses unknown variables: {}",
+                template.label, variables_list
+            )));
+        }
+        let label = template.label.clone();
+        let mut saved = match &location {
+            TaskSettingsLocation::Global(path) => self
+                .templates_from_settings
+                .global
+                .get(*path)
+                .cloned()
+                .unwrap_or_default(),
+            TaskSettingsLocation::Worktree(location) => self
+                .templates_from_settings
+                .worktree
+                .get(&location.worktree_id)
+                .and_then(|directories| directories.get(location.path))
+                .cloned()
+                .unwrap_or_default(),
+        }
+        .into_iter()
+        .map(|template| serde_json::to_value(&template))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| invalid(format!("Saved tasks could not be serialized: {error}")))?;
+        let new_entry = serde_json::to_value(&template)
+            .map_err(|error| invalid(format!("Task '{label}' could not be saved: {error}")))?;
+        match saved
+            .iter_mut()
+            .find(|entry| entry.get("label").and_then(serde_json::Value::as_str) == Some(&label))
+        {
+            Some(entry) => *entry = new_entry,
+            None => saved.push(new_entry),
+        }
+        let json = serde_json::to_string_pretty(&saved)
+            .map_err(|error| invalid(format!("Saved tasks could not be serialized: {error}")))?;
+        self.update_file_based_tasks(location, Some(&json))?;
+        Ok(json)
+    }
+
     /// Updates in-memory task metadata from the JSON string given.
     /// Will fail if the JSON is not a valid array of objects, but will continue if any object will not parse into a [`TaskTemplate`].
     ///
