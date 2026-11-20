@@ -75,6 +75,7 @@ pub(super) struct DynamicRegistrations {
         DocumentSelectorRegistrations<lsp::DocumentOnTypeFormattingOptions>,
     pub(super) formatting_selectors: DocumentSelectorRegistrations<()>,
     rename: CapabilityRegistrations<OneOf<bool, lsp::RenameOptions>>,
+    pub(super) rename_selectors: DocumentSelectorRegistrations<OneOf<bool, lsp::RenameOptions>>,
     code_action: CapabilityRegistrations<lsp::CodeActionProviderCapability>,
     definition: CapabilityRegistrations<OneOf<bool, lsp::DefinitionOptions>>,
     completion: CapabilityRegistrations<lsp::CompletionOptions>,
@@ -208,7 +209,7 @@ impl<T: Clone> DocumentSelectorRegistrations<T> {
 }
 
 impl LspStore {
-    fn register_formatting_selector<T: Clone>(
+    fn register_document_selector<T: Clone>(
         &mut self,
         server_id: LanguageServerId,
         id: String,
@@ -225,7 +226,7 @@ impl LspStore {
         selectors(registrations).register(id, selector, options)
     }
 
-    fn unregister_formatting_selector<T: Clone>(
+    fn unregister_document_selector<T: Clone>(
         &mut self,
         server_id: LanguageServerId,
         id: &str,
@@ -498,9 +499,9 @@ impl LspStore {
                     }
                 }
                 "textDocument/rangeFormatting" => {
-                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
-                    self.register_formatting_selector(
+                    self.register_document_selector(
                         server_id,
                         reg.id.clone(),
                         selector,
@@ -518,13 +519,13 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/onTypeFormatting" => {
-                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     if let Some(options) = reg
                         .register_options
                         .map(serde_json::from_value::<lsp::DocumentOnTypeFormattingOptions>)
                         .transpose()?
                     {
-                        self.register_formatting_selector(
+                        self.register_document_selector(
                             server_id,
                             reg.id.clone(),
                             selector,
@@ -543,9 +544,9 @@ impl LspStore {
                     }
                 }
                 "textDocument/formatting" => {
-                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
-                    self.register_formatting_selector(
+                    self.register_document_selector(
                         server_id,
                         reg.id.clone(),
                         selector,
@@ -563,7 +564,15 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rename" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        options.clone(),
+                        |registrations| &mut registrations.rename_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -956,7 +965,7 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rangeFormatting" => {
-                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
                         &mut registrations.range_formatting_selectors
                     });
                     self.unregister_dynamic_capability(
@@ -968,7 +977,7 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/onTypeFormatting" => {
-                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
                         &mut registrations.on_type_formatting_selectors
                     });
                     self.unregister_dynamic_capability(
@@ -980,7 +989,7 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/formatting" => {
-                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
                         &mut registrations.formatting_selectors
                     });
                     self.unregister_dynamic_capability(
@@ -992,6 +1001,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rename" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.rename_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -1205,7 +1217,7 @@ impl LspStore {
     }
 }
 
-fn parse_formatting_selector(
+fn parse_document_selector(
     options: Option<&serde_json::Value>,
 ) -> Result<Option<lsp::DocumentSelector>> {
     Ok(options

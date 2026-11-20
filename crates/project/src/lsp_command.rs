@@ -106,11 +106,12 @@ pub trait LspCommand: 'static + Sized + Send + std::fmt::Debug {
         path: &Path,
         buffer: &Buffer,
         language_server: &Arc<LanguageServer>,
+        capabilities: AdapterServerCapabilities,
         cx: &App,
     ) -> Result<
         LspParamsOrResponse<<Self::LspRequest as lsp::request::Request>::Params, Self::Response>,
     > {
-        if self.check_capabilities(language_server.adapter_server_capabilities()) {
+        if self.check_capabilities(capabilities) {
             Ok(LspParamsOrResponse::Params(self.to_lsp(
                 path,
                 buffer,
@@ -425,13 +426,10 @@ impl LspCommand for PrepareRename {
         path: &Path,
         buffer: &Buffer,
         language_server: &Arc<LanguageServer>,
+        capabilities: AdapterServerCapabilities,
         cx: &App,
     ) -> Result<LspParamsOrResponse<lsp::TextDocumentPositionParams, PrepareRenameResponse>> {
-        let rename_provider = language_server
-            .adapter_server_capabilities()
-            .server_capabilities
-            .rename_provider;
-        match rename_provider {
+        match capabilities.server_capabilities.rename_provider {
             Some(lsp::OneOf::Right(RenameOptions {
                 prepare_provider: Some(true),
                 ..

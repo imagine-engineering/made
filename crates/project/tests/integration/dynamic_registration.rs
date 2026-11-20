@@ -1738,6 +1738,112 @@ async fn test_multiple_did_change_watched_files_registrations(cx: &mut gpui::Tes
 }
 
 #[gpui::test]
+async fn test_dynamic_rename_respects_document_selector(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, first, second, _handles) = setup_document_selector_test(
+        cx,
+        lsp::ServerCapabilities {
+            rename_provider: Some(lsp::OneOf::Right(lsp::RenameOptions {
+                prepare_provider: Some(true),
+                work_done_progress_options: Default::default(),
+            })),
+            ..Default::default()
+        },
+    )
+    .await;
+    let prepare_requests = Arc::new(Mutex::new(Vec::new()));
+    let _prepare_handler =
+        server.set_request_handler::<lsp::request::PrepareRenameRequest, _, _>({
+            let prepare_requests = prepare_requests.clone();
+            move |params, _| {
+                prepare_requests.lock().push(params.text_document.uri);
+                async {
+                    Ok(Some(lsp::PrepareRenameResponse::DefaultBehavior {
+                        default_behavior: true,
+                    }))
+                }
+            }
+        });
+    let rename_requests = Arc::new(Mutex::new(Vec::new()));
+    let _rename_handler = server.set_request_handler::<lsp::request::Rename, _, _>({
+        let rename_requests = rename_requests.clone();
+        move |params, _| {
+            rename_requests
+                .lock()
+                .push(params.text_document_position.text_document.uri);
+            async { Ok(None) }
+        }
+    });
+    let method = "textDocument/rename";
+    register_capability(
+        &server,
+        method,
+        "rename-a",
+        Some(json!({
+            "documentSelector": [{ "language": "rust", "scheme": "file", "pattern": "**/a.rs" }],
+            "prepareProvider": true,
+        })),
+    )
+    .await;
+    let exercise = |buffer: &Entity<Buffer>, cx: &mut gpui::TestAppContext| {
+        project.update(cx, |project, cx| {
+            (
+                project.prepare_rename(buffer.clone(), 0usize, cx),
+                project.perform_rename(buffer.clone(), 0usize, "renamed".into(), cx),
+            )
+        })
+    };
+    for candidate in [&first, &second] {
+        let (prepare, rename) = exercise(candidate, cx);
+        prepare.await.unwrap();
+        rename.await.unwrap();
+    }
+    let first_uri = Uri::from_file_path(path!("/the-root/a.rs")).unwrap();
+    let second_uri = Uri::from_file_path(path!("/the-root/b.rs")).unwrap();
+    assert_eq!(
+        mem::take(&mut *prepare_requests.lock()),
+        std::slice::from_ref(&first_uri),
+        "only the matching document may reach Prepare Rename",
+    );
+    assert_eq!(
+        mem::take(&mut *rename_requests.lock()),
+        std::slice::from_ref(&first_uri),
+        "only the matching document may reach Rename",
+    );
+
+    register_capability(
+        &server,
+        method,
+        "rename-b",
+        Some(json!({
+            "documentSelector": [{ "pattern": "**/b.rs" }],
+            "prepareProvider": false,
+        })),
+    )
+    .await;
+    for candidate in [&first, &second] {
+        let (prepare, rename) = exercise(candidate, cx);
+        prepare.await.unwrap();
+        rename.await.unwrap();
+    }
+    assert_eq!(
+        mem::take(&mut *prepare_requests.lock()),
+        std::slice::from_ref(&first_uri)
+    );
+    assert_eq!(
+        mem::take(&mut *rename_requests.lock()),
+        [first_uri, second_uri.clone()],
+    );
+
+    unregister_capabilities(&server, method, &["rename-a", "rename-b"]).await;
+    let (prepare, rename) = exercise(&second, cx);
+    prepare.await.unwrap();
+    rename.await.unwrap();
+    assert_eq!(&*prepare_requests.lock(), std::slice::from_ref(&second_uri));
+    assert_eq!(&*rename_requests.lock(), &[second_uri]);
+}
+
+#[gpui::test]
 async fn test_dynamic_document_change_selectors(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     let (project, server, first, second, _handles) = setup_document_sync_test(cx).await;
