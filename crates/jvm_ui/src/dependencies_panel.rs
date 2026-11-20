@@ -7135,6 +7135,208 @@ mod tests {
     }
 
     #[test]
+    fn refresh_reconciles_rows_and_selections_with_import_generations() {
+        use project::jvm_project::MavenProject;
+        fn maven_module(worktree_id: WorktreeId, directory: &str) -> JdtlsProject {
+            JdtlsProject {
+                module_root: path(worktree_id, directory),
+                membership: JdtlsProjectMembership::Unknown,
+                imported_build_kind: project::jvm_project::JdtlsImportedBuildKind::Unknown,
+                source_roots: Vec::new(),
+                project_references: Vec::new(),
+                library_entries: 0,
+                library_files: Vec::new(),
+                library_artifacts: Vec::new(),
+                project_vm_known: false,
+                project_vm_java_major: None,
+                server_launch_java_major: None,
+                java_source_level: None,
+                java_target_level: None,
+                gradle: None,
+                maven: Some(MavenProject {
+                    dependency_graph: None,
+                    pom: path(worktree_id, &format!("{directory}/pom.xml")),
+                    modules: Vec::new(),
+                    group_id: "evidence".into(),
+                    artifact_id: directory.replace('/', "-"),
+                    version: "1.0".into(),
+                    packaging: "jar".into(),
+                    profiles: BTreeMap::new(),
+                    profile_definitions_known: false,
+                    profile_definitions: Vec::new(),
+                    reactor_position: None,
+                    reactor_order_problem: None,
+                    plugins: Vec::new(),
+                    lifecycles: Vec::new(),
+                }),
+            }
+        }
+        fn snapshot(
+            worktree_id: WorktreeId,
+            server_id: lsp::LanguageServerId,
+            generation: u64,
+            modules: Vec<JdtlsProject>,
+        ) -> JdtlsProjectSnapshot {
+            JdtlsProjectSnapshot {
+                metadata: Default::default(),
+                server_id,
+                worktree_id,
+                generation,
+                partial: false,
+                projects: modules,
+            }
+        }
+        let worktree_id = WorktreeId::from_usize(1);
+        let server_id = lsp::LanguageServerId(1);
+        let view = BuildToolView::Dependencies;
+        let preferences = BuildViewPreferences::default();
+        let before = snapshot(
+            worktree_id,
+            server_id,
+            1,
+            vec![
+                maven_module(worktree_id, "application"),
+                maven_module(worktree_id, "service"),
+            ],
+        );
+        let (before_rows, before_navigation) = project_rows_for_view(&before, view, &preferences);
+        let before_selections = graph_selections_for_snapshot(&before, true, view);
+        assert!(
+            before_selections.len() >= 2,
+            "each Maven module offers graph selections"
+        );
+        assert!(
+            before_selections
+                .values()
+                .all(|selection| selection.worktree_id() == worktree_id),
+            "selections stay scoped to the owning worktree"
+        );
+        // A reload advances the causal import generation: one module is removed,
+        // one is retained with unchanged identity and one is added.
+        let after = snapshot(
+            worktree_id,
+            server_id,
+            2,
+            vec![
+                maven_module(worktree_id, "application"),
+                maven_module(worktree_id, "tests"),
+            ],
+        );
+        let (after_rows, after_navigation) = project_rows_for_view(&after, view, &preferences);
+        let retained = |rows: &[LanguageToolNode], label: &str| {
+            rows.iter()
+                .find(|row| row.label == label)
+                .map(|row| row.id.clone())
+                .expect("module row")
+        };
+        let before_application = retained(&before_rows, "application");
+        let after_application = retained(&after_rows, "application");
+        assert_eq!(
+            before_application, after_application,
+            "refresh preserves the valid identity of a retained module"
+        );
+        assert_eq!(
+            before_navigation.get(&before_application),
+            after_navigation.get(&after_application),
+            "retained module navigation target stays identical across generations"
+        );
+        assert!(
+            after_navigation.values().all(|target| match target {
+                DependencyNavigationTarget::ModuleManifest { root, .. }
+                | DependencyNavigationTarget::SourceDirectory { path: root, .. } => {
+                    root.worktree_id == worktree_id && !root.path.as_unix_str().starts_with('/')
+                }
+            }),
+            "navigation targets stay worktree-scoped and never resolve a client host path"
+        );
+        assert!(
+            !after_rows.iter().any(|row| row.label == "service"),
+            "removed modules stop being actionable after the reload"
+        );
+        assert!(after_rows.iter().any(|row| row.label == "tests"));
+        // The current projection wins and stale projections are omitted with a
+        // partial notice, so held selections cannot act on the old generation.
+        let (projections, omitted_stale) =
+            provider_projections_for_view(Some((&after, true)), None, view, &preferences);
+        assert_eq!(projections.len(), 1);
+        assert_eq!(projections[0].generation, 2);
+        assert!(!omitted_stale);
+        let kotlin_worktree = WorktreeId::from_usize(2);
+        let kotlin_current = project::jvm_project::ProviderProjectSnapshot {
+            metadata: (),
+            server_id: lsp::LanguageServerId(3),
+            worktree_id: kotlin_worktree,
+            generation: 5,
+            partial: false,
+            projects: vec![project::jvm_project::KotlinWorkspaceProject {
+                name: "kotlin".into(),
+                build_system: project::jvm_project::KotlinBuildSystem::Unknown,
+                module_root: path(kotlin_worktree, "kotlin"),
+                source_roots: Vec::new(),
+                dependencies: Vec::new(),
+                unidentified_libraries: 0,
+            }],
+        };
+        let (projections, omitted_stale) = provider_projections_for_view(
+            Some((&before, false)),
+            Some((&kotlin_current, true)),
+            view,
+            &preferences,
+        );
+        assert_eq!(
+            projections.len(),
+            1,
+            "stale projections yield to the current one"
+        );
+        assert_eq!(projections[0].generation, 5);
+        assert!(
+            omitted_stale,
+            "stale rows are reported as omitted, not silently mixed"
+        );
+        let held = before_selections
+            .values()
+            .find(|selection| selection.worktree_id() == worktree_id)
+            .expect("held selection");
+        assert!(
+            !held.matches(&after, true),
+            "a held selection from the previous import generation is denied"
+        );
+        assert!(
+            held.matches(&before, true),
+            "the same selection still matches its own generation"
+        );
+        let advanced = graph_selections_for_snapshot(&after, true, view);
+        let refreshed = advanced
+            .values()
+            .find(|selection| selection.worktree_id() == worktree_id)
+            .expect("refreshed selection");
+        assert!(
+            refreshed.matches(&after, true),
+            "the refreshed selection acts on the advanced generation"
+        );
+        // A different (remote) worktree scope never resolves on the client host.
+        let remote_worktree = WorktreeId::from_usize(9);
+        let remote = snapshot(
+            remote_worktree,
+            lsp::LanguageServerId(2),
+            3,
+            vec![maven_module(remote_worktree, "application")],
+        );
+        let (_, remote_navigation) = project_rows_for_view(&remote, view, &preferences);
+        assert!(!remote_navigation.is_empty());
+        assert!(remote_navigation.values().all(|target| match target {
+            DependencyNavigationTarget::ModuleManifest { root, .. }
+            | DependencyNavigationTarget::SourceDirectory { path: root, .. } => {
+                root.worktree_id == remote_worktree
+            }
+        }));
+        let remote_selection = graph_selections_for_snapshot(&remote, true, view);
+        assert!(remote_selection.values().all(|selection| {
+            selection.worktree_id() == remote_worktree && !selection.matches(&before, true)
+        }));
+    }
+
+    #[test]
     fn basic_maven_phases_preserve_provider_order_and_identities() {
         use project::jvm_project::{
             MavenGoal, MavenGoalParameter, MavenLifecycle, MavenPlugin, MavenProject,
