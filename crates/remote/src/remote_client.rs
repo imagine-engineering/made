@@ -2928,6 +2928,10 @@ mod tests {
                 Some(proto::envelope::Payload::FlushBufferedMessages(_))
             ));
 
+            assert_eq!(
+                flush.ack_id, startup.ack_id,
+                "the readiness acknowledgement must not acknowledge earlier unreplayed messages"
+            );
             if reply_to_flush {
                 proxy_input
                     .unbounded_send(proto::Ack {}.into_envelope(101, Some(flush.id), None))
@@ -3776,7 +3780,13 @@ impl ChannelClient {
                     continue;
                 }
 
-                this.max_received.store(incoming.id, SeqCst);
+                // Startup and flush acknowledgements are sent outside the
+                // replay buffer and can arrive before older buffered messages.
+                if incoming.ack_id.is_some()
+                    || !matches!(incoming.payload, Some(proto::envelope::Payload::Ack(_)))
+                {
+                    this.max_received.store(incoming.id, SeqCst);
+                }
 
                 if let Some(request_id) = incoming.responding_to {
                     let request_id = MessageId(request_id);
