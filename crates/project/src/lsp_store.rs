@@ -18112,6 +18112,15 @@ impl LspStore {
                             authorize_metadata(Some(plan), store, cx)?;
                             plan.resolve_metadata_associations(associations, &worktree.read(cx).snapshot(), &server)
                         }).map_err(|_| anyhow!("Gradle project closed during metadata ownership validation"))??;
+                        for scope in plan.initialized_roots().to_vec() {
+                            this.update(cx, |store, cx| authorize_metadata(Some(plan), store, cx))
+                                .map_err(|_| anyhow!("Gradle project closed before cached composite topology read"))??;
+                            let snapshot = this.update(cx, |_, cx| worktree.read(cx).snapshot())
+                                .map_err(|_| anyhow!("Gradle project closed during cached composite topology read"))?;
+                            plan.capture_grouping_roots(&scope, server.clone(), request_timeout, &snapshot).await?;
+                            this.update(cx, |store, cx| authorize_metadata(Some(plan), store, cx))
+                                .map_err(|_| anyhow!("Gradle project closed during cached composite topology read"))??;
+                        }
                         let verify_ownership = async |cx: &mut AsyncApp| -> Result<()> {
                             let mut identities = BTreeSet::new();
                             for scope in plan.initialized_roots() {

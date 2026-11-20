@@ -7707,6 +7707,16 @@ pub(crate) struct ScopedGradleAssociation {
     java_nature: bool,
 }
 
+/// Provider-proven composite grouping root captured from the qualified
+/// cached topology: `present` marks a visible same-worktree directory and
+/// `imported` distinguishes imported membership from model-only grouping.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct GradleGroupingRoot {
+    pub(crate) build: PathBuf,
+    pub(crate) present: bool,
+    pub(crate) imported: bool,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct ScopedGradleMetadataQuery {
     worktree_root: PathBuf,
@@ -7750,6 +7760,8 @@ pub(crate) struct ScopedGradleImports {
     roots: Vec<PathBuf>,
     initialized_roots: Vec<PathBuf>,
     imports: Vec<SelectedGradleImport>,
+    grouping_roots: Vec<GradleGroupingRoot>,
+    captured_scopes: Vec<PathBuf>,
     path_style: PathStyle,
 }
 
@@ -7855,6 +7867,8 @@ impl ScopedGradleImports {
             roots,
             initialized_roots: Vec::new(),
             imports: Vec::new(),
+            grouping_roots: Vec::new(),
+            captured_scopes: Vec::new(),
             path_style: snapshot.path_style(),
         }))
     }
@@ -7898,6 +7912,8 @@ impl ScopedGradleImports {
             roots: Vec::new(),
             initialized_roots: Vec::new(),
             imports: Vec::new(),
+            grouping_roots: Vec::new(),
+            captured_scopes: Vec::new(),
             path_style: snapshot.path_style(),
         })
     }
@@ -7937,6 +7953,7 @@ impl ScopedGradleImports {
                 [
                     "groovy.gradle.projectDetails.v4",
                     "groovy.gradle.importedBuildRoots",
+                    "groovy.gradle.importedBuildRoots.v2",
                     "groovy.gradle.importedProjects",
                 ]
                 .iter()
@@ -8003,6 +8020,10 @@ impl ScopedGradleImports {
         if self.is_empty_selection() {
             return Ok(Vec::new());
         }
+        ensure!(
+            !self.grouping_roots.is_empty(),
+            "Gradle cached composite grouping roots are unavailable; refresh or reimport before synchronizing metadata"
+        );
         self.imports.iter().filter(|import| !self.ignored.iter().any(|ignored| import.root.starts_with(ignored)))
             .map(|import| {
                 let (workspace, build) = import.scoped_roots()?;
@@ -8099,6 +8120,8 @@ impl ScopedGradleImports {
             roots: Vec::new(),
             initialized_roots: Vec::new(),
             imports: Vec::new(),
+            grouping_roots: Vec::new(),
+            captured_scopes: Vec::new(),
             path_style: snapshot.path_style(),
         })
     }
@@ -8252,6 +8275,239 @@ impl ScopedGradleImports {
         }
         rows.sort_by(|left, right| left.project.cmp(&right.project));
         Ok(rows)
+    }
+
+    pub(crate) async fn capture_grouping_roots(
+        &mut self,
+        scope: &Path,
+        server: Arc<LanguageServer>,
+        request_timeout: Duration,
+        snapshot: &Snapshot,
+    ) -> Result<()> {
+        self.validate_initialized_folders(&server)?;
+        ensure!(
+            self.initialized_roots.iter().any(|root| root == scope),
+            "Gradle cached composite scope changed; refresh before synchronizing metadata"
+        );
+        ensure!(
+            !self
+                .captured_scopes
+                .iter()
+                .any(|captured| captured == scope),
+            "Gradle cached composite grouping roots are already captured; refresh before retrying"
+        );
+        let parameters = lsp::ExecuteCommandParams {
+            command: "groovy.gradle.importedBuildRoots.v2".into(),
+            arguments: vec![
+                json!({"rootUri": selected_import_uri(scope, true)?, "cachedOnly": true}),
+            ],
+            ..Default::default()
+        };
+        let value = request_selected_jdtls_phase(server, &parameters, request_timeout, "Gradle",
+            "cached composite topology read",
+            "Current Gradle composite ownership is unavailable; check extension setup and refresh or reimport before synchronizing metadata")
+            .await?;
+        let grouping = self.validate_grouping_roots_reply(scope, value, snapshot)?;
+        self.grouping_roots.extend(grouping);
+        self.captured_scopes.push(scope.to_path_buf());
+        Ok(())
+    }
+
+    fn validate_grouping_roots_reply(
+        &self,
+        scope: &Path,
+        value: Value,
+        snapshot: &Snapshot,
+    ) -> Result<Vec<GradleGroupingRoot>> {
+        let invalid = || {
+            anyhow::anyhow!(
+                "Gradle cached composite topology is invalid, incomplete or stale; preserve settings and refresh or reimport before synchronizing metadata"
+            )
+        };
+        let bounded = |value: &Value| {
+            value
+                .as_str()
+                .is_some_and(|text| text.len() <= 4096 && !text.chars().any(char::is_control))
+        };
+        let object = value.as_object().ok_or_else(invalid)?;
+        ensure!(
+            object.len() == 8
+                && object.get("rootUri").is_some_and(bounded)
+                && object.get("topologies").and_then(Value::as_array).is_some()
+                && object
+                    .get("projects")
+                    .and_then(Value::as_array)
+                    .is_some_and(|projects| projects.len() <= 128
+                        && projects.iter().all(|project| project
+                            .as_object()
+                            .is_some_and(|object| object.len() == 3)
+                            && project.get("projectUri").is_some_and(bounded)
+                            && project.get("buildRootUri").is_some_and(bounded))),
+            "{}",
+            invalid()
+        );
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Reply {
+            version: u32,
+            root_uri: String,
+            cached_only: bool,
+            read_only: bool,
+            partial: bool,
+            full_synchronization_known: bool,
+            projects: Vec<Record>,
+            topologies: Vec<Topology>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Record {
+            project_uri: String,
+            build_root_uri: String,
+            // Typed as a raw value so the v2 topology reply is validated for
+            // boolean nature without depending on the v1 membership meaning.
+            java_nature: serde_json::Value,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Topology {
+            connection_root_uri: String,
+            topology_known: bool,
+            projects: Vec<TopologyRecord>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct TopologyRecord {
+            build_root_uri: String,
+            project_uri: String,
+            project_path: String,
+        }
+        let reply: Reply = serde_json::from_value(value).map_err(|_| invalid())?;
+        ensure!(
+            reply.version == 2
+                && reply.cached_only
+                && reply.read_only
+                && !reply.full_synchronization_known
+                && imported_build_identity_path(&reply.root_uri).map_err(|_| invalid())? == scope,
+            "{}",
+            invalid()
+        );
+        ensure!(
+            reply
+                .projects
+                .iter()
+                .all(|record| record.java_nature.is_boolean()),
+            "{}",
+            invalid()
+        );
+        let imported_builds = reply
+            .projects
+            .iter()
+            .map(|record| (record.project_uri.as_str(), record.build_root_uri.as_str()))
+            .collect::<HashMap<&str, &str>>();
+        // The imported membership is reported separately and stays complete even
+        // when the topology cache is unknown; partial must name that honestly.
+        let any_unknown = reply
+            .topologies
+            .iter()
+            .any(|topology| !topology.topology_known);
+        ensure!(
+            reply.partial == any_unknown
+                && reply
+                    .topologies
+                    .iter()
+                    .all(|topology| { topology.topology_known || topology.projects.is_empty() }),
+            "{}",
+            invalid()
+        );
+        let mut grouping = BTreeSet::new();
+        let mut identities = BTreeSet::new();
+        let mut seen_roots = BTreeSet::new();
+        let mut total = 0;
+        for topology in &reply.topologies {
+            let connection = imported_build_identity_path(&topology.connection_root_uri)
+                .map_err(|_| invalid())?;
+            ensure!(connection.starts_with(scope), "{}", invalid());
+            let mut topology_roots = BTreeSet::new();
+            for record in &topology.projects {
+                let build =
+                    imported_build_identity_path(&record.build_root_uri).map_err(|_| invalid())?;
+                let project =
+                    imported_build_identity_path(&record.project_uri).map_err(|_| invalid())?;
+                ensure!(
+                    build.starts_with(scope)
+                        && project.starts_with(&build)
+                        && record.project_path.starts_with(':')
+                        && !record.project_path.is_empty()
+                        && record.project_path.len() <= 4096
+                        && !record.project_path.chars().any(char::is_control)
+                        && record
+                            .project_path
+                            .chars()
+                            .filter(|ch| *ch == ':' || *ch == '/')
+                            .count()
+                            <= 128
+                        && identities.insert((project.clone(), record.project_path.clone())),
+                    "{}",
+                    invalid()
+                );
+                // The v1 cached ownership and the v2 topology describe the same
+                // cached hierarchy; a participant row contradicting the v1
+                // composite build root for the same project is a stale or
+                // malformed cache. Included builds are the exception: their v1
+                // row names the composite connection root while their
+                // participant build root is the included build itself.
+                if let Some(v1_build) = imported_builds.get(record.project_uri.as_str()) {
+                    let v1_build = imported_build_identity_path(v1_build).map_err(|_| invalid())?;
+                    ensure!(v1_build == build || v1_build == connection, "{}", invalid());
+                }
+                topology_roots.insert(build);
+                total += 1;
+                ensure!(total <= 128, "{}", invalid());
+            }
+            // One participant build root belongs to exactly one connection;
+            // the same root under two connections is an overlapping refusal.
+            ensure!(
+                topology_roots
+                    .iter()
+                    .all(|root| seen_roots.insert(root.clone())),
+                "{}",
+                invalid()
+            );
+            grouping.extend(topology_roots);
+        }
+        ensure!(!any_unknown || grouping.is_empty(), "{}", invalid());
+        let imported = self
+            .cached_associations
+            .as_ref()
+            .map(|rows| {
+                rows.iter()
+                    .map(|row| row.build.clone())
+                    .collect::<BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        let mut roots = Vec::with_capacity(grouping.len());
+        for build in grouping {
+            let confined = confined_project_path(&build, &self.root, self.worktree_id, self.path_style)
+                .context("Gradle cached composite grouping root is outside this project; refresh or reimport before synchronizing metadata")?;
+            let entry = snapshot.entry_for_path(&confined.path);
+            ensure!(
+                entry.is_none_or(|entry| entry.canonical_path.is_none() && !entry.is_ignored),
+                "Gradle cached composite grouping root is private, aliased or hidden; review visibility and refresh or reimport before synchronizing metadata"
+            );
+            let present = match entry {
+                Some(entry) => {
+                    ensure!(entry.is_dir(), "{}", invalid());
+                    true
+                }
+                None => false,
+            };
+            roots.push(GradleGroupingRoot {
+                present,
+                imported: imported.contains(&build),
+                build,
+            });
+        }
+        Ok(roots)
     }
 
     pub(crate) fn resolve_cached_associations(
@@ -15769,6 +16025,11 @@ mod tests {
             }];
             plan.resolve_metadata_associations(rows, &snapshot, &server)
                 .expect("known active module");
+            plan.grouping_roots = vec![GradleGroupingRoot {
+                build: root.join("first"),
+                present: true,
+                imported: true,
+            }];
             let queries = plan.metadata_queries().expect("queries");
             assert_eq!(queries.len(), 1);
             assert_eq!(queries[0].workspace, root);
@@ -15818,6 +16079,11 @@ mod tests {
         let mut defaults =
             ScopedGradleImports::for_metadata(&snapshot, snapshot.id(), &Default::default())
                 .expect("default known roots");
+        defaults.grouping_roots = vec![GradleGroupingRoot {
+            build: root.to_path_buf(),
+            present: true,
+            imported: true,
+        }];
         defaults
             .bind_initialized_folders(&server)
             .expect("parent folder");
@@ -19292,6 +19558,134 @@ mod tests {
                 &root.replacen("file://", "file:", 1),
             );
         serde_json::from_str(&fixture).expect("qualified SDK fixture with platform URI root")
+    }
+
+    fn scoped_gradle_grouping_fixture(base: &Path) -> Value {
+        let scope = selected_import_uri(base, true)
+            .expect("fixture scope")
+            .to_string();
+        let fixture =
+            include_str!("../test_data/groovy_jvm_gradle/cached-composite-grouping-v2.json")
+                .replace("file:///groovy-composite-fixture/", &scope)
+                .replace(
+                    "file:/groovy-composite-fixture/",
+                    &scope.replacen("file://", "file:", 1),
+                );
+        serde_json::from_str(&fixture).expect("qualified SDK fixture with platform URI scope")
+    }
+
+    #[gpui::test]
+    async fn scoped_gradle_grouping_roots_capture_present_absent_and_model_only(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let base = Path::new(util::path!("/groovy-composite-grouping")).to_path_buf();
+        let scope = base.join("primary");
+        let (fs, project) = default_root_fixture(
+            base.to_str().expect("base"),
+            json!({
+                "primary": {
+                    "build.gradle": "root",
+                    "application": {"build.gradle": "application"},
+                    "library": {"build.gradle": "library"}
+                }
+            }),
+            cx,
+        )
+        .await;
+        let _fs = fs;
+        let snapshot = default_root_snapshot(&project, cx);
+        let settings = settings::GradleBuildSettingsContent {
+            selected_build_files: Some(vec!["primary/build.gradle".into()]),
+            ..Default::default()
+        };
+        let mut plan = ScopedGradleImports::for_metadata(&snapshot, snapshot.id(), &settings)
+            .expect("metadata selection");
+        plan.cached_associations = Some(vec![ScopedGradleAssociation {
+            scope: scope.clone(),
+            project: scope.join("application"),
+            build: scope.clone(),
+            java_nature: true,
+        }]);
+        let fixture = scoped_gradle_grouping_fixture(&base);
+        let grouping = plan
+            .validate_grouping_roots_reply(&scope, fixture["cachedV2"].clone(), &snapshot)
+            .expect("qualified cached topology");
+        assert_eq!(
+            grouping
+                .iter()
+                .map(|root| (root.build.clone(), root.present, root.imported))
+                .collect::<Vec<_>>(),
+            vec![
+                (scope.clone(), true, true),
+                (scope.join("included"), false, false),
+            ],
+            "grouping roots stay distinct from imported membership and absent directories stay model-only"
+        );
+        let miss = plan
+            .validate_grouping_roots_reply(&scope, fixture["cachedMiss"].clone(), &snapshot)
+            .expect("cache miss stays unknown without invented topology");
+        assert!(miss.is_empty());
+        plan.grouping_roots = miss;
+        assert!(
+            plan.metadata_queries()
+                .expect_err("unknown cache refuses metadata configuration")
+                .to_string()
+                .contains("refresh or reimport"),
+            "cache miss recovery names refresh or reimport"
+        );
+        let mut plan = ScopedGradleImports::for_metadata(&snapshot, snapshot.id(), &settings)
+            .expect("metadata selection");
+        plan.cached_associations = Some(vec![ScopedGradleAssociation {
+            scope: scope.clone(),
+            project: scope.join("application"),
+            build: scope.clone(),
+            java_nature: true,
+        }]);
+        let mut duplicate = fixture["cachedV2"].clone();
+        duplicate["topologies"][0]["projects"].as_array_mut().expect("rows").push(
+            json!({"buildRootUri": scope_uri(&scope), "projectUri": scope_uri(&scope), "projectPath": ":"}),
+        );
+        assert!(
+            plan.validate_grouping_roots_reply(&scope, duplicate, &snapshot)
+                .is_err(),
+            "duplicate cached project identities are refused atomically"
+        );
+        let mut overlapping = fixture["cachedV2"].clone();
+        overlapping["topologies"].as_array_mut().expect("topologies").push(
+            json!({"connectionRootUri": scope_uri(&scope.join("included")), "topologyKnown": true,
+                   "projects": [{"buildRootUri": scope_uri(&scope), "projectUri": scope_uri(&scope), "projectPath": ":"}]}),
+        );
+        assert!(
+            plan.validate_grouping_roots_reply(&scope, overlapping, &snapshot)
+                .is_err(),
+            "a participant root claimed by two connections is refused atomically"
+        );
+        let mut foreign = fixture["cachedV2"].clone();
+        foreign["topologies"][0]["projects"]
+            .as_array_mut()
+            .expect("rows")
+            .push(
+                json!({"buildRootUri": "file:///foreign-elsewhere/", "projectUri": "file:///foreign-elsewhere/", "projectPath": ":"}),
+            );
+        assert!(
+            plan.validate_grouping_roots_reply(&scope, foreign, &snapshot)
+                .is_err(),
+            "foreign grouping roots are refused atomically"
+        );
+        let mut stale = fixture["cachedV2"].clone();
+        stale["topologies"][0]["topologyKnown"] = json!(false);
+        stale["partial"] = json!(true);
+        assert!(
+            plan.validate_grouping_roots_reply(&scope, stale, &snapshot)
+                .is_err(),
+            "a known topology may not masquerade as an unknown cache"
+        );
+    }
+
+    fn scope_uri(path: &Path) -> String {
+        selected_import_uri(path, true)
+            .expect("fixture URI")
+            .to_string()
     }
 
     #[test]

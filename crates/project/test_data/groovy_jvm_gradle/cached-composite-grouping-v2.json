@@ -1,0 +1,97 @@
+{
+  "cachedV2": {
+    "version": 2,
+    "rootUri": "file:///groovy-composite-fixture/primary/",
+    "projects": [
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/",
+        "javaNature": false,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/application/",
+        "javaNature": true,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/included/",
+        "javaNature": false,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/library/",
+        "javaNature": true,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      }
+    ],
+    "cachedOnly": true,
+    "readOnly": true,
+    "partial": false,
+    "fullSynchronizationKnown": false,
+    "topologies": [
+      {
+        "connectionRootUri": "file:///groovy-composite-fixture/primary/",
+        "topologyKnown": true,
+        "projects": [
+          {
+            "buildRootUri": "file:///groovy-composite-fixture/primary/",
+            "projectUri": "file:///groovy-composite-fixture/primary/",
+            "projectPath": ":"
+          },
+          {
+            "buildRootUri": "file:///groovy-composite-fixture/primary/",
+            "projectUri": "file:///groovy-composite-fixture/primary/application/",
+            "projectPath": ":application"
+          },
+          {
+            "buildRootUri": "file:///groovy-composite-fixture/primary/",
+            "projectUri": "file:///groovy-composite-fixture/primary/library/",
+            "projectPath": ":library"
+          },
+          {
+            "buildRootUri": "file:///groovy-composite-fixture/primary/included/",
+            "projectUri": "file:///groovy-composite-fixture/primary/included/",
+            "projectPath": ":"
+          }
+        ]
+      }
+    ]
+  },
+  "cachedMiss": {
+    "version": 2,
+    "rootUri": "file:///groovy-composite-fixture/primary/",
+    "projects": [
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/",
+        "javaNature": false,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/application/",
+        "javaNature": true,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/included/",
+        "javaNature": false,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      },
+      {
+        "projectUri": "file:///groovy-composite-fixture/primary/library/",
+        "javaNature": true,
+        "buildRootUri": "file:///groovy-composite-fixture/primary/"
+      }
+    ],
+    "cachedOnly": true,
+    "readOnly": true,
+    "partial": true,
+    "fullSynchronizationKnown": false,
+    "topologies": [
+      {
+        "connectionRootUri": "file:///groovy-composite-fixture/primary/",
+        "topologyKnown": false,
+        "projects": []
+      }
+    ]
+  }
+}
