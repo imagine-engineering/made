@@ -50,6 +50,9 @@ actions!(
         InspectGraphAllRootPaths,
         PinGraphSelection,
         InspectGraphPathsBetween,
+        AddGraphSelectionToSet,
+        ClearGraphSelectionSet,
+        InspectGraphSelectionSet,
         ClearGraphInspection,
         ApplySavedMavenSelection,
         ImportGradleSelection,
@@ -592,6 +595,7 @@ pub struct DependenciesPanel {
     graph_search: Entity<Editor>,
     graph_inspection: Option<GraphInspection>,
     graph_pin: Option<GraphPin>,
+    graph_selection_set: Vec<GraphPin>,
     graph_diagram_selection: Option<GraphSelection>,
     graph_diagram: Option<Entity<markdown::Markdown>>,
     position: DockPosition,
@@ -758,6 +762,7 @@ enum GraphInspectionMode {
     AllUsages,
     AllRootPaths,
     PathsBetween,
+    SelectionSetRelations,
 }
 
 impl GraphInspectionMode {
@@ -769,6 +774,7 @@ impl GraphInspectionMode {
             Self::AllUsages => "All usages",
             Self::AllRootPaths => "All root paths",
             Self::PathsBetween => "Paths to pinned dependency",
+            Self::SelectionSetRelations => "Selected set relations",
         }
     }
 }
@@ -779,6 +785,9 @@ struct GraphInspection {
     node: String,
     // The pinned dependency when the mode analyzes a pair of selections.
     anchor: Option<String>,
+    // Every member of a multi-selection analysis; the shared receipt lives
+    // in `selection`.
+    set_members: Vec<String>,
     mode: GraphInspectionMode,
 }
 
@@ -1189,12 +1198,313 @@ fn gradle_inspection_relations(
         .collect()
 }
 
+/// Bounded multi-selection analysis: the induced dependency edges over the
+/// member set and directed reachability between member pairs. Relations
+/// stay inside the induced subgraph over admitted facts; unresolved edges
+/// introduce no relation, so absence stays unproven beyond admitted facts.
+fn graph_selection_set_analysis(
+    members: &[&str],
+    edges: &[(&str, Option<&str>)],
+) -> (Vec<usize>, Vec<Vec<Option<usize>>>) {
+    let member_set: HashSet<&str> = members.iter().copied().collect();
+    let induced = edges
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (from, target))| {
+            let target = (*target).as_ref()?;
+            (member_set.contains(*from) && member_set.contains(*target)).then_some(index)
+        })
+        .collect::<Vec<_>>();
+    let mut adjacency = HashMap::<&str, Vec<&str>>::new();
+    for index in &induced {
+        let (from, target) = edges[*index];
+        if let Some(target) = target {
+            adjacency.entry(from).or_default().push(target);
+        }
+    }
+    let mut reachability = Vec::with_capacity(members.len());
+    for member in members {
+        let mut distances = HashMap::from([(*member, 0_usize)]);
+        let mut pending = VecDeque::from([*member]);
+        while let Some(node) = pending.pop_front() {
+            for next in adjacency.get(node).into_iter().flatten() {
+                if !distances.contains_key(*next) {
+                    distances.insert(*next, distances[node] + 1);
+                    pending.push_back(*next);
+                }
+            }
+        }
+        reachability.push(
+            members
+                .iter()
+                .map(|other| {
+                    if other == member {
+                        None
+                    } else {
+                        distances.get(*other).copied()
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+    }
+    (induced, reachability)
+}
+
+fn graph_selection_set_row(
+    snapshot: &JdtlsProjectSnapshot,
+    view: BuildToolView,
+    inspection: &GraphInspection,
+) -> Option<(LanguageToolNodeId, LanguageToolNode)> {
+    if inspection.mode != GraphInspectionMode::SelectionSetRelations
+        || inspection.set_members.len() < 2
+    {
+        return None;
+    }
+    let members = inspection
+        .set_members
+        .iter()
+        .map(|member| member.as_str())
+        .collect::<Vec<_>>();
+    for module in &snapshot.projects {
+        let module_id = jdtls_module_node_id(snapshot, &module.module_root, view);
+        match &inspection.selection.target {
+            GraphQueryTarget::Maven(pom) if view != BuildToolView::Gradle => {
+                let Some(maven) = module.maven.as_ref().filter(|maven| maven.pom == *pom) else {
+                    continue;
+                };
+                let graph = maven.dependency_graph.as_ref()?;
+                if members
+                    .iter()
+                    .any(|member| !graph.nodes.iter().any(|node| node.id.as_str() == *member))
+                {
+                    continue;
+                }
+                let coordinates = graph
+                    .components
+                    .iter()
+                    .map(|component| {
+                        (
+                            component.id.as_str(),
+                            format!(
+                                "{}:{}:{}:{}:{}",
+                                component.group_id,
+                                component.artifact_id,
+                                component.extension,
+                                component.classifier,
+                                component.version
+                            ),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>();
+                let edges = graph
+                    .edges
+                    .iter()
+                    .map(|edge| (edge.from_node.as_str(), Some(edge.target_node.as_str())))
+                    .collect::<Vec<_>>();
+                let member_label = |member: &str| {
+                    graph
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == member)
+                        .and_then(|node| coordinates.get(node.component.as_str()))
+                        .cloned()
+                        .unwrap_or_else(|| "Unavailable occurrence".into())
+                };
+                let (induced, reachability) = graph_selection_set_analysis(&members, &edges);
+                return Some(build_selection_set_row(
+                    &module_id,
+                    inspection,
+                    &members,
+                    member_label,
+                    &induced,
+                    &reachability,
+                    &edges,
+                ));
+            }
+            GraphQueryTarget::Gradle { configuration, .. } if view != BuildToolView::Maven => {
+                let Some(gradle) = module.gradle.as_ref() else {
+                    continue;
+                };
+                let graph = gradle.dependency_graph.as_ref()?;
+                if graph.resolution.configuration != *configuration {
+                    continue;
+                }
+                if members.iter().any(|member| {
+                    !graph
+                        .resolution
+                        .components
+                        .iter()
+                        .any(|component| component.id.as_str() == *member)
+                }) {
+                    continue;
+                }
+                let labels = graph
+                    .resolution
+                    .components
+                    .iter()
+                    .map(|component| (component.id.as_str(), gradle_component_label(component)))
+                    .collect::<HashMap<_, _>>();
+                let edges = graph
+                    .resolution
+                    .edges
+                    .iter()
+                    .map(|edge| {
+                        (
+                            edge.from.as_str(),
+                            edge.selected.as_deref(),
+                            String::new(),
+                            false,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let member_label = |member: &str| {
+                    labels
+                        .get(member)
+                        .cloned()
+                        .unwrap_or_else(|| "Unavailable component".into())
+                };
+                let borrowed_edges = edges
+                    .iter()
+                    .map(|(from, target, _, _)| (*from, *target))
+                    .collect::<Vec<_>>();
+                let (induced, reachability) =
+                    graph_selection_set_analysis(&members, &borrowed_edges);
+                return Some(build_selection_set_row(
+                    &module_id,
+                    inspection,
+                    &members,
+                    member_label,
+                    &induced,
+                    &reachability,
+                    &borrowed_edges,
+                ));
+            }
+            _ => continue,
+        }
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_selection_set_row(
+    module_id: &LanguageToolNodeId,
+    inspection: &GraphInspection,
+    members: &[&str],
+    member_label: impl Fn(&str) -> String,
+    induced: &[usize],
+    reachability: &[Vec<Option<usize>>],
+    edges: &[(&str, Option<&str>)],
+) -> (LanguageToolNodeId, LanguageToolNode) {
+    let member_rows = members
+        .iter()
+        .enumerate()
+        .map(|(index, member)| {
+            graph_fact_row(
+                graph_fact_id(module_id, "inspection-set-member", &[member]),
+                member_label(member),
+                format!(
+                    "Selected dependency {index}; component identity {}; origins and artifacts unavailable",
+                    member
+                ),
+                Vec::new(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let edge_rows = induced
+        .iter()
+        .map(|index| {
+            let (from, target) = edges[*index];
+            let target = target.unwrap_or(from);
+            graph_fact_row(
+                graph_fact_id(module_id, "inspection-set-edge", &[from, target, &index.to_string()]),
+                format!(
+                    "{} → {}",
+                    member_label(from),
+                    member_label(target)
+                ),
+                format!(
+                    "Induced dependency edge within the selection; from {}; to {}; source origins and artifacts unavailable",
+                    from, target
+                ),
+                Vec::new(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut reach_rows = Vec::new();
+    for (from_index, distances) in reachability.iter().enumerate() {
+        for (to_index, distance) in distances.iter().enumerate() {
+            if from_index == to_index {
+                continue;
+            }
+            let from = members[from_index];
+            let to = members[to_index];
+            let detail = match distance {
+                Some(distance) => format!(
+                    "{} reaches {} over the induced subgraph at distance {distance}; absence beyond admitted facts stays unproven",
+                    member_label(from),
+                    member_label(to)
+                ),
+                None => format!(
+                    "{} does not reach {} in admitted facts; unresolved edges introduce no relation and absence stays unproven beyond admitted facts",
+                    member_label(from),
+                    member_label(to)
+                ),
+            };
+            reach_rows.push(graph_fact_row(
+                graph_fact_id(module_id, "inspection-set-reach", &[from, to]),
+                format!("{} ⇝ {}", member_label(from), member_label(to)),
+                detail,
+                Vec::new(),
+            ));
+        }
+    }
+    let reachable_pairs = reachability
+        .iter()
+        .flatten()
+        .filter(|distance| distance.is_some())
+        .count();
+    let pairs = members.len() * (members.len().saturating_sub(1));
+    let induced_count = induced.len();
+    let row = graph_fact_row(
+        graph_fact_id(module_id, "inspection-set", &[&inspection.mode.label()]),
+        inspection.mode.label().into(),
+        format!(
+            "{count} selected dependencies; {induced_count} induced edges; {reachable_pairs} of {pairs} ordered pairs reach each other over the induced subgraph; unresolved edges introduce no relation and absence stays unproven beyond admitted facts; uses full admitted graph independently of ordinary fact/scope facets",
+            count = members.len(),
+        ),
+        vec![
+            graph_fact_row(
+                graph_fact_id(module_id, "inspection-set-members", &[]),
+                "Selected dependencies".into(),
+                "Every member of the selection set; identities retained".into(),
+                member_rows,
+            ),
+            graph_fact_row(
+                graph_fact_id(module_id, "inspection-set-edges", &[]),
+                "Induced dependency edges".into(),
+                "Admitted edges with both endpoints in the selection".into(),
+                edge_rows,
+            ),
+            graph_fact_row(
+                graph_fact_id(module_id, "inspection-set-reachability", &[]),
+                "Reachability".into(),
+                "Directed reachability between member pairs over the induced subgraph".into(),
+                reach_rows,
+            ),
+        ],
+    );
+    (row.id.clone(), row)
+}
+
 fn graph_inspection_row(
     snapshot: &JdtlsProjectSnapshot,
     view: BuildToolView,
     inspection: &GraphInspection,
 ) -> Option<(LanguageToolNodeId, LanguageToolNode)> {
     use project::jvm_project::GradleDependencySelector;
+    if inspection.mode == GraphInspectionMode::SelectionSetRelations {
+        return graph_selection_set_row(snapshot, view, inspection);
+    }
     for module in &snapshot.projects {
         let module_id = jdtls_module_node_id(snapshot, &module.module_root, view);
         let (graph_id, root, relations, labels, edge_rows, coverage) = match &inspection
@@ -1440,6 +1750,9 @@ fn graph_inspection_row(
             (GraphInspectionMode::PathsBetween, None) => {
                 "Paths to the pinned dependency over admitted facts; the path count is unavailable"
                     .to_string()
+            }
+            (GraphInspectionMode::SelectionSetRelations, _) => {
+                "Selected set relations use the full admitted graph independently of ordinary fact/scope facets; the row builder never reaches this status text".to_string()
             }
             (GraphInspectionMode::AllRootPaths, Some(path_count)) => format!(
                 "All root paths over admitted facts: {path_count} bounded simple paths from the root to the selection; cycles stay terminated and unresolved edges cannot add paths beyond admitted facts"
@@ -2047,6 +2360,7 @@ impl DependenciesPanel {
                     graph_search,
                     graph_inspection: None,
                     graph_pin: None,
+                    graph_selection_set: Vec::new(),
                     graph_diagram_selection: None,
                     graph_diagram: None,
                     position: preferences.dock_position.into(),
@@ -2107,6 +2421,7 @@ impl DependenciesPanel {
     fn set_view(&mut self, view: BuildToolView, window: &mut Window, cx: &mut Context<Self>) {
         self.graph_inspection = None;
         self.graph_pin = None;
+        self.graph_selection_set.clear();
         self.graph_diagram_selection = None;
         self.graph_diagram = None;
         self.view = view;
@@ -2202,11 +2517,16 @@ impl DependenciesPanel {
             selection,
             node,
             anchor: None,
+            set_members: Vec::new(),
             mode,
         })
     }
 
     fn inspect_selected_graph(&mut self, mode: GraphInspectionMode, cx: &mut Context<Self>) {
+        if mode == GraphInspectionMode::SelectionSetRelations {
+            self.inspect_selection_set(cx);
+            return;
+        }
         let mut inspection = match self.selected_graph_inspection(mode, cx) {
             Some(inspection) => inspection,
             None => {
@@ -2233,6 +2553,149 @@ impl DependenciesPanel {
         self.graph_inspection = Some(inspection);
         self.rebuild(cx);
         self.host.expand_all();
+        cx.notify();
+    }
+
+    fn inspect_selection_set(&mut self, cx: &mut Context<Self>) {
+        if self.graph_selection_set.is_empty() {
+            self.show_graph_error(anyhow::anyhow!("The selection set is empty; select a dependency row, activate Add to selection set, then retry Selected set relations"), cx);
+            return;
+        };
+        if self.graph_selection_set.len() < 2 {
+            self.show_graph_error(anyhow::anyhow!("Selected set relations requires at least two dependencies; select a dependency row and activate Add to selection set"), cx);
+            return;
+        }
+        let Some(inspection) = self.selected_graph_set_inspection(cx) else {
+            self.show_graph_error(anyhow::anyhow!("The selection set no longer matches current admitted graph facts; refresh, re-add the dependencies and retry Selected set relations"), cx);
+            return;
+        };
+        self.graph_notice = None;
+        self.graph_inspection = Some(inspection);
+        self.rebuild(cx);
+        self.host.expand_all();
+        cx.notify();
+    }
+
+    fn selected_graph_set_inspection(&self, cx: &App) -> Option<GraphInspection> {
+        let first = self.graph_selection_set.first()?;
+        if self.host_unavailable(cx) {
+            return None;
+        }
+        let project = self.project.read(cx);
+        let worktrees = project.worktree_store();
+        let trusted = TrustedWorktrees::try_get_global(cx)?;
+        let restricted = trusted
+            .read(cx)
+            .restricted_worktrees(&worktrees, cx)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect::<HashSet<_>>();
+        let store = project.lsp_store();
+        let store = store.read(cx);
+        for worktree in worktrees.read(cx).worktrees() {
+            let worktree = worktree.read(cx);
+            if !worktree.is_visible() || restricted.contains(&worktree.id()) {
+                continue;
+            }
+            let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
+                continue;
+            };
+            for module in &snapshot.projects {
+                if self.view != BuildToolView::Gradle
+                    && let Some(maven) = &module.maven
+                    && let Some(graph) = &maven.dependency_graph
+                    && (first.selection
+                        == GraphSelection {
+                            server_id: snapshot.server_id,
+                            generation: snapshot.generation,
+                            target: GraphQueryTarget::Maven(maven.pom.clone()),
+                        })
+                {
+                    let mut members = Vec::new();
+                    for member in &self.graph_selection_set {
+                        let node = graph
+                            .nodes
+                            .iter()
+                            .find(|node| node.id == member.node)
+                            .map(|node| node.id.clone())?;
+                        members.push(node);
+                    }
+                    return Some(GraphInspection {
+                        selection: first.selection.clone(),
+                        node: members[0].clone(),
+                        anchor: None,
+                        set_members: members,
+                        mode: GraphInspectionMode::SelectionSetRelations,
+                    });
+                }
+                if self.view != BuildToolView::Maven
+                    && let Some(gradle) = &module.gradle
+                    && let Some(graph) = &gradle.dependency_graph
+                    && (first.selection
+                        == GraphSelection {
+                            server_id: snapshot.server_id,
+                            generation: snapshot.generation,
+                            target: GraphQueryTarget::Gradle {
+                                module: module.module_root.clone(),
+                                configuration: graph.resolution.configuration.clone(),
+                            },
+                        })
+                {
+                    let mut members = Vec::new();
+                    for member in &self.graph_selection_set {
+                        let component = graph
+                            .resolution
+                            .components
+                            .iter()
+                            .find(|component| component.id == member.node)
+                            .map(|component| component.id.clone())?;
+                        members.push(component);
+                    }
+                    return Some(GraphInspection {
+                        selection: first.selection.clone(),
+                        node: members[0].clone(),
+                        anchor: None,
+                        set_members: members,
+                        mode: GraphInspectionMode::SelectionSetRelations,
+                    });
+                }
+            }
+        }
+        None
+    }
+
+    fn add_graph_selection_to_set(&mut self, cx: &mut Context<Self>) {
+        const MAX_SET_MEMBERS: usize = 8;
+        let Some((selection, node)) = self.resolve_selected_graph(cx) else {
+            self.show_graph_error(anyhow::anyhow!("Adding to the selection set requires a current Gradle component or Maven occurrence; refresh and expand admitted graph facts, then select a dependency row"), cx);
+            return;
+        };
+        if let Some(first) = self.graph_selection_set.first()
+            && first.selection != selection
+        {
+            self.show_graph_error(anyhow::anyhow!("The selection set holds dependencies from one admitted graph; clear the selection set before adding dependencies from other graph facts"), cx);
+            return;
+        }
+        if self
+            .graph_selection_set
+            .iter()
+            .any(|member| member.node == node)
+        {
+            return;
+        }
+        if self.graph_selection_set.len() >= MAX_SET_MEMBERS {
+            self.show_graph_error(anyhow::anyhow!("The selection set holds at most {MAX_SET_MEMBERS} dependencies; clear the selection set before adding more"), cx);
+            return;
+        }
+        self.graph_notice = None;
+        self.graph_selection_set.push(GraphPin { selection, node });
+        self.rebuild(cx);
+        cx.notify();
+    }
+
+    fn clear_graph_selection_set(&mut self, cx: &mut Context<Self>) {
+        self.graph_selection_set.clear();
+        self.rebuild(cx);
         cx.notify();
     }
 
@@ -2481,6 +2944,7 @@ impl DependenciesPanel {
             self.navigation.clear();
             self.graph_inspection = None;
             self.graph_pin = None;
+            self.graph_selection_set.clear();
             self.graph_diagram_selection = None;
             self.graph_diagram = None;
             self.graph_selections.clear();
@@ -2501,6 +2965,7 @@ impl DependenciesPanel {
             self.navigation.clear();
             self.graph_inspection = None;
             self.graph_pin = None;
+            self.graph_selection_set.clear();
             self.graph_diagram_selection = None;
             self.graph_diagram = None;
             self.graph_selections.clear();
@@ -2704,6 +3169,7 @@ impl DependenciesPanel {
         if !inspection_current {
             self.graph_inspection = None;
             self.graph_pin = None;
+            self.graph_selection_set.clear();
         }
         match diagram_source {
             Some(Ok(Some(source))) => {
@@ -5821,6 +6287,9 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &InspectGraphAllRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllRootPaths, cx)))
             .on_action(cx.listener(|panel, _: &PinGraphSelection, _, cx| panel.pin_selected_graph(cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphPathsBetween, _, cx| panel.inspect_selected_graph(GraphInspectionMode::PathsBetween, cx)))
+            .on_action(cx.listener(|panel, _: &AddGraphSelectionToSet, _, cx| panel.add_graph_selection_to_set(cx)))
+            .on_action(cx.listener(|panel, _: &ClearGraphSelectionSet, _, cx| panel.clear_graph_selection_set(cx)))
+            .on_action(cx.listener(|panel, _: &InspectGraphSelectionSet, _, cx| panel.inspect_selected_graph(GraphInspectionMode::SelectionSetRelations, cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphInspection, _, cx| panel.clear_graph_inspection(cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphFactSearch, window, cx| panel.clear_graph_fact_search(window, cx)))
             .on_action(cx.listener(|panel, _: &CycleGraphFactFilter, _, cx| panel.cycle_graph_fact_filter(cx)))
@@ -6041,6 +6510,20 @@ impl Render for DependenciesPanel {
                         .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::PathsBetween) { "Active" } else { "Inactive" })
                         .disabled(!can_inspect_graph).tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::PathsBetween, cx))))
+                    .child(Button::new("groovy-add-graph-selection-to-set", "Add to set")
+                        .aria_label("Add the selected dependency to the selection set for multi-dependency analysis")
+                        .aria_value(if self.graph_selection_set.is_empty() { "Empty" } else { "Has members" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.add_graph_selection_to_set(cx))))
+                    .child(Button::new("groovy-clear-graph-selection-set", "Clear set")
+                        .aria_label("Clear the selection set without changing the current inspection")
+                        .disabled(self.graph_selection_set.is_empty()).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.clear_graph_selection_set(cx))))
+                    .child(Button::new("groovy-inspect-graph-selection-set", "Set relations")
+                        .aria_label("Inspect induced dependency edges and reachability among the selection set in admitted graph facts")
+                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::SelectionSetRelations) { "Active" } else { "Inactive" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::SelectionSetRelations, cx))))
                     .child(Button::new("groovy-clear-graph-inspection", "Clear inspection")
                         .aria_label("Clear selected dependency graph inspection")
                         .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
@@ -6879,6 +7362,7 @@ mod tests {
             },
             node: winner_id,
             anchor: None,
+            set_members: Vec::new(),
             mode: GraphInspectionMode::ConflictOrigins,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -7005,6 +7489,7 @@ mod tests {
             },
             node: shared,
             anchor: None,
+            set_members: Vec::new(),
             mode: GraphInspectionMode::AllUsages,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -7145,6 +7630,7 @@ mod tests {
             },
             node: shared,
             anchor: None,
+            set_members: Vec::new(),
             mode: GraphInspectionMode::AllRootPaths,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -7327,6 +7813,7 @@ mod tests {
             },
             node: shared_id,
             anchor: Some(left_id),
+            set_members: Vec::new(),
             mode: GraphInspectionMode::PathsBetween,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -7353,6 +7840,137 @@ mod tests {
             "the pair path names both ends: {}",
             group.children[0].label
         );
+    }
+
+    #[test]
+    fn selection_set_relations_report_induced_edges_and_reachability() {
+        // Induced-subgraph rule: edges leaving the selection introduce no
+        // relation, and reachability runs only over induced edges.
+        let edges: [(&str, Option<&str>); 5] = [
+            ("left", Some("shared")),
+            ("right", Some("shared")),
+            ("shared", Some("outside")),
+            ("outside", Some("left")),
+            ("left", Some("right")),
+        ];
+        let (induced, reachability) =
+            graph_selection_set_analysis(&["left", "right", "shared"], &edges);
+        assert_eq!(
+            induced,
+            vec![0, 1, 4],
+            "member-to-member edges stay induced"
+        );
+        let labels = ["left", "right", "shared"];
+        for (from_index, distances) in reachability.iter().enumerate() {
+            for (to_index, distance) in distances.iter().enumerate() {
+                let expected = match (labels[from_index], labels[to_index]) {
+                    ("left", "right") => Some(1),
+                    ("left", "shared") | ("right", "shared") => Some(1),
+                    ("shared", "left") | ("shared", "right") => None,
+                    ("right", "left") => None,
+                    _ => None,
+                };
+                let from = labels[from_index];
+                let to = labels[to_index];
+                assert_eq!(distance, &expected, "{from} -> {to}");
+            }
+        }
+        // The captured diamond: the left and right branches and the winner
+        // form the induced subgraph with two edges and two reachable pairs.
+        let (_, gradle) = captured_graphs();
+        let member_id = |name: &str| {
+            gradle
+                .resolution
+                .components
+                .iter()
+                .find(|component| component.module.as_deref() == Some(name))
+                .expect("captured component")
+                .id
+                .clone()
+        };
+        let left_id = member_id("left");
+        let right_id = member_id("right");
+        let shared_id = member_id("shared");
+        let relations =
+            gradle_inspection_relations(&gradle, GraphInspectionMode::SelectionSetRelations);
+        let borrowed = relations;
+        let (induced, reachability) = graph_selection_set_analysis(
+            &[left_id.as_str(), right_id.as_str(), shared_id.as_str()],
+            &borrowed,
+        );
+        assert_eq!(induced.len(), 2, "both branch hops stay induced");
+        assert_eq!(
+            reachability
+                .iter()
+                .flatten()
+                .filter(|distance| distance.is_some())
+                .count(),
+            2
+        );
+        let (snapshot, module_root) = gradle_graph_snapshot(gradle);
+        let inspection = GraphInspection {
+            selection: GraphSelection {
+                server_id: lsp::LanguageServerId(1),
+                generation: 2,
+                target: GraphQueryTarget::Gradle {
+                    module: module_root,
+                    configuration: "parityGraph".into(),
+                },
+            },
+            node: shared_id.clone(),
+            anchor: None,
+            set_members: vec![left_id, right_id, shared_id.clone()],
+            mode: GraphInspectionMode::SelectionSetRelations,
+        };
+        let (id, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
+            .expect("selection-set inspection");
+        assert_eq!(row.label, "Selected set relations");
+        assert!(
+            row.accessibility_label.contains("3 selected dependencies")
+                && row.accessibility_label.contains("2 induced edges")
+                && row.accessibility_label.contains("2 of 6 ordered pairs")
+                && row
+                    .accessibility_label
+                    .contains("absence stays unproven beyond admitted facts"),
+            "coverage names the induced-subgraph scope: {}",
+            row.accessibility_label
+        );
+        assert_eq!(id, row.id);
+        let group = |label: &str| {
+            row.children
+                .iter()
+                .find(|group| group.label == label)
+                .unwrap_or_else(|| panic!("{label} group missing"))
+        };
+        assert_eq!(group("Selected dependencies").children.len(), 3);
+        assert_eq!(group("Induced dependency edges").children.len(), 2);
+        let reachability_group = group("Reachability");
+        assert_eq!(reachability_group.children.len(), 6);
+        assert_eq!(
+            reachability_group
+                .children
+                .iter()
+                .filter(|row| row.accessibility_label.contains("at distance"))
+                .count(),
+            2,
+            "both branch-to-winner pairs stay reachable"
+        );
+        assert!(
+            reachability_group
+                .children
+                .iter()
+                .any(|row| row.accessibility_label.contains("does not reach")),
+            "unreachable pairs stay explicit"
+        );
+        // A member missing from the current graph fails the row build.
+        let stale = GraphInspection {
+            selection: inspection.selection,
+            node: shared_id.clone(),
+            anchor: None,
+            set_members: vec![shared_id, "missing".into()],
+            mode: GraphInspectionMode::SelectionSetRelations,
+        };
+        assert!(graph_inspection_row(&snapshot, BuildToolView::Gradle, &stale).is_none());
     }
 
     fn rendered_diagram(source: &str) -> String {
