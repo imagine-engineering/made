@@ -326,12 +326,11 @@ impl TestExplorerActionDelegate for JvmTestExplorerDelegate {
     fn debug(
         &self,
         selection: &TestExplorerSelection,
-        _: &WeakEntity<Workspace>,
-        _: &mut Window,
-        _: &mut App,
+        workspace: &WeakEntity<Workspace>,
+        window: &mut Window,
+        cx: &mut App,
     ) -> anyhow::Result<()> {
-        require_jvm_provider(selection)?;
-        anyhow::bail!("Selected Java test Debug is not connected to the Java adapter yet")
+        dispatch_java_test_debug_action(selection, workspace, window, cx)
     }
 
     fn rerun_failed(
@@ -493,6 +492,86 @@ fn dispatch_java_test_action(
                     }
                     return Err(error);
                 }
+                anyhow::Ok(())
+            })();
+            if let Err(error) = result {
+                Err::<(), _>(error).notify_workspace_async_err(workspace, &mut cx);
+            }
+            anyhow::Ok(())
+        })
+        .detach();
+    Ok(())
+}
+
+#[cfg(feature = "jvm-test-actions")]
+fn java_test_debug_scenario(template: task::TaskTemplate, debug_port: u16) -> task::DebugScenario {
+    task::DebugScenario {
+        adapter: "Java".into(),
+        label: format!("Debug {}", template.label).into(),
+        build: Some(task::BuildTaskDefinition::Template {
+            task_template: template,
+            locator_name: None,
+        }),
+        config: serde_json::json!({
+            "request": "attach",
+            "hostName": "localhost",
+            "port": debug_port,
+        }),
+        tcp_connection: None,
+    }
+}
+
+#[cfg(feature = "jvm-test-actions")]
+fn dispatch_java_test_debug_action(
+    selection: &TestExplorerSelection,
+    workspace: &WeakEntity<Workspace>,
+    window: &mut Window,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    require_jvm_provider(selection)?;
+    let workspace_entity = workspace
+        .upgrade()
+        .context("The workspace is no longer available")?;
+    let project = workspace_entity.read(cx).project().clone();
+    let provider = project
+        .read(cx)
+        .jvm_test_provider_store()
+        .cloned()
+        .context("The project host does not support Java test actions")?;
+    if provider.read(cx).is_remote() {
+        anyhow::bail!("Remote Java test Debug needs the host action protocol");
+    }
+    let plan = provider.read_with(cx, |provider, cx| {
+        provider.plan_selected_case_debug(&selection.node_id, selection.discovery_generation, cx)
+    })?;
+    dap::DapRegistry::global(cx)
+        .adapter("Java")
+        .context(
+            "The approved Java Debug adapter is not installed; install it to debug this Java test. No unverified adapter is downloaded",
+        )?;
+    let task_contexts = workspace_entity.update(cx, |workspace, cx| {
+        crate::task_contexts(workspace, window, cx)
+    });
+    let workspace = workspace_entity.downgrade();
+    window
+        .spawn(cx, async move |mut cx| {
+            let task_contexts = task_contexts.await;
+            let result = (|| {
+                let task_context = task_contexts
+                    .task_context_for_worktree_id(plan.worktree_id)
+                    .cloned()
+                    .context("No task context exists for the selected Java test worktree")?;
+                let scenario = java_test_debug_scenario(plan.template, plan.debug_port);
+                workspace.update_in(cx, |workspace, window, cx| {
+                    workspace.start_debug_session(
+                        scenario,
+                        task::SharedTaskContext::from(task_context),
+                        None,
+                        Some(plan.worktree_id),
+                        window,
+                        cx,
+                    );
+                })?;
                 anyhow::Ok(())
             })();
             if let Err(error) = result {
@@ -2994,6 +3073,33 @@ mod tests {
     use util::rel_path::RelPath;
 
     use super::*;
+
+    #[cfg(feature = "jvm-test-actions")]
+    #[test]
+    fn java_test_debug_scenario_uses_the_approved_adapter_attach_terms() {
+        let mut template = task::TaskTemplate::default();
+        template.label = "Test org.evidence.Case#method".to_string();
+        template.args = vec!["test".to_string(), "--debug-jvm".to_string()];
+        let scenario = java_test_debug_scenario(template.clone(), 5005);
+        assert_eq!(scenario.adapter.as_ref(), "Java");
+        assert_eq!(scenario.label, "Debug Test org.evidence.Case#method");
+        assert_eq!(scenario.config["request"], "attach");
+        assert_eq!(scenario.config["hostName"], "localhost");
+        assert_eq!(scenario.config["port"], 5005);
+        let build = scenario
+            .build
+            .expect("the Java test debug plan carries its pre-launch build");
+        let task::BuildTaskDefinition::Template {
+            task_template,
+            locator_name,
+        } = build
+        else {
+            panic!("the Java test debug build must be a Task template");
+        };
+        assert_eq!(task_template, template);
+        assert!(locator_name.is_none());
+        assert!(scenario.tcp_connection.is_none());
+    }
 
     #[cfg(all(unix, feature = "rust-test-actions"))]
     #[gpui::test]

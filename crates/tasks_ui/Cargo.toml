@@ -28,7 +28,12 @@ test-explorer = [
     "settings/test-explorer",
 ]
 rust-test-actions = ["test-explorer", "project/rust-tests"]
-jvm-test-actions = ["test-explorer", "project/jvm-tools", "workspace/jvm-tools"]
+jvm-test-actions = [
+    "test-explorer",
+    "project/jvm-tools",
+    "workspace/jvm-tools",
+    "dep:serde_json",
+]
 
 jvm-workflow-test-support = [
     "jvm-test-actions",
@@ -42,6 +47,7 @@ jvm-workflow-test-support = [
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
+dap.workspace = true
 db = { workspace = true, optional = true }
 editor.workspace = true
 file_icons.workspace = true

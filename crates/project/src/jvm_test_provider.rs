@@ -33,9 +33,9 @@ use crate::{
     ProjectPath, WorktreeId,
     buffer_store::BufferStore,
     structured_execution::{
-        DiscoveryGeneration, StructuredExecutionEvent, StructuredExecutionStore,
-        StructuredExecutionStoreEvent, StructuredNode, StructuredNodeId, StructuredNodeKind,
-        StructuredNodeState, StructuredProviderId, StructuredProviderSnapshot,
+        DiscoveryGeneration, StructuredDebugCapability, StructuredExecutionEvent,
+        StructuredExecutionStore, StructuredExecutionStoreEvent, StructuredNode, StructuredNodeId,
+        StructuredNodeKind, StructuredNodeState, StructuredProviderId, StructuredProviderSnapshot,
         StructuredProviderStatus, StructuredRun, StructuredRunId, StructuredRunPhase,
         provider_status_to_proto,
     },
@@ -48,6 +48,10 @@ pub const JVM_JUNIT_PROVIDER_ID: &str = "jvm-junit";
 pub const MAX_JUNIT_REPORT_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_JUNIT_CASES: usize = 3_000;
 pub const MAX_JUNIT_REPORT_FILES: usize = 128;
+
+/// The fixed debug port Gradle's `--debug-jvm` and Maven Surefire's
+/// `-Dmaven.surefire.debug` open for the selected test's suspended JVM.
+pub const JAVA_TEST_DEBUG_PORT: u16 = 5005;
 pub const MAX_JUNIT_DISCOVERY_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_JUNIT_MODULES: usize = 128;
 pub const MAX_JUNIT_SOURCE_FILES: usize = 128;
@@ -105,6 +109,16 @@ pub struct JvmSelectedTestPlan {
     pub selector: JvmTestSelector,
     pub build_tool: JvmTestBuildTool,
     pub template: TaskTemplate,
+}
+
+/// The selected Java test's Debug plan: the pre-launch build runs the same
+/// selected-case Task with the build tool's debug flag so the suspended test
+/// JVM opens `debug_port` for the approved Java adapter to attach to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JvmSelectedTestDebugPlan {
+    pub worktree_id: WorktreeId,
+    pub template: TaskTemplate,
+    pub debug_port: u16,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1136,6 +1150,27 @@ impl JvmTestProviderStore {
         })
     }
 
+    /// Plans Debug for the selected Java test case through the same verified
+    /// gates as its run plan: the case must be in the current discovery with a
+    /// verified method selector and an available manifest and wrapper. The
+    /// pre-launch build appends the build tool's debug flag so the suspended
+    /// test JVM opens `JAVA_TEST_DEBUG_PORT`; the caller owns starting the
+    /// existing DAP session. Remote providers are refused explicitly.
+    pub fn plan_selected_case_debug(
+        &self,
+        node_id: &StructuredNodeId,
+        discovery_generation: DiscoveryGeneration,
+        cx: &gpui::App,
+    ) -> Result<JvmSelectedTestDebugPlan> {
+        let plan = self.plan_selected_case(node_id, discovery_generation, cx)?;
+        let (template, debug_port) = jvm_test_debug_template(plan.template, plan.build_tool);
+        Ok(JvmSelectedTestDebugPlan {
+            worktree_id: plan.worktree_id,
+            template,
+            debug_port,
+        })
+    }
+
     pub fn plan_failed_case(
         &self,
         node_id: &StructuredNodeId,
@@ -1870,7 +1905,8 @@ impl JvmTestProviderStore {
                         store.active_remote_request_abort = None;
                     }
                     ensure!(store.generation == generation && !store.closed, "Stale Java test discovery");
-                    let snapshot = result?;
+                    let mut snapshot = result?;
+                    apply_java_test_remote_debug_capability(&mut snapshot);
                     store.current_remote_discovery = Some(snapshot.discovery_generation);
                     Ok(snapshot)
                 })?
@@ -2622,6 +2658,19 @@ fn remote_jvm_lifecycle_from_proto(
     })
 }
 
+/// Appends the build tool's debug flag to a selected Java test's Task so the
+/// test JVM suspends on `JAVA_TEST_DEBUG_PORT` for the approved Java adapter.
+fn jvm_test_debug_template(
+    mut template: TaskTemplate,
+    build_tool: JvmTestBuildTool,
+) -> (TaskTemplate, u16) {
+    match build_tool {
+        JvmTestBuildTool::Maven => template.args.push("-Dmaven.surefire.debug".to_string()),
+        JvmTestBuildTool::Gradle => template.args.push("--debug-jvm".to_string()),
+    }
+    (template, JAVA_TEST_DEBUG_PORT)
+}
+
 pub fn selected_junit_task(
     selector: &JvmTestSelector,
     build_tool: JvmTestBuildTool,
@@ -3042,7 +3091,7 @@ impl JvmTestDiscovery {
                 nodes.push(StructuredNode {
                     experimental_feature: None,
                     experimental_feature_enabled: None,
-                    debug_capability: None,
+                    debug_capability: Some(StructuredDebugCapability::Supported),
                     id: case_id.clone(),
                     parent_id: Some(suite_id),
                     label: case.display_name.clone(),
@@ -3148,6 +3197,20 @@ fn remote_java_spawn_errors_do_not_export_raw_task_diagnostics() {
     }
 }
 
+/// Marks every reported Java test case as not debuggable for remote consumers:
+/// the host action protocol does not yet start a Debug session on their behalf,
+/// so the Tests view disables Debug with an explicit reason instead of failing
+/// on activation.
+fn apply_java_test_remote_debug_capability(snapshot: &mut StructuredProviderSnapshot) {
+    for node in &mut snapshot.nodes {
+        if node.kind == StructuredNodeKind::Case {
+            node.debug_capability = Some(StructuredDebugCapability::Unsupported(
+                "Remote Java test Debug needs the host action protocol".to_string(),
+            ));
+        }
+    }
+}
+
 fn validate_remote_report_limit(requested: Option<usize>, acknowledged: Option<u64>) -> Result<()> {
     ensure!(
         acknowledged == requested.map(|maximum| maximum as u64),
@@ -3186,4 +3249,89 @@ fn doctor_jvm_reproduction_old_action_protocol_cannot_collect_bounded_reports() 
     assert!(validate_jvm_action_protocol(2, true).is_ok());
     assert!(validate_jvm_action_protocol(1, true).is_err());
     assert!(validate_jvm_action_protocol(2, false).is_err());
+}
+
+#[cfg(test)]
+#[test]
+fn selected_java_test_debug_template_appends_the_build_tool_debug_flag() {
+    let mut gradle = TaskTemplate::default();
+    gradle.args = vec![
+        "test".to_string(),
+        "--tests".to_string(),
+        "a.B#c".to_string(),
+    ];
+    let (template, port) = jvm_test_debug_template(gradle, JvmTestBuildTool::Gradle);
+    assert_eq!(
+        template.args,
+        vec![
+            "test".to_string(),
+            "--tests".to_string(),
+            "a.B#c".to_string(),
+            "--debug-jvm".to_string()
+        ],
+    );
+    assert_eq!(port, JAVA_TEST_DEBUG_PORT);
+    assert_eq!(JAVA_TEST_DEBUG_PORT, 5005);
+
+    let mut maven = TaskTemplate::default();
+    maven.args = vec!["-Dtest=a.B#c".to_string(), "test".to_string()];
+    let (template, port) = jvm_test_debug_template(maven, JvmTestBuildTool::Maven);
+    assert_eq!(
+        template.args,
+        vec![
+            "-Dtest=a.B#c".to_string(),
+            "test".to_string(),
+            "-Dmaven.surefire.debug".to_string()
+        ],
+    );
+    assert_eq!(port, JAVA_TEST_DEBUG_PORT);
+}
+
+#[cfg(test)]
+#[test]
+fn java_discovery_marks_cases_debuggable_and_remote_snapshots_do_not() {
+    let report = JunitReport {
+        scope_path: ProjectPath {
+            worktree_id: WorktreeId::from_usize(1),
+            path: RelPath::from_unix_str("src/test/java").unwrap().into(),
+        },
+        module_path: ".".to_string(),
+        cases: vec![JunitCase {
+            class_name: "org.evidence.Case".to_string(),
+            display_name: "method()".to_string(),
+            state: StructuredNodeState::Passed,
+            message: None,
+        }],
+        version: None,
+    };
+    let discovery =
+        JvmTestDiscovery::from_reports(&[report], DiscoveryGeneration(1), &HashSet::new())
+            .expect("valid discovery");
+    let case_capability = |snapshot: &StructuredProviderSnapshot| {
+        snapshot
+            .nodes
+            .iter()
+            .filter(|node| node.kind == StructuredNodeKind::Case)
+            .map(|node| node.debug_capability.clone())
+            .collect::<Vec<_>>()
+    };
+    for capability in case_capability(&discovery.snapshot) {
+        assert_eq!(capability, Some(StructuredDebugCapability::Supported));
+    }
+
+    let mut remote_snapshot = discovery.snapshot;
+    apply_java_test_remote_debug_capability(&mut remote_snapshot);
+    for capability in case_capability(&remote_snapshot) {
+        assert_eq!(
+            capability,
+            Some(StructuredDebugCapability::Unsupported(
+                "Remote Java test Debug needs the host action protocol".to_string()
+            )),
+        );
+    }
+    for node in &remote_snapshot.nodes {
+        if node.kind != StructuredNodeKind::Case {
+            assert_eq!(node.debug_capability, None);
+        }
+    }
 }

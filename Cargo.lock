@@ -21356,6 +21356,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
+ "dap",
  "db",
  "editor",
  "feature_flags",
