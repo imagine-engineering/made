@@ -47,6 +47,7 @@ actions!(
         ClearGraphInspection,
         ApplySavedMavenSelection,
         ImportGradleSelection,
+        UnlinkSelectedGradleProject,
         CancelSelectedImport,
         ShowDependencyDiagram,
         CloseDependencyDiagram,
@@ -1341,6 +1342,195 @@ fn ignored_project_rows(
     rows
 }
 
+fn selection_review_root_id() -> LanguageToolNodeId {
+    LanguageToolNodeId("groovy-selection-review".into())
+}
+
+// The saved import policy and the provider snapshot are the authoritative
+// records of the selected projects; this review is display-only and never
+// actionable. Each provider module and each policy entry appears exactly once
+// under a named category so gaps stay visible without inferring membership
+// from display names.
+fn selection_review_tree(
+    snapshot: &JdtlsProjectSnapshot,
+    jvm_builds: &settings::JvmBuildSettingsContent,
+) -> LanguageToolNode {
+    fn review_row(id: String, label: String, accessibility: String) -> LanguageToolNode {
+        LanguageToolNode {
+            id: LanguageToolNodeId(id),
+            label,
+            secondary_label: None,
+            icon: None,
+            accessibility_label: accessibility,
+            children: Vec::new(),
+            enabled: false,
+            activation_label: None,
+        }
+    }
+    let mut groups: Vec<LanguageToolNode> = Vec::new();
+    let mut push_group = |label: String, rows: Vec<LanguageToolNode>| {
+        if rows.is_empty() {
+            return;
+        }
+        let heading = format!("{label} ({})", rows.len());
+        groups.push(LanguageToolNode {
+            id: LanguageToolNodeId(format!(
+                "review:group:{}",
+                label.to_lowercase().replace([' ', '/'], "-")
+            )),
+            label: heading.clone(),
+            secondary_label: None,
+            icon: None,
+            accessibility_label: format!(
+                "{heading}; provider selection review only; edit through the saved import selection controls"
+            ),
+            children: rows,
+            enabled: false,
+            activation_label: None,
+        });
+    };
+    let mut ignored_projects = Vec::new();
+    if let Some(maven) = &jvm_builds.maven {
+        ignored_projects.extend(maven.ignored_projects.iter().flatten().cloned());
+    }
+    if let Some(gradle) = &jvm_builds.gradle {
+        ignored_projects.extend(gradle.ignored_projects.iter().flatten().cloned());
+    }
+    let mut required = Vec::new();
+    if let Some(maven) = &jvm_builds.maven {
+        for pom in maven.selected_poms.iter().flatten() {
+            required.push(review_row(
+                format!("review:required:pom:{pom}"),
+                format!("Required: {pom}"),
+                format!(
+                    "Required Maven import {pom} selected by the saved import selection; review only"
+                ),
+            ));
+        }
+    }
+    if let Some(gradle) = &jvm_builds.gradle {
+        for file in gradle.selected_build_files.iter().flatten() {
+            required.push(review_row(
+                format!("review:required:file:{file}"),
+                format!("Required: {file}"),
+                format!(
+                    "Required Gradle import {file} selected by the saved import selection; review only"
+                ),
+            ));
+        }
+    }
+    push_group("Required imports".into(), required);
+    let mut root = Vec::new();
+    let mut nested = Vec::new();
+    let mut linked = Vec::new();
+    let mut orphaned = Vec::new();
+    let mut active_ignored = Vec::new();
+    for module in &snapshot.projects {
+        let directory = module.module_root.path.as_unix_str().to_string();
+        let identity = if directory.is_empty() {
+            "(worktree root)".to_string()
+        } else {
+            directory.clone()
+        };
+        // The saved policy names exact worktree-relative directories; an empty
+        // string names the root. Membership is never inferred from names.
+        if ignored_projects
+            .iter()
+            .any(|entry| entry.as_str() == module.module_root.path.as_unix_str())
+        {
+            orphaned.push(review_row(
+                format!("review:orphan:{directory}"),
+                format!("Orphaned (ignored, still active): {identity}"),
+                format!(
+                    "Orphaned Gradle or Maven project {identity}; ignored by the saved import selection yet still active in the provider; review only"
+                ),
+            ));
+            active_ignored.push(directory);
+            continue;
+        }
+        if directory.is_empty() {
+            root.push(review_row(
+                "review:root:".to_string(),
+                format!("Root: {identity}"),
+                format!("Root project {identity}; imported build root; review only"),
+            ));
+        } else if !module.project_references.is_empty() {
+            linked.push(review_row(
+                format!("review:link:{directory}"),
+                format!("Linked: {identity}"),
+                format!(
+                    "Linked project {identity}; provider references {} external projects; review only",
+                    module.project_references.len()
+                ),
+            ));
+        } else {
+            nested.push(review_row(
+                format!("review:nested:{directory}"),
+                format!("Nested: {identity}"),
+                format!("Nested project {identity}; imported under the root; review only"),
+            ));
+        }
+    }
+    push_group("Root".into(), root);
+    push_group("Nested".into(), nested);
+    push_group("Linked".into(), linked);
+    push_group("Orphaned".into(), orphaned);
+    let mut ignored = Vec::new();
+    for name in &ignored_projects {
+        if active_ignored.contains(name) {
+            continue;
+        }
+        ignored.push(review_row(
+            format!("review:ignored:project:{name}"),
+            format!("Ignored: {}", if name.is_empty() { "(worktree root)".into() } else { name.clone() }),
+            format!(
+                "Ignored project {}; excluded by the saved import selection and not active in the provider; review only",
+                if name.is_empty() { "(worktree root)".into() } else { name.clone() }
+            ),
+        ));
+    }
+    if let Some(maven) = &jvm_builds.maven {
+        for pattern in maven.ignored_pom_patterns.iter().flatten() {
+            ignored.push(review_row(
+                format!("review:ignored:pattern:{pattern}"),
+                format!("Ignored POM mask: {pattern}"),
+                format!(
+                    "Ignored Maven POM mask {pattern}; excluded by the saved import selection; review only"
+                ),
+            ));
+        }
+    }
+    push_group("Ignored".into(), ignored);
+    let heading = format!("Selection review ({})", snapshot.projects.len());
+    LanguageToolNode {
+        id: selection_review_root_id(),
+        label: heading.clone(),
+        secondary_label: None,
+        icon: None,
+        accessibility_label: format!(
+            "{heading}; every provider module and saved policy entry appears under one named category; review only"
+        ),
+        children: groups,
+        enabled: false,
+        activation_label: None,
+    }
+}
+
+// The unlink control delegates to the store's exact unlink owner; it never
+// infers membership from display names and never deletes source files.
+fn unlink_gradle_module(selection: Option<&GraphSelection>) -> anyhow::Result<ProjectPath> {
+    match selection {
+        Some(GraphSelection {
+            target: GraphQueryTarget::Gradle { module, .. },
+            ..
+        }) => Ok(module.clone()),
+        Some(_) => anyhow::bail!(
+            "Select a Gradle module row before unlinking; Maven rows use the saved import selection controls"
+        ),
+        None => anyhow::bail!("Select a Gradle module row before unlinking"),
+    }
+}
+
 fn provider_projections_for_view(
     jdtls_snapshot: Option<(&JdtlsProjectSnapshot, bool)>,
     kotlin_snapshot: Option<(&KotlinWorkspaceSnapshot, bool)>,
@@ -1883,11 +2073,10 @@ impl DependenciesPanel {
 
     // The saved import policy is the authoritative provider-qualified record of
     // excluded projects; these rows are display-only and never actionable.
-    fn ignored_project_rows(
+    fn saved_jvm_builds(
         worktree_id: settings::WorktreeId,
-        view: BuildToolView,
         cx: &App,
-    ) -> Vec<LanguageToolNode> {
+    ) -> Option<settings::JvmBuildSettingsContent> {
         let location = settings::SettingsLocation {
             worktree_id,
             path: util::rel_path::RelPath::empty(),
@@ -1896,10 +2085,17 @@ impl DependenciesPanel {
             Some(location),
             cx,
         );
-        let Some(jvm_builds) = settings.jvm_builds.clone() else {
-            return Vec::new();
-        };
-        ignored_project_rows(&jvm_builds, view)
+        settings.jvm_builds.clone()
+    }
+
+    fn ignored_project_rows(
+        worktree_id: settings::WorktreeId,
+        view: BuildToolView,
+        cx: &App,
+    ) -> Vec<LanguageToolNode> {
+        Self::saved_jvm_builds(worktree_id, cx)
+            .map(|jvm_builds| ignored_project_rows(&jvm_builds, view))
+            .unwrap_or_default()
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
@@ -1953,6 +2149,7 @@ impl DependenciesPanel {
         let mut diagram_source = None;
         let mut partial = false;
         let mut stale = false;
+        let mut review: Option<(settings::WorktreeId, JdtlsProjectSnapshot)> = None;
         let mut query_failed = false;
         let mut import_failed = false;
         let mut jdtls_import_failed = false;
@@ -2010,6 +2207,13 @@ impl DependenciesPanel {
             let shown_jdtls = projections
                 .iter()
                 .any(|projection| projection.provider == DependencyProvider::Jdtls);
+            if shown_jdtls
+                && worktree.is_local()
+                && let Some((snapshot, true)) = jdtls_snapshot
+                && review.is_none()
+            {
+                review = Some((worktree.id(), snapshot.clone()));
+            }
             let shown_kotlin = projections
                 .iter()
                 .any(|projection| projection.provider == DependencyProvider::Kotlin);
@@ -2278,6 +2482,12 @@ impl DependenciesPanel {
                 saved_configuration_tree(&ordered_configurations);
             roots.push(configuration_root);
             self.configuration_selections = configuration_selections;
+        }
+        if self.view == BuildToolView::Dependencies
+            && let Some((review_worktree_id, review_snapshot)) = review
+            && let Some(jvm_builds) = Self::saved_jvm_builds(review_worktree_id, cx)
+        {
+            roots.push(selection_review_tree(&review_snapshot, &jvm_builds));
         }
         self.operation_selections = operation_selections;
         self.host
@@ -2896,6 +3106,81 @@ impl DependenciesPanel {
             .selected()
             .and_then(|id| self.graph_selections.get(id))
             .cloned()
+    }
+
+    fn unlink_target(&self, cx: &App) -> anyhow::Result<ProjectPath> {
+        anyhow::ensure!(
+            !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
+            "Unlinking requires a connected local project host"
+        );
+        let worktree_id = self.selected_build_worktree(cx)?;
+        let module = unlink_gradle_module(self.selected_graph().as_ref())?;
+        anyhow::ensure!(
+            module.worktree_id == worktree_id,
+            "Select a Gradle module row in this local project folder before unlinking"
+        );
+        anyhow::Ok(module)
+    }
+
+    fn unlink_selected_gradle_project(&mut self, cx: &mut Context<Self>) {
+        if self.build_phase_token.is_some() {
+            self.build_phase_notice = Some(
+                "This panel is waiting for its selected import. Cancel that import or wait before unlinking a project."
+                    .into(),
+            );
+            cx.notify();
+            return;
+        }
+        let module = match self.unlink_target(cx) {
+            Ok(module) => module,
+            Err(error) => {
+                self.build_phase_notice = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        let result = self.project.read(cx).lsp_store().update(cx, |store, cx| {
+            let waiter = store.unlink_selected_local_gradle_projects(
+                module.worktree_id,
+                vec![module.clone()],
+                cx,
+            )?;
+            let token = store.jdtls_project_import_token(module.worktree_id);
+            anyhow::Ok((token, waiter))
+        });
+        match result {
+            Ok((token, waiter)) => {
+                self.build_phase_notice = Some(
+                    "Unlinking the selected Gradle project; full synchronization remains unverified."
+                        .into(),
+                );
+                self.build_phase_token = token;
+                self.build_phase_waiter = Some(cx.spawn(async move |panel, cx| {
+                    let result = waiter.await;
+                    if let Err(error) = panel.update(cx, |panel, cx| {
+                        if let Some(token) = token {
+                            if panel.build_phase_token != Some(token) {
+                                return;
+                            }
+                            panel.build_phase_token = None;
+                        }
+                        if result.is_ok() {
+                            panel.build_phase_notice = Some(
+                                "Selected Gradle project unlinked. Refresh provider data and review the saved selection before reimporting."
+                                    .into(),
+                            );
+                        } else {
+                            panel.show_build_phase_error(cx);
+                        }
+                        panel.rebuild(cx);
+                    }) {
+                        log::debug!("Groovy panel closed after unlink phase: {error:#}");
+                    }
+                }));
+            }
+            Err(_) => self.show_build_phase_error(cx),
+        }
+        cx.notify();
     }
 
     fn graph_query_is_pending(&self, cx: &App) -> bool {
@@ -5100,6 +5385,7 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &RunOrderedOfflineOperations, window, cx| panel.run_ordered_offline_operations(window, cx)))
             .on_action(cx.listener(|panel, _: &ApplySavedMavenSelection, _, cx| panel.apply_saved_build_selection(true, cx)))
             .on_action(cx.listener(|panel, _: &ImportGradleSelection, _, cx| panel.apply_saved_build_selection(false, cx)))
+            .on_action(cx.listener(|panel, _: &UnlinkSelectedGradleProject, _, cx| panel.unlink_selected_gradle_project(cx)))
             .on_action(cx.listener(|panel, _: &CancelSelectedImport, _, cx| panel.cancel_selected_import(cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphNeighbours, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx)))
@@ -5231,6 +5517,12 @@ impl Render for DependenciesPanel {
                             .aria_label(if self.project.read(cx).is_remote() { "Gradle selection import unavailable for remote projects" } else { "Import effective Gradle selection for the selected local project folder; executes trusted build configuration" })
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(false, cx)))
+                    ))
+                    .when(self.view != BuildToolView::Maven, |header| header.child(
+                        Button::new("groovy-unlink-selected-gradle-project", "Unlink selected project")
+                            .aria_label(if self.project.read(cx).is_remote() { "Gradle unlinking unavailable for remote projects" } else { "Unlink the selected Gradle module from the local project folder through the provider; never deletes source files" })
+                            .disabled(!can_apply_build_selection).tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.unlink_selected_gradle_project(cx)))
                     ))
                     .child(Button::new("groovy-cancel-selected-import", "Cancel selected import")
                         .aria_label("Cancel only the current build import started by this panel")
@@ -6618,6 +6910,197 @@ mod tests {
         assert!(ignored_project_rows(&empty_policy, BuildToolView::Dependencies).is_empty());
         let absent_policy = JvmBuildSettingsContent::default();
         assert!(ignored_project_rows(&absent_policy, BuildToolView::Dependencies).is_empty());
+    }
+
+    #[test]
+    fn selection_review_classifies_modules_and_policy_exactly_once() {
+        use project::jvm_project::{JdtlsProject, JdtlsProjectMembership, MavenProject};
+
+        fn module(worktree_id: WorktreeId, directory: &str, references: usize) -> JdtlsProject {
+            let pom = if directory.is_empty() {
+                "pom.xml".to_string()
+            } else {
+                format!("{directory}/pom.xml")
+            };
+            JdtlsProject {
+                module_root: path(worktree_id, directory),
+                membership: JdtlsProjectMembership::ImportedJava,
+                imported_build_kind: project::jvm_project::JdtlsImportedBuildKind::Maven,
+                source_roots: Vec::new(),
+                project_references: vec!["external-dep".to_string(); references],
+                library_entries: 0,
+                library_files: Vec::new(),
+                library_artifacts: Vec::new(),
+                project_vm_known: false,
+                project_vm_java_major: None,
+                server_launch_java_major: None,
+                java_source_level: None,
+                java_target_level: None,
+                gradle: None,
+                maven: Some(MavenProject {
+                    dependency_graph: None,
+                    pom: path(worktree_id, &pom),
+                    modules: Vec::new(),
+                    group_id: "evidence".into(),
+                    artifact_id: directory.replace('/', "-"),
+                    version: "1.0".into(),
+                    packaging: "jar".into(),
+                    profiles: BTreeMap::new(),
+                    profile_definitions_known: false,
+                    profile_definitions: Vec::new(),
+                    reactor_position: None,
+                    reactor_order_problem: None,
+                    plugins: Vec::new(),
+                    lifecycles: Vec::new(),
+                }),
+            }
+        }
+        fn snapshot(worktree_id: WorktreeId, projects: Vec<JdtlsProject>) -> JdtlsProjectSnapshot {
+            JdtlsProjectSnapshot {
+                metadata: Default::default(),
+                server_id: lsp::LanguageServerId(1),
+                worktree_id,
+                generation: 2,
+                partial: false,
+                projects,
+            }
+        }
+        let worktree_id = WorktreeId::from_usize(1);
+        let policy = settings::JvmBuildSettingsContent {
+            maven: Some(settings::MavenBuildSettingsContent {
+                selected_poms: Some(vec!["pom.xml".into()]),
+                ignored_projects: Some(vec!["ignored".into(), "stale".into()]),
+                ignored_pom_patterns: Some(vec!["*/other/pom.xml".into()]),
+            }),
+            gradle: Some(settings::GradleBuildSettingsContent {
+                selected_build_files: Some(vec!["build.gradle".into()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let review = selection_review_tree(
+            &snapshot(
+                worktree_id,
+                vec![
+                    module(worktree_id, "", 0),
+                    module(worktree_id, "application", 0),
+                    module(worktree_id, "linked-lib", 2),
+                    module(worktree_id, "ignored", 0),
+                ],
+            ),
+            &policy,
+        );
+        assert_eq!(review.label, "Selection review (4)");
+        assert!(!review.enabled && review.activation_label.is_none());
+        assert_eq!(
+            review
+                .children
+                .iter()
+                .map(|group| group.label.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Required imports (2)",
+                "Root (1)",
+                "Nested (1)",
+                "Linked (1)",
+                "Orphaned (1)",
+                "Ignored (2)",
+            ],
+            "each provider module and policy entry lands in exactly one named category"
+        );
+        let required = &review.children[0];
+        assert_eq!(
+            required
+                .children
+                .iter()
+                .map(|row| row.label.as_str())
+                .collect::<Vec<_>>(),
+            ["Required: pom.xml", "Required: build.gradle"],
+            "required rows follow the saved selection in policy order"
+        );
+        assert_eq!(
+            review.children[1].children[0].label,
+            "Root: (worktree root)"
+        );
+        assert_eq!(review.children[2].children[0].label, "Nested: application");
+        assert_eq!(review.children[3].children[0].label, "Linked: linked-lib");
+        assert_eq!(
+            review.children[4].children[0].label,
+            "Orphaned (ignored, still active): ignored"
+        );
+        let ignored = review.children[5]
+            .children
+            .iter()
+            .map(|row| row.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            ignored.contains(&"Ignored: stale")
+                && ignored.contains(&"Ignored POM mask: */other/pom.xml"),
+            "policy ignores that match no active module stay visible: {ignored:?}"
+        );
+        assert!(
+            !ignored.contains(&"Ignored: ignored"),
+            "an ignored entry that matches an active module is reviewed as orphaned instead of duplicated"
+        );
+        let mut rows = Vec::new();
+        for group in &review.children {
+            rows.extend(group.children.iter());
+        }
+        for directory in ["(worktree root)", "application", "linked-lib", "ignored"] {
+            let found = rows
+                .iter()
+                .filter(|row| row.label.contains(directory))
+                .count();
+            assert_eq!(
+                found, 1,
+                "module {directory:?} appears under exactly one named category"
+            );
+        }
+        assert!(
+            review
+                .children
+                .iter()
+                .all(|group| !group.enabled && group.activation_label.is_none()),
+            "review groups are display-only"
+        );
+        assert!(rows.iter().all(|row| !row.enabled
+            && row.activation_label.is_none()
+            && row.children.is_empty()
+            && row.accessibility_label.contains("review only")));
+    }
+
+    #[test]
+    fn unlink_control_targets_gradle_modules_and_rejects_other_rows() {
+        let worktree_id = WorktreeId::from_usize(1);
+        let module = path(worktree_id, "application");
+        let gradle = GraphSelection {
+            server_id: lsp::LanguageServerId(1),
+            generation: 2,
+            target: GraphQueryTarget::Gradle {
+                module: module.clone(),
+                configuration: "runtimeClasspath".into(),
+            },
+        };
+        assert_eq!(
+            unlink_gradle_module(Some(&gradle)).expect("gradle target"),
+            module,
+            "the unlink control targets the selected Gradle module identity"
+        );
+        let maven = GraphSelection {
+            server_id: lsp::LanguageServerId(1),
+            generation: 2,
+            target: GraphQueryTarget::Maven(path(worktree_id, "application/pom.xml")),
+        };
+        assert!(
+            unlink_gradle_module(Some(&maven))
+                .err()
+                .is_some_and(|error| {
+                    error
+                        .to_string()
+                        .contains("Maven rows use the saved import selection controls")
+                })
+        );
+        assert!(unlink_gradle_module(None).is_err());
     }
 
     #[test]
