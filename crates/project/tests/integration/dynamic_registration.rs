@@ -517,6 +517,130 @@ async fn test_registration_with_unchanged_options_does_not_refresh(cx: &mut gpui
 }
 
 #[gpui::test]
+async fn test_dynamic_completion_respects_document_selector(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, first, second, _handles) =
+        setup_document_selector_test(cx, lsp::ServerCapabilities::default()).await;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let _request_handler = server.set_request_handler::<lsp::request::Completion, _, _>({
+        let requests = requests.clone();
+        move |params, _| {
+            requests
+                .lock()
+                .push(params.text_document_position.text_document.uri);
+            async {
+                Ok(Some(lsp::CompletionResponse::Array(vec![
+                    lsp::CompletionItem {
+                        label: "candidate".into(),
+                        ..Default::default()
+                    },
+                ])))
+            }
+        }
+    });
+    let method = "textDocument/completion";
+    register_capability(
+        &server,
+        method,
+        "completion-a",
+        Some(json!({
+            "documentSelector": [{ "language": "rust", "scheme": "file", "pattern": "**/a.rs" }],
+            "triggerCharacters": ["."],
+            "resolveProvider": true,
+        })),
+    )
+    .await;
+
+    let complete = |buffer: &Entity<Buffer>, cx: &mut gpui::TestAppContext| {
+        project.update(cx, |project, cx| {
+            project.completions(buffer, 0usize, project::DEFAULT_COMPLETION_CONTEXT, cx)
+        })
+    };
+    let matching = complete(&first, cx).await.unwrap();
+    let nonmatching = complete(&second, cx).await.unwrap();
+    assert_eq!(
+        &*requests.lock(),
+        &[Uri::from_file_path(path!("/the-root/a.rs")).unwrap()],
+        "only the matching document may reach the completion provider",
+    );
+    assert_eq!(
+        matching
+            .iter()
+            .map(|response| response.completions.len())
+            .sum::<usize>(),
+        1
+    );
+    assert!(
+        nonmatching
+            .iter()
+            .all(|response| response.completions.is_empty())
+    );
+    assert!(first.read_with(cx, |buffer, _| buffer.completion_triggers().contains(".")));
+    assert!(second.read_with(cx, |buffer, _| buffer.completion_triggers().is_empty()));
+
+    register_capability(
+        &server,
+        method,
+        "completion-b",
+        Some(json!({
+            "documentSelector": [{ "pattern": "**/b.rs" }],
+            "triggerCharacters": [":"],
+            "resolveProvider": false,
+        })),
+    )
+    .await;
+    assert!(first.read_with(cx, |buffer, _| buffer.completion_triggers().contains(".")));
+    assert!(second.read_with(cx, |buffer, _| buffer.completion_triggers().contains(":")));
+
+    let _resolve_handler = server.set_request_handler::<lsp::request::ResolveCompletionItem, _, _>(
+        |mut item, _| async move {
+            item.documentation = Some(lsp::Documentation::String("Resolved".into()));
+            Ok(item)
+        },
+    );
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    let matching = Rc::new(RefCell::new(
+        matching
+            .into_iter()
+            .flat_map(|response| response.completions)
+            .collect::<Box<[_]>>(),
+    ));
+    assert!(
+        lsp_store
+            .update(cx, |store, cx| {
+                store.resolve_completions(first.clone(), vec![0], matching.clone(), cx)
+            })
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        matching.borrow()[0]
+            .source
+            .lsp_completion(false)
+            .unwrap()
+            .documentation,
+        Some(lsp::Documentation::String("Resolved".into())),
+    );
+
+    unregister_capabilities(&server, method, &["completion-a"]).await;
+    assert!(first.read_with(cx, |buffer, _| buffer.completion_triggers().is_empty()));
+    assert!(second.read_with(cx, |buffer, _| buffer.completion_triggers().contains(":")));
+    assert!(complete(&first, cx).await.unwrap().is_empty());
+    assert_eq!(
+        complete(&second, cx)
+            .await
+            .unwrap()
+            .into_iter()
+            .flat_map(|response| response.completions)
+            .count(),
+        1
+    );
+    unregister_capabilities(&server, method, &["completion-b"]).await;
+    assert!(second.read_with(cx, |buffer, _| buffer.completion_triggers().is_empty()));
+    assert!(complete(&second, cx).await.unwrap().is_empty());
+}
+
+#[gpui::test]
 async fn test_multi_registration_completion_triggers(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     let (project, fake_server) =
