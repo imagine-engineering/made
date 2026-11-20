@@ -171,7 +171,7 @@ impl MavenGraphScope {
 
 const PANEL_KEY: &str = "GroovyDependenciesPanel";
 const VIEW_STATE_KEY: &str = "GroovyBuildViewState";
-const VIEW_STATE_VERSION: u32 = 6;
+const VIEW_STATE_VERSION: u32 = 7;
 const MAX_VIEW_STATE_BYTES: usize = 4096;
 const MAX_GRAPH_SEARCH_BYTES: usize = 512;
 const BASIC_MAVEN_PHASES: &[&str] = &[
@@ -192,6 +192,7 @@ struct BuildViewPreferences {
     show_gradle_toolbar: bool,
     show_maven_toolbar: bool,
     show_basic_maven_phases: bool,
+    show_ignored: bool,
     graph_fact_filter: GraphFactFilter,
     maven_graph_scope: MavenGraphScope,
 }
@@ -210,6 +211,7 @@ impl Default for BuildViewPreferences {
             show_gradle_toolbar: true,
             show_maven_toolbar: true,
             show_basic_maven_phases: true,
+            show_ignored: false,
             graph_fact_filter: GraphFactFilter::All,
             maven_graph_scope: MavenGraphScope::All,
         }
@@ -396,6 +398,45 @@ impl BuildViewPreferences {
                     ..Default::default()
                 })
             }
+            6 => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct PreviousPreferences {
+                    version: u32,
+                    dock_position: settings::DockPosition,
+                    view: BuildToolView,
+                    group_gradle_tasks: bool,
+                    group_gradle_modules: bool,
+                    group_maven_modules: bool,
+                    show_maven_artifact_id: bool,
+                    show_maven_version: bool,
+                    show_gradle_toolbar: bool,
+                    show_maven_toolbar: bool,
+                    show_basic_maven_phases: bool,
+                    graph_fact_filter: GraphFactFilter,
+                    maven_graph_scope: MavenGraphScope,
+                }
+                let previous: PreviousPreferences = serde_json::from_str(serialized)?;
+                anyhow::ensure!(
+                    previous.version == 6,
+                    "Unsupported previous preferences version"
+                );
+                Ok(Self {
+                    dock_position: previous.dock_position,
+                    view: previous.view,
+                    group_gradle_tasks: previous.group_gradle_tasks,
+                    group_gradle_modules: previous.group_gradle_modules,
+                    group_maven_modules: previous.group_maven_modules,
+                    show_maven_artifact_id: previous.show_maven_artifact_id,
+                    show_maven_version: previous.show_maven_version,
+                    show_gradle_toolbar: previous.show_gradle_toolbar,
+                    show_maven_toolbar: previous.show_maven_toolbar,
+                    show_basic_maven_phases: previous.show_basic_maven_phases,
+                    graph_fact_filter: previous.graph_fact_filter,
+                    maven_graph_scope: previous.maven_graph_scope,
+                    ..Default::default()
+                })
+            }
             VIEW_STATE_VERSION => Ok(serde_json::from_str(serialized)?),
             _ => anyhow::bail!("Unsupported build view preferences version"),
         }
@@ -426,6 +467,7 @@ enum BuildViewOption {
     ShowMavenArtifactId,
     ShowMavenVersion,
     ShowToolbar,
+    ShowIgnored,
 }
 
 impl BuildViewOption {
@@ -437,6 +479,7 @@ impl BuildViewOption {
             Self::ShowMavenArtifactId => "Always Show ArtifactId",
             Self::ShowMavenVersion => "Show Version",
             Self::ShowToolbar => "Show Toolbar",
+            Self::ShowIgnored => "Show Ignored",
         }
     }
 
@@ -448,6 +491,7 @@ impl BuildViewOption {
             Self::ShowMavenArtifactId => state.show_maven_artifact_id,
             Self::ShowMavenVersion => state.show_maven_version,
             Self::ShowToolbar => state.show_toolbar(view),
+            Self::ShowIgnored => state.show_ignored,
         }
     }
 }
@@ -1246,6 +1290,57 @@ struct DependencyProjection {
     graph_selections: HashMap<LanguageToolNodeId, GraphSelection>,
 }
 
+// The saved import policy is the authoritative provider-qualified record of
+// excluded projects; these rows are display-only and never actionable.
+fn ignored_project_rows(
+    jvm_builds: &settings::JvmBuildSettingsContent,
+    view: BuildToolView,
+) -> Vec<LanguageToolNode> {
+    fn ignored_row(id: String, label: String, accessibility: String) -> LanguageToolNode {
+        LanguageToolNode {
+            id: LanguageToolNodeId(id),
+            label,
+            secondary_label: None,
+            icon: None,
+            accessibility_label: accessibility,
+            children: Vec::new(),
+            enabled: false,
+            activation_label: None,
+        }
+    }
+    let mut rows = Vec::new();
+    if let Some(maven) = &jvm_builds.maven
+        && view != BuildToolView::Gradle
+    {
+        for name in maven.ignored_projects.iter().flatten() {
+            rows.push(ignored_row(
+                format!("ignored:maven:project:{name}"),
+                format!("Ignored: {name}"),
+                format!("Ignored Maven project {name}; excluded by the saved import selection; activation unavailable"),
+            ));
+        }
+        for pattern in maven.ignored_pom_patterns.iter().flatten() {
+            rows.push(ignored_row(
+                format!("ignored:maven:pattern:{pattern}"),
+                format!("Ignored POM mask: {pattern}"),
+                format!("Ignored Maven POM mask {pattern}; excluded by the saved import selection; activation unavailable"),
+            ));
+        }
+    }
+    if let Some(gradle) = &jvm_builds.gradle
+        && view != BuildToolView::Maven
+    {
+        for name in gradle.ignored_projects.iter().flatten() {
+            rows.push(ignored_row(
+                format!("ignored:gradle:project:{name}"),
+                format!("Ignored: {name}"),
+                format!("Ignored Gradle project {name}; excluded by the saved import selection; activation unavailable"),
+            ));
+        }
+    }
+    rows
+}
+
 fn provider_projections_for_view(
     jdtls_snapshot: Option<(&JdtlsProjectSnapshot, bool)>,
     kotlin_snapshot: Option<(&KotlinWorkspaceSnapshot, bool)>,
@@ -1678,6 +1773,9 @@ impl DependenciesPanel {
             BuildViewOption::ShowMavenVersion => {
                 self.preferences.show_maven_version = !self.preferences.show_maven_version
             }
+            BuildViewOption::ShowIgnored => {
+                self.preferences.show_ignored = !self.preferences.show_ignored
+            }
             BuildViewOption::ShowToolbar => match self.view {
                 BuildToolView::Gradle => {
                     self.preferences.show_gradle_toolbar = !self.preferences.show_gradle_toolbar
@@ -1781,6 +1879,27 @@ impl DependenciesPanel {
             || project
                 .remote_connection_state(cx)
                 .is_some_and(|state| state != remote::ConnectionState::Connected)
+    }
+
+    // The saved import policy is the authoritative provider-qualified record of
+    // excluded projects; these rows are display-only and never actionable.
+    fn ignored_project_rows(
+        worktree_id: settings::WorktreeId,
+        view: BuildToolView,
+        cx: &App,
+    ) -> Vec<LanguageToolNode> {
+        let location = settings::SettingsLocation {
+            worktree_id,
+            path: util::rel_path::RelPath::empty(),
+        };
+        let settings = <project::project_settings::ProjectSettings as settings::Settings>::get(
+            Some(location),
+            cx,
+        );
+        let Some(jvm_builds) = settings.jvm_builds.clone() else {
+            return Vec::new();
+        };
+        ignored_project_rows(&jvm_builds, view)
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
@@ -1923,6 +2042,10 @@ impl DependenciesPanel {
                     );
                     annotate_operation_rows(&mut rows, &selections, &unavailable);
                     operation_selections.extend(selections);
+                }
+                if provider == DependencyProvider::Jdtls && current && self.preferences.show_ignored
+                {
+                    rows.extend(Self::ignored_project_rows(worktree.id(), self.view, cx));
                 }
                 match provider {
                     DependencyProvider::Jdtls => {
@@ -5350,8 +5473,8 @@ impl Render for DependenciesPanel {
             )
             .when(self.show_options && self.view != BuildToolView::Dependencies, |panel| {
                 let options = match self.view {
-                    BuildToolView::Gradle => vec![BuildViewOption::GroupModules, BuildViewOption::GroupGradleTasks, BuildViewOption::ShowToolbar],
-                    BuildToolView::Maven => vec![BuildViewOption::GroupModules, BuildViewOption::ShowBasicMavenPhases, BuildViewOption::ShowMavenArtifactId, BuildViewOption::ShowMavenVersion, BuildViewOption::ShowToolbar],
+                    BuildToolView::Gradle => vec![BuildViewOption::GroupModules, BuildViewOption::GroupGradleTasks, BuildViewOption::ShowToolbar, BuildViewOption::ShowIgnored],
+                    BuildToolView::Maven => vec![BuildViewOption::GroupModules, BuildViewOption::ShowBasicMavenPhases, BuildViewOption::ShowMavenArtifactId, BuildViewOption::ShowMavenVersion, BuildViewOption::ShowToolbar, BuildViewOption::ShowIgnored],
                     BuildToolView::Dependencies => Vec::new(),
                 };
                 panel.child(v_flex()
@@ -5366,10 +5489,7 @@ impl Render for DependenciesPanel {
                             .toggle_state(option.enabled(&self.preferences, self.view))
                             .tab_index(0_isize)
                             .on_click(cx.listener(move |panel, _, _, cx| panel.toggle_option(option, cx)))
-                    }))
-                    .child(Button::new("groovy-build-option-show-ignored", "Show Ignored")
-                        .aria_label("Show Ignored unavailable: provider ignore semantics are not implemented")
-                        .disabled(true)))
+                    })))
             })
             .when_some(self.build_phase_notice.clone(), |panel, notice| panel.child(
                 div().id("groovy-selected-import-status").role(Role::Status)
@@ -5782,6 +5902,10 @@ mod tests {
             .as_object_mut()
             .expect("record")
             .remove("dock_position");
+        previous_three
+            .as_object_mut()
+            .expect("record")
+            .remove("show_ignored");
         let mut expected_three = state.clone();
         expected_three.dock_position = settings::DockPosition::Right;
         assert_eq!(
@@ -5808,6 +5932,10 @@ mod tests {
             .as_object_mut()
             .expect("record")
             .remove("dock_position");
+        previous_two
+            .as_object_mut()
+            .expect("record")
+            .remove("show_ignored");
         let mut expected = state;
         expected.show_basic_maven_phases = false;
         expected.dock_position = settings::DockPosition::Right;
@@ -6371,6 +6499,10 @@ mod tests {
         previous
             .as_object_mut()
             .expect("schema 5")
+            .remove("show_ignored");
+        previous
+            .as_object_mut()
+            .expect("schema 5")
             .remove("maven_graph_scope");
         let migrated =
             BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 5 migration");
@@ -6382,6 +6514,110 @@ mod tests {
         let mut invalid = serialized;
         invalid["maven_graph_scope"] = serde_json::json!("private-canary");
         assert!(BuildViewPreferences::restore(Some(&invalid.to_string())).is_err());
+    }
+
+    #[test]
+    fn show_ignored_preferences_migrate_strict_schema_six() {
+        let state = BuildViewPreferences {
+            show_ignored: true,
+            dock_position: settings::DockPosition::Bottom,
+            ..Default::default()
+        };
+        let serialized = serde_json::to_value(&state).expect("ignored preferences");
+        assert_eq!(
+            BuildViewPreferences::restore(Some(&serialized.to_string())).expect("ignored restore"),
+            state
+        );
+        let mut previous = serialized.clone();
+        previous["version"] = serde_json::json!(6);
+        previous
+            .as_object_mut()
+            .expect("schema 6")
+            .remove("show_ignored");
+        let migrated =
+            BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 6 migration");
+        assert!(
+            !migrated.show_ignored,
+            "migrated state hides ignored projects"
+        );
+        assert_eq!(migrated.dock_position, state.dock_position);
+        assert_eq!(migrated.maven_graph_scope, state.maven_graph_scope);
+        previous["show_ignored"] = serde_json::json!(true);
+        assert!(
+            BuildViewPreferences::restore(Some(&previous.to_string())).is_err(),
+            "a schema 6 payload cannot carry the schema 7 flag"
+        );
+        let mut invalid = serialized;
+        invalid["show_ignored"] = serde_json::json!("private-canary");
+        assert!(BuildViewPreferences::restore(Some(&invalid.to_string())).is_err());
+    }
+
+    #[test]
+    fn ignored_project_rows_preserve_saved_policy_and_nonactionability() {
+        use settings::JvmBuildSettingsContent;
+        let policy = JvmBuildSettingsContent {
+            maven: Some(settings::MavenBuildSettingsContent {
+                ignored_projects: Some(vec!["ignored".into()]),
+                ignored_pom_patterns: Some(vec!["*/other/pom.xml".into()]),
+                ..Default::default()
+            }),
+            gradle: Some(settings::GradleBuildSettingsContent {
+                ignored_projects: Some(vec!["stale-root".into()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let row_ids =
+            |rows: &[LanguageToolNode]| rows.iter().map(|row| row.id.0.clone()).collect::<Vec<_>>();
+        let dependencies = ignored_project_rows(&policy, BuildToolView::Dependencies);
+        assert_eq!(
+            row_ids(&dependencies),
+            [
+                "ignored:maven:project:ignored",
+                "ignored:maven:pattern:*/other/pom.xml",
+                "ignored:gradle:project:stale-root",
+            ],
+            "stable identities follow the saved policy order"
+        );
+        assert!(dependencies.iter().all(|row| {
+            !row.enabled
+                && row.activation_label.is_none()
+                && row.children.is_empty()
+                && row
+                    .accessibility_label
+                    .contains("excluded by the saved import selection")
+                && row.accessibility_label.contains("activation unavailable")
+        }));
+        let maven_view = ignored_project_rows(&policy, BuildToolView::Maven);
+        assert_eq!(
+            row_ids(&maven_view),
+            [
+                "ignored:maven:project:ignored",
+                "ignored:maven:pattern:*/other/pom.xml",
+            ],
+            "the Maven view shows only Maven ignore facts"
+        );
+        let gradle_view = ignored_project_rows(&policy, BuildToolView::Gradle);
+        assert_eq!(
+            row_ids(&gradle_view),
+            ["ignored:gradle:project:stale-root"],
+            "the Gradle view shows only Gradle ignore facts"
+        );
+        let empty_policy = JvmBuildSettingsContent {
+            maven: Some(settings::MavenBuildSettingsContent {
+                ignored_projects: Some(Vec::new()),
+                ignored_pom_patterns: Some(Vec::new()),
+                ..Default::default()
+            }),
+            gradle: Some(settings::GradleBuildSettingsContent {
+                ignored_projects: Some(Vec::new()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(ignored_project_rows(&empty_policy, BuildToolView::Dependencies).is_empty());
+        let absent_policy = JvmBuildSettingsContent::default();
+        assert!(ignored_project_rows(&absent_policy, BuildToolView::Dependencies).is_empty());
     }
 
     #[test]
@@ -6740,6 +6976,10 @@ mod tests {
         );
         let mut previous = serde_json::to_value(&state).expect("prefs");
         previous["version"] = serde_json::json!(4);
+        previous
+            .as_object_mut()
+            .expect("old prefs")
+            .remove("show_ignored");
         previous
             .as_object_mut()
             .expect("old prefs")
