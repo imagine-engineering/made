@@ -44,6 +44,7 @@ actions!(
         ClearGraphFactSearch,
         InspectGraphNeighbours,
         InspectGraphRootPaths,
+        InspectGraphConflictOrigins,
         ClearGraphInspection,
         ApplySavedMavenSelection,
         ImportGradleSelection,
@@ -680,6 +681,7 @@ impl GraphSelection {
 enum GraphInspectionMode {
     Neighbours,
     ShortestRootPaths,
+    ConflictOrigins,
 }
 
 impl GraphInspectionMode {
@@ -687,6 +689,7 @@ impl GraphInspectionMode {
         match self {
             Self::Neighbours => "Selected dependency neighbours",
             Self::ShortestRootPaths => "Shortest root paths",
+            Self::ConflictOrigins => "Conflict origins",
         }
     }
 }
@@ -897,6 +900,18 @@ fn graph_inspection_edges<'a>(
     edges: &[(&'a str, Option<&'a str>)],
     mode: GraphInspectionMode,
 ) -> (Vec<usize>, Option<usize>) {
+    if mode == GraphInspectionMode::ConflictOrigins {
+        // Conflict origins report only the mediation facts that reached the
+        // selected winner; the walk stays off the general graph traversal.
+        return (
+            edges
+                .iter()
+                .enumerate()
+                .filter_map(|(index, (_, target))| (*target == Some(selected)).then_some(index))
+                .collect(),
+            None,
+        );
+    }
     if mode == GraphInspectionMode::Neighbours {
         return (
             edges
@@ -1023,16 +1038,55 @@ fn graph_inspection_row(
                         )
                     })
                     .collect::<HashMap<_, _>>();
-                let relations = graph
-                    .edges
-                    .iter()
-                    .map(|edge| (edge.from_node.as_str(), Some(edge.target_node.as_str())))
-                    .collect::<Vec<_>>();
-                let edge_rows = graph.edges.iter().map(|edge| (
-                    graph_fact_id(&module_id, "inspection-maven-edge", &[&edge.from_node, &edge.target_node, &edge.selected_node, &edge.position.to_string()]),
-                    format!("{} → {}", labels.get(edge.from_node.as_str()).map(String::as_str).unwrap_or("Unavailable occurrence"), labels.get(edge.target_node.as_str()).map(String::as_str).unwrap_or("Unavailable occurrence")),
-                    format!("From occurrence {}; requested occurrence {}; selected occurrence {}; scope {}; omitted by mediation {}; optional {}; source origin unavailable", edge.from_node, edge.target_node, edge.selected_node, edge.scope, edge.omitted, edge.optional),
-                )).collect::<Vec<_>>();
+                let relations = if inspection.mode == GraphInspectionMode::ConflictOrigins {
+                    // Origin navigation reports the mediation facts that lost
+                    // to the selected winner occurrence; relation positions
+                    // stay aligned with the full edge order.
+                    graph
+                        .edges
+                        .iter()
+                        .map(|edge| {
+                            (
+                                edge.from_node.as_str(),
+                                if edge.omitted {
+                                    Some(edge.selected_node.as_str())
+                                } else {
+                                    None
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    graph
+                        .edges
+                        .iter()
+                        .map(|edge| (edge.from_node.as_str(), Some(edge.target_node.as_str())))
+                        .collect::<Vec<_>>()
+                };
+                let edge_rows = graph.edges.iter().map(|edge| {
+                    if inspection.mode == GraphInspectionMode::ConflictOrigins {
+                        return (
+                            graph_fact_id(&module_id, "inspection-maven-origin", &[&edge.from_node, &edge.target_node, &edge.selected_node, &edge.position.to_string()]),
+                            format!(
+                                "{} mediated to {}",
+                                labels.get(edge.target_node.as_str()).map(String::as_str).unwrap_or("Unavailable occurrence"),
+                                labels.get(edge.selected_node.as_str()).map(String::as_str).unwrap_or("Unavailable occurrence"),
+                            ),
+                            format!(
+                                "Omitted occurrence {}; selected occurrence {}; requested version {}; version constraint {}; premanaged version {}; source origin unavailable",
+                                edge.target_node, edge.selected_node,
+                                coordinates.get(edge.component.as_str()).map(String::as_str).unwrap_or("unavailable"),
+                                edge.version_constraint.as_deref().unwrap_or("none"),
+                                edge.premanaged_version.as_deref().unwrap_or("none"),
+                            ),
+                        );
+                    }
+                    (
+                        graph_fact_id(&module_id, "inspection-maven-edge", &[&edge.from_node, &edge.target_node, &edge.selected_node, &edge.position.to_string()]),
+                        format!("{} → {}", labels.get(edge.from_node.as_str()).map(String::as_str).unwrap_or("Unavailable occurrence"), labels.get(edge.target_node.as_str()).map(String::as_str).unwrap_or("Unavailable occurrence")),
+                        format!("From occurrence {}; requested occurrence {}; selected occurrence {}; scope {}; omitted by mediation {}; optional {}; source origin unavailable", edge.from_node, edge.target_node, edge.selected_node, edge.scope, edge.omitted, edge.optional),
+                    )
+                }).collect::<Vec<_>>();
                 (
                     graph_fact_id(&module_id, "maven", &[]),
                     graph.root_node.as_str(),
@@ -1072,6 +1126,23 @@ fn graph_inspection_row(
                         GradleDependencySelector::Module { group, module, version, .. } => format!("{group}:{module}:{version}"),
                         GradleDependencySelector::Project { build_path, project_path } => format!("Project {project_path}; build {build_path}"),
                     };
+                    if inspection.mode == GraphInspectionMode::ConflictOrigins {
+                        let (required, preferred, strict, rejected) = match &edge.requested {
+                            GradleDependencySelector::Module { required_version, preferred_version, strict_version, rejected_versions, .. } => {
+                                (required_version.as_str(), preferred_version.as_str(), strict_version.as_str(), rejected_versions.join(", "))
+                            }
+                            _ => ("none", "none", "none", String::new()),
+                        };
+                        let selected_label = edge.selected.as_deref().and_then(|id| labels.get(id)).map(String::as_str).unwrap_or("Unresolved");
+                        return (
+                            graph_fact_id(&module_id, "inspection-gradle-origin", &[configuration, &edge.from, &format!("{:?}", edge.requested), edge.selected.as_deref().unwrap_or("")]),
+                            format!("Requested {requested} mediated to {selected_label}"),
+                            format!(
+                                "Requested {requested}; required {required}; preferred {preferred}; strict {strict}; rejected {rejected}; constraint {}; resolved {}; source origin unavailable",
+                                edge.constraint, edge.resolved,
+                            ),
+                        );
+                    }
                     (graph_fact_id(&module_id, "inspection-gradle-edge", &[configuration, &edge.from, &format!("{:?}", edge.requested), edge.selected.as_deref().unwrap_or(""), if edge.constraint { "constraint" } else { "dependency" }]),
                         format!("{} → {}", labels.get(edge.from.as_str()).map(String::as_str).unwrap_or("Unavailable component"), edge.selected.as_deref().and_then(|id| labels.get(id)).map(String::as_str).unwrap_or("Unresolved")),
                         format!("Requested {requested}; constraint {}; resolved {}; variant {}; failure {}; source origin unavailable", edge.constraint, edge.resolved, edge.selected_variant.as_deref().unwrap_or("unavailable"), edge.failure_category.as_deref().unwrap_or("none")))
@@ -1138,6 +1209,7 @@ fn graph_inspection_row(
             })
             .collect();
         let path_status = match (inspection.mode, distance) {
+            (GraphInspectionMode::ConflictOrigins, _) => "Conflict-origin mediation facts only; every requested version that resolved into the selected winner stays reported; source origin ranges and artifacts unavailable".to_string(),
             (GraphInspectionMode::Neighbours, _) => "Incident edges only; unresolved outgoing edges retained".to_string(),
             (GraphInspectionMode::ShortestRootPaths, Some(distance)) => format!("Shortest distance {distance}; all equal-shortest paths retained without recursive expansion"),
             (GraphInspectionMode::ShortestRootPaths, None) => "No root path in admitted facts; incomplete coverage cannot prove absence; repair provider/cache settings and recollect".into(),
@@ -5389,6 +5461,7 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &CancelSelectedImport, _, cx| panel.cancel_selected_import(cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphNeighbours, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx)))
+            .on_action(cx.listener(|panel, _: &InspectGraphConflictOrigins, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphInspection, _, cx| panel.clear_graph_inspection(cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphFactSearch, window, cx| panel.clear_graph_fact_search(window, cx)))
             .on_action(cx.listener(|panel, _: &CycleGraphFactFilter, _, cx| panel.cycle_graph_fact_filter(cx)))
@@ -5576,6 +5649,11 @@ impl Render for DependenciesPanel {
                         .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ShortestRootPaths) { "Active" } else { "Inactive" })
                         .disabled(!can_inspect_graph).tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx))))
+                    .child(Button::new("groovy-inspect-graph-conflict-origins", "Conflict origins")
+                        .aria_label("Inspect the conflict origins and requested versions of the selected dependency in admitted graph facts")
+                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ConflictOrigins) { "Active" } else { "Inactive" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx))))
                     .child(Button::new("groovy-clear-graph-inspection", "Clear inspection")
                         .aria_label("Clear selected dependency graph inspection")
                         .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
@@ -6307,6 +6385,142 @@ mod tests {
             "resolution": serde_json::from_str::<serde_json::Value>(response["projects"][0]["graphJson"].as_str().expect("graph JSON")).expect("resolution graph"),
         })).expect("captured Gradle facts");
         (maven, gradle)
+    }
+
+    #[test]
+    fn conflict_origin_inspection_reports_requested_versions_and_unknown_origins() {
+        let (_, gradle) = captured_graphs();
+        let winner_id = gradle
+            .resolution
+            .components
+            .iter()
+            .find(|component| {
+                component.conflict_resolution && component.module.as_deref() == Some("shared")
+            })
+            .expect("captured conflict winner")
+            .id
+            .clone();
+        let winner_id_borrowed = winner_id.as_str();
+        // Origin navigation retains only the mediation facts that resolved
+        // into the selected winner; relation positions stay aligned with the
+        // full edge order.
+        let relations = gradle_inspection_relations(&gradle, GraphInspectionMode::ConflictOrigins);
+        let (indices, distance) = graph_inspection_edges(
+            &gradle.resolution.root_component,
+            winner_id_borrowed,
+            &relations,
+            GraphInspectionMode::ConflictOrigins,
+        );
+        assert_eq!(
+            distance, None,
+            "origin navigation does not compute distances"
+        );
+        let requested_versions = indices
+            .iter()
+            .filter_map(|index| gradle.resolution.edges.get(*index))
+            .filter_map(|edge| match &edge.requested {
+                project::jvm_project::GradleDependencySelector::Module { version, .. } => {
+                    Some(version.as_str())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            requested_versions.contains(&"1.0") && requested_versions.contains(&"2.0"),
+            "both diamond branches stay reported: {requested_versions:?}"
+        );
+        let worktree_id = WorktreeId::from_usize(1);
+        let module_root = path(worktree_id, "application");
+        let snapshot = JdtlsProjectSnapshot {
+            metadata: Default::default(),
+            server_id: lsp::LanguageServerId(1),
+            worktree_id,
+            generation: 2,
+            partial: false,
+            projects: vec![project::jvm_project::JdtlsProject {
+                module_root: module_root.clone(),
+                membership: project::jvm_project::JdtlsProjectMembership::ImportedJava,
+                imported_build_kind: project::jvm_project::JdtlsImportedBuildKind::Gradle,
+                source_roots: Vec::new(),
+                project_references: Vec::new(),
+                library_entries: 0,
+                library_files: Vec::new(),
+                library_artifacts: Vec::new(),
+                project_vm_known: false,
+                project_vm_java_major: None,
+                server_launch_java_major: None,
+                java_source_level: None,
+                java_target_level: None,
+                gradle: Some(project::jvm_project::GradleProject {
+                    dependency_graph: Some(std::sync::Arc::new(gradle)),
+                    build_root: path(worktree_id, ""),
+                    project_path: ":application".into(),
+                    tasks: Vec::new(),
+                    source_sets_known: false,
+                    source_sets: Vec::new(),
+                    configurations_known: false,
+                    configurations: Vec::new(),
+                }),
+                maven: None,
+            }],
+        };
+        let inspection = GraphInspection {
+            selection: GraphSelection {
+                server_id: lsp::LanguageServerId(1),
+                generation: 2,
+                target: GraphQueryTarget::Gradle {
+                    module: module_root,
+                    configuration: "parityGraph".into(),
+                },
+            },
+            node: winner_id,
+            mode: GraphInspectionMode::ConflictOrigins,
+        };
+        let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
+            .expect("conflict-origin inspection");
+        assert_eq!(row.label, "Conflict origins");
+        assert!(
+            row.accessibility_label
+                .contains("Conflict-origin mediation facts only")
+        );
+        assert!(
+            row.accessibility_label
+                .contains("source origin ranges and artifacts unavailable")
+        );
+        let edges = &row
+            .children
+            .iter()
+            .find(|group| group.label == "Inspected edges")
+            .expect("inspected edges group")
+            .children;
+        assert!(
+            edges.iter().any(|origin| origin.label.contains("1.0")
+                && origin.label.contains("2.0")
+                && origin.label.contains("shared")),
+            "each requested version names the winner it mediated to: {:?}",
+            edges
+                .iter()
+                .map(|origin| origin.label.clone())
+                .collect::<Vec<_>>()
+        );
+        assert!(edges.iter().all(|origin| {
+            origin.accessibility_label.contains("required")
+                && origin.accessibility_label.contains("preferred")
+                && origin.accessibility_label.contains("strict")
+                && origin.accessibility_label.contains("rejected")
+                && origin
+                    .accessibility_label
+                    .contains("source origin unavailable")
+        }));
+        assert!(
+            edges
+                .iter()
+                .all(|origin| origin.accessibility_label.contains("rejected"))
+                && edges
+                    .iter()
+                    .any(|origin| origin.accessibility_label.contains("3.0")),
+            "the rejected version fact from the captured constraint stays reported"
+        );
     }
 
     #[test]
