@@ -46,6 +46,7 @@ actions!(
         InspectGraphRootPaths,
         InspectGraphConflictOrigins,
         InspectGraphAllUsages,
+        InspectGraphAllRootPaths,
         ClearGraphInspection,
         ApplySavedMavenSelection,
         ImportGradleSelection,
@@ -684,6 +685,7 @@ enum GraphInspectionMode {
     ShortestRootPaths,
     ConflictOrigins,
     AllUsages,
+    AllRootPaths,
 }
 
 impl GraphInspectionMode {
@@ -693,6 +695,7 @@ impl GraphInspectionMode {
             Self::ShortestRootPaths => "Shortest root paths",
             Self::ConflictOrigins => "Conflict origins",
             Self::AllUsages => "All usages",
+            Self::AllRootPaths => "All root paths",
         }
     }
 }
@@ -903,6 +906,76 @@ fn graph_inspection_edges<'a>(
     edges: &[(&'a str, Option<&'a str>)],
     mode: GraphInspectionMode,
 ) -> (Vec<usize>, Option<usize>) {
+    if mode == GraphInspectionMode::AllRootPaths {
+        // Every bounded simple path from the root to the selection: paths
+        // stay simple so cycles terminate, and the enumeration is capped so
+        // large graphs cannot grow unbounded. Unresolved edges introduce no
+        // hops and cannot add paths beyond admitted facts.
+        const MAX_PATHS: usize = 64;
+        const MAX_HOP_EXAMINATIONS: usize = 4096;
+        let mut adjacency = HashMap::<&str, Vec<&str>>::new();
+        for (from, target) in edges {
+            if let Some(target) = target {
+                adjacency.entry(from).or_default().push(target);
+            }
+        }
+        let mut paths: Vec<Vec<(&str, &str)>> = Vec::new();
+        let mut budget = MAX_HOP_EXAMINATIONS;
+        fn walk<'a>(
+            node: &'a str,
+            selected: &'a str,
+            adjacency: &HashMap<&'a str, Vec<&'a str>>,
+            on_stack: &mut HashSet<&'a str>,
+            path: &mut Vec<(&'a str, &'a str)>,
+            paths: &mut Vec<Vec<(&'a str, &'a str)>>,
+            budget: &mut usize,
+        ) {
+            for next in adjacency.get(node).into_iter().flatten() {
+                if *budget == 0 || paths.len() >= MAX_PATHS {
+                    return;
+                }
+                if on_stack.contains(next) {
+                    continue;
+                }
+                *budget -= 1;
+                if *next == selected {
+                    path.push((node, *next));
+                    paths.push(path.clone());
+                    path.pop();
+                } else {
+                    path.push((node, *next));
+                    on_stack.insert(*next);
+                    walk(next, selected, adjacency, on_stack, path, paths, budget);
+                    on_stack.remove(*next);
+                    path.pop();
+                }
+            }
+        }
+        let mut path = Vec::new();
+        walk(
+            root,
+            selected,
+            &adjacency,
+            &mut HashSet::from([root]),
+            &mut path,
+            &mut paths,
+            &mut budget,
+        );
+        let hops = paths
+            .iter()
+            .flat_map(|path| path.iter())
+            .copied()
+            .collect::<HashSet<_>>();
+        let indices = edges
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (from, target))| {
+                let target = (*target).as_ref()?;
+                hops.contains(&(*from, *target)).then_some(index)
+            })
+            .collect::<Vec<_>>();
+        return (indices, Some(paths.len()));
+    }
     if mode == GraphInspectionMode::AllUsages {
         // Reverse reachability over admitted facts: every edge inside the
         // set of components that transitively reach the selection. The walk
@@ -1015,7 +1088,11 @@ fn gradle_inspection_relations(
         .iter()
         .map(|edge| {
             // A constraint selects a version but does not introduce a dependency.
-            let target = if mode == GraphInspectionMode::ShortestRootPaths && edge.constraint {
+            let target = if edge.constraint
+                && matches!(
+                    mode,
+                    GraphInspectionMode::ShortestRootPaths | GraphInspectionMode::AllRootPaths
+                ) {
                 None
             } else {
                 edge.selected.as_deref()
@@ -1246,6 +1323,12 @@ fn graph_inspection_row(
             })
             .collect();
         let path_status = match (inspection.mode, distance) {
+            (GraphInspectionMode::AllRootPaths, Some(path_count)) => format!(
+                "All root paths over admitted facts: {path_count} bounded simple paths from the root to the selection; cycles stay terminated and unresolved edges cannot add paths beyond admitted facts"
+            ),
+            (GraphInspectionMode::AllRootPaths, None) => {
+                "All root paths over admitted facts; the path count is unavailable".to_string()
+            }
             (GraphInspectionMode::AllUsages, Some(user_count)) => format!(
                 "All usages over admitted facts: {user_count} components transitively reach the selection; the usage subgraph is bounded and unresolved or foreign edges cannot prove absence"
             ),
@@ -5506,6 +5589,7 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &InspectGraphRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphConflictOrigins, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphAllUsages, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllUsages, cx)))
+            .on_action(cx.listener(|panel, _: &InspectGraphAllRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllRootPaths, cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphInspection, _, cx| panel.clear_graph_inspection(cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphFactSearch, window, cx| panel.clear_graph_fact_search(window, cx)))
             .on_action(cx.listener(|panel, _: &CycleGraphFactFilter, _, cx| panel.cycle_graph_fact_filter(cx)))
@@ -5703,6 +5787,11 @@ impl Render for DependenciesPanel {
                         .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::AllUsages) { "Active" } else { "Inactive" })
                         .disabled(!can_inspect_graph).tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllUsages, cx))))
+                    .child(Button::new("groovy-inspect-graph-all-root-paths", "All root paths")
+                        .aria_label("Inspect every bounded root path to the selected dependency in admitted graph facts")
+                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::AllRootPaths) { "Active" } else { "Inactive" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllRootPaths, cx))))
                     .child(Button::new("groovy-clear-graph-inspection", "Clear inspection")
                         .aria_label("Clear selected dependency graph inspection")
                         .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
@@ -6667,6 +6756,146 @@ mod tests {
                 .contains("transitively reach the selection")
                 && row.accessibility_label.contains("cannot prove absence"),
             "coverage names the reverse-reachability scope: {}",
+            row.accessibility_label
+        );
+    }
+
+    #[test]
+    fn all_root_paths_inspection_enumerates_bounded_simple_paths() {
+        let edges: [(&str, Option<&str>); 13] = [
+            ("root", Some("left")),
+            ("root", Some("right")),
+            ("root", Some("mid")),
+            ("mid", Some("deep")),
+            ("deep", Some("selected")),
+            ("left", Some("selected")),
+            ("right", Some("selected")),
+            ("left", Some("root")),
+            ("selected", Some("selected")),
+            ("selected", Some("extra")),
+            ("extra", Some("selected")),
+            ("unreachable", Some("selected")),
+            ("left", None),
+        ];
+        let (indices, count) = graph_inspection_edges(
+            "root",
+            "selected",
+            &edges,
+            GraphInspectionMode::AllRootPaths,
+        );
+        // The diamond plus the longer mid branch; the cycle, self loop,
+        // downstream edges, unreachable branch and unresolved edge add no
+        // path beyond admitted facts.
+        assert_eq!(count, Some(3));
+        let reported = indices
+            .iter()
+            .map(|index| edges[*index])
+            .collect::<Vec<_>>();
+        for hop in [
+            ("root", "left"),
+            ("root", "right"),
+            ("root", "mid"),
+            ("mid", "deep"),
+            ("deep", "selected"),
+            ("left", "selected"),
+            ("right", "selected"),
+        ] {
+            assert!(
+                reported
+                    .iter()
+                    .any(|(from, target)| *target == Some(hop.1) && *from == hop.0),
+                "path hop stays reported: {hop:?}"
+            );
+        }
+        for absent in [
+            ("left", Some("root")),
+            ("selected", Some("selected")),
+            ("selected", Some("extra")),
+            ("extra", Some("selected")),
+            ("unreachable", Some("selected")),
+            ("left", None),
+        ] {
+            assert!(
+                !reported
+                    .iter()
+                    .any(|(from, target)| *from == absent.0 && *target == absent.1),
+                "non-path edge stays excluded: {absent:?}"
+            );
+        }
+        // A chain stays a single bounded path.
+        let chain_nodes: Vec<String> = (0..=600).map(|index| format!("chain-{index}")).collect();
+        let chain: Vec<(&str, Option<&str>)> = (0..600)
+            .map(|index| {
+                (
+                    chain_nodes[index].as_str(),
+                    Some(chain_nodes[index + 1].as_str()),
+                )
+            })
+            .collect();
+        let (indices, count) = graph_inspection_edges(
+            chain_nodes[0].as_str(),
+            chain_nodes[600].as_str(),
+            &chain,
+            GraphInspectionMode::AllRootPaths,
+        );
+        assert_eq!(count, Some(1), "a chain is one path");
+        assert_eq!(indices.len(), 600, "every chain hop stays reported");
+        // Parallel branches exceed the path cap and stay bounded.
+        let branch_nodes: Vec<String> = (0..70).map(|index| format!("branch-{index}")).collect();
+        let mut branches = Vec::new();
+        for node in &branch_nodes {
+            branches.push(("root", Some(node.as_str()) as Option<&str>));
+            branches.push((node.as_str(), Some("selected")));
+        }
+        let (indices, count) = graph_inspection_edges(
+            "root",
+            "selected",
+            &branches,
+            GraphInspectionMode::AllRootPaths,
+        );
+        assert_eq!(count, Some(64), "the path cap keeps enumeration bounded");
+        assert_eq!(indices.len(), 128, "each capped branch keeps its two hops");
+        // The captured diamond has exactly two root paths to the winner.
+        let (_, gradle) = captured_graphs();
+        let shared = gradle
+            .resolution
+            .components
+            .iter()
+            .find(|component| component.module.as_deref() == Some("shared"))
+            .expect("captured shared component")
+            .id
+            .clone();
+        let relations = gradle_inspection_relations(&gradle, GraphInspectionMode::AllRootPaths);
+        let (indices, count) = graph_inspection_edges(
+            &gradle.resolution.root_component,
+            shared.as_str(),
+            &relations,
+            GraphInspectionMode::AllRootPaths,
+        );
+        assert_eq!(count, Some(2), "diamond branches are the two root paths");
+        assert_eq!(indices.len(), 4, "both branch hops stay reported");
+        let (snapshot, module_root) = gradle_graph_snapshot(gradle);
+        let inspection = GraphInspection {
+            selection: GraphSelection {
+                server_id: lsp::LanguageServerId(1),
+                generation: 2,
+                target: GraphQueryTarget::Gradle {
+                    module: module_root,
+                    configuration: "parityGraph".into(),
+                },
+            },
+            node: shared,
+            mode: GraphInspectionMode::AllRootPaths,
+        };
+        let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
+            .expect("all-root-paths inspection");
+        assert_eq!(row.label, "All root paths");
+        assert!(
+            row.accessibility_label.contains("bounded simple paths")
+                && row
+                    .accessibility_label
+                    .contains("cannot add paths beyond admitted facts"),
+            "coverage names the bounded enumeration scope: {}",
             row.accessibility_label
         );
     }
