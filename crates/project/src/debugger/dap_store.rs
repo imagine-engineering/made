@@ -1676,3 +1676,479 @@ impl dap::adapters::DapDelegate for DapAdapterDelegate {
         self.is_headless
     }
 }
+
+#[cfg(feature = "jvm-tools")]
+/// The bounded number of task-graph, goal, script and breakpoint entries one
+/// JVM Debug plan may carry.
+pub const MAX_JVM_DEBUG_PLAN_ENTRIES: usize = 32;
+
+#[cfg(feature = "jvm-tools")]
+/// A bounded test source breakpoint a JVM Debug plan carries for the session
+/// to register through the existing breakpoint store.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JvmDebugSourceBreakpoint {
+    pub source: String,
+    pub line: u32,
+}
+
+#[cfg(feature = "jvm-tools")]
+/// The bounded JVM Debug launch requests this owner admits. The pre-launch
+/// build that opens the debug port (Gradle task graph with forked JVMs and
+/// build scripts, or Maven goals) stays with the existing saved-configuration
+/// and provider-argument owners; the plan links that build to the approved
+/// adapter through its standard attach terms and carries the test source
+/// breakpoints for the existing breakpoint owner. Unsupported Debug actions
+/// are unrepresentable as requests and are never a successful no-op.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum JvmDebugPlanRequest {
+    /// Gradle task-graph Debug: the named tasks run through Gradle-managed
+    /// forked JVMs that open the debug port; scripts name the build script
+    /// sources whose frames the session must map.
+    GradleTasks {
+        tasks: Vec<String>,
+        scripts: Vec<String>,
+        breakpoints: Vec<JvmDebugSourceBreakpoint>,
+        debug_port: u16,
+    },
+    /// Maven goal Debug: the goals run in a forked goal JVM that opens the
+    /// debug port.
+    MavenGoals {
+        goals: Vec<String>,
+        breakpoints: Vec<JvmDebugSourceBreakpoint>,
+        debug_port: u16,
+    },
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(Clone, Debug, PartialEq)]
+pub struct JvmDebugPlan {
+    pub definition: DebugTaskDefinition,
+    pub breakpoints: Vec<JvmDebugSourceBreakpoint>,
+}
+
+#[cfg(feature = "jvm-tools")]
+impl DapStore {
+    /// Plans one JVM Debug launch through the existing DAP owner: the shared
+    /// worktree trust gate applies, the request's inputs are bounded and
+    /// sanitized, and only the approved `Java` adapter is used — an absent or
+    /// unverified adapter is an explicit error, never a download. The plan
+    /// does not start the session; the caller owns the pre-launch build
+    /// through the existing Tasks owner, cancellation through the existing
+    /// task handle, and recovery by re-planning.
+    pub fn plan_jvm_debug_launch(
+        &mut self,
+        worktree: &Entity<Worktree>,
+        request: JvmDebugPlanRequest,
+        cx: &mut Context<Self>,
+    ) -> Result<JvmDebugPlan> {
+        if !self.groovy_java_debug_worktree_trusted(worktree, cx) {
+            anyhow::bail!("Trust the project before planning JVM Debug");
+        }
+        let (entries, scripts, breakpoints, label, debug_port) = match &request {
+            JvmDebugPlanRequest::GradleTasks {
+                tasks,
+                scripts,
+                breakpoints,
+                debug_port,
+            } => (
+                tasks.clone(),
+                scripts.clone(),
+                breakpoints.clone(),
+                "Gradle Debug",
+                *debug_port,
+            ),
+            JvmDebugPlanRequest::MavenGoals {
+                goals,
+                breakpoints,
+                debug_port,
+            } => (
+                goals.clone(),
+                Vec::new(),
+                breakpoints.clone(),
+                "Maven Debug",
+                *debug_port,
+            ),
+        };
+        let total = entries.len() + scripts.len() + breakpoints.len();
+        anyhow::ensure!(
+            total > 0,
+            "The JVM Debug plan names no task, goal, script or breakpoint; select what to debug"
+        );
+        anyhow::ensure!(
+            total <= MAX_JVM_DEBUG_PLAN_ENTRIES,
+            "The JVM Debug plan exceeds the {MAX_JVM_DEBUG_PLAN_ENTRIES}-entry limit"
+        );
+        for entry in entries.iter().chain(scripts.iter()) {
+            anyhow::ensure!(
+                !entry.is_empty() && entry.chars().count() <= 256,
+                "JVM Debug plan entries are empty or unbounded"
+            );
+        }
+        for breakpoint in &breakpoints {
+            anyhow::ensure!(
+                !breakpoint.source.is_empty()
+                    && breakpoint.source.chars().count() <= 256
+                    && breakpoint.line >= 1,
+                "JVM Debug plan breakpoints are empty, unbounded or mislocated"
+            );
+        }
+        anyhow::ensure!(
+            debug_port != 0,
+            "The JVM Debug plan needs the non-zero debug port its pre-launch build opens"
+        );
+        DapRegistry::global(cx).adapter("Java").context(
+            "The approved Java Debug adapter is not installed; install it to plan JVM Debug. No unverified adapter is downloaded",
+        )?;
+        Ok(JvmDebugPlan {
+            definition: DebugTaskDefinition {
+                label: SharedString::from(label),
+                adapter: DebugAdapterName("Java".into()),
+                config: serde_json::json!({
+                    "request": "attach",
+                    "hostName": "localhost",
+                    "port": debug_port,
+                }),
+                tcp_connection: None,
+            },
+            breakpoints,
+        })
+    }
+}
+
+#[cfg(all(test, feature = "jvm-tools", feature = "test-support"))]
+struct JavaDebugFixtureAdapter;
+
+#[cfg(all(test, feature = "jvm-tools", feature = "test-support"))]
+#[async_trait(?Send)]
+impl DebugAdapter for JavaDebugFixtureAdapter {
+    fn name(&self) -> DebugAdapterName {
+        DebugAdapterName("Java".into())
+    }
+
+    async fn config_from_zed_format(
+        &self,
+        zed_scenario: task::ZedDebugConfig,
+    ) -> Result<DebugScenario> {
+        dap::FakeAdapter::new()
+            .config_from_zed_format(zed_scenario)
+            .await
+    }
+
+    async fn get_binary(
+        &self,
+        _delegate: &Arc<dyn DapDelegate>,
+        _config: &DebugTaskDefinition,
+        _user_installed_path: Option<PathBuf>,
+        _user_args: Option<Vec<String>>,
+        _user_env: Option<HashMap<String, String>>,
+        _cx: &mut AsyncApp,
+    ) -> Result<DebugAdapterBinary> {
+        anyhow::bail!("the fixture adapter never resolves a binary")
+    }
+
+    async fn request_kind(
+        &self,
+        config: &serde_json::Value,
+    ) -> Result<dap::StartDebuggingRequestArgumentsRequest> {
+        dap::FakeAdapter::new().request_kind(config).await
+    }
+
+    fn dap_schema(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+}
+
+#[cfg(all(test, feature = "jvm-tools", feature = "test-support"))]
+mod jvm_debug_plan_tests {
+    use super::*;
+    use collections::HashSet;
+
+    struct DebugPlanFixture {
+        dap_store: Entity<DapStore>,
+        worktree: Entity<Worktree>,
+    }
+
+    async fn plan_fixture(allow: bool, cx: &mut gpui::TestAppContext) -> DebugPlanFixture {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            crate::trusted_worktrees::init(crate::trusted_worktrees::DbTrustedPaths::default(), cx);
+        });
+        let fs = fs::FakeFs::new(cx.executor());
+        fs.insert_tree(
+            Path::new("/debug-plan"),
+            serde_json::json!({"pom.xml":"<project/>","Main.java":"class Main {}"}),
+        )
+        .await;
+        let project =
+            crate::Project::test_with_worktree_trust(fs, [Path::new("/debug-plan")], cx).await;
+        let dap_store = project.read_with(cx, |project, _| project.dap_store());
+        let (worktree, worktree_store) = project.read_with(cx, |project, cx| {
+            (
+                project.worktrees(cx).next().expect("worktree"),
+                project.worktree_store(),
+            )
+        });
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let trusted = cx.update(|cx| {
+            crate::trusted_worktrees::TrustedWorktrees::try_get_global(cx).expect("trust service")
+        });
+        trusted.update(cx, |trusted, cx| {
+            let paths =
+                HashSet::from_iter([crate::trusted_worktrees::PathTrust::Worktree(worktree_id)]);
+            if allow {
+                trusted.trust(&worktree_store, paths, cx);
+            } else {
+                trusted.restrict(worktree_store.downgrade(), paths, cx);
+            }
+        });
+        DebugPlanFixture {
+            dap_store,
+            worktree,
+        }
+    }
+
+    fn gradle_request(port: u16) -> JvmDebugPlanRequest {
+        JvmDebugPlanRequest::GradleTasks {
+            tasks: vec!["compileJava".into()],
+            scripts: vec!["build.gradle".into()],
+            breakpoints: vec![JvmDebugSourceBreakpoint {
+                source: "src/test/java/evidence/CaseTest.java".into(),
+                line: 5,
+            }],
+            debug_port: port,
+        }
+    }
+
+    // The `gpui::test` macro's generated closure is inferred against
+    // `&mut (dyn RefUnwindSafe + Fn(TestDispatcher, u64))`, and rustc 1.98
+    // nondeterministically reports E0282 for that inference in this file.
+    // These tests therefore hand-write the same harness the macro generates,
+    // with explicitly typed closure parameters so no inference is needed.
+    #[test]
+    fn untrusted_or_adapterless_plans_are_explicit_errors() {
+        gpui::run_test(
+            1,
+            &[],
+            0,
+            &mut |dispatcher: gpui::TestDispatcher, _seed: u64| {
+                let exec = std::sync::Arc::new(dispatcher.clone());
+                let mut cx = gpui::TestAppContext::build(
+                    dispatcher.clone(),
+                    Some(stringify!(
+                        untrusted_or_adapterless_plans_are_explicit_errors
+                    )),
+                );
+                gpui::ForegroundExecutor::new(exec.clone()).block_test(async {
+                    let fixture = plan_fixture(false, &mut cx).await;
+                    let error = fixture
+                        .dap_store
+                        .update(&mut cx, |dap_store, cx| {
+                            dap_store.plan_jvm_debug_launch(
+                                &fixture.worktree,
+                                gradle_request(5005),
+                                cx,
+                            )
+                        })
+                        .expect_err("untrusted worktree")
+                        .to_string();
+                    assert!(error.contains("Trust the project"), "{error}");
+
+                    // The approved adapter is required by name; an absent adapter is an
+                    // explicit error and never a download.
+                    let fixture = plan_fixture(true, &mut cx).await;
+                    let error = fixture
+                        .dap_store
+                        .update(&mut cx, |dap_store, cx| {
+                            dap_store.plan_jvm_debug_launch(
+                                &fixture.worktree,
+                                gradle_request(5005),
+                                cx,
+                            )
+                        })
+                        .expect_err("adapterless")
+                        .to_string();
+                    assert!(error.contains("not installed"), "{error}");
+                });
+                drop(exec);
+                cx.run_until_parked();
+                cx.update(|cx| {
+                    cx.background_executor().forbid_parking();
+                    cx.quit();
+                });
+                cx.run_until_parked();
+                drop(cx);
+                dispatcher.drain_tasks();
+                drop(dispatcher);
+            },
+            None,
+        );
+    }
+
+    #[test]
+    fn bounded_plan_requests_reject_empty_oversized_and_portless_inputs() {
+        gpui::run_test(
+            1,
+            &[],
+            0,
+            &mut |dispatcher: gpui::TestDispatcher, _seed: u64| {
+                let exec = std::sync::Arc::new(dispatcher.clone());
+                let mut cx = gpui::TestAppContext::build(
+                    dispatcher.clone(),
+                    Some(stringify!(
+                        bounded_plan_requests_reject_empty_oversized_and_portless_inputs
+                    )),
+                );
+                gpui::ForegroundExecutor::new(exec.clone()).block_test(async {
+                    let fixture = plan_fixture(true, &mut cx).await;
+                    cx.update(|cx| {
+                        DapRegistry::global(cx).add_adapter(Arc::new(JavaDebugFixtureAdapter));
+                    });
+                    let plan = |fixture: &DebugPlanFixture,
+                                request: JvmDebugPlanRequest,
+                                cx: &mut gpui::TestAppContext| {
+                        fixture.dap_store.update(cx, |dap_store, cx| {
+                            dap_store.plan_jvm_debug_launch(&fixture.worktree, request, cx)
+                        })
+                    };
+                    let empty = JvmDebugPlanRequest::GradleTasks {
+                        tasks: vec![],
+                        scripts: vec![],
+                        breakpoints: vec![],
+                        debug_port: 5005,
+                    };
+                    let error = plan(&fixture, empty, &mut cx)
+                        .expect_err("empty")
+                        .to_string();
+                    assert!(error.contains("names no task"), "{error}");
+
+                    let oversized = JvmDebugPlanRequest::MavenGoals {
+                        goals: (0..MAX_JVM_DEBUG_PLAN_ENTRIES + 1)
+                            .map(|index| format!("goal-{index}"))
+                            .collect(),
+                        breakpoints: vec![],
+                        debug_port: 5005,
+                    };
+                    let error = plan(&fixture, oversized, &mut cx)
+                        .expect_err("oversized")
+                        .to_string();
+                    assert!(error.contains("limit"), "{error}");
+
+                    let unbounded = JvmDebugPlanRequest::GradleTasks {
+                        tasks: vec![String::new()],
+                        scripts: vec![],
+                        breakpoints: vec![],
+                        debug_port: 5005,
+                    };
+                    let error = plan(&fixture, unbounded, &mut cx)
+                        .expect_err("unbounded")
+                        .to_string();
+                    assert!(error.contains("empty or unbounded"), "{error}");
+
+                    let portless = JvmDebugPlanRequest::MavenGoals {
+                        goals: vec!["test".into()],
+                        breakpoints: vec![],
+                        debug_port: 0,
+                    };
+                    let error = plan(&fixture, portless, &mut cx)
+                        .expect_err("portless")
+                        .to_string();
+                    assert!(error.contains("debug port"), "{error}");
+
+                    let misplaced = JvmDebugPlanRequest::GradleTasks {
+                        tasks: vec!["compileJava".into()],
+                        scripts: vec![],
+                        breakpoints: vec![JvmDebugSourceBreakpoint {
+                            source: "src/test/java/evidence/CaseTest.java".into(),
+                            line: 0,
+                        }],
+                        debug_port: 5005,
+                    };
+                    let error = plan(&fixture, misplaced, &mut cx)
+                        .expect_err("mislocated")
+                        .to_string();
+                    assert!(error.contains("mislocated"), "{error}");
+                });
+                drop(exec);
+                cx.run_until_parked();
+                cx.update(|cx| {
+                    cx.background_executor().forbid_parking();
+                    cx.quit();
+                });
+                cx.run_until_parked();
+                drop(cx);
+                dispatcher.drain_tasks();
+                drop(dispatcher);
+            },
+            None,
+        );
+    }
+
+    #[test]
+    fn gradle_and_maven_plans_use_the_approved_adapter_terms() {
+        gpui::run_test(
+            1,
+            &[],
+            0,
+            &mut |dispatcher: gpui::TestDispatcher, _seed: u64| {
+                let exec = std::sync::Arc::new(dispatcher.clone());
+                let mut cx = gpui::TestAppContext::build(
+                    dispatcher.clone(),
+                    Some(stringify!(
+                        gradle_and_maven_plans_use_the_approved_adapter_terms
+                    )),
+                );
+                gpui::ForegroundExecutor::new(exec.clone()).block_test(async {
+                    let fixture = plan_fixture(true, &mut cx).await;
+                    cx.update(|cx| {
+                        DapRegistry::global(cx).add_adapter(Arc::new(JavaDebugFixtureAdapter));
+                    });
+
+                    let plan = fixture
+                        .dap_store
+                        .update(&mut cx, |dap_store, cx| {
+                            dap_store.plan_jvm_debug_launch(
+                                &fixture.worktree,
+                                gradle_request(5005),
+                                cx,
+                            )
+                        })
+                        .expect("Gradle plan");
+                    assert_eq!(plan.definition.adapter.as_ref(), "Java");
+                    assert_eq!(plan.definition.config["request"], "attach");
+                    assert_eq!(plan.definition.config["hostName"], "localhost");
+                    assert_eq!(plan.definition.config["port"], 5005);
+                    assert_eq!(plan.definition.label, "Gradle Debug");
+                    assert_eq!(plan.breakpoints.len(), 1);
+                    assert_eq!(plan.breakpoints[0].line, 5);
+
+                    let maven = JvmDebugPlanRequest::MavenGoals {
+                        goals: vec!["test".into()],
+                        breakpoints: vec![],
+                        debug_port: 5005,
+                    };
+                    let plan = fixture
+                        .dap_store
+                        .update(&mut cx, |dap_store, cx| {
+                            dap_store.plan_jvm_debug_launch(&fixture.worktree, maven, cx)
+                        })
+                        .expect("Maven plan");
+                    assert_eq!(plan.definition.label, "Maven Debug");
+                    assert_eq!(plan.definition.config["request"], "attach");
+                    assert!(plan.breakpoints.is_empty());
+                });
+                drop(exec);
+                cx.run_until_parked();
+                cx.update(|cx| {
+                    cx.background_executor().forbid_parking();
+                    cx.quit();
+                });
+                cx.run_until_parked();
+                drop(cx);
+                dispatcher.drain_tasks();
+                drop(dispatcher);
+            },
+            None,
+        );
+    }
+}
