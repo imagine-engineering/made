@@ -48,6 +48,8 @@ actions!(
         InspectGraphConflictOrigins,
         InspectGraphAllUsages,
         InspectGraphAllRootPaths,
+        PinGraphSelection,
+        InspectGraphPathsBetween,
         ClearGraphInspection,
         ApplySavedMavenSelection,
         ImportGradleSelection,
@@ -589,6 +591,7 @@ pub struct DependenciesPanel {
     build_phase_notice: Option<String>,
     graph_search: Entity<Editor>,
     graph_inspection: Option<GraphInspection>,
+    graph_pin: Option<GraphPin>,
     graph_diagram_selection: Option<GraphSelection>,
     graph_diagram: Option<Entity<markdown::Markdown>>,
     position: DockPosition,
@@ -715,7 +718,7 @@ enum DependencyProvider {
     Kotlin,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum GraphQueryTarget {
     Maven(ProjectPath),
     Gradle {
@@ -724,7 +727,7 @@ enum GraphQueryTarget {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct GraphSelection {
     server_id: lsp::LanguageServerId,
     generation: u64,
@@ -754,6 +757,7 @@ enum GraphInspectionMode {
     ConflictOrigins,
     AllUsages,
     AllRootPaths,
+    PathsBetween,
 }
 
 impl GraphInspectionMode {
@@ -764,6 +768,7 @@ impl GraphInspectionMode {
             Self::ConflictOrigins => "Conflict origins",
             Self::AllUsages => "All usages",
             Self::AllRootPaths => "All root paths",
+            Self::PathsBetween => "Paths to pinned dependency",
         }
     }
 }
@@ -772,7 +777,15 @@ impl GraphInspectionMode {
 struct GraphInspection {
     selection: GraphSelection,
     node: String,
+    // The pinned dependency when the mode analyzes a pair of selections.
+    anchor: Option<String>,
     mode: GraphInspectionMode,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct GraphPin {
+    selection: GraphSelection,
+    node: String,
 }
 
 fn dependency_diagram_markdown(
@@ -974,9 +987,13 @@ fn graph_inspection_edges<'a>(
     edges: &[(&'a str, Option<&'a str>)],
     mode: GraphInspectionMode,
 ) -> (Vec<usize>, Option<usize>) {
-    if mode == GraphInspectionMode::AllRootPaths {
-        // Every bounded simple path from the root to the selection: paths
-        // stay simple so cycles terminate, and the enumeration is capped so
+    if matches!(
+        mode,
+        GraphInspectionMode::AllRootPaths | GraphInspectionMode::PathsBetween
+    ) {
+        // Every bounded simple path from the root (the graph root, or the
+        // pinned dependency for pair analysis) to the selection: paths stay
+        // simple so cycles terminate, and the enumeration is capped so
         // large graphs cannot grow unbounded. Unresolved edges introduce no
         // hops and cannot add paths beyond admitted facts.
         const MAX_PATHS: usize = 64;
@@ -1159,7 +1176,9 @@ fn gradle_inspection_relations(
             let target = if edge.constraint
                 && matches!(
                     mode,
-                    GraphInspectionMode::ShortestRootPaths | GraphInspectionMode::AllRootPaths
+                    GraphInspectionMode::ShortestRootPaths
+                        | GraphInspectionMode::AllRootPaths
+                        | GraphInspectionMode::PathsBetween
                 ) {
                 None
             } else {
@@ -1271,7 +1290,18 @@ fn graph_inspection_row(
                 }).collect::<Vec<_>>();
                 (
                     graph_fact_id(&module_id, "maven", &[]),
-                    graph.root_node.as_str(),
+                    // Pair analysis walks from the pinned occurrence, which
+                    // the pin receipt guarantees lives in this same graph.
+                    match inspection.anchor.as_deref() {
+                        Some(anchor) if inspection.mode == GraphInspectionMode::PathsBetween => {
+                            graph
+                                .nodes
+                                .iter()
+                                .find(|node| node.id.as_str() == anchor)
+                                .map(|node| node.id.as_str())?
+                        }
+                        _ => graph.root_node.as_str(),
+                    },
                     relations,
                     labels,
                     edge_rows,
@@ -1331,7 +1361,18 @@ fn graph_inspection_row(
                 }).collect::<Vec<_>>();
                 (
                     graph_fact_id(&module_id, "gradle", &[]),
-                    resolution.root_component.as_str(),
+                    // Pair analysis walks from the pinned component, which
+                    // the pin receipt guarantees lives in this same graph.
+                    match inspection.anchor.as_deref() {
+                        Some(anchor) if inspection.mode == GraphInspectionMode::PathsBetween => {
+                            resolution
+                                .components
+                                .iter()
+                                .find(|component| component.id.as_str() == anchor)
+                                .map(|component| component.id.as_str())?
+                        }
+                        _ => resolution.root_component.as_str(),
+                    },
                     relations,
                     labels,
                     edge_rows,
@@ -1346,7 +1387,9 @@ fn graph_inspection_row(
         let (indices, distance) =
             graph_inspection_edges(root, &inspection.node, &relations, inspection.mode);
         let mut nodes = HashSet::from([inspection.node.as_str()]);
-        if inspection.mode == GraphInspectionMode::ShortestRootPaths {
+        if inspection.mode == GraphInspectionMode::ShortestRootPaths
+            || inspection.mode == GraphInspectionMode::PathsBetween
+        {
             nodes.insert(root);
         }
         let mut rows = Vec::new();
@@ -1391,6 +1434,13 @@ fn graph_inspection_row(
             })
             .collect();
         let path_status = match (inspection.mode, distance) {
+            (GraphInspectionMode::PathsBetween, Some(path_count)) => format!(
+                "Paths from the pinned dependency to the selection over admitted facts: {path_count} bounded simple paths; cycles stay terminated and unresolved edges cannot add paths beyond admitted facts"
+            ),
+            (GraphInspectionMode::PathsBetween, None) => {
+                "Paths to the pinned dependency over admitted facts; the path count is unavailable"
+                    .to_string()
+            }
             (GraphInspectionMode::AllRootPaths, Some(path_count)) => format!(
                 "All root paths over admitted facts: {path_count} bounded simple paths from the root to the selection; cycles stay terminated and unresolved edges cannot add paths beyond admitted facts"
             ),
@@ -1996,6 +2046,7 @@ impl DependenciesPanel {
                     build_phase_notice: None,
                     graph_search,
                     graph_inspection: None,
+                    graph_pin: None,
                     graph_diagram_selection: None,
                     graph_diagram: None,
                     position: preferences.dock_position.into(),
@@ -2055,6 +2106,7 @@ impl DependenciesPanel {
 
     fn set_view(&mut self, view: BuildToolView, window: &mut Window, cx: &mut Context<Self>) {
         self.graph_inspection = None;
+        self.graph_pin = None;
         self.graph_diagram_selection = None;
         self.graph_diagram = None;
         self.view = view;
@@ -2064,11 +2116,7 @@ impl DependenciesPanel {
         window.focus(&self.focus_handle, cx);
     }
 
-    fn selected_graph_inspection(
-        &self,
-        mode: GraphInspectionMode,
-        cx: &App,
-    ) -> Option<GraphInspection> {
+    fn resolve_selected_graph(&self, cx: &App) -> Option<(GraphSelection, String)> {
         if self.host_unavailable(cx) {
             return None;
         }
@@ -2102,15 +2150,14 @@ impl DependenciesPanel {
                         if *selected
                             == graph_component_row_id(graph_fact_id(&id, "maven-node", &[&node.id]))
                         {
-                            return Some(GraphInspection {
-                                selection: GraphSelection {
+                            return Some((
+                                GraphSelection {
                                     server_id: snapshot.server_id,
                                     generation: snapshot.generation,
                                     target: GraphQueryTarget::Maven(maven.pom.clone()),
                                 },
-                                node: node.id.clone(),
-                                mode,
-                            });
+                                node.id.clone(),
+                            ));
                         }
                     }
                 }
@@ -2126,8 +2173,8 @@ impl DependenciesPanel {
                                 &[&graph.resolution.configuration, &component.id],
                             ))
                         {
-                            return Some(GraphInspection {
-                                selection: GraphSelection {
+                            return Some((
+                                GraphSelection {
                                     server_id: snapshot.server_id,
                                     generation: snapshot.generation,
                                     target: GraphQueryTarget::Gradle {
@@ -2135,9 +2182,8 @@ impl DependenciesPanel {
                                         configuration: graph.resolution.configuration.clone(),
                                     },
                                 },
-                                node: component.id.clone(),
-                                mode,
-                            });
+                                component.id.clone(),
+                            ));
                         }
                     }
                 }
@@ -2146,15 +2192,75 @@ impl DependenciesPanel {
         None
     }
 
+    fn selected_graph_inspection(
+        &self,
+        mode: GraphInspectionMode,
+        cx: &App,
+    ) -> Option<GraphInspection> {
+        let (selection, node) = self.resolve_selected_graph(cx)?;
+        Some(GraphInspection {
+            selection,
+            node,
+            anchor: None,
+            mode,
+        })
+    }
+
     fn inspect_selected_graph(&mut self, mode: GraphInspectionMode, cx: &mut Context<Self>) {
-        let Some(inspection) = self.selected_graph_inspection(mode, cx) else {
-            self.show_graph_error(anyhow::anyhow!("Graph inspection requires a current Gradle component or Maven occurrence; refresh and expand admitted graph facts, then select a dependency row"), cx);
-            return;
+        let mut inspection = match self.selected_graph_inspection(mode, cx) {
+            Some(inspection) => inspection,
+            None => {
+                self.show_graph_error(anyhow::anyhow!("Graph inspection requires a current Gradle component or Maven occurrence; refresh and expand admitted graph facts, then select a dependency row"), cx);
+                return;
+            }
         };
+        if mode == GraphInspectionMode::PathsBetween {
+            let Some(pin) = self.graph_pin.clone() else {
+                self.show_graph_error(anyhow::anyhow!("Pin a dependency first: select a dependency row, activate Pin dependency, then select the second dependency and retry Paths to pinned dependency"), cx);
+                return;
+            };
+            let same_graph = pin.selection.server_id == inspection.selection.server_id
+                && pin.selection.generation == inspection.selection.generation
+                && pin.selection.worktree_id() == inspection.selection.worktree_id()
+                && pin.selection.target == inspection.selection.target;
+            if !same_graph || pin.node == inspection.node {
+                self.show_graph_error(anyhow::anyhow!("The pinned dependency no longer matches the current admitted graph facts or equals the selection; re-pin and retry Paths to pinned dependency"), cx);
+                return;
+            }
+            inspection.anchor = Some(pin.node);
+        }
         self.graph_notice = None;
         self.graph_inspection = Some(inspection);
         self.rebuild(cx);
         self.host.expand_all();
+        cx.notify();
+    }
+
+    fn pin_selected_graph(&mut self, cx: &mut Context<Self>) {
+        if let Some(pin) = self.graph_pin.clone()
+            && let Some((selection, node)) = self.resolve_selected_graph(cx)
+            && pin.selection.server_id == selection.server_id
+            && pin.selection.generation == selection.generation
+            && pin.selection.worktree_id() == selection.worktree_id()
+            && pin.selection.target == selection.target
+            && pin.node == node
+        {
+            self.graph_pin = None;
+            self.rebuild(cx);
+            cx.notify();
+            return;
+        }
+        match self.resolve_selected_graph(cx) {
+            Some((selection, node)) => {
+                self.graph_notice = None;
+                self.graph_pin = Some(GraphPin { selection, node });
+            }
+            None => {
+                self.show_graph_error(anyhow::anyhow!("Pinning requires a current Gradle component or Maven occurrence; refresh and expand admitted graph facts, then select a dependency row"), cx);
+                return;
+            }
+        }
+        self.rebuild(cx);
         cx.notify();
     }
 
@@ -2374,6 +2480,7 @@ impl DependenciesPanel {
         if self.host_unavailable(cx) {
             self.navigation.clear();
             self.graph_inspection = None;
+            self.graph_pin = None;
             self.graph_diagram_selection = None;
             self.graph_diagram = None;
             self.graph_selections.clear();
@@ -2393,6 +2500,7 @@ impl DependenciesPanel {
         let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) else {
             self.navigation.clear();
             self.graph_inspection = None;
+            self.graph_pin = None;
             self.graph_diagram_selection = None;
             self.graph_diagram = None;
             self.graph_selections.clear();
@@ -2595,6 +2703,7 @@ impl DependenciesPanel {
         }
         if !inspection_current {
             self.graph_inspection = None;
+            self.graph_pin = None;
         }
         match diagram_source {
             Some(Ok(Some(source))) => {
@@ -5710,6 +5819,8 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &InspectGraphConflictOrigins, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphAllUsages, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllUsages, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphAllRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllRootPaths, cx)))
+            .on_action(cx.listener(|panel, _: &PinGraphSelection, _, cx| panel.pin_selected_graph(cx)))
+            .on_action(cx.listener(|panel, _: &InspectGraphPathsBetween, _, cx| panel.inspect_selected_graph(GraphInspectionMode::PathsBetween, cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphInspection, _, cx| panel.clear_graph_inspection(cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphFactSearch, window, cx| panel.clear_graph_fact_search(window, cx)))
             .on_action(cx.listener(|panel, _: &CycleGraphFactFilter, _, cx| panel.cycle_graph_fact_filter(cx)))
@@ -5920,6 +6031,16 @@ impl Render for DependenciesPanel {
                         .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::AllRootPaths) { "Active" } else { "Inactive" })
                         .disabled(!can_inspect_graph).tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllRootPaths, cx))))
+                    .child(Button::new("groovy-pin-graph-selection", "Pin dependency")
+                        .aria_label("Pin the selected dependency for pair analysis; activate again on the pinned row to clear the pin")
+                        .aria_value(if self.graph_pin.is_some() { "Pinned" } else { "Not pinned" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.pin_selected_graph(cx))))
+                    .child(Button::new("groovy-inspect-graph-paths-between", "Paths to pinned")
+                        .aria_label("Inspect every bounded simple path from the pinned dependency to the selected dependency in admitted graph facts")
+                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::PathsBetween) { "Active" } else { "Inactive" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::PathsBetween, cx))))
                     .child(Button::new("groovy-clear-graph-inspection", "Clear inspection")
                         .aria_label("Clear selected dependency graph inspection")
                         .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
@@ -6757,6 +6878,7 @@ mod tests {
                 },
             },
             node: winner_id,
+            anchor: None,
             mode: GraphInspectionMode::ConflictOrigins,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -6882,6 +7004,7 @@ mod tests {
                 },
             },
             node: shared,
+            anchor: None,
             mode: GraphInspectionMode::AllUsages,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -7021,6 +7144,7 @@ mod tests {
                 },
             },
             node: shared,
+            anchor: None,
             mode: GraphInspectionMode::AllRootPaths,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
@@ -7100,6 +7224,135 @@ mod tests {
         );
         assert_eq!(distance, Some(4095));
         assert_eq!(paths.len(), 4095);
+    }
+
+    #[test]
+    fn paths_between_inspection_reports_bounded_paths_from_the_pinned_dependency() {
+        let edges: [(&str, Option<&str>); 8] = [
+            ("left", Some("mid")),
+            ("mid", Some("selected")),
+            ("left", Some("other")),
+            ("other", Some("selected")),
+            ("selected", Some("extra")),
+            ("extra", Some("selected")),
+            ("unreachable", Some("selected")),
+            ("left", None),
+        ];
+        // Directed pair analysis: two bounded simple paths from the pinned
+        // dependency to the selection; downstream, unreachable and
+        // unresolved edges add no path beyond admitted facts.
+        let (indices, count) = graph_inspection_edges(
+            "left",
+            "selected",
+            &edges,
+            GraphInspectionMode::PathsBetween,
+        );
+        assert_eq!(count, Some(2));
+        let reported = indices
+            .iter()
+            .map(|index| edges[*index])
+            .collect::<Vec<_>>();
+        for hop in [
+            ("left", Some("mid")),
+            ("mid", Some("selected")),
+            ("left", Some("other")),
+            ("other", Some("selected")),
+        ] {
+            assert!(
+                reported
+                    .iter()
+                    .any(|(from, target)| *from == hop.0 && *target == hop.1),
+                "pair path hop stays reported: {hop:?}"
+            );
+        }
+        for absent in [
+            ("selected", Some("extra")),
+            ("extra", Some("selected")),
+            ("unreachable", Some("selected")),
+            ("left", None),
+        ] {
+            assert!(
+                !reported
+                    .iter()
+                    .any(|(from, target)| *from == absent.0 && *target == absent.1),
+                "non-path edge stays excluded: {absent:?}"
+            );
+        }
+        // No directed path in admitted facts stays explicit.
+        let (indices, count) = graph_inspection_edges(
+            "selected",
+            "left",
+            &edges,
+            GraphInspectionMode::PathsBetween,
+        );
+        assert_eq!(count, Some(0));
+        assert!(indices.is_empty());
+        // The captured fixture: one bounded path from the left branch to
+        // the conflict winner, with the row naming the pair scope.
+        let (_, gradle) = captured_graphs();
+        let left_id = gradle
+            .resolution
+            .components
+            .iter()
+            .find(|component| component.module.as_deref() == Some("left"))
+            .expect("captured left component")
+            .id
+            .clone();
+        let shared_id = gradle
+            .resolution
+            .components
+            .iter()
+            .find(|component| component.module.as_deref() == Some("shared"))
+            .expect("captured shared component")
+            .id
+            .clone();
+        let relations = gradle_inspection_relations(&gradle, GraphInspectionMode::PathsBetween);
+        let (indices, count) = graph_inspection_edges(
+            left_id.as_str(),
+            shared_id.as_str(),
+            &relations,
+            GraphInspectionMode::PathsBetween,
+        );
+        assert_eq!(count, Some(1), "the left branch mediates into the winner");
+        assert_eq!(indices.len(), 1, "only the left hop stays reported");
+        let (snapshot, module_root) = gradle_graph_snapshot(gradle);
+        let inspection = GraphInspection {
+            selection: GraphSelection {
+                server_id: lsp::LanguageServerId(1),
+                generation: 2,
+                target: GraphQueryTarget::Gradle {
+                    module: module_root,
+                    configuration: "parityGraph".into(),
+                },
+            },
+            node: shared_id,
+            anchor: Some(left_id),
+            mode: GraphInspectionMode::PathsBetween,
+        };
+        let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
+            .expect("paths-between inspection");
+        assert_eq!(row.label, "Paths to pinned dependency");
+        assert!(
+            row.accessibility_label
+                .contains("Paths from the pinned dependency to the selection")
+                && row
+                    .accessibility_label
+                    .contains("cannot add paths beyond admitted facts"),
+            "coverage names the pair-analysis scope: {}",
+            row.accessibility_label
+        );
+        let group = row
+            .children
+            .iter()
+            .find(|group| group.label == "Inspected edges")
+            .expect("inspected edges group");
+        assert_eq!(group.children.len(), 1);
+        assert!(
+            group.children[0].label.contains("evidence:left:1.0")
+                && group.children[0].label.contains("evidence:shared:2.0"),
+            "the pair path names both ends: {}",
+            group.children[0].label
+        );
     }
 
     fn rendered_diagram(source: &str) -> String {
