@@ -80,6 +80,9 @@ impl XAiLanguageModelProvider {
     ) -> Self {
         let state = cx.new(|cx| {
             cx.observe_global::<SettingsStore>(|this: &mut State, cx| {
+                if crate::AllLanguageModelSettings::get_global(cx).disable_ai {
+                    return;
+                }
                 let credentials_provider = this.credentials_provider.clone();
                 let api_url = Self::api_url(cx);
                 this.api_key_state.handle_url_change(

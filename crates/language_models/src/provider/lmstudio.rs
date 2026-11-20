@@ -183,6 +183,9 @@ impl LmStudioLanguageModelProvider {
                 let subscription = cx.observe_global::<SettingsStore>({
                     let mut settings = AllLanguageModelSettings::get_global(cx).lmstudio.clone();
                     move |this: &mut State, cx| {
+                        if crate::AllLanguageModelSettings::get_global(cx).disable_ai {
+                            return;
+                        }
                         let new_settings =
                             AllLanguageModelSettings::get_global(cx).lmstudio.clone();
                         if settings != new_settings {

@@ -1862,6 +1862,133 @@ async fn test_multiple_did_change_watched_files_registrations(cx: &mut gpui::Tes
 }
 
 #[gpui::test]
+async fn test_dynamic_definition_respects_document_selector(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, matching, nonmatching, _handles) = setup_document_sync_test(cx).await;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    server.set_request_handler::<lsp::request::GotoDefinition, _, _>({
+        let requests = requests.clone();
+        move |params, _| {
+            let uri = params.text_document_position_params.text_document.uri;
+            requests.lock().push(uri.clone());
+            async move {
+                Ok(Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri,
+                    range: lsp::Range::default(),
+                })))
+            }
+        }
+    });
+
+    let method = "textDocument/definition";
+    register_capability(
+        &server,
+        method,
+        "scoped-definition",
+        Some(json!({
+            "documentSelector": [{"scheme": "file", "pattern": "**/a.rs"}],
+        })),
+    )
+    .await;
+    let matching_definitions = project
+        .update(cx, |project, cx| project.definitions(&matching, 0, cx))
+        .await
+        .expect("matching definition request")
+        .expect("matching result");
+    let nonmatching_definitions = project
+        .update(cx, |project, cx| project.definitions(&nonmatching, 0, cx))
+        .await
+        .expect("nonmatching definition request completes");
+    assert_eq!(matching_definitions.len(), 1);
+    assert_eq!(
+        &*requests.lock(),
+        &[Uri::from_file_path(path!("/the-root/a.rs")).unwrap()]
+    );
+    assert!(nonmatching_definitions.is_none_or(|definitions| definitions.is_empty()));
+
+    unregister_capabilities(&server, method, &["scoped-definition"]).await;
+    requests.lock().clear();
+    project
+        .update(cx, |project, cx| project.definitions(&matching, 0, cx))
+        .await
+        .expect("definition request completes after unregistration");
+    assert!(requests.lock().is_empty());
+
+    register_capability(&server, method, "unscoped-definition", Some(json!({}))).await;
+    project
+        .update(cx, |project, cx| project.definitions(&nonmatching, 0, cx))
+        .await
+        .expect("definition request completes with unscoped registration");
+    assert_eq!(
+        &*requests.lock(),
+        &[Uri::from_file_path(path!("/the-root/b.rs")).unwrap()]
+    );
+}
+
+#[gpui::test]
+async fn test_dynamic_hover_respects_document_selector(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let (project, server, matching, nonmatching, _handles) = setup_document_sync_test(cx).await;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    server.set_request_handler::<lsp::request::HoverRequest, _, _>({
+        let requests = requests.clone();
+        move |params, _| {
+            requests
+                .lock()
+                .push(params.text_document_position_params.text_document.uri);
+            async move {
+                Ok(Some(lsp::Hover {
+                    contents: lsp::HoverContents::Scalar(lsp::MarkedString::String(
+                        "fixture documentation".into(),
+                    )),
+                    range: None,
+                }))
+            }
+        }
+    });
+
+    let method = "textDocument/hover";
+    register_capability(
+        &server,
+        method,
+        "scoped-hover",
+        Some(json!({
+            "documentSelector": [{"scheme": "file", "pattern": "**/a.rs"}],
+        })),
+    )
+    .await;
+    let matching_hover = project
+        .update(cx, |project, cx| project.hover(&matching, 0, cx))
+        .await
+        .expect("matching hover response");
+    let nonmatching_hover = project
+        .update(cx, |project, cx| project.hover(&nonmatching, 0, cx))
+        .await;
+    assert_eq!(matching_hover.len(), 1);
+    assert_eq!(
+        &*requests.lock(),
+        &[Uri::from_file_path(path!("/the-root/a.rs")).unwrap()]
+    );
+    assert!(nonmatching_hover.is_none_or(|hovers| hovers.is_empty()));
+
+    unregister_capabilities(&server, method, &["scoped-hover"]).await;
+    requests.lock().clear();
+    project
+        .update(cx, |project, cx| project.hover(&matching, 0, cx))
+        .await;
+    assert!(requests.lock().is_empty());
+
+    register_capability(&server, method, "unscoped-hover", Some(json!({}))).await;
+    project
+        .update(cx, |project, cx| project.hover(&nonmatching, 0, cx))
+        .await;
+    assert_eq!(
+        &*requests.lock(),
+        &[Uri::from_file_path(path!("/the-root/b.rs")).unwrap()]
+    );
+}
+
+#[gpui::test]
 async fn test_dynamic_document_change_selectors(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     let (project, server, first, second, _handles) = setup_document_sync_test(cx).await;

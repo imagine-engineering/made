@@ -76,9 +76,11 @@ pub(super) struct DynamicRegistrations {
     pub(super) formatting_selectors: DocumentSelectorRegistrations<()>,
     rename: CapabilityRegistrations<OneOf<bool, lsp::RenameOptions>>,
     code_action: CapabilityRegistrations<lsp::CodeActionProviderCapability>,
+    pub(super) definition_selectors: DocumentSelectorRegistrations<()>,
     definition: CapabilityRegistrations<OneOf<bool, lsp::DefinitionOptions>>,
     completion: CapabilityRegistrations<CompletionOptions>,
     pub(super) completion_selectors: DocumentSelectorRegistrations<CompletionOptions>,
+    pub(super) hover_selectors: DocumentSelectorRegistrations<()>,
     hover: CapabilityRegistrations<lsp::HoverProviderCapability>,
     signature_help: CapabilityRegistrations<lsp::SignatureHelpOptions>,
     color: CapabilityRegistrations<lsp::ColorProviderCapability>,
@@ -611,7 +613,15 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/definition" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        (),
+                        |registrations| &mut registrations.definition_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -649,11 +659,19 @@ impl LspStore {
                     }
                 }
                 "textDocument/hover" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
                     let provider = match options {
                         OneOf::Left(value) => lsp::HoverProviderCapability::Simple(value),
                         OneOf::Right(caps) => caps,
                     };
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        (),
+                        |registrations| &mut registrations.hover_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -1008,6 +1026,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/definition" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.definition_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -1030,6 +1051,9 @@ impl LspStore {
                     self.apply_completion_triggers(&server, cx);
                 }
                 "textDocument/hover" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.hover_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,

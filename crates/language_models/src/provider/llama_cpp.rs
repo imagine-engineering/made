@@ -525,6 +525,9 @@ impl LlamaCppLanguageModelProvider {
                 cx.observe_global::<SettingsStore>({
                     let mut last_settings = LlamaCppLanguageModelProvider::settings(cx).clone();
                     move |this: &mut State, cx| {
+                        if crate::AllLanguageModelSettings::get_global(cx).disable_ai {
+                            return;
+                        }
                         let current_settings = LlamaCppLanguageModelProvider::settings(cx);
                         let settings_changed = current_settings != &last_settings;
                         if settings_changed {
