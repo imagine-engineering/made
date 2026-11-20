@@ -7890,7 +7890,81 @@ async fn test_remote_lsp(cx: &mut TestAppContext, server_cx: &mut TestAppContext
     cx.run_until_parked();
     buffer.update(cx, |buffer, _| {
         assert_eq!(buffer.text(), "fn two() -> usize { 1 }")
-    })
+    });
+
+    fs.insert_tree(
+        path!("/code/project1/src"),
+        json!({"other.rs": "fn other() {}"}),
+    )
+    .await;
+    let (nonmatching_buffer, _nonmatching_handle) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp((worktree_id, rel_path("src/other.rs")), cx)
+        })
+        .await
+        .unwrap();
+    fake_lsp
+        .request::<lsp::request::RegisterCapability>(
+            lsp::RegistrationParams {
+                registrations: vec![lsp::Registration {
+                    id: "scoped-rename".into(),
+                    method: "textDocument/rename".into(),
+                    register_options: Some(json!({
+                        "documentSelector": [{"scheme": "file", "pattern": "**/lib.rs"}],
+                        "prepareProvider": true,
+                    })),
+                }],
+            },
+            DEFAULT_LSP_REQUEST_TIMEOUT,
+        )
+        .await
+        .into_response()
+        .unwrap();
+    cx.run_until_parked();
+
+    let prepare_uris = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let _prepare_handler = fake_lsp
+        .set_request_handler::<lsp::request::PrepareRenameRequest, _, _>({
+            let prepare_uris = prepare_uris.clone();
+            move |params, _| {
+                prepare_uris.lock().unwrap().push(params.text_document.uri);
+                async { Ok(None) }
+            }
+        });
+    let rename_uris = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let _rename_handler = fake_lsp.set_request_handler::<lsp::request::Rename, _, _>({
+        let rename_uris = rename_uris.clone();
+        move |params, _| {
+            rename_uris
+                .lock()
+                .unwrap()
+                .push(params.text_document_position.text_document.uri);
+            async { Ok(None) }
+        }
+    });
+    let _unscoped_rename_handler = fake_second_lsp
+        .set_request_handler::<lsp::request::Rename, _, _>(|_, _| async { Ok(None) });
+
+    for candidate in [&buffer, &nonmatching_buffer] {
+        project
+            .update(cx, |project, cx| {
+                project.prepare_rename(candidate.clone(), 3usize, cx)
+            })
+            .await
+            .unwrap();
+        project
+            .update(cx, |project, cx| {
+                project.perform_rename(candidate.clone(), 3usize, "new_name".into(), cx)
+            })
+            .await
+            .unwrap();
+    }
+    let matching_uri = lsp::Uri::from_file_path(path!("/code/project1/src/lib.rs")).unwrap();
+    assert_eq!(
+        &*prepare_uris.lock().unwrap(),
+        std::slice::from_ref(&matching_uri)
+    );
+    assert_eq!(&*rename_uris.lock().unwrap(), &[matching_uri]);
 }
 
 #[gpui::test]

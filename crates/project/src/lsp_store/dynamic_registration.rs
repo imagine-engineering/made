@@ -75,6 +75,7 @@ pub(super) struct DynamicRegistrations {
         DocumentSelectorRegistrations<lsp::DocumentOnTypeFormattingOptions>,
     pub(super) formatting_selectors: DocumentSelectorRegistrations<()>,
     rename: CapabilityRegistrations<OneOf<bool, lsp::RenameOptions>>,
+    pub(super) rename_selectors: DocumentSelectorRegistrations<OneOf<bool, lsp::RenameOptions>>,
     code_action: CapabilityRegistrations<lsp::CodeActionProviderCapability>,
     pub(super) definition_selectors: DocumentSelectorRegistrations<()>,
     definition: CapabilityRegistrations<OneOf<bool, lsp::DefinitionOptions>>,
@@ -557,7 +558,15 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rename" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        options.clone(),
+                        |registrations| &mut registrations.rename_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -1008,6 +1017,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rename" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.rename_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
