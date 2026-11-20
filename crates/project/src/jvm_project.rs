@@ -2254,6 +2254,171 @@ fn decode_maven_dependency_graph(response: Value) -> Result<MavenDependencyGraph
     Ok(graph)
 }
 
+/// One Gradle conflict-resolved component with the requested versions that
+/// reached it and the selected version the resolution chose. Origin ranges
+/// stay explicitly unknown: graph admission rejects origin-known graphs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GradleConflictOrigin {
+    pub component_id: String,
+    pub group: Option<String>,
+    pub module: Option<String>,
+    pub project_path: Option<String>,
+    pub selected_version: Option<String>,
+    pub requested_versions: Vec<GradleRequestedVersion>,
+    pub selection_causes: Vec<GradleSelectionCause>,
+    pub origins_known: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GradleRequestedVersion {
+    pub version: String,
+    pub required_version: String,
+    pub preferred_version: String,
+    pub strict_version: String,
+    pub rejected_versions: Vec<String>,
+}
+
+// The report is bounded so callers can render it without a second graph
+// store; admission already bounds components (4096) and edges (16384).
+const MAX_CONFLICT_ORIGINS: usize = 128;
+const MAX_REQUESTED_VERSIONS: usize = 128;
+const MAX_OMITTED_VERSIONS: usize = 128;
+
+pub fn gradle_conflict_origins(graph: &GradleResolutionGraph) -> Vec<GradleConflictOrigin> {
+    let mut requested: HashMap<&str, Vec<GradleRequestedVersion>> = HashMap::new();
+    for edge in &graph.edges {
+        if !edge.resolved {
+            continue;
+        }
+        let Some(selected) = edge.selected.as_deref() else {
+            continue;
+        };
+        if let GradleDependencySelector::Module {
+            version,
+            required_version,
+            preferred_version,
+            strict_version,
+            rejected_versions,
+            ..
+        } = &edge.requested
+        {
+            let entry = requested.entry(selected).or_default();
+            if entry.len() >= MAX_REQUESTED_VERSIONS {
+                continue;
+            }
+            let candidate = GradleRequestedVersion {
+                version: version.clone(),
+                required_version: required_version.clone(),
+                preferred_version: preferred_version.clone(),
+                strict_version: strict_version.clone(),
+                rejected_versions: rejected_versions.clone(),
+            };
+            if !entry.contains(&candidate) {
+                entry.push(candidate);
+            }
+        }
+    }
+    let mut origins = Vec::new();
+    for component in &graph.components {
+        if origins.len() >= MAX_CONFLICT_ORIGINS {
+            break;
+        }
+        if !component.conflict_resolution {
+            continue;
+        }
+        origins.push(GradleConflictOrigin {
+            component_id: component.id.clone(),
+            group: component.group.clone(),
+            module: component.module.clone(),
+            project_path: component.project_path.clone(),
+            selected_version: component.version.clone(),
+            requested_versions: requested
+                .get(component.id.as_str())
+                .cloned()
+                .unwrap_or_default(),
+            selection_causes: component.selection_causes.clone(),
+            origins_known: graph.origins_known,
+        });
+    }
+    origins
+}
+
+/// One Maven mediated artifact with the winning version and the requested
+/// versions that lost mediation to it. Origin ranges and cycle occurrences
+/// stay explicitly unknown: graph admission rejects graphs claiming them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MavenConflictOrigin {
+    pub group_id: String,
+    pub artifact_id: String,
+    pub winner_component_id: String,
+    pub winner_version: String,
+    pub omitted_versions: Vec<MavenOmittedVersion>,
+    pub origins_known: bool,
+    pub cycle_count: usize,
+    pub cycle_occurrences_known: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MavenOmittedVersion {
+    pub component_id: String,
+    pub version: String,
+    pub version_constraint: Option<String>,
+    pub premanaged_version: Option<String>,
+}
+
+pub fn maven_conflict_origins(graph: &MavenDependencyGraph) -> Vec<MavenConflictOrigin> {
+    let components: HashMap<&str, &MavenDependencyComponent> = graph
+        .components
+        .iter()
+        .map(|component| (component.id.as_str(), component))
+        .collect();
+    let mut omitted: HashMap<&str, Vec<MavenOmittedVersion>> = HashMap::new();
+    for edge in &graph.edges {
+        if !edge.omitted {
+            continue;
+        }
+        let entry = omitted.entry(edge.selected.as_str()).or_default();
+        if entry.len() >= MAX_OMITTED_VERSIONS {
+            continue;
+        }
+        let Some(component) = components.get(edge.component.as_str()) else {
+            continue;
+        };
+        let candidate = MavenOmittedVersion {
+            component_id: component.id.clone(),
+            version: component.version.clone(),
+            version_constraint: edge.version_constraint.clone(),
+            premanaged_version: edge.premanaged_version.clone(),
+        };
+        if !entry.contains(&candidate) {
+            entry.push(candidate);
+        }
+    }
+    let mut origins = Vec::new();
+    for component in &graph.components {
+        if origins.len() >= MAX_CONFLICT_ORIGINS {
+            break;
+        }
+        let Some(lost) = omitted.get(component.id.as_str()) else {
+            continue;
+        };
+        if lost.is_empty() {
+            continue;
+        }
+        origins.push(MavenConflictOrigin {
+            group_id: component.group_id.clone(),
+            artifact_id: component.artifact_id.clone(),
+            winner_component_id: component.id.clone(),
+            winner_version: component.version.clone(),
+            omitted_versions: lost.clone(),
+            origins_known: graph.origins_known,
+            cycle_count: graph.cycle_count,
+            cycle_occurrences_known: graph.cycle_occurrences_known,
+        });
+    }
+    origins
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MavenProfileDefinition {
     pub id: String,
@@ -13238,6 +13403,160 @@ mod tests {
         );
         assert!(!graph.cycles.is_empty());
         assert_eq!(graph.cycles.len(), graph.cycle_count);
+    }
+
+    #[test]
+    fn gradle_conflict_origins_report_requested_and_selected_versions() {
+        let (selection, response) = gradle_graph_fixture();
+        let graph = selection
+            .validate_response(response)
+            .expect("actual pinned graph");
+        let origins = gradle_conflict_origins(&graph.resolution);
+        assert_eq!(
+            origins.len(),
+            1,
+            "the pinned diamond fixture has exactly one conflict-resolved component"
+        );
+        let origin = &origins[0];
+        assert_eq!(origin.module.as_deref(), Some("shared"));
+        assert_eq!(origin.group.as_deref(), Some("evidence"));
+        assert_eq!(origin.selected_version.as_deref(), Some("2.0"));
+        assert!(
+            origin
+                .requested_versions
+                .iter()
+                .map(|requested| requested.version.as_str())
+                .collect::<Vec<_>>()
+                .contains(&"1.0"),
+            "the losing requested version stays reported"
+        );
+        assert!(
+            origin
+                .requested_versions
+                .iter()
+                .map(|requested| requested.version.as_str())
+                .collect::<Vec<_>>()
+                .contains(&"2.0"),
+            "the winning requested version stays reported"
+        );
+        assert!(
+            origin
+                .selection_causes
+                .contains(&GradleSelectionCause::ConflictResolution)
+        );
+        assert!(
+            !origin.origins_known,
+            "origin ranges stay explicitly unknown; admission rejects origin-known graphs"
+        );
+    }
+
+    #[test]
+    fn maven_conflict_origins_report_mediation_winners_and_unknown_facts() {
+        let (selection, response) = maven_graph_fixture();
+        let graph = selection
+            .validate_response(response)
+            .expect("actual pinned graph");
+        let origins = maven_conflict_origins(&graph);
+        assert_eq!(
+            origins.len(),
+            2,
+            "the pinned fixture mediates two artifacts: shared and branch"
+        );
+        let origin = origins
+            .iter()
+            .find(|origin| origin.artifact_id == "branch")
+            .expect("mediated branch artifact");
+        let winner = graph
+            .edges
+            .iter()
+            .find(|edge| {
+                !edge.omitted
+                    && graph.components.iter().any(|component| {
+                        component.id == edge.component && component.artifact_id == "branch"
+                    })
+            })
+            .expect("selected occurrence");
+        let winner_component = graph
+            .components
+            .iter()
+            .find(|component| component.id == winner.selected)
+            .expect("winner component");
+        assert_eq!(origin.winner_component_id, winner_component.id);
+        assert_eq!(origin.winner_version, winner_component.version);
+        assert_eq!(origin.group_id, winner_component.group_id);
+        let omitted = graph
+            .edges
+            .iter()
+            .find(|edge| {
+                edge.omitted
+                    && graph.components.iter().any(|component| {
+                        component.id == edge.component && component.artifact_id == "branch"
+                    })
+            })
+            .expect("omitted branch occurrence");
+        let omitted_component = graph
+            .components
+            .iter()
+            .find(|component| component.id == omitted.component)
+            .expect("omitted component");
+        assert!(
+            origin
+                .omitted_versions
+                .iter()
+                .any(|lost| lost.component_id == omitted_component.id
+                    && lost.version == omitted_component.version)
+        );
+        assert!(
+            !origin.origins_known && !origin.cycle_occurrences_known,
+            "origin ranges and cycle occurrences stay explicitly unknown"
+        );
+        assert_eq!(origin.cycle_count, graph.cycles.len());
+        assert!(
+            origin.cycle_count > 0,
+            "the pinned fixture retains a real cycle"
+        );
+    }
+
+    #[test]
+    fn conflict_origin_reports_stay_bounded() {
+        let components = (0..200)
+            .map(|index| GradleDependencyComponent {
+                id: format!("[\"module\",\"evidence\",\"shared-{index}\",\"2.0\"]"),
+                kind: GradleDependencyKind::Module,
+                group: Some("evidence".into()),
+                module: Some(format!("shared-{index}")),
+                version: Some("2.0".into()),
+                build_tree_path: None,
+                project_path: None,
+                conflict_resolution: true,
+                forced: false,
+                selected_by_rule: false,
+                composite_substitution: false,
+                constrained: false,
+                selection_causes: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let graph = GradleResolutionGraph {
+            configuration: "parityGraph".into(),
+            root_component: "unrelated".into(),
+            structural_coverage_known: true,
+            resolution_complete: true,
+            origins_known: false,
+            artifacts_known: false,
+            components,
+            edges: Vec::new(),
+        };
+        let origins = gradle_conflict_origins(&graph);
+        assert_eq!(
+            origins.len(),
+            MAX_CONFLICT_ORIGINS,
+            "the report stays bounded regardless of component count"
+        );
+        assert!(
+            origins
+                .iter()
+                .all(|origin| origin.requested_versions.is_empty())
+        );
     }
 
     #[test]
