@@ -62,7 +62,7 @@ def build(jdtls, java_home, gradle_home, component_annotations, output):
             *gradle_home.glob("lib/plugins/*.jar"), *maven.glob("*.jar"),
         ]))
         subprocess.run([
-            str(java_home / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror",
+            str(java_home / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror", "-proc:none",
             "-classpath", classpath, "-d", str(classes), *(str(path) for path in sorted(SOURCE.glob("*.java"))),
         ], check=True)
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:

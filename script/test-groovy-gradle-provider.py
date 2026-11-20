@@ -160,7 +160,7 @@ public final class EnumDeclarationProbe {
 }
 """.replace("AT_LIMIT", ",".join(f"V{index}" for index in range(128)))
        .replace("OVER_LIMIT", ",".join(f"V{index}" for index in range(129))))
-    commands = [[str(arguments.java_home.resolve() / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror",
+    commands = [[str(arguments.java_home.resolve() / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror", "-proc:none",
                  "-classpath", classpath, "-d", str(evidence), str(source)],
                 [str(arguments.java_home.resolve() / "bin/java"), "-Xmx256m", "-classpath", str(evidence) + os.pathsep + classpath,
                  "EnumDeclarationProbe"]]
@@ -315,7 +315,7 @@ public final class GeneratedSourceDeclarationProbe {
     }
 }
 """)
-    subprocess.run([str(arguments.java_home.resolve() / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror",
+    subprocess.run([str(arguments.java_home.resolve() / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror", "-proc:none",
                     "-classpath", classpath, "-d", str(evidence), str(source)], check=True)
     checks = []
     identities = []
