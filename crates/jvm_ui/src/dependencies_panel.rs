@@ -60,6 +60,7 @@ actions!(
         CancelSelectedImport,
         ShowDependencyDiagram,
         CloseDependencyDiagram,
+        CopyDependencyDiagramSource,
         RunSelectedOfflineOperation,
         AddSelectedOrderedOperation,
         RemoveLastOrderedOperation,
@@ -598,6 +599,11 @@ pub struct DependenciesPanel {
     graph_selection_set: Vec<GraphPin>,
     graph_diagram_selection: Option<GraphSelection>,
     graph_diagram: Option<Entity<markdown::Markdown>>,
+    // The exact Mermaid source behind the rendered diagram, for copy export.
+    graph_diagram_source: Option<String>,
+    // One entry per diagram node: the matching tree fact row identity and
+    // label, for legend navigation back into the shared tree.
+    graph_diagram_legend: Vec<(LanguageToolNodeId, String)>,
     position: DockPosition,
     active: bool,
     view: BuildToolView,
@@ -984,6 +990,101 @@ fn dependency_diagram_source(
         }
     }
     Ok(None)
+}
+
+/// Legend navigation mapping for the bounded diagram: one entry per
+/// diagram node that has a tree fact row, using the same row identities
+/// the graph fact rows are built with. Synthetic unresolved placeholders
+/// have no tree row and are excluded. The diagram itself stays inert;
+/// navigation happens through the shared tree.
+fn dependency_diagram_legend(
+    snapshot: &JdtlsProjectSnapshot,
+    current: bool,
+    view: BuildToolView,
+    selection: &GraphSelection,
+) -> Vec<(LanguageToolNodeId, String)> {
+    if !selection.matches(snapshot, current) {
+        return Vec::new();
+    }
+    for module in &snapshot.projects {
+        let module_id = jdtls_module_node_id(snapshot, &module.module_root, view);
+        match &selection.target {
+            GraphQueryTarget::Maven(pom) if view != BuildToolView::Gradle => {
+                let Some(maven) = module.maven.as_ref().filter(|maven| maven.pom == *pom) else {
+                    continue;
+                };
+                let Some(graph) = &maven.dependency_graph else {
+                    return Vec::new();
+                };
+                let coordinates = graph
+                    .components
+                    .iter()
+                    .map(|component| {
+                        (
+                            component.id.as_str(),
+                            format!(
+                                "{}:{}:{}:{}:{}",
+                                component.group_id,
+                                component.artifact_id,
+                                component.extension,
+                                component.classifier,
+                                component.version
+                            ),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>();
+                return graph
+                    .nodes
+                    .iter()
+                    .take(64)
+                    .map(|node| {
+                        (
+                            graph_component_row_id(graph_fact_id(
+                                &module_id,
+                                "maven-node",
+                                &[&node.id],
+                            )),
+                            coordinates
+                                .get(node.component.as_str())
+                                .cloned()
+                                .unwrap_or_else(|| "Unavailable component".into()),
+                        )
+                    })
+                    .collect();
+            }
+            GraphQueryTarget::Gradle {
+                module: selected_module,
+                configuration,
+            } if view != BuildToolView::Maven && module.module_root == *selected_module => {
+                let Some(graph) = module
+                    .gradle
+                    .as_ref()
+                    .and_then(|gradle| gradle.dependency_graph.as_ref())
+                    .filter(|graph| graph.resolution.configuration == *configuration)
+                else {
+                    return Vec::new();
+                };
+                return graph
+                    .resolution
+                    .components
+                    .iter()
+                    .take(64)
+                    .map(|component| {
+                        (
+                            graph_component_row_id(graph_fact_id(
+                                &module_id,
+                                "gradle-component",
+                                &[&graph.resolution.configuration, &component.id],
+                            )),
+                            gradle_component_label(component),
+                        )
+                    })
+                    .collect();
+            }
+            _ => {}
+        }
+    }
+    Vec::new()
 }
 
 fn graph_component_row_id(id: LanguageToolNodeId) -> LanguageToolNodeId {
@@ -2363,6 +2464,8 @@ impl DependenciesPanel {
                     graph_selection_set: Vec::new(),
                     graph_diagram_selection: None,
                     graph_diagram: None,
+                    graph_diagram_source: None,
+                    graph_diagram_legend: Vec::new(),
                     position: preferences.dock_position.into(),
                     active: false,
                     view: preferences.view,
@@ -2424,6 +2527,8 @@ impl DependenciesPanel {
         self.graph_selection_set.clear();
         self.graph_diagram_selection = None;
         self.graph_diagram = None;
+        self.graph_diagram_source = None;
+        self.graph_diagram_legend.clear();
         self.view = view;
         self.preferences.view = view;
         self.persist_preferences(cx);
@@ -2744,6 +2849,8 @@ impl DependenciesPanel {
         self.graph_notice = None;
         self.graph_diagram_selection = Some(selection);
         self.graph_diagram = None;
+        self.graph_diagram_source = None;
+        self.graph_diagram_legend.clear();
         self.rebuild(cx);
         if self.graph_diagram.is_none() && self.graph_notice.is_none() {
             self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram"), cx);
@@ -2753,7 +2860,39 @@ impl DependenciesPanel {
     fn close_dependency_diagram(&mut self, cx: &mut Context<Self>) {
         self.graph_diagram_selection = None;
         self.graph_diagram = None;
+        self.graph_diagram_source = None;
+        self.graph_diagram_legend.clear();
         cx.notify();
+    }
+
+    fn copy_dependency_diagram_source(&mut self, cx: &mut Context<Self>) {
+        let Some(source) = self.graph_diagram_source.clone() else {
+            self.show_graph_error(anyhow::anyhow!("No diagram source is available; show a current dependency diagram, then retry Copy diagram source"), cx);
+            return;
+        };
+        let characters = source.chars().count();
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(source));
+        self.graph_notice = Some(format!(
+            "Diagram source copied to the clipboard; {characters} characters; the copied source is the exact input the displayed diagram renders"
+        ));
+        cx.notify();
+    }
+
+    fn navigate_diagram_legend(
+        &mut self,
+        row_id: LanguageToolNodeId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.host.visible_rows().iter().any(|row| row.id == row_id) {
+            self.host.select(row_id);
+            self.host.reveal_selection(ScrollStrategy::Center);
+            window.focus(&self.focus_handle, cx);
+            self.graph_notice = None;
+            cx.notify();
+        } else {
+            self.show_graph_error(anyhow::anyhow!("The diagram node's tree fact row is hidden by the current fact, scope or search filter; adjust the filters to include it, then retry the legend entry"), cx);
+        }
     }
 
     fn clear_graph_fact_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2947,6 +3086,8 @@ impl DependenciesPanel {
             self.graph_selection_set.clear();
             self.graph_diagram_selection = None;
             self.graph_diagram = None;
+            self.graph_diagram_source = None;
+            self.graph_diagram_legend.clear();
             self.graph_selections.clear();
             self.operation_selections.clear();
             self.operation_option_target = None;
@@ -2968,6 +3109,8 @@ impl DependenciesPanel {
             self.graph_selection_set.clear();
             self.graph_diagram_selection = None;
             self.graph_diagram = None;
+            self.graph_diagram_source = None;
+            self.graph_diagram_legend.clear();
             self.graph_selections.clear();
             self.operation_selections.clear();
             self.operation_option_target = None;
@@ -3161,6 +3304,8 @@ impl DependenciesPanel {
                     diagram_source = Some(dependency_diagram_source(
                         snapshot, current, self.view, selection,
                     ));
+                    self.graph_diagram_legend =
+                        dependency_diagram_legend(snapshot, current, self.view, selection);
                 }
                 mark_manifest_navigation(&mut rows, &navigation);
                 roots.append(&mut rows);
@@ -3180,7 +3325,7 @@ impl DependenciesPanel {
                 {
                     self.graph_diagram = Some(cx.new(|cx| {
                         markdown::Markdown::new_with_options(
-                            source.into(),
+                            source.clone().into(),
                             None,
                             None,
                             markdown::MarkdownOptions {
@@ -3191,14 +3336,19 @@ impl DependenciesPanel {
                         )
                     }));
                 }
+                self.graph_diagram_source = Some(source);
             }
             Some(Err(_)) => {
                 self.graph_diagram = None;
+                self.graph_diagram_source = None;
+                self.graph_diagram_legend.clear();
                 self.graph_diagram_selection = None;
                 self.graph_notice = Some("Diagram unavailable: the current graph exceeds presentation limits or contains unsupported labels/references. Use tree facts, review provider data and recollect. Limits: 64 nodes, 128 edges, 256 characters per label, 128 KiB source; no facts were truncated.".into());
             }
             _ => {
                 self.graph_diagram = None;
+                self.graph_diagram_source = None;
+                self.graph_diagram_legend.clear();
                 self.graph_diagram_selection = None;
             }
         }
@@ -6352,6 +6502,7 @@ impl Render for DependenciesPanel {
             )
             .on_action(cx.listener(|panel, _: &ShowDependencyDiagram, _, cx| panel.show_dependency_diagram(cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
+            .on_action(cx.listener(|panel, _: &CopyDependencyDiagramSource, _, cx| panel.copy_dependency_diagram_source(cx)))
             .on_action(
                 cx.listener(|panel, _: &language_tool_tree::ToggleExpanded, _, cx| {
                     panel.host.toggle_selected();
@@ -6611,6 +6762,11 @@ impl Render for DependenciesPanel {
                         .aria_label("Close dependency diagram; retain current tree facts")
                         .tab_index(0_isize).disabled(self.graph_diagram.is_none())
                         .on_click(cx.listener(|panel, _, _, cx| panel.close_dependency_diagram(cx))))
+                    .child(Button::new("groovy-copy-dependency-diagram-source", "Copy diagram source")
+                        .aria_label("Copy the bounded diagram's Mermaid source to the clipboard as the accepted export equivalent")
+                        .aria_value(if self.graph_diagram_source.is_some() { "Available" } else { "Unavailable" })
+                        .tab_index(0_isize).disabled(self.graph_diagram_source.is_none())
+                        .on_click(cx.listener(|panel, _, _, cx| panel.copy_dependency_diagram_source(cx))))
                     .when(show_toolbar, |header| header.child(
                         h_flex()
                             .gap_1()
@@ -6761,6 +6917,29 @@ impl Render for DependenciesPanel {
                     .max_h(px(240.)).overflow_y_scroll().px_2()
                     .child(markdown::MarkdownElement::new(diagram, markdown::MarkdownStyle::themed(markdown::MarkdownFont::Preview, window, cx)))
             ))
+            .when(!self.graph_diagram_legend.is_empty(), |panel| {
+                let legend = self.graph_diagram_legend.clone();
+                panel.child(
+                    div().id("groovy-dependency-diagram-legend").role(Role::Group)
+                        .aria_label("Dependency diagram legend")
+                        .aria_description("One entry per diagram node; activating an entry selects the matching tree fact row in the shared tree. The diagram image stays inert; navigation happens through the tree.")
+                        .px_2()
+                        .children(legend.iter().enumerate().map(|(index, (row_id, label))| {
+                            let row_id = row_id.clone();
+                            Button::new(
+                                SharedString::from(format!("groovy-diagram-legend-{index}")),
+                                format!("{index}. {label}"),
+                            )
+                            .aria_label(format!(
+                                "Select the tree fact row for diagram node {index}: {label}"
+                            ))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.navigate_diagram_legend(row_id.clone(), window, cx);
+                            }))
+                        })),
+                )
+            })
             .child(language_tool_tree(
                 rows,
                 selected,
@@ -7971,6 +8150,155 @@ mod tests {
             mode: GraphInspectionMode::SelectionSetRelations,
         };
         assert!(graph_inspection_row(&snapshot, BuildToolView::Gradle, &stale).is_none());
+    }
+
+    #[test]
+    fn dependency_diagram_legend_maps_nodes_to_tree_fact_rows() {
+        let (maven_graph, gradle_graph) = captured_graphs();
+        let worktree_id = WorktreeId::from_usize(1);
+        // Gradle: every captured component maps to the tree fact row
+        // identity the graph fact rows are built with.
+        let (snapshot, module_root) = gradle_graph_snapshot(gradle_graph.clone());
+        let selection = GraphSelection {
+            server_id: lsp::LanguageServerId(1),
+            generation: 2,
+            target: GraphQueryTarget::Gradle {
+                module: module_root.clone(),
+                configuration: "parityGraph".into(),
+            },
+        };
+        let legend = dependency_diagram_legend(&snapshot, true, BuildToolView::Gradle, &selection);
+        assert_eq!(
+            legend.len(),
+            gradle_graph.resolution.components.len(),
+            "every component gets a legend entry"
+        );
+        for (component, (row_id, label)) in
+            gradle_graph.resolution.components.iter().zip(legend.iter())
+        {
+            let module_id = jdtls_module_node_id(
+                &snapshot,
+                &snapshot.projects[0].module_root,
+                BuildToolView::Gradle,
+            );
+            assert_eq!(
+                row_id,
+                &graph_component_row_id(graph_fact_id(
+                    &module_id,
+                    "gradle-component",
+                    &[&gradle_graph.resolution.configuration, &component.id],
+                )),
+                "legend row matches the shared tree identity"
+            );
+            assert_eq!(label, &gradle_component_label(component));
+        }
+        // Stale receipts and mismatched configurations produce no legend.
+        assert!(
+            dependency_diagram_legend(&snapshot, false, BuildToolView::Gradle, &selection)
+                .is_empty()
+        );
+        let wrong_configuration = GraphSelection {
+            target: GraphQueryTarget::Gradle {
+                module: module_root,
+                configuration: "other".into(),
+            },
+            ..selection
+        };
+        assert!(
+            dependency_diagram_legend(&snapshot, true, BuildToolView::Gradle, &wrong_configuration)
+                .is_empty()
+        );
+        // Maven: coordinate labels match the diagram node labels and rows
+        // use the Maven occurrence row identity.
+        let pom = path(worktree_id, "application/pom.xml");
+        let maven_snapshot = JdtlsProjectSnapshot {
+            metadata: Default::default(),
+            server_id: lsp::LanguageServerId(1),
+            worktree_id,
+            generation: 2,
+            partial: false,
+            projects: vec![project::jvm_project::JdtlsProject {
+                module_root: path(worktree_id, "application"),
+                membership: project::jvm_project::JdtlsProjectMembership::ImportedJava,
+                imported_build_kind: project::jvm_project::JdtlsImportedBuildKind::Maven,
+                source_roots: Vec::new(),
+                project_references: Vec::new(),
+                library_entries: 0,
+                library_files: Vec::new(),
+                library_artifacts: Vec::new(),
+                project_vm_known: false,
+                project_vm_java_major: None,
+                server_launch_java_major: None,
+                java_source_level: None,
+                java_target_level: None,
+                gradle: None,
+                maven: Some(project::jvm_project::MavenProject {
+                    dependency_graph: Some(std::sync::Arc::new(maven_graph.clone())),
+                    pom: pom.clone(),
+                    modules: Vec::new(),
+                    group_id: "evidence".into(),
+                    artifact_id: "application".into(),
+                    version: "1.0".into(),
+                    packaging: "jar".into(),
+                    profiles: Default::default(),
+                    profile_definitions_known: false,
+                    profile_definitions: Vec::new(),
+                    reactor_position: None,
+                    reactor_order_problem: None,
+                    plugins: Vec::new(),
+                    lifecycles: Vec::new(),
+                }),
+            }],
+        };
+        let maven_selection = GraphSelection {
+            server_id: lsp::LanguageServerId(1),
+            generation: 2,
+            target: GraphQueryTarget::Maven(pom),
+        };
+        let legend = dependency_diagram_legend(
+            &maven_snapshot,
+            true,
+            BuildToolView::Maven,
+            &maven_selection,
+        );
+        assert_eq!(legend.len(), maven_graph.nodes.len());
+        let coordinates = maven_graph
+            .components
+            .iter()
+            .map(|component| {
+                (
+                    component.id.as_str(),
+                    format!(
+                        "{}:{}:{}:{}:{}",
+                        component.group_id,
+                        component.artifact_id,
+                        component.extension,
+                        component.classifier,
+                        component.version
+                    ),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        for (node, (row_id, label)) in maven_graph.nodes.iter().zip(legend.iter()) {
+            let module_id = jdtls_module_node_id(
+                &maven_snapshot,
+                &maven_snapshot.projects[0].module_root,
+                BuildToolView::Maven,
+            );
+            assert_eq!(
+                row_id,
+                &graph_component_row_id(graph_fact_id(&module_id, "maven-node", &[&node.id])),
+            );
+            assert_eq!(
+                label,
+                &coordinates
+                    .get(node.component.as_str())
+                    .cloned()
+                    .unwrap_or_else(|| "Unavailable component".into())
+            );
+        }
+        // Legend entries stay bounded with the diagram's node budget.
+        assert!(legend.len() <= 64);
     }
 
     fn rendered_diagram(source: &str) -> String {
@@ -12805,6 +13133,39 @@ mod tests {
             panel.update(cx, |panel, cx| {
                 panel.host.select(inspection_target.clone());
                 panel.show_dependency_diagram(cx);
+            });
+
+            // Export equivalent: the copied source is the exact input the
+            // displayed diagram renders, and the legend navigates back into
+            // the shared tree while the diagram image stays inert.
+            cx.dispatch_action(CopyDependencyDiagramSource);
+            let copied = cx.cx.update(|cx| {
+                cx.read_from_clipboard().and_then(|item| {
+                    item.entries().iter().find_map(|entry| match entry {
+                        gpui::ClipboardEntry::String(text) => Some(text.text().to_string()),
+                        _ => None,
+                    })
+                })
+            });
+            panel.read_with(cx, |panel, _| {
+                let source = panel.graph_diagram_source.as_ref().expect("diagram source");
+                assert_eq!(copied.as_deref(), Some(source.as_str()));
+                assert!(source.contains("flowchart LR"));
+            });
+            let legend_row = panel.read_with(cx, |panel, _| {
+                let legend = &panel.graph_diagram_legend;
+                legend
+                    .iter()
+                    .find(|(row_id, _)| *row_id == inspection_target)
+                    .map(|(row_id, _)| row_id)
+                    .or_else(|| legend.first().map(|(row_id, _)| row_id))
+                    .expect("legend entry")
+                    .clone()
+            });
+            panel.update_in(cx, |panel, window, cx| {
+                panel.host.select_first();
+                panel.navigate_diagram_legend(legend_row.clone(), window, cx);
+                assert_eq!(panel.host.selected(), Some(&legend_row));
             });
 
             lsp_store.read_with(cx, |store, _| {
