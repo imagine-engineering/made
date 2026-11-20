@@ -41,6 +41,7 @@ actions!(
         CancelGraphCollection,
         CycleGraphFactFilter,
         CycleMavenGraphScope,
+        CycleGraphFactPresentation,
         ClearGraphFactSearch,
         InspectGraphNeighbours,
         InspectGraphRootPaths,
@@ -122,6 +123,30 @@ impl GraphFactFilter {
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+enum GraphFactPresentation {
+    #[default]
+    Tree,
+    Flat,
+}
+
+impl GraphFactPresentation {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Tree => "Tree groups",
+            Self::Flat => "Flat list",
+        }
+    }
+
+    fn next(self) -> Self {
+        match self {
+            Self::Tree => Self::Flat,
+            Self::Flat => Self::Tree,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 enum MavenGraphScope {
     #[default]
     All,
@@ -175,7 +200,7 @@ impl MavenGraphScope {
 
 const PANEL_KEY: &str = "GroovyDependenciesPanel";
 const VIEW_STATE_KEY: &str = "GroovyBuildViewState";
-const VIEW_STATE_VERSION: u32 = 7;
+const VIEW_STATE_VERSION: u32 = 8;
 const MAX_VIEW_STATE_BYTES: usize = 4096;
 const MAX_GRAPH_SEARCH_BYTES: usize = 512;
 const BASIC_MAVEN_PHASES: &[&str] = &[
@@ -199,6 +224,7 @@ struct BuildViewPreferences {
     show_ignored: bool,
     graph_fact_filter: GraphFactFilter,
     maven_graph_scope: MavenGraphScope,
+    graph_fact_presentation: GraphFactPresentation,
 }
 
 impl Default for BuildViewPreferences {
@@ -218,6 +244,7 @@ impl Default for BuildViewPreferences {
             show_ignored: false,
             graph_fact_filter: GraphFactFilter::All,
             maven_graph_scope: MavenGraphScope::All,
+            graph_fact_presentation: GraphFactPresentation::Tree,
         }
     }
 }
@@ -436,6 +463,47 @@ impl BuildViewPreferences {
                     show_gradle_toolbar: previous.show_gradle_toolbar,
                     show_maven_toolbar: previous.show_maven_toolbar,
                     show_basic_maven_phases: previous.show_basic_maven_phases,
+                    graph_fact_filter: previous.graph_fact_filter,
+                    maven_graph_scope: previous.maven_graph_scope,
+                    ..Default::default()
+                })
+            }
+            7 => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct PreviousPreferences {
+                    version: u32,
+                    dock_position: settings::DockPosition,
+                    view: BuildToolView,
+                    group_gradle_tasks: bool,
+                    group_gradle_modules: bool,
+                    group_maven_modules: bool,
+                    show_maven_artifact_id: bool,
+                    show_maven_version: bool,
+                    show_gradle_toolbar: bool,
+                    show_maven_toolbar: bool,
+                    show_basic_maven_phases: bool,
+                    show_ignored: bool,
+                    graph_fact_filter: GraphFactFilter,
+                    maven_graph_scope: MavenGraphScope,
+                }
+                let previous: PreviousPreferences = serde_json::from_str(serialized)?;
+                anyhow::ensure!(
+                    previous.version == 7,
+                    "Unsupported previous preferences version"
+                );
+                Ok(Self {
+                    dock_position: previous.dock_position,
+                    view: previous.view,
+                    group_gradle_tasks: previous.group_gradle_tasks,
+                    group_gradle_modules: previous.group_gradle_modules,
+                    group_maven_modules: previous.group_maven_modules,
+                    show_maven_artifact_id: previous.show_maven_artifact_id,
+                    show_maven_version: previous.show_maven_version,
+                    show_gradle_toolbar: previous.show_gradle_toolbar,
+                    show_maven_toolbar: previous.show_maven_toolbar,
+                    show_basic_maven_phases: previous.show_basic_maven_phases,
+                    show_ignored: previous.show_ignored,
                     graph_fact_filter: previous.graph_fact_filter,
                     maven_graph_scope: previous.maven_graph_scope,
                     ..Default::default()
@@ -2133,6 +2201,12 @@ impl DependenciesPanel {
 
     fn cycle_maven_graph_scope(&mut self, cx: &mut Context<Self>) {
         self.preferences.maven_graph_scope = self.preferences.maven_graph_scope.next();
+        self.persist_preferences(cx);
+        self.rebuild(cx);
+    }
+
+    fn cycle_graph_fact_presentation(&mut self, cx: &mut Context<Self>) {
+        self.preferences.graph_fact_presentation = self.preferences.graph_fact_presentation.next();
         self.persist_preferences(cx);
         self.rebuild(cx);
     }
@@ -3968,6 +4042,7 @@ fn project_rows_for_view(
                 &module_id,
                 gradle.dependency_graph.as_deref(),
                 preferences.graph_fact_filter,
+                preferences.graph_fact_presentation,
             ));
         }
         if view != BuildToolView::Gradle
@@ -3978,6 +4053,7 @@ fn project_rows_for_view(
                 maven.dependency_graph.as_deref(),
                 preferences.graph_fact_filter,
                 preferences.maven_graph_scope,
+                preferences.graph_fact_presentation,
             ));
         }
         if view == BuildToolView::Gradle {
@@ -4340,7 +4416,12 @@ fn gradle_graph_node(
     module: &LanguageToolNodeId,
     graph: Option<&project::jvm_project::GradleDependencyGraph>,
 ) -> LanguageToolNode {
-    gradle_graph_node_filtered(module, graph, GraphFactFilter::All)
+    gradle_graph_node_filtered(
+        module,
+        graph,
+        GraphFactFilter::All,
+        GraphFactPresentation::Tree,
+    )
 }
 
 #[cfg(test)]
@@ -4348,13 +4429,20 @@ fn maven_graph_node(
     module: &LanguageToolNodeId,
     graph: Option<&project::jvm_project::MavenDependencyGraph>,
 ) -> LanguageToolNode {
-    maven_graph_node_filtered(module, graph, GraphFactFilter::All, MavenGraphScope::All)
+    maven_graph_node_filtered(
+        module,
+        graph,
+        GraphFactFilter::All,
+        MavenGraphScope::All,
+        GraphFactPresentation::Tree,
+    )
 }
 
 fn gradle_graph_node_filtered(
     module: &LanguageToolNodeId,
     graph: Option<&project::jvm_project::GradleDependencyGraph>,
     filter: GraphFactFilter,
+    presentation: GraphFactPresentation,
 ) -> LanguageToolNode {
     use project::jvm_project::GradleDependencySelector;
     let id = graph_fact_id(module, "gradle", &[]);
@@ -4431,32 +4519,46 @@ fn gradle_graph_node_filtered(
                 edge.failure_category.as_deref().unwrap_or("Resolved metadata; artifact readiness unknown")), Vec::new(),
         )
     }).collect();
+    let (children, presentation_text) = match presentation {
+        GraphFactPresentation::Tree => (
+            vec![
+                graph_fact_row(
+                    graph_fact_id(module, "gradle-components", &[&resolution.configuration]),
+                    "Components".into(),
+                    "Selected provider components; root and selection causes retained".into(),
+                    components,
+                ),
+                graph_fact_row(
+                    graph_fact_id(module, "gradle-edges", &[&resolution.configuration]),
+                    "Dependency edges".into(),
+                    "Provider edges; cycles and diamonds retained without recursive expansion"
+                        .into(),
+                    edges,
+                ),
+            ],
+            "tree groups",
+        ),
+        // The flat presentation reports the identical retained fact rows in
+        // one list; only the group wrappers disappear.
+        GraphFactPresentation::Flat => (
+            components.into_iter().chain(edges).collect(),
+            "flat list; the same facts as the tree groups",
+        ),
+    };
     graph_fact_row(
         id,
         format!("Gradle dependency graph: {}", resolution.configuration),
         format!(
-            "{} components; {} edges; graph facts filter {}; {} retained edges; structural coverage {}; resolution complete {}; source origins and artifacts unavailable",
+            "{} components; {} edges; graph facts filter {}; facts presentation {}; {} retained edges; structural coverage {}; resolution complete {}; source origins and artifacts unavailable",
             resolution.components.len(),
             resolution.edges.len(),
             filter.label(),
+            presentation_text,
             retained_edges.len(),
             resolution.structural_coverage_known,
             resolution.resolution_complete
         ),
-        vec![
-            graph_fact_row(
-                graph_fact_id(module, "gradle-components", &[&resolution.configuration]),
-                "Components".into(),
-                "Selected provider components; root and selection causes retained".into(),
-                components,
-            ),
-            graph_fact_row(
-                graph_fact_id(module, "gradle-edges", &[&resolution.configuration]),
-                "Dependency edges".into(),
-                "Provider edges; cycles and diamonds retained without recursive expansion".into(),
-                edges,
-            ),
-        ],
+        children,
     )
 }
 
@@ -4465,6 +4567,7 @@ fn maven_graph_node_filtered(
     graph: Option<&project::jvm_project::MavenDependencyGraph>,
     filter: GraphFactFilter,
     scope: MavenGraphScope,
+    presentation: GraphFactPresentation,
 ) -> LanguageToolNode {
     let id = graph_fact_id(module, "maven", &[]);
     let Some(graph) = graph else {
@@ -4587,15 +4690,51 @@ fn maven_graph_node_filtered(
             )
         })
         .collect();
+    let (children, presentation_text) = match presentation {
+        GraphFactPresentation::Tree => (
+            vec![
+                graph_fact_row(
+                    graph_fact_id(module, "maven-nodes", &[]),
+                    "Occurrences".into(),
+                    "Distinct dependency occurrences; coordinate duplicates remain separate".into(),
+                    occurrences,
+                ),
+                graph_fact_row(
+                    graph_fact_id(module, "maven-edges", &[]),
+                    "Dependency edges".into(),
+                    "Requested and selected occurrences, scopes and mediation retained".into(),
+                    edges,
+                ),
+                graph_fact_row(
+                    graph_fact_id(module, "maven-descriptors", &[]),
+                    "Unavailable descriptors".into(),
+                    "Provider collection gaps; repair cache/build settings and recollect".into(),
+                    descriptors,
+                ),
+            ],
+            "tree groups",
+        ),
+        // The flat presentation reports the identical retained fact rows in
+        // one list; only the group wrappers disappear.
+        GraphFactPresentation::Flat => (
+            occurrences
+                .into_iter()
+                .chain(edges)
+                .chain(descriptors)
+                .collect(),
+            "flat list; the same facts as the tree groups",
+        ),
+    };
     graph_fact_row(
         id,
         "Maven dependency graph".into(),
         format!(
-            "{} occurrences; {} edges; graph facts filter {}; Maven scope {}; {} retained edges; structural coverage {}; collection complete {}; {} cycle reports; exact cycle occurrences {}; source origins and artifacts unavailable; {}",
+            "{} occurrences; {} edges; graph facts filter {}; Maven scope {}; facts presentation {}; {} retained edges; structural coverage {}; collection complete {}; {} cycle reports; exact cycle occurrences {}; source origins and artifacts unavailable; {}",
             graph.nodes.len(),
             graph.edges.len(),
             filter.label(),
             scope.label(),
+            presentation_text,
             retained_edges.len(),
             graph.structural_coverage_known,
             graph.collection_complete,
@@ -4610,26 +4749,7 @@ fn maven_graph_node_filtered(
                 .as_deref()
                 .unwrap_or("No collection problem reported")
         ),
-        vec![
-            graph_fact_row(
-                graph_fact_id(module, "maven-nodes", &[]),
-                "Occurrences".into(),
-                "Distinct dependency occurrences; coordinate duplicates remain separate".into(),
-                occurrences,
-            ),
-            graph_fact_row(
-                graph_fact_id(module, "maven-edges", &[]),
-                "Dependency edges".into(),
-                "Requested and selected occurrences, scopes and mediation retained".into(),
-                edges,
-            ),
-            graph_fact_row(
-                graph_fact_id(module, "maven-descriptors", &[]),
-                "Unavailable descriptors".into(),
-                "Provider collection gaps; repair cache/build settings and recollect".into(),
-                descriptors,
-            ),
-        ],
+        children,
     )
 }
 
@@ -5594,6 +5714,7 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &ClearGraphFactSearch, window, cx| panel.clear_graph_fact_search(window, cx)))
             .on_action(cx.listener(|panel, _: &CycleGraphFactFilter, _, cx| panel.cycle_graph_fact_filter(cx)))
             .on_action(cx.listener(|panel, _: &CycleMavenGraphScope, _, cx| panel.cycle_maven_graph_scope(cx)))
+            .on_action(cx.listener(|panel, _: &CycleGraphFactPresentation, _, cx| panel.cycle_graph_fact_presentation(cx)))
             .on_action(
                 cx.listener(|panel, _: &language_tool_tree::Refresh, _, cx| panel.refresh(cx)),
             )
@@ -5767,6 +5888,13 @@ impl Render for DependenciesPanel {
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.cycle_maven_graph_scope(cx)))
                     ))
+                    .child(
+                        Button::new("groovy-graph-fact-presentation", format!("Graph facts: {}", self.preferences.graph_fact_presentation.label()))
+                            .aria_label(format!("Dependency graph facts presentation: {}; activate for {}; both presentations report the same admitted provider facts", self.preferences.graph_fact_presentation.label(), self.preferences.graph_fact_presentation.next().label()))
+                            .aria_value(self.preferences.graph_fact_presentation.label())
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_presentation(cx)))
+                    )
                     .child(Button::new("groovy-inspect-graph-neighbours", "Neighbours")
                         .aria_label("Inspect selected dependency neighbours in admitted graph facts")
                         .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::Neighbours) { "Active" } else { "Inactive" })
@@ -6409,6 +6537,10 @@ mod tests {
         previous_three
             .as_object_mut()
             .expect("record")
+            .remove("graph_fact_presentation");
+        previous_three
+            .as_object_mut()
+            .expect("record")
             .remove("dock_position");
         previous_three
             .as_object_mut()
@@ -6432,6 +6564,10 @@ mod tests {
             .as_object_mut()
             .expect("schema 2")
             .remove("maven_graph_scope");
+        previous_two
+            .as_object_mut()
+            .expect("record")
+            .remove("graph_fact_presentation");
         previous_two
             .as_object_mut()
             .expect("record")
@@ -7208,8 +7344,13 @@ mod tests {
             (MavenGraphScope::Test, 1),
             (MavenGraphScope::Runtime, 0),
         ] {
-            let projected =
-                maven_graph_node_filtered(&module, Some(&graph), GraphFactFilter::All, scope);
+            let projected = maven_graph_node_filtered(
+                &module,
+                Some(&graph),
+                GraphFactFilter::All,
+                scope,
+                GraphFactPresentation::Tree,
+            );
             let edges = &projected
                 .children
                 .iter()
@@ -7252,7 +7393,13 @@ mod tests {
                 GraphFactFilter::Conflicts,
                 GraphFactFilter::Unavailable,
             ] {
-                let root = maven_graph_node_filtered(&module, Some(&graph), filter, scope);
+                let root = maven_graph_node_filtered(
+                    &module,
+                    Some(&graph),
+                    filter,
+                    scope,
+                    GraphFactPresentation::Tree,
+                );
                 let occurrences = &root
                     .children
                     .iter()
@@ -7340,6 +7487,7 @@ mod tests {
             Some(&graph),
             GraphFactFilter::All,
             MavenGraphScope::Test,
+            GraphFactPresentation::Tree,
         );
         assert!(empty.accessibility_label.contains("0 retained edges"));
         assert_eq!(
@@ -7357,7 +7505,8 @@ mod tests {
                 &module,
                 None,
                 GraphFactFilter::All,
-                MavenGraphScope::Compile
+                MavenGraphScope::Compile,
+                GraphFactPresentation::Tree,
             )
             .accessibility_label
             .contains("Not collected")
@@ -7387,6 +7536,10 @@ mod tests {
             .as_object_mut()
             .expect("schema 5")
             .remove("maven_graph_scope");
+        previous
+            .as_object_mut()
+            .expect("record")
+            .remove("graph_fact_presentation");
         let migrated =
             BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 5 migration");
         assert_eq!(migrated.maven_graph_scope, MavenGraphScope::All);
@@ -7417,6 +7570,10 @@ mod tests {
             .as_object_mut()
             .expect("schema 6")
             .remove("show_ignored");
+        previous
+            .as_object_mut()
+            .expect("record")
+            .remove("graph_fact_presentation");
         let migrated =
             BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 6 migration");
         assert!(
@@ -7432,6 +7589,150 @@ mod tests {
         );
         let mut invalid = serialized;
         invalid["show_ignored"] = serde_json::json!("private-canary");
+        assert!(BuildViewPreferences::restore(Some(&invalid.to_string())).is_err());
+    }
+
+    #[test]
+    fn graph_fact_presentation_keeps_flat_and_tree_fact_parity() {
+        let rows = |root: LanguageToolNode| {
+            let mut host = LanguageToolTreeHost::default();
+            host.replace_snapshot(LanguageToolSnapshot {
+                roots: vec![root],
+                status: LanguageToolProviderStatus::Current,
+            });
+            host.expand_all();
+            host.visible_rows().to_vec()
+        };
+        let (maven, gradle) = captured_graphs();
+        let module = LanguageToolNodeId("module:application".into());
+        for (tree, flat) in [
+            (
+                gradle_graph_node_filtered(
+                    &module,
+                    Some(&gradle),
+                    GraphFactFilter::All,
+                    GraphFactPresentation::Tree,
+                ),
+                gradle_graph_node_filtered(
+                    &module,
+                    Some(&gradle),
+                    GraphFactFilter::All,
+                    GraphFactPresentation::Flat,
+                ),
+            ),
+            (
+                maven_graph_node_filtered(
+                    &module,
+                    Some(&maven),
+                    GraphFactFilter::All,
+                    MavenGraphScope::All,
+                    GraphFactPresentation::Tree,
+                ),
+                maven_graph_node_filtered(
+                    &module,
+                    Some(&maven),
+                    GraphFactFilter::All,
+                    MavenGraphScope::All,
+                    GraphFactPresentation::Flat,
+                ),
+            ),
+        ] {
+            assert_eq!(tree.id, flat.id, "presentations share the graph fact root");
+            let tree_rows = rows(tree.clone());
+            let flat_rows = rows(flat.clone());
+            let tree_facts = tree_rows
+                .iter()
+                .map(|row| (row.id.clone(), row.accessibility_label.clone()))
+                .collect::<std::collections::HashMap<_, _>>();
+            let flat_facts = flat_rows
+                .iter()
+                .map(|row| (row.id.clone(), row.accessibility_label.clone()))
+                .collect::<std::collections::HashMap<_, _>>();
+            // The root row names the presentation by design and the tree
+            // group wrappers are presentation-only; every other fact row
+            // must be identical across both presentations.
+            let is_presentation_only = |id: &LanguageToolNodeId| {
+                let id = id.0.as_str();
+                id == tree.id.0
+                    || id.contains(":gradle-components")
+                    || id.contains(":gradle-edges")
+                    || id.contains(":maven-nodes")
+                    || id.contains(":maven-edges")
+                    || id.contains(":maven-descriptors")
+            };
+            let tree_facts = tree_facts
+                .into_iter()
+                .filter(|(id, _)| !is_presentation_only(id))
+                .collect::<std::collections::HashMap<_, _>>();
+            let flat_facts = flat_facts
+                .into_iter()
+                .filter(|(id, _)| !is_presentation_only(id))
+                .collect::<std::collections::HashMap<_, _>>();
+            assert_eq!(
+                tree_facts, flat_facts,
+                "both presentations report identical facts"
+            );
+            assert!(
+                tree.accessibility_label
+                    .contains("facts presentation tree groups")
+                    && flat.accessibility_label.contains(
+                        "facts presentation flat list; the same facts as the tree groups"
+                    ),
+                "coverage names the presentation parity boundary"
+            );
+            // The group wrappers exist only in the tree presentation.
+            assert!(
+                tree.children
+                    .iter()
+                    .any(|group| group.label == "Dependency edges")
+                    && flat
+                        .children
+                        .iter()
+                        .all(|group| group.label != "Dependency edges"),
+            );
+            assert_eq!(
+                tree.children
+                    .iter()
+                    .map(|g| g.children.len())
+                    .sum::<usize>(),
+                flat.children.len(),
+                "the flat list holds every grouped fact row"
+            );
+        }
+    }
+
+    #[test]
+    fn graph_fact_presentation_preferences_migrate_strict_schema_seven() {
+        let state = BuildViewPreferences {
+            graph_fact_presentation: GraphFactPresentation::Flat,
+            dock_position: settings::DockPosition::Bottom,
+            ..Default::default()
+        };
+        let serialized = serde_json::to_value(&state).expect("presentation preferences");
+        assert_eq!(
+            BuildViewPreferences::restore(Some(&serialized.to_string())).expect("restore"),
+            state
+        );
+        let mut previous = serialized.clone();
+        previous["version"] = serde_json::json!(7);
+        previous
+            .as_object_mut()
+            .expect("schema 7")
+            .remove("graph_fact_presentation");
+        let migrated =
+            BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 7 migration");
+        assert_eq!(
+            migrated.graph_fact_presentation,
+            GraphFactPresentation::Tree,
+            "a schema 7 payload cannot carry the schema 8 presentation"
+        );
+        assert_eq!(migrated.maven_graph_scope, state.maven_graph_scope);
+        assert_eq!(migrated.graph_fact_filter, state.graph_fact_filter);
+        assert_eq!(migrated.dock_position, state.dock_position);
+        previous["graph_fact_presentation"] = serde_json::json!("flat");
+        assert!(BuildViewPreferences::restore(Some(&previous.to_string())).is_err());
+        let mut invalid = serialized;
+        invalid["graph_fact_presentation"] = serde_json::json!("private-canary");
         assert!(BuildViewPreferences::restore(Some(&invalid.to_string())).is_err());
     }
 
@@ -7724,12 +8025,19 @@ mod tests {
         };
         for provider in [GraphFixtureProvider::Maven, GraphFixtureProvider::Gradle] {
             let build = |filter| match provider {
-                GraphFixtureProvider::Maven => {
-                    maven_graph_node_filtered(&module, Some(&maven), filter, MavenGraphScope::All)
-                }
-                GraphFixtureProvider::Gradle => {
-                    gradle_graph_node_filtered(&module, Some(&gradle), filter)
-                }
+                GraphFixtureProvider::Maven => maven_graph_node_filtered(
+                    &module,
+                    Some(&maven),
+                    filter,
+                    MavenGraphScope::All,
+                    GraphFactPresentation::Tree,
+                ),
+                GraphFixtureProvider::Gradle => gradle_graph_node_filtered(
+                    &module,
+                    Some(&gradle),
+                    filter,
+                    GraphFactPresentation::Tree,
+                ),
             };
             let all = rows(build(GraphFactFilter::All));
             let all_ids = all.iter().map(|row| row.id.clone()).collect::<HashSet<_>>();
@@ -7829,6 +8137,7 @@ mod tests {
             &module,
             Some(&gradle),
             GraphFactFilter::Conflicts,
+            GraphFactPresentation::Tree,
         ))
         .iter()
         .map(|row| row.id.clone())
@@ -7839,6 +8148,7 @@ mod tests {
             &module,
             Some(&gradle),
             GraphFactFilter::Conflicts,
+            GraphFactPresentation::Tree,
         ))
         .iter()
         .map(|row| row.id.clone())
@@ -7864,6 +8174,7 @@ mod tests {
             Some(&maven),
             GraphFactFilter::Unavailable,
             MavenGraphScope::All,
+            GraphFactPresentation::Tree,
         ));
         assert!(
             missing
@@ -7883,6 +8194,7 @@ mod tests {
             Some(&maven),
             GraphFactFilter::Conflicts,
             MavenGraphScope::All,
+            GraphFactPresentation::Tree,
         ));
         assert!(no_conflicts.iter().all(|row| !row.label.contains(" → ")));
         assert!(
@@ -7897,7 +8209,8 @@ mod tests {
                 &module,
                 None,
                 GraphFactFilter::Unavailable,
-                MavenGraphScope::All
+                MavenGraphScope::All,
+                GraphFactPresentation::Tree,
             )
             .accessibility_label
             .contains("Not collected")
@@ -8062,6 +8375,10 @@ mod tests {
             .as_object_mut()
             .expect("schema 4")
             .remove("maven_graph_scope");
+        previous
+            .as_object_mut()
+            .expect("record")
+            .remove("graph_fact_presentation");
         let migrated =
             BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 4 migration");
         assert_eq!(migrated.dock_position, settings::DockPosition::Bottom);
