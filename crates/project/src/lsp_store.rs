@@ -4904,6 +4904,9 @@ pub struct LspStore {
     #[cfg(feature = "jvm-tools")]
     pending_jvm_reloads: HashMap<WorktreeId, PendingJvmReload>,
     #[cfg(feature = "jvm-tools")]
+    pending_jvm_triggers:
+        HashMap<(WorktreeId, crate::task_store::JvmTaskTrigger), JvmTriggerActivation>,
+    #[cfg(feature = "jvm-tools")]
     kotlin_workspace_projects: HashMap<WorktreeId, KotlinWorkspaceState>,
     #[cfg(feature = "jvm-tools")]
     kotlin_workspace_refresh_tasks: HashMap<WorktreeId, Task<()>>,
@@ -5683,6 +5686,8 @@ impl LspStore {
             #[cfg(feature = "jvm-tools")]
             pending_jvm_reloads: Default::default(),
             #[cfg(feature = "jvm-tools")]
+            pending_jvm_triggers: Default::default(),
+            #[cfg(feature = "jvm-tools")]
             kotlin_workspace_projects: Default::default(),
             #[cfg(feature = "jvm-tools")]
             kotlin_workspace_refresh_tasks: Default::default(),
@@ -5804,6 +5809,8 @@ impl LspStore {
             jdtls_refresh_tasks: Default::default(),
             #[cfg(feature = "jvm-tools")]
             pending_jvm_reloads: Default::default(),
+            #[cfg(feature = "jvm-tools")]
+            pending_jvm_triggers: Default::default(),
             #[cfg(feature = "jvm-tools")]
             kotlin_workspace_projects: Default::default(),
             #[cfg(feature = "jvm-tools")]
@@ -11936,6 +11943,8 @@ impl LspStore {
                 .retain(|(root, _), _| root.worktree_id != id_to_remove);
             self.jdtls_refresh_tasks.remove(&id_to_remove);
             self.pending_jvm_reloads.remove(&id_to_remove);
+            self.pending_jvm_triggers
+                .retain(|(id, _), _| *id != id_to_remove);
             self.kotlin_workspace_projects.remove(&id_to_remove);
             self.kotlin_workspace_refresh_tasks.remove(&id_to_remove);
         }
@@ -14655,6 +14664,27 @@ impl LspStore {
         self.jdtls_project_query_token(worktree_id).is_some()
     }
 
+    /// The identity of the live Java provider serving one worktree, used as
+    /// the causality anchor for activation triggers: ordinary refreshes keep
+    /// it while a replaced or vanished provider invalidates armed sequences.
+    #[cfg(feature = "jvm-tools")]
+    fn live_jdtls_server_id(&self, worktree_id: WorktreeId) -> Option<LanguageServerId> {
+        let server_id = self
+            .language_server_statuses
+            .iter()
+            .find(|(_, status)| {
+                status.name == LanguageServerName::new_static("jdtls")
+                    && status.worktree == Some(worktree_id)
+            })
+            .map(|(server_id, _)| *server_id)?;
+        self.provider_project_server_is_live(
+            server_id,
+            worktree_id,
+            LanguageServerName::new_static("jdtls"),
+        )
+        .then_some(server_id)
+    }
+
     #[cfg(feature = "jvm-tools")]
     pub fn jdtls_project_query_token(
         &self,
@@ -16507,6 +16537,45 @@ impl LspStore {
         after_build_change: bool,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
+        let task = match self.reload_jvm_builds_inner(worktree_id, after_build_change, cx) {
+            Ok(task) => task,
+            Err(error) => {
+                self.cancel_jvm_trigger(worktree_id, crate::task_store::JvmTaskTrigger::AfterSync);
+                return Err(error);
+            }
+        };
+        // An armed after-sync activation is joined to this reload: a failed
+        // reload drops the activation instead of leaving it armed, and the
+        // completing caller releases it causally after observing success.
+        if !self
+            .pending_jvm_triggers
+            .contains_key(&(worktree_id, crate::task_store::JvmTaskTrigger::AfterSync))
+        {
+            return Ok(task);
+        }
+        Ok(cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |store, cx| {
+                if result.is_err() {
+                    store.cancel_jvm_trigger(
+                        worktree_id,
+                        crate::task_store::JvmTaskTrigger::AfterSync,
+                    );
+                    cx.notify();
+                }
+            })
+            .log_err();
+            result
+        }))
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn reload_jvm_builds_inner(
+        &mut self,
+        worktree_id: WorktreeId,
+        after_build_change: bool,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
         let worktree = self
             .worktree_store
             .read(cx)
@@ -16523,7 +16592,7 @@ impl LspStore {
             has_maven || has_gradle,
             "No Maven or Gradle build inputs are available for reload"
         );
-        self.execute_selected_local_jdtls_phase(
+        let task = self.execute_selected_local_jdtls_phase(
             worktree_id,
             SelectedJdtlsPhaseTarget::ReloadBuilds {
                 after_build_change,
@@ -16537,7 +16606,83 @@ impl LspStore {
                     .then(|| Box::new(SelectedJdtlsPhaseTarget::GradleModules(gradle))),
             },
             cx,
-        )
+        )?;
+        Ok(task)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn arm_jvm_trigger(
+        &mut self,
+        worktree_id: WorktreeId,
+        trigger: crate::task_store::JvmTaskTrigger,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
+        let trusted = TrustedWorktrees::try_get_global(cx).is_some_and(|trusted| {
+            trusted.update(cx, |trusted, cx| {
+                trusted.can_trust(&self.worktree_store, worktree_id, cx)
+            })
+        });
+        ensure!(
+            trusted,
+            "The project folder is not trusted; trust it before arming the {} trigger",
+            trigger.label(),
+        );
+        ensure!(
+            !self
+                .pending_jvm_triggers
+                .contains_key(&(worktree_id, trigger)),
+            "The {} trigger sequence is already active for this project; wait for it to complete",
+            trigger.label(),
+        );
+        // The live Java provider identity is the activation's causality
+        // anchor: ordinary refreshes keep it, while a replaced or vanished
+        // provider invalidates the activation before its sequence can fire.
+        let server_id = self.live_jdtls_server_id(worktree_id).context(
+            "The JVM project has no live Java provider; start it before arming a trigger",
+        )?;
+        self.pending_jvm_triggers.insert(
+            (worktree_id, trigger),
+            JvmTriggerActivation { trigger, server_id },
+        );
+        Ok(())
+    }
+
+    /// Releases an armed trigger activation when its operation completes. A
+    /// replaced or vanished Java provider drops the activation instead of
+    /// firing it, as does trust revoked between arming and completion.
+    /// Returns whether the activation completed.
+    #[cfg(feature = "jvm-tools")]
+    pub fn complete_jvm_trigger(
+        &mut self,
+        worktree_id: WorktreeId,
+        trigger: crate::task_store::JvmTaskTrigger,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(activation) = self.pending_jvm_triggers.get(&(worktree_id, trigger)) else {
+            return false;
+        };
+        let armed = activation.server_id;
+        let trusted = TrustedWorktrees::try_get_global(cx).is_some_and(|trusted| {
+            trusted.update(cx, |trusted, cx| {
+                trusted.can_trust(&self.worktree_store, worktree_id, cx)
+            })
+        });
+        self.pending_jvm_triggers.remove(&(worktree_id, trigger));
+        if !trusted {
+            return false;
+        }
+        self.live_jdtls_server_id(worktree_id) == Some(armed)
+    }
+
+    /// Drops an armed activation whose operation was cancelled or failed, so
+    /// a later activation is not rejected as a reentry.
+    #[cfg(feature = "jvm-tools")]
+    pub fn cancel_jvm_trigger(
+        &mut self,
+        worktree_id: WorktreeId,
+        trigger: crate::task_store::JvmTaskTrigger,
+    ) {
+        self.pending_jvm_triggers.remove(&(worktree_id, trigger));
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -21870,6 +22015,13 @@ struct PendingJvmReload {
 }
 
 #[cfg(feature = "jvm-tools")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct JvmTriggerActivation {
+    trigger: crate::task_store::JvmTaskTrigger,
+    server_id: lsp::LanguageServerId,
+}
+
+#[cfg(feature = "jvm-tools")]
 struct JvmReloadChange {
     mtime: Option<fs::MTime>,
     saved_in_editor: bool,
@@ -26396,6 +26548,247 @@ mod tests {
             expected.push("groovy.gradle.importSelected");
         }
         assert_eq!(calls.lock().as_slice(), expected);
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jvm_trigger_activation_gates_and_causal_completion(cx: &mut gpui::TestAppContext) {
+        use crate::task_store::JvmTaskTrigger;
+
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        let worktree_id = fixture.root.worktree_id;
+        let arm = |fixture: &ProjectLanguageFixture, cx: &mut gpui::TestAppContext| {
+            fixture.store.update(cx, |store, cx| {
+                store.arm_jvm_trigger(worktree_id, JvmTaskTrigger::AfterSync, cx)
+            })
+        };
+        let complete = |fixture: &ProjectLanguageFixture, cx: &mut gpui::TestAppContext| {
+            fixture.store.update(cx, |store, cx| {
+                store.complete_jvm_trigger(worktree_id, JvmTaskTrigger::AfterSync, cx)
+            })
+        };
+        let armed = |fixture: &ProjectLanguageFixture, cx: &mut gpui::TestAppContext| {
+            fixture.store.read_with(cx, |store, _| {
+                store
+                    .pending_jvm_triggers
+                    .contains_key(&(worktree_id, JvmTaskTrigger::AfterSync))
+            })
+        };
+
+        // Untrusted worktrees cannot arm activation triggers.
+        fixture.trust(cx, false);
+        let error = arm(&fixture, cx).expect_err("untrusted arming").to_string();
+        assert!(error.contains("not trusted"), "{error}");
+
+        // A project without a live Java provider cannot arm either.
+        fixture.trust(cx, true);
+        let error = arm(&fixture, cx)
+            .expect_err("providerless arming")
+            .to_string();
+        assert!(error.contains("no live Java provider"), "{error}");
+
+        fixture.register(cx).expect("start Java provider");
+        let _server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        fixture
+            .store
+            .update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+        ProjectLanguageFixture::pump(cx);
+
+        // Reentry is rejected while an activation is armed.
+        arm(&fixture, cx).expect("arm after-sync trigger");
+        let error = arm(&fixture, cx).expect_err("reentry").to_string();
+        assert!(error.contains("already active"), "{error}");
+
+        // Causal completion releases the activation exactly once.
+        assert!(complete(&fixture, cx), "the live provider completes");
+        assert!(!armed(&fixture, cx));
+        assert!(
+            !complete(&fixture, cx),
+            "a consumed activation cannot re-complete"
+        );
+
+        // Trust revoked between arming and completion drops the activation.
+        arm(&fixture, cx).expect("arm before revocation");
+        fixture.trust(cx, false);
+        assert!(!complete(&fixture, cx), "revoked trust cannot complete");
+        assert!(!armed(&fixture, cx));
+
+        // Removing the worktree drops every armed activation.
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("restart Java provider");
+        let _recovered = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        arm(&fixture, cx).expect("arm before removal");
+        fixture
+            .project
+            .update(cx, |project, cx| project.remove_worktree(worktree_id, cx));
+        ProjectLanguageFixture::pump(cx);
+        assert!(!armed(&fixture, cx));
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jvm_after_sync_trigger_completes_causally_after_reload(cx: &mut gpui::TestAppContext) {
+        use crate::task_store::JvmTaskTrigger;
+
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        let languages = fixture
+            .project
+            .read_with(cx, |project, _| project.languages().clone());
+        languages.remove_lsp_adapter(
+            &fixture.language.name(),
+            &LanguageServerName::new_static("jdtls"),
+        );
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        fixture.servers = languages.register_fake_lsp(
+            "Java",
+            language::FakeLspAdapter {
+                name: "jdtls",
+                capabilities: lsp::ServerCapabilities {
+                    execute_command_provider: Some(lsp::ExecuteCommandOptions {
+                        commands: ["groovy.maven.defaultImportRoots", "groovy.maven.importReactor"]
+                            .into_iter()
+                            .map(str::to_owned)
+                            .collect(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+                initializer: Some(Box::new({
+                    let calls = calls.clone();
+                    move |server| {
+                        let calls = calls.clone();
+                        server
+                            .set_request_handler::<lsp::request::ExecuteCommand, _, _>(
+                                move |parameters, _| {
+                                    let calls = calls.clone();
+                                    async move {
+                                        let root = "file:///project-consumer/";
+                                        let pom = "file:///project-consumer/pom.xml";
+                                        Ok(Some(match parameters.command.as_str() {
+                                            "groovy.maven.defaultImportRoots" => {
+                                                calls.lock().push(parameters.command.clone());
+                                                serde_json::json!({"version":1,"rootUri":root,
+                                                    "rootPomUris":[pom],"retainedPomUris":[],
+                                                    "cachedOnly":true,"readOnly":true,"partial":false,
+                                                    "fullSynchronizationKnown":false})
+                                            }
+                                            "groovy.maven.importReactor" => {
+                                                calls.lock().push(parameters.command.clone());
+                                                serde_json::json!({"version":1,"rootUri":root,
+                                                    "reactorPomUri":pom,"excludedProjectUris":[],
+                                                    "importedPomUris":[pom],
+                                                    "selectedImportPhaseComplete":true,
+                                                    "fullSynchronizationKnown":false})
+                                            }
+                                            _ => serde_json::json!([]),
+                                        }))
+                                    }
+                                },
+                            );
+                    }
+                })),
+                ..Default::default()
+            },
+        );
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let _server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        fixture
+            .store
+            .update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+        ProjectLanguageFixture::pump(cx);
+
+        fixture
+            .store
+            .update(cx, |store, cx| {
+                store.arm_jvm_trigger(worktree_id, JvmTaskTrigger::AfterSync, cx)
+            })
+            .expect("arm after-sync trigger");
+        let reload = fixture
+            .store
+            .update(cx, |store, cx| {
+                store.reload_local_jvm_builds(worktree_id, cx)
+            })
+            .expect("prepare build reload");
+        reload.await.expect("reload succeeds");
+        assert_eq!(
+            calls.lock().as_slice(),
+            [
+                "groovy.maven.defaultImportRoots",
+                "groovy.maven.importReactor"
+            ]
+        );
+        // The completing caller releases the activation causally after the
+        // reload it joined observed success.
+        assert!(
+            fixture.store.update(cx, |store, cx| {
+                store.complete_jvm_trigger(worktree_id, JvmTaskTrigger::AfterSync, cx)
+            }),
+            "the same live provider completes the activation"
+        );
+        assert!(
+            fixture
+                .store
+                .read_with(cx, |store, _| store.pending_jvm_triggers.is_empty())
+        );
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jvm_failed_reload_cancels_armed_after_sync_trigger(cx: &mut gpui::TestAppContext) {
+        use crate::task_store::JvmTaskTrigger;
+
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let _server = fixture.servers.next().await.expect("Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        fixture
+            .store
+            .update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+        ProjectLanguageFixture::pump(cx);
+
+        fixture
+            .store
+            .update(cx, |store, cx| {
+                store.arm_jvm_trigger(worktree_id, JvmTaskTrigger::AfterSync, cx)
+            })
+            .expect("arm after-sync trigger");
+        // Removing every Maven and Gradle build input makes the reload refuse
+        // to start, which drops its joined activation instead of leaving it
+        // armed for a sync that cannot happen.
+        fixture
+            .fs
+            .remove_file(Path::new("/project-consumer/pom.xml"), Default::default())
+            .await
+            .expect("remove POM");
+        fixture
+            .fs
+            .remove_file(
+                Path::new("/project-consumer/nested/pom.xml"),
+                Default::default(),
+            )
+            .await
+            .expect("remove nested POM");
+        ProjectLanguageFixture::pump(cx);
+        let error = fixture
+            .store
+            .update(cx, |store, cx| {
+                store.reload_local_jvm_builds(worktree_id, cx)
+            })
+            .expect_err("no build inputs remain")
+            .to_string();
+        assert!(error.contains("No Maven or Gradle build inputs"), "{error}");
+        assert!(
+            fixture
+                .store
+                .read_with(cx, |store, _| store.pending_jvm_triggers.is_empty())
+        );
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]

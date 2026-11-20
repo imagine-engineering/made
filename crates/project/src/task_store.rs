@@ -16,14 +16,14 @@ use language::{
 };
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
 use settings::{InvalidSettingsError, SettingsLocation};
-use task::{TaskContext, TaskVariables, VariableName};
+use task::{TaskContext, TaskTemplate, TaskVariables, VariableName};
 use text::{BufferId, OffsetRangeExt};
 use util::ResultExt;
 use worktree::WorktreeId;
 
 use crate::{
     BasicContextProvider, Inventory, ProjectEnvironment, buffer_store::BufferStore,
-    git_store::GitStore, worktree_store::WorktreeStore,
+    git_store::GitStore, task_inventory::TaskSourceKind, worktree_store::WorktreeStore,
 };
 
 // platform-dependent warning
@@ -381,6 +381,106 @@ pub fn plan_before_launch_dependencies(
         }
         Ok(planned)
     }))
+}
+
+/// The bounded number of ordered saved configurations one activation trigger
+/// may declare.
+pub const MAX_TRIGGER_SEQUENCE_DEPENDENCIES: usize = MAX_BEFORE_LAUNCH_DEPENDENCIES;
+
+/// The bounded before/after sync/build/rebuild/run/debug activation labels.
+/// Labels are stored on saved configurations through the existing `tags` owner
+/// field; unrelated tags never authorize a trigger.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum JvmTaskTrigger {
+    BeforeSync,
+    AfterSync,
+    BeforeBuild,
+    AfterBuild,
+    BeforeRebuild,
+    AfterRebuild,
+    BeforeRun,
+    AfterRun,
+    BeforeDebug,
+    AfterDebug,
+}
+
+impl JvmTaskTrigger {
+    pub const ALL: [Self; 10] = [
+        Self::BeforeSync,
+        Self::AfterSync,
+        Self::BeforeBuild,
+        Self::AfterBuild,
+        Self::BeforeRebuild,
+        Self::AfterRebuild,
+        Self::BeforeRun,
+        Self::AfterRun,
+        Self::BeforeDebug,
+        Self::AfterDebug,
+    ];
+
+    /// The visible activation label shown when the trigger's sequence runs.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::BeforeSync => "before-sync",
+            Self::AfterSync => "after-sync",
+            Self::BeforeBuild => "before-build",
+            Self::AfterBuild => "after-build",
+            Self::BeforeRebuild => "before-rebuild",
+            Self::AfterRebuild => "after-rebuild",
+            Self::BeforeRun => "before-run",
+            Self::AfterRun => "after-run",
+            Self::BeforeDebug => "before-debug",
+            Self::AfterDebug => "after-debug",
+        }
+    }
+
+    /// Parses one bounded activation label from a saved configuration's tags.
+    pub fn from_tag(tag: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|trigger| trigger.label() == tag)
+    }
+}
+
+/// Resolves the bounded ordered sequence of saved configurations tagged for
+/// one activation trigger, in saved file order, through the existing saved
+/// task inventory. The returned entries are resolved and dispatched by the
+/// existing execution plumbing; the planner never schedules anything, so sync
+/// cannot implicitly authorize untagged or arbitrary unrelated tasks.
+pub fn plan_trigger_sequence(
+    inventory: &Entity<Inventory>,
+    worktree_id: Option<WorktreeId>,
+    trigger: JvmTaskTrigger,
+    cx: &mut App,
+) -> Task<anyhow::Result<Vec<(TaskSourceKind, TaskTemplate)>>> {
+    let entries = inventory.read(cx).list_tasks(None, None, worktree_id, cx);
+    cx.spawn(async move |_| {
+        let entries = entries.await;
+        let mut sequence = Vec::new();
+        for (kind, template) in entries {
+            if !template
+                .tags
+                .iter()
+                .any(|tag| JvmTaskTrigger::from_tag(tag) == Some(trigger))
+            {
+                continue;
+            }
+            anyhow::ensure!(
+                sequence.len() < MAX_TRIGGER_SEQUENCE_DEPENDENCIES,
+                "The {} trigger sequence exceeds the {MAX_TRIGGER_SEQUENCE_DEPENDENCIES}-configuration limit",
+                trigger.label(),
+            );
+            anyhow::ensure!(
+                sequence
+                    .iter()
+                    .all(|(_, saved): &(TaskSourceKind, TaskTemplate)| saved.label
+                        != template.label),
+                "The {} trigger sequence lists configuration '{}' more than once",
+                trigger.label(),
+                template.label,
+            );
+            sequence.push((kind, template));
+        }
+        Ok(sequence)
+    })
 }
 
 fn local_task_context_for_location(

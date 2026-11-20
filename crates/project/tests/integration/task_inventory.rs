@@ -747,6 +747,126 @@ fn plan_before_launch_dependencies_len_limit() -> usize {
     project::task_store::MAX_BEFORE_LAUNCH_DEPENDENCIES
 }
 
+#[cfg(feature = "jvm-tools")]
+#[gpui::test]
+async fn test_planning_jvm_trigger_sequences(cx: &mut TestAppContext) {
+    use project::task_store::{
+        JvmTaskTrigger, MAX_TRIGGER_SEQUENCE_DEPENDENCIES, plan_trigger_sequence,
+    };
+
+    init_test(cx);
+    let inventory = cx.update(|cx| Inventory::new(cx));
+    let initial_tasks = serde_json::to_string(&serde_json::Value::Array(
+        vec![
+            ("sync-setup", vec!["before-sync"]),
+            ("build-check", vec!["after-build"]),
+            ("both-phases", vec!["before-sync", "after-run"]),
+            ("untagged", Vec::<&str>::new()),
+            ("unrelated", vec!["coverage"]),
+        ]
+        .into_iter()
+        .map(|(label, tags)| {
+            json!({
+                "label": label,
+                "command": "echo",
+                "args": vec![label],
+                "tags": tags,
+            })
+        })
+        .collect::<Vec<_>>(),
+    ))
+    .unwrap();
+    inventory.update(cx, |inventory, _| {
+        inventory
+            .update_file_based_tasks(
+                TaskSettingsLocation::Global(tasks_file()),
+                Some(initial_tasks.as_str()),
+            )
+            .unwrap();
+    });
+
+    // Only configurations tagged for the trigger join its ordered sequence.
+    let planned =
+        cx.update(|cx| plan_trigger_sequence(&inventory, None, JvmTaskTrigger::BeforeSync, cx));
+    let sequence = planned.await.unwrap();
+    assert_eq!(sequence.len(), 2);
+    assert_eq!(sequence[0].1.label, "sync-setup");
+    assert_eq!(sequence[1].1.label, "both-phases");
+
+    // Unrelated tags never authorize a trigger sequence.
+    let planned =
+        cx.update(|cx| plan_trigger_sequence(&inventory, None, JvmTaskTrigger::AfterDebug, cx));
+    assert!(planned.await.unwrap().is_empty());
+
+    // The same configuration can serve two different triggers through its
+    // separate tags.
+    let planned =
+        cx.update(|cx| plan_trigger_sequence(&inventory, None, JvmTaskTrigger::AfterRun, cx));
+    let sequence = planned.await.unwrap();
+    assert_eq!(sequence.len(), 1);
+    assert_eq!(sequence[0].1.label, "both-phases");
+
+    // Duplicate labels and over-limit sequences are rejected explicitly.
+    let duplicate_tasks = serde_json::to_string(&serde_json::Value::Array(
+        vec![
+            ("repeat", vec!["before-rebuild"]),
+            ("repeat", vec!["before-rebuild"]),
+        ]
+        .into_iter()
+        .map(|(label, tags)| {
+            json!({
+                "label": label,
+                "command": "echo",
+                "args": vec![label],
+                "tags": tags,
+            })
+        })
+        .collect::<Vec<_>>(),
+    ))
+    .unwrap();
+    inventory.update(cx, |inventory, _| {
+        inventory
+            .update_file_based_tasks(
+                TaskSettingsLocation::Global(Path::new("/duplicate/tasks.json")),
+                Some(duplicate_tasks.as_str()),
+            )
+            .unwrap();
+    });
+    let planned =
+        cx.update(|cx| plan_trigger_sequence(&inventory, None, JvmTaskTrigger::BeforeRebuild, cx));
+    let error = planned.await.unwrap_err().to_string();
+    assert!(error.contains("more than once"), "{error}");
+
+    let over_limit: Vec<(String, String)> = (0..MAX_TRIGGER_SEQUENCE_DEPENDENCIES + 1)
+        .map(|index| {
+            let label = format!("over-{index}");
+            let tasks = serde_json::to_string(&serde_json::Value::Array(vec![json!({
+                "label": label,
+                "command": "echo",
+                "args": vec![label.clone()],
+                "tags": vec!["after-sync"],
+            })]))
+            .unwrap();
+            (label, tasks)
+        })
+        .collect();
+    for (label, tasks) in &over_limit {
+        let path = format!("/limit/{label}.json");
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    TaskSettingsLocation::Global(Path::new(path.as_str())),
+                    Some(tasks.as_str()),
+                )
+                .unwrap();
+        });
+    }
+    let planned =
+        cx.update(|cx| plan_trigger_sequence(&inventory, None, JvmTaskTrigger::AfterSync, cx));
+    let error = planned.await.unwrap_err().to_string();
+    assert!(error.contains("limit"), "{error}");
+}
+
 #[gpui::test]
 async fn test_reloading_debug_scenarios(cx: &mut TestAppContext) {
     init_test(cx);
