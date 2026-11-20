@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -16,6 +17,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import com.google.gson.Gson;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IProjectDescription;
@@ -49,6 +52,7 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
     private static final int MAX_TEXT = 4096;
     private static final int MAX_MARKERS = 10000;
     private static final int MAX_INSPECTED_PROJECTS = 1024;
+    private static final int MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
     @Override
     public Object executeCommand(String command, List<Object> arguments, IProgressMonitor monitor) throws Exception {
@@ -59,10 +63,13 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
             return addLooseSource(arguments, monitor);
         }
         if ("groovy.gradle.importedBuildRoots".equals(command)) {
-            return importedProjects("Gradle", arguments, true, monitor);
+            return importedProjects("Gradle", arguments, true, 1, monitor);
+        }
+        if ("groovy.gradle.importedBuildRoots.v2".equals(command)) {
+            return importedProjects("Gradle", arguments, true, 2, monitor);
         }
         if ("groovy.maven.importedProjects".equals(command) || "groovy.gradle.importedProjects".equals(command)) {
-            return importedProjects(command.startsWith("groovy.maven.") ? "Maven" : "Gradle", arguments, false, monitor);
+            return importedProjects(command.startsWith("groovy.maven.") ? "Maven" : "Gradle", arguments, false, 1, monitor);
         }
         String buildSystem = "groovy.maven.unlinkSelected".equals(command) ? "Maven"
                 : "groovy.gradle.unlinkSelected".equals(command) ? "Gradle" : "JVM";
@@ -420,7 +427,7 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
     }
 
     private static Object importedProjects(String buildSystem, List<Object> arguments, boolean includeBuildRoots,
-            IProgressMonitor monitor) {
+            int version, IProgressMonitor monitor) {
         try {
             checkCancelled(monitor);
             if (arguments == null || arguments.size() != 1 || !(arguments.get(0) instanceof Map<?, ?> request)
@@ -435,7 +442,7 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
                 throw new IllegalArgumentException();
             }
             if (!includeBuildRoots) {
-                return readImportedProjects(buildSystem, rootUri, root, canonicalRootUri, false, monitor);
+                return readImportedProjects(buildSystem, rootUri, root, canonicalRootUri, false, version, monitor);
             }
             GradleImportHandler.canonicalDirectory(rootUri, root);
             Object identity = GradleImportHandler.rootFileKey(root);
@@ -446,7 +453,7 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
             workspace.run((IWorkspaceRunnable) progress -> {
                 GradleImportHandler.requireRootIdentity(root, identity);
                 try {
-                    response.putAll(readImportedProjects(buildSystem, rootUri, root, canonicalRootUri, true, progress));
+                    response.putAll(readImportedProjects(buildSystem, rootUri, root, canonicalRootUri, true, version, progress));
                 } catch (IOException failure) {
                     throw new IllegalArgumentException();
                 }
@@ -483,7 +490,7 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
     }
 
     private static Map<String, Object> readImportedProjects(String buildSystem, String rootUri, Path root,
-            String canonicalRootUri, boolean includeBuildRoots, IProgressMonitor monitor)
+            String canonicalRootUri, boolean includeBuildRoots, int version, IProgressMonitor monitor)
             throws IOException, CoreException {
         List<Map<String, Object>> projects = new ArrayList<>();
         Set<Path> identities = new LinkedHashSet<>();
@@ -549,16 +556,121 @@ public final class ProjectUnlinkHandler implements IDelegateCommandHandler {
         }
         projects.sort(Comparator.comparing(project -> (String) project.get("projectUri")));
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("version", 1);
+        response.put("version", version);
         response.put("rootUri", canonicalRootUri);
         response.put("projects", projects);
         if (includeBuildRoots) {
             response.put("cachedOnly", true);
             response.put("readOnly", true);
         }
+        List<Map<String, Object>> topologies = Collections.emptyList();
+        if (version == 2) {
+            topologies = cachedTopologyRecords(root, associations, monitor);
+            response.put("topologies", topologies);
+            partial = partial || topologies.stream().anyMatch(topology -> topology.get("topologyKnown") != Boolean.TRUE);
+        }
         response.put("partial", partial);
         response.put("fullSynchronizationKnown", false);
+        if (version == 2 && new Gson().toJson(response).getBytes(StandardCharsets.UTF_8).length > MAX_RESPONSE_BYTES) {
+            throw new IllegalArgumentException();
+        }
         return response;
+    }
+
+    private static List<Map<String, Object>> cachedTopologyRecords(Path root, List<CachedGradleAssociation> associations,
+            IProgressMonitor monitor) {
+        Map<Path, CachedGradleAssociation> connections = new LinkedHashMap<>();
+        for (CachedGradleAssociation association : associations) {
+            connections.putIfAbsent(association.build(), association);
+        }
+        List<Map<String, Object>> topologies = new ArrayList<>();
+        int totalTopologyProjects = 0;
+        for (Map.Entry<Path, CachedGradleAssociation> connection : connections.entrySet()) {
+            checkCancelled(monitor);
+            Path connectionRoot = connection.getKey();
+            String connectionRootUri = connectionRoot.toUri().toString();
+            if (!boundedText(connectionRootUri)) {
+                throw new IllegalArgumentException();
+            }
+            // The Tooling API cache is consulted strictly FROM_CACHE_ONLY: a cache
+            // miss stays unknown (never an invented known-empty topology) and no
+            // Gradle load or configuration may run on a cached-only request.
+            var models = cachedCompositeModels(connection.getValue(), monitor);
+            boolean topologyKnown = models != null;
+            List<Map<String, Object>> topologyProjects = new ArrayList<>();
+            if (models != null) {
+                Set<String> topologyIdentities = new LinkedHashSet<>();
+                for (org.gradle.tooling.model.eclipse.EclipseProject model : models.values()) {
+                    checkCancelled(monitor);
+                    // The composite cache stores participant root models; the actual
+                    // topology includes their physical subprojects, so the cached
+                    // hierarchy is traversed in memory only, never re-fetched.
+                    for (org.gradle.tooling.model.eclipse.EclipseProject element
+                            : org.eclipse.buildship.core.internal.util.gradle.HierarchicalElementUtils.getAll(model)) {
+                        checkCancelled(monitor);
+                        if (topologyProjects.size() + totalTopologyProjects >= MAX_PROJECTS) {
+                            throw new IllegalArgumentException();
+                        }
+                        topologyProjects.add(topologyProjectRecord(root, element, topologyIdentities));
+                    }
+                }
+                totalTopologyProjects += topologyProjects.size();
+            }
+            topologyProjects.sort(Comparator.comparing(record -> (String) record.get("projectUri")));
+            Map<String, Object> topology = new LinkedHashMap<>();
+            topology.put("connectionRootUri", connectionRootUri);
+            topology.put("topologyKnown", topologyKnown);
+            topology.put("projects", topologyProjects);
+            topologies.add(topology);
+        }
+        topologies.sort(Comparator.comparing(topology -> (String) topology.get("connectionRootUri")));
+        return topologies;
+    }
+
+    private static Map<String, Object> topologyProjectRecord(Path root, org.gradle.tooling.model.eclipse.EclipseProject model,
+            Set<String> topologyIdentities) {
+        var identifier = model.getGradleProject().getProjectIdentifier();
+        Path participant;
+        Path module;
+        String projectPath;
+        try {
+            participant = identifier.getBuildIdentifier().getRootDir().toPath().toRealPath();
+            module = model.getProjectDirectory().toPath().toRealPath();
+            projectPath = identifier.getProjectPath().toString();
+        } catch (IOException | LinkageError unavailable) {
+            throw new IllegalArgumentException();
+        }
+        // Connection root, participant build root, Gradle project path and physical
+        // module stay distinct records; aliased, duplicate, foreign or malformed
+        // cached facts are refused instead of normalized into membership.
+        if (participant == null || module == null || projectPath == null
+                || !participant.startsWith(root) || !participant.equals(participant.normalize())
+                || !Files.isDirectory(participant) || !module.startsWith(participant)
+                || !Files.isDirectory(module) || !boundedText(participant.toUri().toString())
+                || !boundedText(module.toUri().toString())
+                || projectPath.isEmpty() || projectPath.length() > MAX_TEXT
+                || projectPath.chars().anyMatch(Character::isISOControl)
+                || projectPath.chars().filter(ch -> ch == ':' || ch == '/').count() > MAX_PROJECTS
+                || !topologyIdentities.add(participant + "\u0000" + module + "\u0000" + projectPath)) {
+            throw new IllegalArgumentException();
+        }
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("buildRootUri", participant.toUri().toString());
+        record.put("projectUri", module.toUri().toString());
+        record.put("projectPath", projectPath);
+        return record;
+    }
+
+    private static Map<String, ? extends org.gradle.tooling.model.eclipse.EclipseProject> cachedCompositeModels(
+            CachedGradleAssociation association, IProgressMonitor monitor) {
+        var build = org.eclipse.buildship.core.GradleCore.getWorkspace().getBuild(association.project());
+        if (build.isEmpty()
+                || !(build.get() instanceof org.eclipse.buildship.core.internal.workspace.InternalGradleBuild internal)) {
+            return null;
+        }
+        return internal.getModelProvider().fetchModels(org.gradle.tooling.model.eclipse.EclipseProject.class,
+                org.eclipse.buildship.core.internal.workspace.FetchStrategy.FROM_CACHE_ONLY,
+                org.gradle.tooling.GradleConnector.newCancellationTokenSource(), monitor);
     }
 
     static boolean matches(IProject project, Path module, String buildSystem) {

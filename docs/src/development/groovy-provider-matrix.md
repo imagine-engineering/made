@@ -7,9 +7,11 @@ Groovy workflow or permission to redistribute its binary.
 
 ## Current development SDK boundary — 2026-10-18
 
-The latest locally qualified internal development bundle is **0.45.0**, SHA-256
-`b8b6b845afb3afb7ac73fda6014904f67ad6956ef375a23e5f9e6f247c4c83bd`.
-This identifies registered-module details qualification 7.119; prior root-scoped v3/0.44 retains its original boundary. Existing scoped import/policy/cached-association regressions retain their exact artifact and source bindings. Historical command and
+The latest locally qualified internal development bundle is **0.50.0**, SHA-256
+`6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e`.
+This identifies cached composite topology qualification 7.124/7.125 (the bundle adds the
+`groovy.gradle.importedBuildRoots.v2` cached-only wire contract); prior registered-module
+details 0.45.0 and root-scoped v3/0.44 retain their original boundaries. Existing scoped import/policy/cached-association regressions retain their exact artifact and source bindings. Historical command and
 Rust evidence retains its original source/version scope. Existing audit app
 bindings are not upgraded. This is not installed-default, platform, redistribution
 or release qualification.

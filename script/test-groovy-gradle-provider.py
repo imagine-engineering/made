@@ -1700,8 +1700,54 @@ tasks.named('jar') {
             preserve_sources(stage + ": cache read preserves resource and source metadata without running Gradle")
             if held == "cancel":
                 return
+
+            def provider_cached_topology(cache_known):
+                request = {"rootUri": primary.as_uri(), "cachedOnly": True}
+                v1 = client.request("workspace/executeCommand", {"command": "groovy.gradle.importedBuildRoots",
+                    "arguments": [request]}, timeout=60)
+                v2 = client.request("workspace/executeCommand", {"command": "groovy.gradle.importedBuildRoots.v2",
+                    "arguments": [request]}, timeout=60)
+                if (set(v1) != {"version", "rootUri", "projects", "cachedOnly", "readOnly", "partial", "fullSynchronizationKnown"}
+                        or v1["version"] != 1 or v1["rootUri"] != primary.as_uri() + "/"
+                        or v1["cachedOnly"] is not True or v1["readOnly"] is not True
+                        or v1["fullSynchronizationKnown"] is not False):
+                    raise AssertionError("Cached v1 build-root envelope differs from the qualified wire contract")
+                if (set(v2) != {"version", "rootUri", "projects", "cachedOnly", "readOnly", "partial", "fullSynchronizationKnown", "topologies"}
+                        or v2["version"] != 2 or v2["rootUri"] != v1["rootUri"]
+                        or v2["projects"] != v1["projects"] or v2["cachedOnly"] is not True or v2["readOnly"] is not True
+                        or v2["fullSynchronizationKnown"] is not False
+                        or v2["partial"] is not (not cache_known)
+                        or not isinstance(v2["topologies"], list) or len(v2["topologies"]) != 1):
+                    raise AssertionError("Cached composite topology envelope differs from the qualified wire contract")
+                topology = v2["topologies"][0]
+                if set(topology) != {"connectionRootUri", "topologyKnown", "projects"}:
+                    raise AssertionError("Cached topology record envelope differs")
+                if topology["connectionRootUri"] != primary.as_uri() + "/":
+                    raise AssertionError("Cached topology connection root differs from the initialized build connection")
+                if topology["topologyKnown"] is not cache_known:
+                    raise AssertionError("Cached topology availability differs from the observed Buildship cache")
+                if cache_known:
+                    provider_rows = {(Path(unquote(urlparse(row["projectUri"]).path)),
+                                      Path(unquote(urlparse(row["buildRootUri"]).path)), row["projectPath"])
+                                     for row in topology["projects"]}
+                    if provider_rows != expected:
+                        raise AssertionError("Provider cached topology differs from the composite fixture cache"
+                            + f" (provider rows: {sorted((str(a), str(b), c) for a, b, c in provider_rows)};"
+                            + f" expected rows: {sorted((str(a), str(b), c) for a, b, c in expected)})")
+                elif topology["projects"] != []:
+                    raise AssertionError("Unknown cache must not invent topology projects")
+                if (qualifiers.imported_resource_membership(client, root) != membership_before
+                        or metadata() != metadata_before
+                        or sorted(root.rglob("cached-topology-configuration.marker")) != markers
+                        or any(path.read_bytes() != content for path, content in marker_contents.items())
+                        or list(root.rglob("unrequested-composite-default.marker"))):
+                    raise AssertionError("Provider cached topology read changed resources, configured a build or ran a default task")
+                receipt["checks"].append(stage + ": provider cached composite topology " +
+                                         ("matches the composite cache" if cache_known else "is an honest miss with imported projects intact"))
+
             if response["topologyKnown"] is False and response["projects"] == []:
                 receipt["checks"].append(stage + ": cache miss remains unknown and existing resources remain intact")
+                provider_cached_topology(False)
                 if require_warm:
                     raise AssertionError(stage + ": Buildship cache has no EclipseProject model")
                 return False
@@ -1713,6 +1759,7 @@ tasks.named('jar') {
                         (primary / "included", primary / "included", ":")}
             if response["topologyKnown"] is not True or actual != expected or len(response["projects"]) != len(expected):
                 raise AssertionError(stage + ": cached participant topology differs from the composite fixture")
+            provider_cached_topology(True)
             receipt["checks"].append(stage + ": exact cached participant topology and independent unused model miss")
             return True
 
@@ -2777,6 +2824,17 @@ tasks.named('jar') {
                             # repair above re-warms the topology, which this stage's
                             # require_warm=True read just proved.
                             receipt["checks"].append(label + ": same-profile restart cache-only read is an honest miss; imported resources retained; explicit repair re-warms the topology")
+                        cached_request = {"rootUri": primary.as_uri(), "cachedOnly": True}
+                        for request, case in [
+                                ({**cached_request, "cachedOnly": False}, "noncached composite topology read"),
+                                ({**cached_request, "extra": "private-canary"}, "unknown composite topology key"),
+                                ({"rootUri": primary.as_uri()}, "missing composite cached-only authority"),
+                                ({**cached_request, "rootUri": "https://example.invalid/private-canary"}, "composite nonfile root"),
+                                ({**cached_request, "rootUri": primary.parent.as_uri()}, "composite foreign uninitialized root"),
+                                ({**cached_request, "rootUri": "x" * 4097}, "composite root URI budget")]:
+                            expect_failure(client, {"command": "groovy.gradle.importedBuildRoots.v2", "arguments": [request]},
+                                "Gradle imported project identities unavailable", str(root))
+                            receipt["checks"].append(label + ": composite topology read refuses " + case)
                 if guarded_actions:
                     def phase(root_uri=primary.as_uri(), offline=True):
                         return {"command": "groovy.gradle.importSelected",

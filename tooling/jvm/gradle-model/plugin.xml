@@ -42,6 +42,7 @@
       <command id="groovy.maven.importedProjects"/>
       <command id="groovy.gradle.importedProjects"/>
       <command id="groovy.gradle.importedBuildRoots"/>
+      <command id="groovy.gradle.importedBuildRoots.v2"/>
       <command id="groovy.maven.unlinkSelected"/>
       <command id="groovy.gradle.unlinkSelected"/>
     </delegateCommandHandler>
