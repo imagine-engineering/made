@@ -2906,6 +2906,65 @@ impl LocalLspStore {
         }
     }
 
+    fn completion_options_for_buffer(
+        &self,
+        buffer: &Buffer,
+        server: &LanguageServer,
+        cx: &App,
+    ) -> Option<lsp::CompletionOptions> {
+        let server_id = server.server_id();
+        let Some(selectors) = self
+            .language_server_dynamic_registrations
+            .get(&server_id)
+            .map(|registrations| &registrations.completion_selectors)
+            .filter(|selectors| !selectors.is_empty())
+        else {
+            return server.capabilities().completion_provider;
+        };
+
+        let file = File::from_dyn(buffer.file())?.as_local()?;
+        let absolute_path = file.abs_path(cx);
+        let uri = file_path_to_lsp_url(&absolute_path).log_err()?;
+        let LanguageServerState::Running { adapter, .. } = self.language_servers.get(&server_id)?
+        else {
+            return None;
+        };
+        let language_id = buffer
+            .language()
+            .map(|language| adapter.language_id(&language.name()));
+        selectors.matching_options(DocumentSelectorTarget {
+            uri: &uri,
+            absolute_path: &absolute_path,
+            worktree_path: file.path().as_unix_str(),
+            language_id: language_id.as_deref(),
+            matches_client_selector: true,
+        })
+    }
+
+    fn completion_triggers_for_buffer(
+        &self,
+        buffer: &Buffer,
+        server: &LanguageServer,
+        cx: &App,
+    ) -> BTreeSet<String> {
+        self.completion_options_for_buffer(buffer, server, cx)
+            .and_then(|options| options.trigger_characters)
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
+    }
+
+    fn can_resolve_completion_for_buffer(
+        &self,
+        buffer: &Buffer,
+        server: &LanguageServer,
+        cx: &App,
+    ) -> bool {
+        self.completion_options_for_buffer(buffer, server, cx)
+            .and_then(|options| options.resolve_provider)
+            .unwrap_or(false)
+    }
+
     fn formatting_capabilities_for_buffer(
         &self,
         buffer: &Buffer,
@@ -3237,17 +3296,7 @@ impl LocalLspStore {
             buffer_handle.update(cx, |buffer, cx| {
                 buffer.set_completion_triggers(
                     server.server_id(),
-                    server
-                        .capabilities()
-                        .completion_provider
-                        .as_ref()
-                        .and_then(|provider| {
-                            provider
-                                .trigger_characters
-                                .as_ref()
-                                .map(|characters| characters.iter().cloned().collect())
-                        })
-                        .unwrap_or_default(),
+                    self.completion_triggers_for_buffer(buffer, &server, cx),
                     cx,
                 );
             });
@@ -3533,17 +3582,7 @@ impl LocalLspStore {
             buffer_handle.update(cx, |buffer, cx| {
                 buffer.set_completion_triggers(
                     server.server_id(),
-                    server
-                        .capabilities()
-                        .completion_provider
-                        .as_ref()
-                        .and_then(|provider| {
-                            provider
-                                .trigger_characters
-                                .as_ref()
-                                .map(|characters| characters.iter().cloned().collect())
-                        })
-                        .unwrap_or_default(),
+                    self.completion_triggers_for_buffer(buffer, &server, cx),
                     cx,
                 );
             });
@@ -6760,11 +6799,62 @@ impl LspStore {
         }
 
         let method = <R::LspRequest as lsp::request::Request>::METHOD;
+        let request_document = if matches!(method, "textDocument/hover" | "textDocument/definition")
+        {
+            File::from_dyn(buffer.read(cx).file())
+                .and_then(File::as_local)
+                .and_then(|file| {
+                    let absolute_path = file.abs_path(cx);
+                    let uri = file_path_to_lsp_url(&absolute_path).log_err()?;
+                    Some((uri, absolute_path, file.path().clone()))
+                })
+        } else {
+            None
+        };
+        let can_handle_request =
+            |buffer: &Buffer, adapter: &CachedLspAdapter, server: &LanguageServer| {
+                if !request.check_capabilities(server.adapter_server_capabilities()) {
+                    return false;
+                }
+                let Some(selectors) = self
+                    .as_local()
+                    .and_then(|local| {
+                        local
+                            .language_server_dynamic_registrations
+                            .get(&server.server_id())
+                    })
+                    .and_then(|registrations| match method {
+                        "textDocument/hover" => Some(&registrations.hover_selectors),
+                        "textDocument/definition" => Some(&registrations.definition_selectors),
+                        _ => None,
+                    })
+                    .filter(|selectors| !selectors.is_empty())
+                else {
+                    return true;
+                };
+                let Some((uri, absolute_path, worktree_path)) = &request_document else {
+                    return false;
+                };
+                let language_id = buffer
+                    .language()
+                    .map(|language| adapter.language_id(&language.name()));
+                selectors
+                    .matching_options(DocumentSelectorTarget {
+                        uri,
+                        absolute_path,
+                        worktree_path: worktree_path.as_unix_str(),
+                        language_id: language_id.as_deref(),
+                        matches_client_selector: true,
+                    })
+                    .is_some()
+            };
+
         let is_on_type_formatting =
             method == <lsp::request::OnTypeFormatting as lsp::request::Request>::METHOD;
+        let is_completion = method == <lsp::request::Completion as lsp::request::Request>::METHOD;
         let is_rename = matches!(method, "textDocument/prepareRename" | "textDocument/rename");
         let language_server = buffer.update(cx, |buffer, cx| {
-            if is_on_type_formatting || is_rename {
+            if is_on_type_formatting || is_completion || is_rename {
                 let candidates = match server {
                     LanguageServerToQuery::FirstCapable => self
                         .as_local()
@@ -6782,7 +6872,13 @@ impl LspStore {
                         .collect(),
                 };
                 candidates.into_iter().find(|server| {
-                    if is_rename {
+                    if is_completion {
+                        self.as_local().is_some_and(|local| {
+                            local
+                                .completion_options_for_buffer(buffer, server, cx)
+                                .is_some()
+                        })
+                    } else if is_rename {
                         request.check_capabilities(
                             self.rename_capabilities_for_buffer(buffer, server, cx),
                         )
@@ -6795,18 +6891,13 @@ impl LspStore {
                     LanguageServerToQuery::FirstCapable => self.as_local().and_then(|local| {
                         local
                             .language_servers_for_buffer(buffer, cx)
-                            .find(|(_, server)| {
-                                request.check_capabilities(server.adapter_server_capabilities())
-                            })
+                            .find(|(adapter, server)| can_handle_request(buffer, adapter, server))
                             .map(|(_, server)| server.clone())
                     }),
                     LanguageServerToQuery::Other(id) => self
                         .language_server_for_local_buffer(buffer, id, cx)
-                        .and_then(|(_, server)| {
-                            request
-                                .check_capabilities(server.adapter_server_capabilities())
-                                .then(|| server.clone())
-                        }),
+                        .filter(|(adapter, server)| can_handle_request(buffer, adapter, server))
+                        .map(|(_, server)| server.clone()),
                 }
             }
         });
@@ -9910,9 +10001,17 @@ impl LspStore {
             }
 
             let server_ids: Vec<_> = buffer.update(cx, |buffer, cx| {
-                local
+                let servers = local
                     .language_servers_for_buffer(buffer, cx)
-                    .filter(|(_, server)| server.capabilities().completion_provider.is_some())
+                    .map(|(adapter, server)| (adapter.clone(), server.clone()))
+                    .collect::<Vec<_>>();
+                servers
+                    .into_iter()
+                    .filter(|(_, server)| {
+                        local
+                            .completion_options_for_buffer(buffer, server, cx)
+                            .is_some()
+                    })
                     .filter(|(adapter, _)| {
                         scope
                             .as_ref()
@@ -10009,11 +10108,19 @@ impl LspStore {
         let buffer_id = buffer.read(cx).remote_id();
         let buffer_snapshot = buffer.read(cx).snapshot();
 
-        if !self.check_if_capable_for_proto_request(
-            &buffer,
-            GetCompletions::can_resolve_completions,
-            cx,
-        ) {
+        let can_resolve = if let Some(local) = self.as_local() {
+            self.relevant_server_ids_for_capability_check(&buffer, cx)
+                .into_iter()
+                .filter_map(|server_id| self.language_server_for_id(server_id))
+                .any(|server| local.can_resolve_completion_for_buffer(buffer.read(cx), &server, cx))
+        } else {
+            self.check_if_capable_for_proto_request(
+                &buffer,
+                GetCompletions::can_resolve_completions,
+                cx,
+            )
+        };
+        if !can_resolve {
             return Task::ready(Ok(false));
         }
         cx.spawn(async move |lsp_store, cx| {
@@ -10060,8 +10167,16 @@ impl LspStore {
                     };
                     if let Some(server_id) = server_id {
                         let server_and_adapter = lsp_store
-                            .read_with(cx, |lsp_store, _| {
+                            .read_with(cx, |lsp_store, cx| {
                                 let server = lsp_store.language_server_for_id(server_id)?;
+                                let local = lsp_store.as_local()?;
+                                if !local.can_resolve_completion_for_buffer(
+                                    buffer.read(cx),
+                                    &server,
+                                    cx,
+                                ) {
+                                    return None;
+                                }
                                 let adapter =
                                     lsp_store.language_server_adapter_for_id(server.server_id())?;
                                 Some((server, adapter))
@@ -10112,10 +10227,6 @@ impl LspStore {
         request_timeout: Duration,
     ) -> Result<()> {
         let server_id = server.server_id();
-        if !GetCompletions::can_resolve_completions(&server.capabilities()) {
-            return Ok(());
-        }
-
         let request = {
             let completion = &completions.borrow()[completion_index];
             match &completion.source {
@@ -10444,14 +10555,21 @@ impl LspStore {
             };
 
             cx.spawn(async move |this, cx| {
-                Self::resolve_completion_local(
-                    server.clone(),
-                    completions.clone(),
-                    completion_index,
-                    request_timeout,
-                )
-                .await
-                .context("resolving completion")?;
+                let can_resolve = this.read_with(cx, |this, cx| {
+                    this.as_local().is_some_and(|local| {
+                        local.can_resolve_completion_for_buffer(buffer_handle.read(cx), &server, cx)
+                    })
+                })?;
+                if can_resolve {
+                    Self::resolve_completion_local(
+                        server.clone(),
+                        completions.clone(),
+                        completion_index,
+                        request_timeout,
+                    )
+                    .await
+                    .context("resolving completion")?;
+                }
                 let completion = completions.borrow()[completion_index].clone();
                 let additional_text_edits = completion
                     .source
@@ -19307,17 +19425,7 @@ impl LspStore {
                 buffer_handle.update(cx, |buffer, cx| {
                     buffer.set_completion_triggers(
                         server_id,
-                        language_server
-                            .capabilities()
-                            .completion_provider
-                            .as_ref()
-                            .and_then(|provider| {
-                                provider
-                                    .trigger_characters
-                                    .as_ref()
-                                    .map(|characters| characters.iter().cloned().collect())
-                            })
-                            .unwrap_or_default(),
+                        local.completion_triggers_for_buffer(buffer, &language_server, cx),
                         cx,
                     )
                 });
