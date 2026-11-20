@@ -143,7 +143,15 @@ impl AnthropicLanguageModelProvider {
         let state = cx.new(|cx| {
             cx.observe_global::<SettingsStore>({
                 let mut last_api_url = Self::api_url(cx);
+                let mut ai_disabled = crate::AllLanguageModelSettings::get_global(cx).disable_ai;
                 move |this: &mut State, cx| {
+                    let currently_disabled =
+                        crate::AllLanguageModelSettings::get_global(cx).disable_ai;
+                    let reenabled = ai_disabled && !currently_disabled;
+                    ai_disabled = currently_disabled;
+                    if currently_disabled {
+                        return;
+                    }
                     let credentials_provider = this.credentials_provider.clone();
                     let api_url = Self::api_url(cx);
                     let url_changed = api_url != last_api_url;
@@ -154,7 +162,7 @@ impl AnthropicLanguageModelProvider {
                         credentials_provider,
                         cx,
                     );
-                    if url_changed {
+                    if url_changed || reenabled {
                         this.fetched_models.clear();
                         this.authenticate(cx).detach();
                     }
