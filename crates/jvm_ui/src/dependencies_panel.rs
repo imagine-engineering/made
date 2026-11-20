@@ -45,6 +45,7 @@ actions!(
         InspectGraphNeighbours,
         InspectGraphRootPaths,
         InspectGraphConflictOrigins,
+        InspectGraphAllUsages,
         ClearGraphInspection,
         ApplySavedMavenSelection,
         ImportGradleSelection,
@@ -682,6 +683,7 @@ enum GraphInspectionMode {
     Neighbours,
     ShortestRootPaths,
     ConflictOrigins,
+    AllUsages,
 }
 
 impl GraphInspectionMode {
@@ -690,6 +692,7 @@ impl GraphInspectionMode {
             Self::Neighbours => "Selected dependency neighbours",
             Self::ShortestRootPaths => "Shortest root paths",
             Self::ConflictOrigins => "Conflict origins",
+            Self::AllUsages => "All usages",
         }
     }
 }
@@ -900,6 +903,40 @@ fn graph_inspection_edges<'a>(
     edges: &[(&'a str, Option<&'a str>)],
     mode: GraphInspectionMode,
 ) -> (Vec<usize>, Option<usize>) {
+    if mode == GraphInspectionMode::AllUsages {
+        // Reverse reachability over admitted facts: every edge inside the
+        // set of components that transitively reach the selection. The walk
+        // stays bounded; unresolved edges cannot prove absence.
+        const MAX_USAGE_EDGES: usize = 512;
+        let mut users = HashMap::<&str, Vec<&str>>::default();
+        for (from, target) in edges {
+            if let Some(target) = target {
+                users.entry(*target).or_default().push(*from);
+            }
+        }
+        let mut reachable = HashSet::from([selected]);
+        let mut pending = VecDeque::from([selected]);
+        while let Some(node) = pending.pop_front() {
+            for user in users.get(node).into_iter().flatten() {
+                if reachable.insert(*user) {
+                    pending.push_back(*user);
+                }
+            }
+        }
+        let mut indices = Vec::new();
+        for (index, (_, target)) in edges.iter().enumerate() {
+            if indices.len() >= MAX_USAGE_EDGES {
+                break;
+            }
+            if let Some(target) = target
+                && reachable.contains(*target)
+            {
+                indices.push(index);
+            }
+        }
+        let user_count = reachable.len() - 1;
+        return (indices, Some(user_count));
+    }
     if mode == GraphInspectionMode::ConflictOrigins {
         // Conflict origins report only the mediation facts that reached the
         // selected winner; the walk stays off the general graph traversal.
@@ -1209,6 +1246,12 @@ fn graph_inspection_row(
             })
             .collect();
         let path_status = match (inspection.mode, distance) {
+            (GraphInspectionMode::AllUsages, Some(user_count)) => format!(
+                "All usages over admitted facts: {user_count} components transitively reach the selection; the usage subgraph is bounded and unresolved or foreign edges cannot prove absence"
+            ),
+            (GraphInspectionMode::AllUsages, None) => {
+                "All usages over admitted facts; the user count is unavailable".to_string()
+            }
             (GraphInspectionMode::ConflictOrigins, _) => "Conflict-origin mediation facts only; every requested version that resolved into the selected winner stays reported; source origin ranges and artifacts unavailable".to_string(),
             (GraphInspectionMode::Neighbours, _) => "Incident edges only; unresolved outgoing edges retained".to_string(),
             (GraphInspectionMode::ShortestRootPaths, Some(distance)) => format!("Shortest distance {distance}; all equal-shortest paths retained without recursive expansion"),
@@ -5462,6 +5505,7 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &InspectGraphNeighbours, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphRootPaths, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphConflictOrigins, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx)))
+            .on_action(cx.listener(|panel, _: &InspectGraphAllUsages, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllUsages, cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphInspection, _, cx| panel.clear_graph_inspection(cx)))
             .on_action(cx.listener(|panel, _: &ClearGraphFactSearch, window, cx| panel.clear_graph_fact_search(window, cx)))
             .on_action(cx.listener(|panel, _: &CycleGraphFactFilter, _, cx| panel.cycle_graph_fact_filter(cx)))
@@ -5654,6 +5698,11 @@ impl Render for DependenciesPanel {
                         .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ConflictOrigins) { "Active" } else { "Inactive" })
                         .disabled(!can_inspect_graph).tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx))))
+                    .child(Button::new("groovy-inspect-graph-all-usages", "All usages")
+                        .aria_label("Inspect every component that transitively reaches the selected dependency in admitted graph facts")
+                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::AllUsages) { "Active" } else { "Inactive" })
+                        .disabled(!can_inspect_graph).tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllUsages, cx))))
                     .child(Button::new("groovy-clear-graph-inspection", "Clear inspection")
                         .aria_label("Clear selected dependency graph inspection")
                         .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
@@ -6387,6 +6436,49 @@ mod tests {
         (maven, gradle)
     }
 
+    fn gradle_graph_snapshot(
+        gradle: project::jvm_project::GradleDependencyGraph,
+    ) -> (JdtlsProjectSnapshot, ProjectPath) {
+        let worktree_id = WorktreeId::from_usize(1);
+        let module_root = path(worktree_id, "application");
+        (
+            JdtlsProjectSnapshot {
+                metadata: Default::default(),
+                server_id: lsp::LanguageServerId(1),
+                worktree_id,
+                generation: 2,
+                partial: false,
+                projects: vec![project::jvm_project::JdtlsProject {
+                    module_root: module_root.clone(),
+                    membership: project::jvm_project::JdtlsProjectMembership::ImportedJava,
+                    imported_build_kind: project::jvm_project::JdtlsImportedBuildKind::Gradle,
+                    source_roots: Vec::new(),
+                    project_references: Vec::new(),
+                    library_entries: 0,
+                    library_files: Vec::new(),
+                    library_artifacts: Vec::new(),
+                    project_vm_known: false,
+                    project_vm_java_major: None,
+                    server_launch_java_major: None,
+                    java_source_level: None,
+                    java_target_level: None,
+                    gradle: Some(project::jvm_project::GradleProject {
+                        dependency_graph: Some(std::sync::Arc::new(gradle)),
+                        build_root: path(worktree_id, ""),
+                        project_path: ":application".into(),
+                        tasks: Vec::new(),
+                        source_sets_known: false,
+                        source_sets: Vec::new(),
+                        configurations_known: false,
+                        configurations: Vec::new(),
+                    }),
+                    maven: None,
+                }],
+            },
+            module_root,
+        )
+    }
+
     #[test]
     fn conflict_origin_inspection_reports_requested_versions_and_unknown_origins() {
         let (_, gradle) = captured_graphs();
@@ -6429,41 +6521,7 @@ mod tests {
             requested_versions.contains(&"1.0") && requested_versions.contains(&"2.0"),
             "both diamond branches stay reported: {requested_versions:?}"
         );
-        let worktree_id = WorktreeId::from_usize(1);
-        let module_root = path(worktree_id, "application");
-        let snapshot = JdtlsProjectSnapshot {
-            metadata: Default::default(),
-            server_id: lsp::LanguageServerId(1),
-            worktree_id,
-            generation: 2,
-            partial: false,
-            projects: vec![project::jvm_project::JdtlsProject {
-                module_root: module_root.clone(),
-                membership: project::jvm_project::JdtlsProjectMembership::ImportedJava,
-                imported_build_kind: project::jvm_project::JdtlsImportedBuildKind::Gradle,
-                source_roots: Vec::new(),
-                project_references: Vec::new(),
-                library_entries: 0,
-                library_files: Vec::new(),
-                library_artifacts: Vec::new(),
-                project_vm_known: false,
-                project_vm_java_major: None,
-                server_launch_java_major: None,
-                java_source_level: None,
-                java_target_level: None,
-                gradle: Some(project::jvm_project::GradleProject {
-                    dependency_graph: Some(std::sync::Arc::new(gradle)),
-                    build_root: path(worktree_id, ""),
-                    project_path: ":application".into(),
-                    tasks: Vec::new(),
-                    source_sets_known: false,
-                    source_sets: Vec::new(),
-                    configurations_known: false,
-                    configurations: Vec::new(),
-                }),
-                maven: None,
-            }],
-        };
+        let (snapshot, module_root) = gradle_graph_snapshot(gradle);
         let inspection = GraphInspection {
             selection: GraphSelection {
                 server_id: lsp::LanguageServerId(1),
@@ -6520,6 +6578,96 @@ mod tests {
                     .iter()
                     .any(|origin| origin.accessibility_label.contains("3.0")),
             "the rejected version fact from the captured constraint stays reported"
+        );
+    }
+
+    #[test]
+    fn all_usages_inspection_reports_transitive_users_over_admitted_facts() {
+        let (_, gradle) = captured_graphs();
+        let shared = gradle
+            .resolution
+            .components
+            .iter()
+            .find(|component| component.module.as_deref() == Some("shared"))
+            .expect("captured shared component")
+            .id
+            .clone();
+        // Reverse reachability includes the diamond branches and the root,
+        // but not components outside the selection's user set.
+        let relations = gradle_inspection_relations(&gradle, GraphInspectionMode::AllUsages);
+        let (indices, distance) = graph_inspection_edges(
+            &gradle.resolution.root_component,
+            shared.as_str(),
+            &relations,
+            GraphInspectionMode::AllUsages,
+        );
+        let user_count = distance.expect("transitive user count");
+        let used = indices
+            .iter()
+            .filter_map(|index| gradle.resolution.edges.get(*index))
+            .map(|edge| edge.from.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        assert!(
+            used.iter().any(|from| from.contains(":application"))
+                && used.iter().any(|from| from.contains("\"left\""))
+                && used.iter().any(|from| from.contains("\"right\"")),
+            "root and both diamond branches reach the selection: {used:?}"
+        );
+        assert!(
+            !used.iter().any(|from| from.contains("missing")),
+            "unresolved edges never enter the usage set: {used:?}"
+        );
+        assert_eq!(used.len(), user_count, "count matches the user set");
+        // The usage subgraph stays bounded: a long user chain keeps the
+        // first bounded window of edges instead of growing unbounded.
+        let chain: Vec<(String, Option<String>)> = (0..600)
+            .map(|index| {
+                let from = format!("user-{index}");
+                let target = if index == 0 {
+                    None
+                } else {
+                    Some(format!("user-{}", index - 1))
+                };
+                (from, target)
+            })
+            .collect();
+        let borrowed = chain
+            .iter()
+            .map(|(from, target)| (from.as_str(), target.as_deref()))
+            .collect::<Vec<_>>();
+        let (indices, _) = graph_inspection_edges(
+            "user-0",
+            "user-0",
+            &borrowed,
+            GraphInspectionMode::AllUsages,
+        );
+        assert!(
+            indices.len() < 600,
+            "the usage subgraph stays bounded: {}",
+            indices.len()
+        );
+        let (snapshot, module_root) = gradle_graph_snapshot(gradle);
+        let inspection = GraphInspection {
+            selection: GraphSelection {
+                server_id: lsp::LanguageServerId(1),
+                generation: 2,
+                target: GraphQueryTarget::Gradle {
+                    module: module_root,
+                    configuration: "parityGraph".into(),
+                },
+            },
+            node: shared,
+            mode: GraphInspectionMode::AllUsages,
+        };
+        let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
+            .expect("all-usages inspection");
+        assert_eq!(row.label, "All usages");
+        assert!(
+            row.accessibility_label
+                .contains("transitively reach the selection")
+                && row.accessibility_label.contains("cannot prove absence"),
+            "coverage names the reverse-reachability scope: {}",
+            row.accessibility_label
         );
     }
 
