@@ -938,10 +938,10 @@ fn tokenizer_and_clip_target_descriptors_cover_catalog_and_data_only_selection()
     });
     assert!(serde_json::from_value::<ModelClipTargetDescriptor>(serialized_unknown_fact).is_err());
     for malformed in [
-        "sim.text_encoders.ace15.te(**detect)",
-        "sim..text_encoder",
-        "sim.text-encoder.Model",
-        ".sim.text_encoder.Model",
+        "comfy.text_encoders.ace15.te(**detect)",
+        "comfy..text_encoder",
+        "comfy.text-encoder.Model",
+        ".comfy.text_encoder.Model",
     ] {
         assert!(ModelClipTargetCandidateDescriptor::checked("valid.Tokenizer", malformed).is_err());
     }
@@ -954,11 +954,11 @@ fn tokenizer_and_clip_target_descriptors_cover_catalog_and_data_only_selection()
         assert!(project_catalog_clip_model_expression(malformed_expression).is_err());
     }
     let (factory_target, factory_invocation) = project_catalog_clip_model_expression(
-        "sim.text_encoders.sd3_clip.sd3_clip(clip_l=clip_l, clip_g=clip_g, t5=t5, **t5_detect)",
+        "comfy.text_encoders.sd3_clip.sd3_clip(clip_l=clip_l, clip_g=clip_g, t5=t5, **t5_detect)",
     )?;
     assert_eq!(
         factory_target.as_str(),
-        "sim.text_encoders.sd3_clip.sd3_clip"
+        "comfy.text_encoders.sd3_clip.sd3_clip"
     );
     let ModelClipModelInvocation::Factory { configuration } = factory_invocation else {
         return Err("catalog factory expression projected as a reference".into());
@@ -2825,8 +2825,8 @@ fn state_transaction_prevalidates_errors_and_rolls_back_on_failure_or_cancellati
 }
 
 const MODEL_FAMILY_CATALOG_INPUT_ALLOWLIST: [&str; 3] = [
-    "projects/comfy/ComfyUI/sim/supported_models.py",
-    "projects/comfy/ComfyUI/sim/supported_models_base.py",
+    "projects/comfy/ComfyUI/comfy/supported_models.py",
+    "projects/comfy/ComfyUI/comfy/supported_models_base.py",
     "crates/sim_test_support/parity/catalogs/backend-models.csv",
 ];
 

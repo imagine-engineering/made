@@ -18,11 +18,11 @@ from typing import Any, Iterable
 SCHEMA_VERSION = 1
 EXPECTED_MODEL_COUNT = 94
 EXPECTED_FEATURE_IDS = tuple(f"COMFY-MODEL-{number:04d}" for number in range(61, 155))
-MODEL_SOURCE_RELATIVE = Path("projects/sim/ComfyUI/sim/supported_models.py")
-BASE_SOURCE_RELATIVE = Path("projects/sim/ComfyUI/sim/supported_models_base.py")
+MODEL_SOURCE_RELATIVE = Path("projects/comfy/ComfyUI/comfy/supported_models.py")
+BASE_SOURCE_RELATIVE = Path("projects/comfy/ComfyUI/comfy/supported_models_base.py")
 CATALOG_RELATIVE = Path("crates/sim_test_support/parity/catalogs/backend-models.csv")
 OUTPUT_RELATIVE = Path("crates/sim_model/catalog/model-families-v1.json")
-CATALOG_SOURCE_FILE = "sim/supported_models.py"
+CATALOG_SOURCE_FILE = "comfy/supported_models.py"
 
 REQUIRED_STATIC_FIELDS = (
     "unet_config",
@@ -671,8 +671,8 @@ class Child(Parent):
 models = [Parent, Child]
 """
     catalog = """kind,name,source_file,source_symbol,source_line,feature_id
-model family,Parent,sim/supported_models.py,Parent,2,COMFY-MODEL-0002
-model family,Child,sim/supported_models.py,Child,9,COMFY-MODEL-0001
+model family,Parent,comfy/supported_models.py,Parent,2,COMFY-MODEL-0002
+model family,Child,comfy/supported_models.py,Child,9,COMFY-MODEL-0001
 """
     return models, base, catalog
 
