@@ -29,7 +29,7 @@ use crate::{
 };
 
 const PROFILE: &str = "sim.graphite.finite-linked-artboard.v1";
-const ORIGINAL_PROFILE: &str = "sim.graphite.source-linked-artboard.v2";
+pub const SOURCE_ARTBOARD_FORMAT: &str = "sim.graphite.source-linked-artboard.v2";
 
 #[derive(Debug)]
 pub enum ArtboardPersistenceError {
@@ -39,6 +39,7 @@ pub enum ArtboardPersistenceError {
     PayloadBudgetExceeded,
     UnsupportedPayload,
     SourceMismatch,
+    StaleCheckpoint,
     OriginalSourcePanic,
 }
 
@@ -60,6 +61,9 @@ impl fmt::Display for ArtboardPersistenceError {
                 .write_str("The Graphite document contains unsupported graph or editor state."),
             Self::SourceMismatch => {
                 formatter.write_str("The verified PNG does not match the saved input link.")
+            }
+            Self::StaleCheckpoint => {
+                formatter.write_str("The edit does not follow the saved Graphite checkpoint.")
             }
             Self::OriginalSourcePanic => {
                 formatter.write_str("Original Graphite document reconstruction panicked.")
@@ -122,7 +126,7 @@ struct Payload {
 
 // These integer bit patterns belong to the opaque capture record, not the
 // original document schema or an assertion of durable host version authority.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Capture {
     document_id_encoding: u64,
@@ -138,7 +142,7 @@ struct Capture {
     input: InputLink,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct InputLink {
     asset_id: String,
@@ -148,7 +152,7 @@ struct InputLink {
     height: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Configuration {
     viewport_transform: [u64; 6],
@@ -165,7 +169,7 @@ struct Configuration {
     for_eyedropper: bool,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 enum Quality {
     Preview,
@@ -231,6 +235,15 @@ impl Configuration {
 }
 
 impl Capture {
+    fn same_persistent_graph(&self, previous: &Self) -> bool {
+        self.location == previous.location
+            && self.dimensions == previous.dimensions
+            && self.background == previous.background
+            && self.clip == previous.clip
+            && self.placement == previous.placement
+            && self.input.encoded_sha256 == previous.input.encoded_sha256
+    }
+
     fn parameters(&self) -> CpuSvgArtboardParameters {
         let [red, green, blue, alpha] = self.background.map(f32::from_bits);
         CpuSvgArtboardParameters {
@@ -343,7 +356,7 @@ pub fn capture_original_artboard_engine_payload(
         .map_err(|_| ArtboardPersistenceError::UnsupportedPayload)?
         .to_owned();
     let payload = Payload {
-        profile: ORIGINAL_PROFILE.into(),
+        profile: SOURCE_ARTBOARD_FORMAT.into(),
         source_revision: GRAPHITE_IMAGE_SOURCE_REVISION.into(),
         legacy_document: legacy_document.clone(),
         legacy_serialization: Some(legacy_serialization),
@@ -364,6 +377,7 @@ pub struct ReopenedArtboardEnginePayload {
     legacy_bytes: Arc<[u8]>,
     document: CpuSvgArtboardDocument,
     resource_id: ResourceId,
+    original_capture: Option<Arc<Capture>>,
 }
 
 impl ReopenedArtboardEnginePayload {
@@ -373,8 +387,67 @@ impl ReopenedArtboardEnginePayload {
     pub fn resource_id(&self) -> ResourceId {
         self.resource_id
     }
+    pub fn original_source(&self) -> Option<OriginalArtboardSource> {
+        Some(OriginalArtboardSource {
+            legacy_bytes: self.legacy_bytes.clone(),
+            capture: self.original_capture.clone()?,
+        })
+    }
     pub fn into_document(self) -> CpuSvgArtboardDocument {
         self.document
+    }
+}
+
+#[derive(Clone)]
+pub struct OriginalArtboardSource {
+    legacy_bytes: Arc<[u8]>,
+    capture: Arc<Capture>,
+}
+
+impl OriginalArtboardSource {
+    pub fn prepare_successor(
+        &self,
+        document: &CpuSvgArtboardDocument,
+        max_payload_bytes: usize,
+    ) -> Result<(PreparedArtboardEnginePayload, Self), ArtboardPersistenceError> {
+        if self.legacy_bytes.len() > max_payload_bytes {
+            return Err(ArtboardPersistenceError::PayloadBudgetExceeded);
+        }
+        let resource_id = ResourceId::from(self.capture.resource_id);
+        let capture = capture_document(document, resource_id)?;
+        if capture.document_id_encoding != self.capture.document_id_encoding
+            || capture.node_id != self.capture.node_id
+        {
+            return Err(ArtboardPersistenceError::UnsupportedPayload);
+        }
+        if capture.revision < self.capture.revision
+            || (capture.revision == self.capture.revision && capture != *self.capture)
+        {
+            return Err(ArtboardPersistenceError::StaleCheckpoint);
+        }
+
+        let source = document
+            .encoded_png_input()
+            .ok_or(ArtboardPersistenceError::MissingEncodedInput)?
+            .source();
+        let legacy_bytes = if capture.same_persistent_graph(&self.capture) {
+            self.legacy_bytes.clone()
+        } else {
+            update_original_artboard(&self.legacy_bytes, &capture, source)?.into()
+        };
+        let payload = capture_original_artboard_engine_payload(
+            document,
+            resource_id,
+            &legacy_bytes,
+            max_payload_bytes,
+        )?;
+        Ok((
+            payload,
+            Self {
+                legacy_bytes,
+                capture: Arc::new(capture),
+            },
+        ))
     }
 }
 
@@ -408,7 +481,7 @@ pub fn reopen_original_artboard_engine_payload_with_resource(
         source,
         budget,
         max_payload_bytes,
-        ORIGINAL_PROFILE,
+        SOURCE_ARTBOARD_FORMAT,
     )
 }
 
@@ -458,7 +531,7 @@ fn reopen_artboard_engine_payload_for_profile(
             .map_err(|_| ArtboardPersistenceError::OriginalSourcePanic)??;
             serde_json::to_vec(&payload.legacy_document)?
         }
-        ORIGINAL_PROFILE => {
+        SOURCE_ARTBOARD_FORMAT => {
             let serialization = payload
                 .legacy_serialization
                 .ok_or(ArtboardPersistenceError::UnsupportedPayload)?;
@@ -475,6 +548,8 @@ fn reopen_artboard_engine_payload_for_profile(
         legacy_bytes: legacy_bytes.into(),
         document,
         resource_id: ResourceId::from(payload.capture.resource_id),
+        original_capture: (expected_profile == SOURCE_ARTBOARD_FORMAT)
+            .then(|| Arc::new(payload.capture)),
     })
 }
 
@@ -500,8 +575,21 @@ fn validate_original_document(
     {
         return Err(ArtboardPersistenceError::UnsupportedPayload);
     }
-    // Resource deserialization can decode embedded bytes. Exclude those and foreign
-    // declarations before asking the original owner to read otherwise native state.
+    // The source deserializer can decode embedded resources, so verify the linked resource first.
+    let owner = decode_original_artboard(original)?;
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let roundtrip = serde_json::to_value(owner)?;
+        if !same_original_json(original, &roundtrip) {
+            return Err(ArtboardPersistenceError::UnsupportedPayload);
+        }
+        Ok(())
+    }))
+    .map_err(|_| ArtboardPersistenceError::OriginalSourcePanic)?
+}
+
+fn decode_original_artboard(
+    original: &Value,
+) -> Result<DocumentMessageHandler, ArtboardPersistenceError> {
     std::panic::catch_unwind(AssertUnwindSafe(|| {
         let mut owner: DocumentMessageHandler = serde_json::from_value(original.clone())?;
         // The original loader intentionally skips this historical build hint. It is
@@ -511,11 +599,73 @@ fn validate_original_document(
             .and_then(Value::as_str)
             .ok_or(ArtboardPersistenceError::UnsupportedPayload)?
             .to_owned();
-        let roundtrip = serde_json::to_value(owner)?;
-        if !same_original_json(original, &roundtrip) {
+        Ok(owner)
+    }))
+    .map_err(|_| ArtboardPersistenceError::OriginalSourcePanic)?
+}
+
+fn update_original_artboard(
+    bytes: &[u8],
+    capture: &Capture,
+    source: &PreparedEncodedPngSource,
+) -> Result<Vec<u8>, ArtboardPersistenceError> {
+    let OriginalJson(mut prior) = serde_json::from_slice(bytes)?;
+    let mut owner = decode_original_artboard(&prior)?;
+    let desired = persistent_document(capture, source)?;
+    let artboard = NodeId(capture.node_id);
+    let [_, _, placement] = encoded_png_node_ids(artboard)?;
+    let resource_id = ResourceId::from(capture.resource_id);
+
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        for (node_id, input_index) in [
+            (artboard, 2),
+            (artboard, 3),
+            (artboard, 4),
+            (artboard, 5),
+            (placement, 1),
+        ] {
+            let connector = InputConnector::Node {
+                node_id,
+                input_index,
+            };
+            let input = desired
+                .network_interface
+                .input_from_connector(&connector, &[])
+                .ok_or(ArtboardPersistenceError::UnsupportedPayload)?;
+            owner
+                .network_interface
+                .set_input(&connector, input.clone(), &[]);
+        }
+        let hash = ResourceHash::from(source.encoded_bytes().as_ref());
+        let previous_hash = owner
+            .resources
+            .registry
+            .hash(&resource_id)
+            .ok_or(ArtboardPersistenceError::UnsupportedPayload)?;
+        if previous_hash != hash {
+            owner.resources.registry.resolve(&resource_id, hash);
+            *prior
+                .get_mut("resources")
+                .ok_or(ArtboardPersistenceError::UnsupportedPayload)? =
+                serde_json::to_value(&desired.resources)?;
+        }
+
+        let bytes = serde_json::to_vec(&owner)?;
+        let OriginalJson(edited) = serde_json::from_slice(&bytes)?;
+        // The native setter may update persistent editor data. Require every
+        // other persistent field to survive the edit.
+        let edited_network = edited
+            .get("network_interface")
+            .and_then(|interface| interface.get("network"))
+            .ok_or(ArtboardPersistenceError::UnsupportedPayload)?;
+        *prior
+            .get_mut("network_interface")
+            .and_then(|interface| interface.get_mut("network"))
+            .ok_or(ArtboardPersistenceError::UnsupportedPayload)? = edited_network.clone();
+        if !same_original_json(&prior, &edited) {
             return Err(ArtboardPersistenceError::UnsupportedPayload);
         }
-        Ok(())
+        Ok(bytes)
     }))
     .map_err(|_| ArtboardPersistenceError::OriginalSourcePanic)?
 }
@@ -851,7 +1001,7 @@ mod original_source_tests {
         assert!(same_original_json(payload.legacy_document(), &original));
         let envelope: Value =
             serde_json::from_slice(payload.serialized_bytes()).expect("typed envelope");
-        assert_eq!(envelope["profile"], ORIGINAL_PROFILE);
+        assert_eq!(envelope["profile"], SOURCE_ARTBOARD_FORMAT);
         assert_eq!(
             envelope["legacy_serialization"]
                 .as_str()
@@ -1098,6 +1248,123 @@ mod original_source_tests {
         assert_eq!(
             reopen(&payload, source).legacy_document_bytes(),
             original.as_bytes()
+        );
+    }
+
+    #[test]
+    fn at_r06_9_1_editing_a_reopened_source_preserves_its_native_metadata_and_original_bytes() {
+        let source = encoded_source("first");
+        let initial = document(source.clone());
+        let raw = original_owner(&initial).serialize_document();
+        let payload = capture_original_artboard_engine_payload(
+            &initial,
+            ResourceId::from(RESOURCE_ID),
+            raw.as_bytes(),
+            PAYLOAD_LIMIT,
+        )
+        .expect("original pinned serializer capture");
+        let reopened = reopen(&payload, source.clone());
+        let original = reopened
+            .original_source()
+            .expect("verified original checkpoint");
+        let mut edited = reopened.into_document();
+
+        let (same, _) = original
+            .prepare_successor(&edited, PAYLOAD_LIMIT)
+            .expect("no edit");
+        assert_eq!(same.serialized_bytes(), payload.serialized_bytes());
+        let mut parameters = edited.parameters();
+        parameters.location.x = 12.;
+        parameters.clip = false;
+        let configuration = edited.configuration();
+        assert!(
+            edited
+                .apply(0, parameters, configuration)
+                .expect("finite Artboard edit")
+        );
+
+        let (successor, source_checkpoint) = original
+            .prepare_successor(&edited, PAYLOAD_LIMIT)
+            .expect("edit through the verified source checkpoint");
+        let after = reopen(&successor, source.clone());
+        let restored: DocumentMessageHandler =
+            serde_json::from_slice(after.legacy_document_bytes())
+                .expect("edited bytes accepted by the original deserializer");
+        assert_eq!(restored.document_ptz.pan.y, 17.25);
+        assert!(restored.document_ptz.flip);
+        assert!(!restored.rulers_visible);
+        assert!(after.legacy_document_bytes() != raw.as_bytes());
+        assert!(
+            successor
+                .legacy_document()
+                .to_string()
+                .contains("Original layer — 保存")
+        );
+        assert_eq!(
+            successor.legacy_document()["resources"],
+            payload.legacy_document()["resources"]
+        );
+        assert_eq!(after.into_document().parameters(), parameters);
+        assert_eq!(
+            reopen(&payload, source.clone()).legacy_document_bytes(),
+            raw.as_bytes()
+        );
+        assert_eq!(
+            original
+                .prepare_successor(&initial, PAYLOAD_LIMIT)
+                .expect("original remains usable")
+                .0
+                .serialized_bytes(),
+            payload.serialized_bytes()
+        );
+        assert!(matches!(
+            source_checkpoint.prepare_successor(&initial, PAYLOAD_LIMIT),
+            Err(ArtboardPersistenceError::StaleCheckpoint)
+        ));
+
+        let mut other_edit = initial.detach_for_edit();
+        parameters.location.x = 23.;
+        assert!(
+            other_edit
+                .apply(0, parameters, configuration)
+                .expect("a competing revision")
+        );
+        assert!(matches!(
+            source_checkpoint.prepare_successor(&other_edit, PAYLOAD_LIMIT),
+            Err(ArtboardPersistenceError::StaleCheckpoint)
+        ));
+
+        let mut render_only = initial.detach_for_edit();
+        let mut configuration = render_only.configuration();
+        configuration.pointer.x = 7.;
+        assert!(
+            render_only
+                .apply(0, initial.parameters(), configuration)
+                .expect("finite render context edit")
+        );
+        let (render_checkpoint, _) = original
+            .prepare_successor(&render_only, PAYLOAD_LIMIT)
+            .expect("the render context is stored separately");
+        let after = reopen(&render_checkpoint, source.clone());
+        assert_eq!(after.legacy_document_bytes(), raw.as_bytes());
+        assert_eq!(after.into_document().configuration().pointer.x, 7.);
+
+        let finite =
+            capture_artboard_engine_payload(&initial, ResourceId::from(RESOURCE_ID), PAYLOAD_LIMIT)
+                .expect("existing v1 checkpoint");
+        assert!(
+            reopen_artboard_engine_payload_with_resource(
+                finite.serialized_bytes(),
+                source,
+                CpuSvgEvaluationBudget {
+                    max_viewport_pixels: 31 * 17,
+                    max_output_bytes: 64 * 1024,
+                },
+                PAYLOAD_LIMIT,
+            )
+            .expect("existing finite reopen")
+            .original_source()
+            .is_none()
         );
     }
 

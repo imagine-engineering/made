@@ -5,6 +5,7 @@ use graphics_core::evaluate::{
     CpuSvgArtboardDocument, CpuSvgArtboardParameters, CpuSvgDocumentError, CpuSvgEncodedPngInput,
     CpuSvgEvaluationBudget,
 };
+use graphics_core::formats::{self, OriginalArtboardSource, SOURCE_ARTBOARD_FORMAT};
 use graphics_core::resources::{EncodedPngBudget, ImageResourceIdentity};
 use sim_runtime::{
     AuthorizedCapabilities, OutputCommitReceipt, OutputOperationState,
@@ -16,6 +17,8 @@ use crate::{
     resources::ImageResourceError,
     session::{GraphiteArtboardSession, GraphiteEncodedPngLoad, GraphiteImageSession},
 };
+
+const FINITE_ARTBOARD_FORMAT: &str = "sim.graphite.legacy-artboard.v1";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GraphiteAssetBindingError {
@@ -426,7 +429,10 @@ fn verify_published_closure(
                             && engine.engine == "graphite"
                             && engine.source_revision
                                 == graphics_core::resources::GRAPHITE_IMAGE_SOURCE_REVISION
-                            && engine.serialization_format == "sim.graphite.legacy-artboard.v1"
+                            && matches!(
+                                engine.serialization_format.as_str(),
+                                FINITE_ARTBOARD_FORMAT | SOURCE_ARTBOARD_FORMAT
+                            )
                             && engine.dependencies == version.dependencies
                     }),
                 "The published PNG asset identity does not match its canonical editable producer document."
@@ -3334,6 +3340,7 @@ pub(crate) struct GraphiteLinkedDocument {
     pub(crate) engine_index: usize,
     pub(crate) input_version: sim_runtime::ProjectAssetVersion,
     pub(crate) resource_id: graphite_graph_craft::application_io::resource::ResourceId,
+    pub(crate) original_source: Option<OriginalArtboardSource>,
     pub(crate) saved_source: Option<sim_runtime::ProjectEditableSourceReference>,
     pub(crate) saved_revision: Option<u64>,
 }
@@ -3633,7 +3640,7 @@ fn create_linked_png_artboard(
             uuid::Uuid::new_v4(),
             "graphite".into(),
             graphics_core::resources::GRAPHITE_IMAGE_SOURCE_REVISION.into(),
-            "sim.graphite.legacy-artboard.v1".into(),
+            FINITE_ARTBOARD_FORMAT.into(),
             String::new(),
             vec![version.reference.clone()],
         )],
@@ -3650,6 +3657,7 @@ fn create_linked_png_artboard(
             resource_id: graphite_graph_craft::application_io::resource::ResourceId::from(
                 request.document_id_encoding,
             ),
+            original_source: None,
             saved_source: None,
             saved_revision: None,
         },
@@ -3694,7 +3702,10 @@ pub(crate) fn acquire_saved_sim(
         let (engine_index, engine) = engines[0];
         anyhow::ensure!(
             engine.source_revision == graphics_core::resources::GRAPHITE_IMAGE_SOURCE_REVISION
-                && engine.serialization_format == "sim.graphite.legacy-artboard.v1"
+                && matches!(
+                    engine.serialization_format.as_str(),
+                    FINITE_ARTBOARD_FORMAT | SOURCE_ARTBOARD_FORMAT
+                )
                 && engine.dependencies.len() == 1,
             "This Graphite payload format or source pin is unsupported."
         );
@@ -3763,8 +3774,17 @@ pub(crate) fn acquire_saved_sim(
             max_metadata_bytes: 1024 * 1024,
         },
     )?);
-    let restored = graphics_core::formats::reopen_artboard_engine_payload_with_resource(
-        container.documents[engine_index].payload.as_bytes(),
+    let engine = container
+        .documents
+        .get(engine_index)
+        .ok_or_else(|| anyhow::anyhow!("The Graphite engine document is missing."))?;
+    let reopen = if engine.serialization_format == SOURCE_ARTBOARD_FORMAT {
+        formats::reopen_original_artboard_engine_payload_with_resource
+    } else {
+        formats::reopen_artboard_engine_payload_with_resource
+    };
+    let restored = reopen(
+        engine.payload.as_bytes(),
         prepared,
         CpuSvgEvaluationBudget {
             max_viewport_pixels: 16 * 1024 * 1024,
@@ -3773,6 +3793,7 @@ pub(crate) fn acquire_saved_sim(
         sim_runtime::MAX_SIM_DOCUMENT_BYTES,
     )?;
     let resource_id = restored.resource_id();
+    let original_source = restored.original_source();
     let document = restored.into_document();
     let saved_revision = Some(document.revision());
     let saved_source = Some(sim_runtime::ProjectEditableSourceReference {
@@ -3787,6 +3808,7 @@ pub(crate) fn acquire_saved_sim(
             engine_index,
             input_version: version.version().clone(),
             resource_id,
+            original_source,
             saved_source,
             saved_revision,
         },

@@ -1645,6 +1645,223 @@ pub(crate) mod tests {
     }
 
     #[gpui::test]
+    async fn at_r06_9_1_native_source_artboard_edits_save_and_reopen(cx: &mut TestAppContext) {
+        use graphics_core::formats::{self, SOURCE_ARTBOARD_FORMAT};
+        use graphite_editor::messages::portfolio::document::DocumentMessageHandler;
+        use graphite_graph_craft::application_io::resource::{ResourceHash, ResourceId};
+        use workspace::item::Item as _;
+
+        let fixture = host_reader_fixture().expect("actual shared project service");
+        let png = indexed_request_png(&fixture, 4).expect("actual pinned source image");
+        let (workspace, window) = native_workspace(cx).await;
+        let (reader, committer, writer) = register_fixture_workflow(&fixture, &png, window);
+        let item = open_requested_png(&workspace, window);
+        let source_pin = graphics_core::resources::GRAPHITE_IMAGE_SOURCE_REVISION;
+        let (original_bytes, source_engine) = item.read_with(window, |item, cx| {
+            let document = item.session().read(cx).document();
+            let resource_id = ResourceId::from(document.document_id_encoding());
+            let finite = formats::capture_artboard_engine_payload(
+                document,
+                resource_id,
+                sim_runtime::MAX_SIM_DOCUMENT_BYTES,
+            )
+            .expect("actual pinned persistent Artboard");
+            let mut owner: DocumentMessageHandler =
+                serde_json::from_value(finite.legacy_document().clone())
+                    .expect("pinned Graphite owner reads the finite capture");
+            owner.commit_hash = source_pin.into();
+            owner.rulers_visible = false;
+            owner.graph_view_overlay_open = true;
+            owner.document_ptz.pan.y = 17.25;
+            owner.properties_panel_collapsed_sections = vec![document.node_id()];
+            owner.network_interface.set_display_name(
+                &document.node_id(),
+                "Pinned layer — 保存".into(),
+                &[],
+            );
+            let raw = owner.serialize_document();
+            let payload = formats::capture_original_artboard_engine_payload(
+                document,
+                resource_id,
+                raw.as_bytes(),
+                sim_runtime::MAX_SIM_DOCUMENT_BYTES,
+            )
+            .expect("capture the pinned owner serialization");
+            let engine = sim_runtime::SimEngineDocument::new(
+                uuid::Uuid::new_v4(),
+                "graphite".into(),
+                source_pin.into(),
+                SOURCE_ARTBOARD_FORMAT.into(),
+                String::from_utf8(payload.serialized_bytes().to_vec()).expect("source JSON"),
+                vec![
+                    item.input_version(cx)
+                        .expect("verified linked input")
+                        .clone(),
+                ],
+            );
+            (raw, engine)
+        });
+        let document_id = source_engine.document_id;
+        let original_container = sim_runtime::SimDocument {
+            format: "sim".into(),
+            schema_version: sim_runtime::SIM_DOCUMENT_SCHEMA_VERSION,
+            project_id: reader.profile_id().parse().expect("actual project ID"),
+            documents: vec![source_engine],
+            build_outputs: vec![],
+            provenance: serde_json::json!({}),
+        }
+        .encode()
+        .expect("source-preserving container bytes");
+        let proposal = sim_runtime::OutputProposal::new(
+            uuid::Uuid::new_v4(),
+            sim_runtime::assets::AssetNamespace::Output,
+            "source-preserving-artboard",
+            "sim",
+            0,
+            0,
+            0,
+            original_container.clone(),
+        )
+        .expect("publish the source fixture through the canonical writer");
+        let cancellation = sim_tensor::CancellationToken::default();
+        let original_identity = {
+            let mut assets = fixture.assets.lock().expect("shared project catalog");
+            let mut committer = committer.lock().expect("project writer");
+            committer
+                .commit_proposal_batch_and_register(
+                    &[proposal],
+                    "2026-10-10T12:00:00+00:00"
+                        .parse()
+                        .expect("fixed timestamp"),
+                    &mut assets,
+                    &writer,
+                    &cancellation,
+                )
+                .expect("published source fixture")
+                .first()
+                .expect("actual publication receipt")
+                .operation()
+                .identity
+                .clone()
+        };
+        close_artboard(&workspace, item, window).await;
+
+        let chooser = saved_sim_search(&workspace, "source-preserving-artboard", window);
+        assert_eq!(
+            chooser.read_with(window, |chooser, _| chooser.choices.len()),
+            1
+        );
+        window.simulate_keystrokes("enter");
+        window.run_until_parked();
+        paint(window);
+        let item = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteArtboardItem>(cx)
+            })
+            .expect("open the source-preserving .sim with native controls");
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert_eq!(
+                item.saved_sim_source(cx).expect("source receipt").identity,
+                original_identity
+            );
+        });
+        edit_artboard_field(&item, 9, "12", window);
+        assert!(item.read_with(window, |item, cx| item.is_dirty(cx)));
+        let replacement =
+            indexed_request_png(&fixture, 3).expect("actual originating Input replacement");
+        assert_eq!(replacement.asset_identity, png.asset_identity);
+        assert_ne!(replacement.encoded, png.encoded);
+        let updated = item
+            .update_in(window, |item, window, cx| {
+                item.update_input_version(window, cx)
+            })
+            .expect("use the native update input operation");
+        assert!(updated.await.expect("replace the linked dependency"));
+        let updated_version = item.read_with(window, |item, cx| {
+            item.input_version(cx)
+                .expect("new verified dependency")
+                .clone()
+        });
+        let successor = item
+            .update_in(window, |item, _, cx| item.save_sim(cx))
+            .expect("save the edited source Artboard");
+        let successor_identity = successor.operation().identity.clone();
+        let read = |identity: &sim_runtime::assets::AssetIdentity| {
+            fixture
+                .assets
+                .lock()
+                .expect("shared catalog")
+                .read_verified(
+                    identity,
+                    &reader,
+                    &cancellation,
+                    sim_runtime::MAX_SIM_DOCUMENT_BYTES as u64,
+                )
+                .expect("read actual immutable .sim bytes")
+        };
+        let successor_container = sim_runtime::SimDocument::decode(&read(&successor_identity))
+            .expect("saved source-preserving .sim");
+        let engine = successor_container
+            .documents
+            .first()
+            .expect("saved Graphite engine");
+        assert_eq!(engine.serialization_format, SOURCE_ARTBOARD_FORMAT);
+        assert_eq!(engine.document_id, document_id);
+        assert_eq!(engine.dependencies, vec![updated_version]);
+        let payload: serde_json::Value =
+            serde_json::from_str(&engine.payload).expect("saved v2 payload");
+        let raw = payload["legacy_serialization"]
+            .as_str()
+            .expect("saved source serialization");
+        assert_ne!(raw, original_bytes);
+        let decoded = DocumentMessageHandler::deserialize_document(raw)
+            .expect("pinned Graphite can open the edited source");
+        assert_eq!(decoded.document_ptz.pan.y, 17.25);
+        assert!(!decoded.rulers_visible);
+        assert!(decoded.graph_view_overlay_open);
+        assert!(raw.contains("Pinned layer — 保存"));
+        let resource_id = item.read_with(window, |item, cx| {
+            ResourceId::from(item.session().read(cx).document().document_id_encoding())
+        });
+        assert_eq!(
+            decoded.resources.registry.hash(&resource_id),
+            Some(ResourceHash::from(replacement.encoded.as_ref()))
+        );
+        assert_eq!(read(&original_identity), original_container);
+        close_artboard(&workspace, item, window).await;
+
+        let chooser = saved_sim_search(
+            &workspace,
+            &successor_identity.relative_path.to_string_lossy(),
+            window,
+        );
+        assert_eq!(
+            chooser.read_with(window, |chooser, _| chooser.choices.len()),
+            1
+        );
+        window.simulate_keystrokes("enter");
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteArtboardItem>(cx)
+            })
+            .expect("reopen the edited source .sim");
+        reopened.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert_eq!(
+                item.session()
+                    .read(cx)
+                    .image_placement()
+                    .expect("reopened placement")
+                    .translation
+                    .x,
+                12.
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn at_r07_1_unsaved_artboard_uses_workspace_close_and_save_prompts(
         cx: &mut TestAppContext,
     ) {

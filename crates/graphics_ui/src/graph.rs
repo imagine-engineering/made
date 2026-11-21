@@ -2671,11 +2671,18 @@ impl GraphiteArtboardItem {
         let mut container = linked.container.clone();
         let session = self.session.read(cx);
         let revision = session.revision();
-        let payload = graphics_core::formats::capture_artboard_engine_payload(
-            session.document(),
-            linked.resource_id,
-            sim_runtime::MAX_SIM_DOCUMENT_BYTES,
-        )?;
+        let (payload, original_source) = if let Some(source) = &linked.original_source {
+            let (payload, successor) = source
+                .prepare_successor(session.document(), sim_runtime::MAX_SIM_DOCUMENT_BYTES)?;
+            (payload, Some(successor))
+        } else {
+            let payload = graphics_core::formats::capture_artboard_engine_payload(
+                session.document(),
+                linked.resource_id,
+                sim_runtime::MAX_SIM_DOCUMENT_BYTES,
+            )?;
+            (payload, None)
+        };
         let engine = container
             .documents
             .get_mut(linked.engine_index)
@@ -2720,6 +2727,7 @@ impl GraphiteArtboardItem {
             .ok_or_else(|| anyhow::anyhow!("The linked document was closed."))?
             .update(cx, |linked, cx| {
                 linked.container = container;
+                linked.original_source = original_source;
                 linked.saved_source = Some(source);
                 linked.saved_revision = Some(revision);
                 cx.notify();
