@@ -3921,6 +3921,25 @@ impl Item for GraphiteArtboardItem {
         "Graphite Artboard".into()
     }
 
+    fn can_save(&self, _cx: &App) -> bool {
+        self.linked_document.is_some()
+    }
+
+    fn save(
+        &mut self,
+        _options: workspace::item::SaveOptions,
+        _project: Entity<project::Project>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Task<anyhow::Result<()>> {
+        let result = self.save_sim(cx).map(|_| ());
+        if let Err(error) = &result {
+            self.delivery_diagnostic = Some(error.to_string());
+            cx.notify();
+        }
+        gpui::Task::ready(result)
+    }
+
     fn can_split(&self) -> bool {
         true
     }

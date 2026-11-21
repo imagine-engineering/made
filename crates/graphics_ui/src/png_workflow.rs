@@ -1572,6 +1572,79 @@ pub(crate) mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_doc_004_1_workspace_save_publishes_the_active_artboard(
+        cx: &mut TestAppContext,
+    ) {
+        let fixture = host_reader_fixture().expect("real shared project service");
+        let png = indexed_request_png(&fixture, 4).expect("actual Input producer");
+        let (workspace, window) = native_workspace(cx).await;
+        let (reader, _, _) = register_fixture_workflow(&fixture, &png, window);
+        let item = open_requested_png(&workspace, window);
+        edit_artboard_field(&item, 9, "12", window);
+        let revision = item.read_with(window, |item, cx| {
+            assert!(item.saved_sim_source(cx).is_none());
+            item.session().read(cx).revision()
+        });
+
+        window.update(|_, cx| {
+            cx.bind_keys([gpui::KeyBinding::new(
+                "ctrl-s",
+                workspace::Save { save_intent: None },
+                None,
+            )]);
+        });
+        window.simulate_keystrokes("ctrl-s");
+        window.run_until_parked();
+        paint(window);
+
+        let saved = item.read_with(window, |item, cx| {
+            assert!(item.delivery_diagnostic().is_none());
+            item.saved_sim_source(cx)
+                .expect("active Artboard saved by the workspace action")
+                .clone()
+        });
+        let bytes = fixture
+            .assets
+            .lock()
+            .expect("shared catalog")
+            .read_verified(
+                &saved.identity,
+                &reader,
+                &sim_tensor::CancellationToken::default(),
+                sim_runtime::MAX_SIM_DOCUMENT_BYTES as u64,
+            )
+            .expect("saved editable bytes");
+        let document = sim_runtime::SimDocument::decode(&bytes).expect("saved container");
+        let [engine] = document.documents.as_slice() else {
+            panic!("expected one saved Graphite engine document");
+        };
+        assert_eq!(engine.engine, "graphite");
+        let payload: serde_json::Value =
+            serde_json::from_str(&engine.payload).expect("Graphite payload");
+        assert_eq!(payload["capture"]["revision"], serde_json::json!(revision));
+        assert_eq!(
+            payload["capture"]["placement"][4],
+            serde_json::json!(12_f64.to_bits())
+        );
+
+        window.update(|_, cx| {
+            crate::clear_asset_binding(cx).expect("revoke the linked project's asset authority");
+        });
+        let failure = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.save_active_item(workspace::SaveIntent::Save, window, cx)
+            })
+            .await
+            .expect_err("workspace Save must surface the revoked project authority");
+        assert!(failure.to_string().contains("permission changed"));
+        item.read_with(window, |item, cx| {
+            assert_eq!(item.saved_sim_source(cx), Some(&saved));
+            assert_eq!(item.session().read(cx).revision(), revision);
+            assert!(item.delivery_diagnostic().is_some());
+        });
+    }
+
+    #[gpui::test]
     async fn at_task573_png_workflow_saves_reopens_immutable_source_and_publishes_edited_png(
         cx: &mut TestAppContext,
     ) {
