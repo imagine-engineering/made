@@ -1900,6 +1900,13 @@ impl Pane {
     // save it. That said, if you still have the buffer open in a different pane
     // we can close this one without fear of losing data.
     pub fn skip_save_on_close(item: &dyn ItemHandle, workspace: &Workspace, cx: &App) -> bool {
+        if let Some(owner) = item.shared_save_owner(cx) {
+            return !item.is_dirty(cx)
+                || workspace.items(cx).any(|open_item| {
+                    open_item.item_id() != item.item_id()
+                        && open_item.shared_save_owner(cx) == Some(owner)
+                });
+        }
         let mut dirty_project_item_ids = Vec::new();
         item.for_each_project_item(cx, &mut |project_item_id, project_item| {
             if project_item.is_dirty() {

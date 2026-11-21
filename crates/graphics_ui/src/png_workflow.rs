@@ -1645,6 +1645,135 @@ pub(crate) mod tests {
     }
 
     #[gpui::test]
+    async fn at_r07_1_unsaved_artboard_uses_workspace_close_and_save_prompts(
+        cx: &mut TestAppContext,
+    ) {
+        use workspace::item::Item as _;
+
+        let fixture = host_reader_fixture().expect("real shared project service");
+        let png = indexed_request_png(&fixture, 4).expect("actual Input producer");
+        let (workspace, window) = native_workspace(cx).await;
+        let (reader, _, _) = register_fixture_workflow(&fixture, &png, window);
+        let item = open_requested_png(&workspace, window);
+        assert!(!item.read_with(window, |item, cx| item.is_dirty(cx)));
+        edit_artboard_field(&item, 9, "15", window);
+        let first_revision = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            item.session().read(cx).revision()
+        });
+
+        let pane = workspace.read_with(window, |workspace, _| workspace.active_pane().clone());
+        let close = pane.update_in(window, |pane, window, cx| {
+            pane.close_item_by_id(item.entity_id(), workspace::SaveIntent::Close, window, cx)
+        });
+        window.run_until_parked();
+        assert!(window.cx.has_pending_prompt());
+        window.cx.simulate_prompt_answer("Cancel");
+        close.await.expect("native close cancellation");
+        assert!(pane.read_with(window, |pane, _| pane.active_item().is_some()));
+        assert!(item.read_with(window, |item, cx| {
+            item.is_dirty(cx) && item.saved_sim_source(cx).is_none()
+        }));
+
+        workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.save_active_item(workspace::SaveIntent::Save, window, cx)
+            })
+            .await
+            .expect("save committed the pending native revision");
+        let first_saved = item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            item.saved_sim_source(cx)
+                .expect("first save receipt")
+                .clone()
+        });
+        edit_artboard_field(&item, 9, "18", window);
+        let successor_revision = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            assert_eq!(item.saved_sim_source(cx), Some(&first_saved));
+            item.session().read(cx).revision()
+        });
+        assert!(successor_revision > first_revision);
+
+        let split = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.split_and_clone(
+                    pane.clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            })
+            .await
+            .expect("native Artboard split");
+        let split_item = split
+            .read_with(window, |pane, _| {
+                pane.active_item()
+                    .and_then(|item| item.downcast::<GraphiteArtboardItem>())
+            })
+            .expect("same Artboard in the split pane");
+        split_item.read_with(window, |view, cx| {
+            assert!(view.is_dirty(cx));
+            assert_eq!(
+                view.shared_save_owner(cx),
+                item.read(cx).shared_save_owner(cx)
+            );
+            assert_eq!(view.saved_sim_source(cx), Some(&first_saved));
+        });
+        let close_split = split.update_in(window, |pane, window, cx| {
+            pane.close_item_by_id(
+                split_item.entity_id(),
+                workspace::SaveIntent::Close,
+                window,
+                cx,
+            )
+        });
+        window.run_until_parked();
+        assert!(!window.cx.has_pending_prompt());
+        close_split
+            .await
+            .expect("closing one split leaves the shared editor open");
+
+        let close = pane.update_in(window, |pane, window, cx| {
+            pane.close_item_by_id(item.entity_id(), workspace::SaveIntent::Close, window, cx)
+        });
+        window.run_until_parked();
+        assert!(window.cx.has_pending_prompt());
+        window.cx.simulate_prompt_answer("Save");
+        close.await.expect("native close with successful save");
+        assert!(pane.read_with(window, |pane, _| pane.active_item().is_none()));
+        let successor = item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            item.saved_sim_source(cx)
+                .expect("successor save receipt")
+                .clone()
+        });
+        assert_ne!(successor, first_saved);
+        let assets = fixture.assets.lock().expect("project catalog");
+        let cancellation = sim_tensor::CancellationToken::default();
+        for (receipt, revision) in [
+            (&first_saved, first_revision),
+            (&successor, successor_revision),
+        ] {
+            let bytes = assets
+                .read_verified(
+                    &receipt.identity,
+                    &reader,
+                    &cancellation,
+                    sim_runtime::MAX_SIM_DOCUMENT_BYTES as u64,
+                )
+                .expect("each immutable saved version remains accessible");
+            let container = sim_runtime::SimDocument::decode(&bytes).expect("saved container");
+            let [engine] = container.documents.as_slice() else {
+                panic!("expected a single Graphite engine document");
+            };
+            let payload: serde_json::Value =
+                serde_json::from_str(&engine.payload).expect("Graphite payload");
+            assert_eq!(payload["capture"]["revision"], serde_json::json!(revision));
+        }
+    }
+
+    #[gpui::test]
     async fn at_task573_png_workflow_saves_reopens_immutable_source_and_publishes_edited_png(
         cx: &mut TestAppContext,
     ) {
@@ -3169,7 +3298,20 @@ pub(crate) mod tests {
             item.entity_id()
         );
         drop(session);
-        close_artboard(&workspace, item, window).await;
+        let pane = workspace.read_with(window, |workspace, _| workspace.active_pane().clone());
+        let close = pane.update_in(window, |pane, window, cx| {
+            pane.close_item_by_id(item.entity_id(), workspace::SaveIntent::Close, window, cx)
+        });
+        window.run_until_parked();
+        assert!(window.cx.has_pending_prompt());
+        window.cx.simulate_prompt_answer("Don't Save");
+        close
+            .await
+            .expect("explicit discard closes the revoked Artboard");
+        let weak = item.downgrade();
+        drop(item);
+        window.run_until_parked();
+        assert!(weak.upgrade().is_none());
     }
     #[gpui::test]
     async fn at_task573_split_input_update_save_and_export_share_current_links_and_retained_outputs(

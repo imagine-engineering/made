@@ -4,7 +4,10 @@ use gpui::{
     Subscription, Window, actions,
 };
 use ui::{ContextMenu, DropdownMenu, TintColor, prelude::*};
-use workspace::{Workspace, item::Item};
+use workspace::{
+    Workspace,
+    item::{Item, ItemEvent, SaveOptions},
+};
 
 use crate::session::{AddMode, GraphicsSession};
 
@@ -2541,6 +2544,7 @@ impl GraphiteArtboardItem {
                 |item, _, _: &crate::session::ArtboardSessionEvent, window, cx| {
                     item.synchronize_fields(window, cx);
                     item.refresh_resource_authority(window, cx);
+                    cx.emit(ItemEvent::UpdateTab);
                     cx.notify();
                 },
             ),
@@ -2600,9 +2604,12 @@ impl GraphiteArtboardItem {
         linked: Entity<crate::interop::GraphiteLinkedDocument>,
         cx: &mut Context<Self>,
     ) {
-        self._subscriptions
-            .push(cx.observe(&linked, |_, _, cx| cx.notify()));
+        self._subscriptions.push(cx.observe(&linked, |_, _, cx| {
+            cx.emit(ItemEvent::UpdateTab);
+            cx.notify();
+        }));
         self.linked_document = Some(linked);
+        cx.emit(ItemEvent::UpdateTab);
         cx.notify();
     }
 
@@ -3945,10 +3952,14 @@ impl Focusable for GraphiteArtboardItem {
     }
 }
 
-impl EventEmitter<()> for GraphiteArtboardItem {}
+impl EventEmitter<ItemEvent> for GraphiteArtboardItem {}
 
 impl Item for GraphiteArtboardItem {
-    type Event = ();
+    type Event = ItemEvent;
+
+    fn to_item_events(event: &Self::Event, emit: &mut dyn FnMut(ItemEvent)) {
+        emit(*event);
+    }
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
         "Graphite Artboard".into()
@@ -3958,9 +3969,19 @@ impl Item for GraphiteArtboardItem {
         self.linked_document.is_some()
     }
 
+    fn is_dirty(&self, cx: &App) -> bool {
+        self.linked_document.as_ref().is_some_and(|linked| {
+            self.session.read(cx).revision() != linked.read(cx).saved_revision.unwrap_or_default()
+        })
+    }
+
+    fn shared_save_owner(&self, _cx: &App) -> Option<gpui::EntityId> {
+        self.linked_document.as_ref().map(Entity::entity_id)
+    }
+
     fn save(
         &mut self,
-        _options: workspace::item::SaveOptions,
+        _options: SaveOptions,
         _project: Entity<project::Project>,
         _window: &mut Window,
         cx: &mut Context<Self>,
