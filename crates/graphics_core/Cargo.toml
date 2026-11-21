@@ -9,6 +9,8 @@ rust-version = "1.98"
 path = "src/graphics_core.rs"
 
 [dependencies]
+graphite-document-container.workspace = true
+graphite-document-format.workspace = true
 graphite-editor.workspace = true
 graphite-resource.workspace = true
 serde.workspace = true
@@ -33,6 +35,8 @@ sha2.workspace = true
 png.workspace = true
 image.workspace = true
 sim_media.workspace = true
+thiserror.workspace = true
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 base64.workspace = true

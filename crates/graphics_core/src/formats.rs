@@ -28,6 +28,8 @@ use crate::{
     resources::{GRAPHITE_IMAGE_SOURCE_REVISION, PreparedEncodedPngSource},
 };
 
+pub mod gdd;
+
 const PROFILE: &str = "sim.graphite.finite-linked-artboard.v1";
 pub const SOURCE_ARTBOARD_FORMAT: &str = "sim.graphite.source-linked-artboard.v2";
 
