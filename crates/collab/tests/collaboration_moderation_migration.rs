@@ -145,10 +145,7 @@ fn collaboration_moderation_schema_rolls_back_in_dependency_order() {
 
 #[tokio::test]
 async fn collaboration_moderation_migration_has_stable_reversible_checksums() {
-    let migrations_path = Path::new(file!())
-        .parent()
-        .expect("moderation migration test has a parent directory")
-        .join("../migrations");
+    let migrations_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
     let migrations = MigrationSource::resolve(migrations_path.as_path())
         .await
         .expect("migration directory resolves");
