@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 use db::kvp::KeyValueStore;
 use editor::{Editor, EditorEvent};
@@ -30,6 +30,13 @@ use util::rel_path::RelPath;
 use workspace::{
     Panel, Workspace, dock::DockPosition, dock::PanelEvent, workspace_scoped_state_key,
 };
+
+use crate::dependency_diagram_item::{
+    DependencyDiagramDerivation, DependencyDiagramItem, DependencyDiagramOpen,
+    DependencyDiagramPopup, DependencyDiagramProvider, DependencyDiagramScope,
+    DependencyDiagramSource, DependencyDiagramTarget, ShowDependencyDiagramPopup,
+};
+use crate::dependency_graph_canvas::{canvas_graph_from_gradle, canvas_graph_from_maven};
 
 actions!(
     groovy_dependencies_panel,
@@ -72,7 +79,7 @@ actions!(
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum BuildToolView {
+pub enum BuildToolView {
     #[default]
     Dependencies,
     Gradle,
@@ -88,7 +95,7 @@ enum BuildImport {
 }
 
 impl BuildToolView {
-    fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             Self::Dependencies => "Dependencies",
             Self::Gradle => "Gradle",
@@ -153,7 +160,7 @@ impl GraphFactPresentation {
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum MavenGraphScope {
+pub enum MavenGraphScope {
     #[default]
     All,
     Compile,
@@ -610,6 +617,8 @@ pub struct DependenciesPanel {
     preferences: BuildViewPreferences,
     preferences_key: Option<String>,
     preferences_notice: Option<String>,
+    // Staged tree context menu, anchored at the click position until dismissed.
+    graph_context_menu: Option<(Entity<ui::ContextMenu>, gpui::Point<Pixels>, Subscription)>,
     preferences_write: Option<gpui::Task<()>>,
     preferences_generation: u64,
     show_options: bool,
@@ -729,7 +738,7 @@ enum DependencyProvider {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum GraphQueryTarget {
+pub enum GraphQueryTarget {
     Maven(ProjectPath),
     Gradle {
         module: ProjectPath,
@@ -738,7 +747,7 @@ enum GraphQueryTarget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct GraphSelection {
+pub struct GraphSelection {
     server_id: lsp::LanguageServerId,
     generation: u64,
     target: GraphQueryTarget,
@@ -858,6 +867,229 @@ fn dependency_diagram_markdown(
         "Dependency diagram exceeds source budget; use current tree facts"
     );
     Ok(source)
+}
+
+/// Derives a short module display name from the module root path.
+fn dependency_module_label(module_root: &ProjectPath) -> String {
+    let path = module_root.path.as_unix_str();
+    match path.rsplit('/').next() {
+        Some(label) if !label.is_empty() => label.to_owned(),
+        _ => path.to_string(),
+    }
+}
+
+/// Adapts the selected module's admitted provider graph into canvas facts.
+/// Returns the canvas graph, the diagram target and the selected node ids.
+/// Reads admitted facts only; never queries a provider.
+fn dependency_canvas_for_selection(
+    snapshot: &JdtlsProjectSnapshot,
+    view: BuildToolView,
+    selection: &GraphSelection,
+    node: &str,
+    scope: Option<&DependencyDiagramScope>,
+) -> Option<DependencyDiagramDerivation> {
+    for module in &snapshot.projects {
+        match &selection.target {
+            GraphQueryTarget::Maven(pom) if view != BuildToolView::Gradle => {
+                let Some(maven) = module.maven.as_ref().filter(|maven| maven.pom == *pom) else {
+                    continue;
+                };
+                let Some(graph) = &maven.dependency_graph else {
+                    continue;
+                };
+                // Maven scope filtering keeps the existing fact-filter
+                // semantics: edges outside the chosen scope are not admitted.
+                let (admitted, chosen_scope) = match scope {
+                    Some(DependencyDiagramScope::MavenScope(label)) => {
+                        let chosen = maven_graph_scope_from_label(label);
+                        let mut filtered = (**graph).clone();
+                        filtered.edges.retain(|edge| chosen.matches(&edge.scope));
+                        (Some(filtered), chosen)
+                    }
+                    Some(_) => continue,
+                    None => (None, MavenGraphScope::default()),
+                };
+                let admitted_graph: &project::jvm_project::MavenDependencyGraph =
+                    admitted.as_ref().unwrap_or(graph);
+                let mut selected = BTreeSet::new();
+                selected.insert(node.to_owned());
+                return Some(DependencyDiagramDerivation {
+                    canvas: canvas_graph_from_maven(admitted_graph),
+                    target: DependencyDiagramTarget {
+                        module_label: dependency_module_label(&module.module_root),
+                        provider: DependencyDiagramProvider::Maven,
+                        configuration: None,
+                    },
+                    selected,
+                    scope: DependencyDiagramScope::MavenScope(chosen_scope.label().to_owned()),
+                    scope_options: maven_graph_scope_labels(),
+                });
+            }
+            GraphQueryTarget::Gradle {
+                module: module_root,
+                configuration,
+            } if view != BuildToolView::Maven => {
+                if module.module_root != *module_root {
+                    continue;
+                }
+                let Some(gradle) = &module.gradle else {
+                    continue;
+                };
+                // The scope picker offers the configurations the provider
+                // reports for the module; the chosen one admits its matching
+                // graph only.
+                let mut scope_options: Vec<String> = gradle
+                    .configurations
+                    .iter()
+                    .filter(|configuration| gradle.configurations_known && configuration.resolvable)
+                    .map(|configuration| configuration.name.clone())
+                    .collect();
+                let chosen_configuration = match scope {
+                    Some(DependencyDiagramScope::GradleConfiguration(name)) => Some(name.clone()),
+                    Some(_) => continue,
+                    None => None,
+                };
+                let configuration = chosen_configuration.unwrap_or_else(|| configuration.clone());
+                if !scope_options.iter().any(|option| option == &configuration) {
+                    scope_options.push(configuration.clone());
+                    scope_options.sort();
+                }
+                let Some(graph) = gradle
+                    .dependency_graph
+                    .as_ref()
+                    .filter(|graph| graph.resolution.configuration == configuration)
+                else {
+                    continue;
+                };
+                let mut selected = BTreeSet::new();
+                selected.insert(node.to_owned());
+                return Some(DependencyDiagramDerivation {
+                    canvas: canvas_graph_from_gradle(&graph.resolution),
+                    target: DependencyDiagramTarget {
+                        module_label: dependency_module_label(&module.module_root),
+                        provider: DependencyDiagramProvider::Gradle,
+                        configuration: Some(configuration.clone()),
+                    },
+                    selected,
+                    scope: DependencyDiagramScope::GradleConfiguration(configuration),
+                    scope_options,
+                });
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Derives diagram facts for the diagram surfaces from admitted provider
+/// state: walks visible trusted worktrees, matches the selection and applies
+/// the chosen scope. Read-only; never queries a provider.
+pub(crate) fn derive_dependency_diagram(
+    project: &Project,
+    view: BuildToolView,
+    selection: &GraphSelection,
+    node: &str,
+    scope: Option<&DependencyDiagramScope>,
+    cx: &App,
+) -> Option<DependencyDiagramDerivation> {
+    let worktrees = project.worktree_store();
+    let Some(trusted) = TrustedWorktrees::try_get_global(cx) else {
+        return None;
+    };
+    let restricted = trusted
+        .read(cx)
+        .restricted_worktrees(&worktrees, cx)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect::<HashSet<_>>();
+    let store = project.lsp_store();
+    let store = store.read(cx);
+    for worktree in worktrees.read(cx).worktrees() {
+        let worktree = worktree.read(cx);
+        if !worktree.is_visible() || restricted.contains(&worktree.id()) {
+            continue;
+        }
+        let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
+            continue;
+        };
+        if let Some(derivation) =
+            dependency_canvas_for_selection(snapshot, view, selection, node, scope)
+        {
+            return Some(derivation);
+        }
+    }
+    None
+}
+
+/// Re-derives the exact Mermaid export payload for a diagram from admitted
+/// facts, so the diagram toolbar's Copy Diagram Source behaves identically to
+/// the panel's existing action.
+pub(crate) fn dependency_diagram_source_export(
+    project: &Project,
+    view: BuildToolView,
+    selection: &GraphSelection,
+    cx: &App,
+) -> Option<String> {
+    let worktrees = project.worktree_store();
+    let Some(trusted) = TrustedWorktrees::try_get_global(cx) else {
+        return None;
+    };
+    let restricted = trusted
+        .read(cx)
+        .restricted_worktrees(&worktrees, cx)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect::<HashSet<_>>();
+    let store = project.lsp_store();
+    let store = store.read(cx);
+    for worktree in worktrees.read(cx).worktrees() {
+        let worktree = worktree.read(cx);
+        if !worktree.is_visible() || restricted.contains(&worktree.id()) {
+            continue;
+        }
+        let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
+            continue;
+        };
+        if let Ok(Some(source)) = dependency_diagram_source(snapshot, true, view, selection) {
+            return Some(source);
+        }
+    }
+    None
+}
+
+/// Maps a Maven fact-filter scope label back to its enum value.
+fn maven_graph_scope_from_label(label: &str) -> MavenGraphScope {
+    maven_graph_scope_labels()
+        .into_iter()
+        .zip([
+            MavenGraphScope::All,
+            MavenGraphScope::Compile,
+            MavenGraphScope::Runtime,
+            MavenGraphScope::Test,
+            MavenGraphScope::Provided,
+            MavenGraphScope::System,
+            MavenGraphScope::Import,
+            MavenGraphScope::Other,
+        ])
+        .find(|(option, _)| option == label)
+        .map(|(_, scope)| scope)
+        .unwrap_or(MavenGraphScope::All)
+}
+
+fn maven_graph_scope_labels() -> Vec<String> {
+    [
+        MavenGraphScope::All,
+        MavenGraphScope::Compile,
+        MavenGraphScope::Runtime,
+        MavenGraphScope::Test,
+        MavenGraphScope::Provided,
+        MavenGraphScope::System,
+        MavenGraphScope::Import,
+        MavenGraphScope::Other,
+    ]
+    .into_iter()
+    .map(|scope| scope.label().to_owned())
+    .collect()
 }
 
 fn dependency_diagram_source(
@@ -2466,6 +2698,7 @@ impl DependenciesPanel {
                     graph_diagram: None,
                     graph_diagram_source: None,
                     graph_diagram_legend: Vec::new(),
+                    graph_context_menu: None,
                     position: preferences.dock_position.into(),
                     active: false,
                     view: preferences.view,
@@ -2610,6 +2843,102 @@ impl DependenciesPanel {
             }
         }
         None
+    }
+
+    /// Resolves the selected row for the diagram surfaces: node and
+    /// occurrence rows resolve to that node, and module-level graph fact rows
+    /// resolve to the graph's root. Read-only; never queries a provider.
+    fn resolve_selected_canvas_graph(&self, cx: &App) -> Option<(GraphSelection, String)> {
+        if self.host_unavailable(cx) {
+            return None;
+        }
+        let selected = self.host.selected()?;
+        let project = self.project.read(cx);
+        let worktrees = project.worktree_store();
+        let trusted = TrustedWorktrees::try_get_global(cx)?;
+        let restricted = trusted
+            .read(cx)
+            .restricted_worktrees(&worktrees, cx)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect::<HashSet<_>>();
+        let store = project.lsp_store();
+        let store = store.read(cx);
+        for worktree in worktrees.read(cx).worktrees() {
+            let worktree = worktree.read(cx);
+            if !worktree.is_visible() || restricted.contains(&worktree.id()) {
+                continue;
+            }
+            let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
+                continue;
+            };
+            for module in &snapshot.projects {
+                let id = jdtls_module_node_id(snapshot, &module.module_root, self.view);
+                if self.view != BuildToolView::Gradle
+                    && let Some(maven) = &module.maven
+                    && let Some(graph) = &maven.dependency_graph
+                {
+                    let selection = GraphSelection {
+                        server_id: snapshot.server_id,
+                        generation: snapshot.generation,
+                        target: GraphQueryTarget::Maven(maven.pom.clone()),
+                    };
+                    if *selected == graph_fact_id(&id, "maven", &[]) {
+                        return Some((selection, graph.root_node.clone()));
+                    }
+                    for node in &graph.nodes {
+                        if *selected
+                            == graph_component_row_id(graph_fact_id(&id, "maven-node", &[&node.id]))
+                        {
+                            return Some((selection, node.id.clone()));
+                        }
+                    }
+                }
+                if self.view != BuildToolView::Maven
+                    && let Some(gradle) = &module.gradle
+                    && let Some(graph) = &gradle.dependency_graph
+                {
+                    let selection = GraphSelection {
+                        server_id: snapshot.server_id,
+                        generation: snapshot.generation,
+                        target: GraphQueryTarget::Gradle {
+                            module: module.module_root.clone(),
+                            configuration: graph.resolution.configuration.clone(),
+                        },
+                    };
+                    if *selected == graph_fact_id(&id, "gradle", &[]) {
+                        return Some((selection, graph.resolution.root_component.clone()));
+                    }
+                    for component in &graph.resolution.components {
+                        if *selected
+                            == graph_component_row_id(graph_fact_id(
+                                &id,
+                                "gradle-component",
+                                &[&graph.resolution.configuration, &component.id],
+                            ))
+                        {
+                            return Some((selection, component.id.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Availability inputs the diagram context menus share with the panel's
+    /// enablement logic.
+    pub(crate) fn context_menu_availability(&self) -> (usize, bool) {
+        (
+            self.graph_selection_set.len(),
+            self.graph_inspection.is_some(),
+        )
+    }
+
+    /// The focus handle menu routing dispatches through, so menu invocations
+    /// run inside the panel's own action scope.
+    pub(crate) fn routing_focus_handle(&self) -> gpui::FocusHandle {
+        self.focus_handle.clone()
     }
 
     fn selected_graph_inspection(
@@ -2837,6 +3166,58 @@ impl DependenciesPanel {
         self.rebuild(cx);
     }
 
+    /// Resolves the selected row into canvas facts for the diagram surfaces.
+    /// Reads admitted facts only and never queries a provider.
+    fn canvas_diagram_load(
+        &self,
+        panel: gpui::WeakEntity<DependenciesPanel>,
+        cx: &App,
+    ) -> Option<DependencyDiagramOpen> {
+        if self.host_unavailable(cx) {
+            return None;
+        }
+        let (selection, node) = self.resolve_selected_canvas_graph(cx)?;
+        let project = self.project.clone();
+        let derivation = derive_dependency_diagram(
+            self.project.read(cx),
+            self.view,
+            &selection,
+            &node,
+            None,
+            cx,
+        )?;
+        Some(DependencyDiagramOpen {
+            derivation,
+            source: DependencyDiagramSource {
+                project,
+                selection,
+                node,
+                view: self.view,
+                panel,
+            },
+        })
+    }
+
+    /// Opens the diagram tab or focuses the matching open one.
+    fn open_or_focus_diagram_tab(&self, open: DependencyDiagramOpen, cx: &mut Context<Self>) {
+        let _ = self.workspace.update_in(cx, |workspace, window, cx| {
+            let existing = workspace
+                .items_of_type::<DependencyDiagramItem>(cx)
+                .find(|item| item.read(cx).target() == &open.derivation.target);
+            if let Some(item) = existing {
+                workspace.activate_item(&item, true, true, window, cx);
+            } else {
+                DependencyDiagramItem::open(
+                    open.derivation,
+                    Some(open.source),
+                    workspace,
+                    window,
+                    cx,
+                );
+            }
+        });
+    }
+
     fn show_dependency_diagram(&mut self, cx: &mut Context<Self>) {
         let selection = self.selected_graph().or_else(|| {
             self.selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
@@ -2854,7 +3235,81 @@ impl DependenciesPanel {
         self.rebuild(cx);
         if self.graph_diagram.is_none() && self.graph_notice.is_none() {
             self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram"), cx);
+            return;
         }
+        if let Some(open) = self.canvas_diagram_load(cx.weak_entity(), cx) {
+            self.open_or_focus_diagram_tab(open, cx);
+        } else {
+            // No admitted facts: show the collection affordance without
+            // starting a provider query.
+            self.graph_notice = Some("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram".into());
+            cx.notify();
+        }
+    }
+
+    fn show_dependency_diagram_popup(&mut self, cx: &mut Context<Self>) {
+        let has_selection = self.selected_graph().is_some()
+            || self
+                .selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
+                .is_some();
+        if !has_selection {
+            self.show_graph_error(anyhow::anyhow!("Select a current Maven occurrence or Gradle configuration/component, refresh provider graph facts and retry Show diagram popup"), cx);
+            return;
+        }
+        match self.canvas_diagram_load(cx.weak_entity(), cx) {
+            Some(open) => {
+                let _ = self.workspace.update_in(cx, |workspace, window, cx| {
+                    workspace.toggle_modal(window, cx, |_window, cx| {
+                        DependencyDiagramPopup::new(
+                            open.derivation.canvas,
+                            open.derivation.target,
+                            open.derivation.selected,
+                            cx,
+                        )
+                    });
+                });
+            }
+            None => {
+                // Collection affordance without a provider query.
+                self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram popup"), cx);
+            }
+        }
+    }
+
+    /// Builds the tree context menu for the selected row: diagram entry points
+    /// grouped above the shared tree commands, availability-filtered through
+    /// the same eligibility logic as the panel controls.
+    fn show_graph_context_menu(
+        &mut self,
+        id: LanguageToolNodeId,
+        position: gpui::Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.host.select(id);
+        let eligible = self.resolve_selected_canvas_graph(cx).is_some();
+        let focus_handle = self.focus_handle.clone();
+        let context_menu = ui::ContextMenu::build(window, cx, |menu, _, _| {
+            menu.context(focus_handle).map(|menu| {
+                menu.action_disabled_when(
+                    !eligible,
+                    "Show Dependency Diagram",
+                    Box::new(ShowDependencyDiagram),
+                )
+                .action_disabled_when(
+                    !eligible,
+                    "Show Dependency Diagram Popup",
+                    Box::new(ShowDependencyDiagramPopup),
+                )
+            })
+        });
+        window.focus(&context_menu.focus_handle(cx), cx);
+        let subscription = cx.subscribe(&context_menu, |this, _, _: &gpui::DismissEvent, cx| {
+            this.graph_context_menu.take();
+            cx.notify();
+        });
+        self.graph_context_menu = Some((context_menu, position, subscription));
+        cx.notify();
     }
 
     fn close_dependency_diagram(&mut self, cx: &mut Context<Self>) {
@@ -6555,6 +7010,7 @@ impl Render for DependenciesPanel {
             .is_some();
         let click_panel = cx.weak_entity();
         let toggle_panel = cx.weak_entity();
+        let menu_panel = cx.weak_entity();
         v_flex()
             .id("groovy-dependencies-panel")
             .role(Role::Group)
@@ -6647,6 +7103,7 @@ impl Render for DependenciesPanel {
                 }),
             )
             .on_action(cx.listener(|panel, _: &ShowDependencyDiagram, _, cx| panel.show_dependency_diagram(cx)))
+            .on_action(cx.listener(|panel, _: &ShowDependencyDiagramPopup, _, cx| panel.show_dependency_diagram_popup(cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
             .on_action(cx.listener(|panel, _: &CopyDependencyDiagramSource, _, cx| panel.copy_dependency_diagram_source(cx)))
             .on_action(
@@ -6799,6 +7256,28 @@ impl Render for DependenciesPanel {
                                     .tooltip(Tooltip::text("Cancel graph collection"))
                                     .disabled(!can_cancel_graph)
                                     .on_click(cx.listener(|panel, _, _, cx| panel.cancel_graph_collection(cx))),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-show-dependency-diagram-icon",
+                                        ui::IconName::GitGraph,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label("Show a read-only diagram of current admitted dependency graph facts in a dedicated editor tab; opens or focuses the tab without resolving dependencies")
+                                    .tooltip(Tooltip::text("Show dependency diagram"))
+                                    .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram(cx))),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-show-dependency-diagram-popup-icon",
+                                        ui::IconName::GenericMaximize,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label("Show the dependency diagram popup over the current admitted dependency graph facts; dismissed by Escape")
+                                    .tooltip(Tooltip::text("Show diagram popup"))
+                                    .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram_popup(cx))),
                                 )
                                 .when(self.view != BuildToolView::Dependencies, |row| {
                                     row.child(
@@ -7260,7 +7739,13 @@ impl Render for DependenciesPanel {
                         log::debug!("Dependencies panel closed during toggle: {error:#}");
                     }
                 },
-                |_, _, _, _| {},
+                move |id, position, window, cx| {
+                    if let Err(error) = menu_panel.update(cx, |panel, cx| {
+                        panel.show_graph_context_menu(id, position, window, cx);
+                    }) {
+                        log::debug!("Dependencies panel closed during context menu: {error:#}");
+                    }
+                },
             ))
     }
 }
@@ -12456,6 +12941,18 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn show_dependency_diagram_opens_tab_popup_and_rejects_ineligible(
+        cx: &mut TestAppContext,
+    ) {
+        // The diagram surfaces share the provider-graph journey: tab open and
+        // focus, popup Escape dismissal, ineligible-selection rejection and
+        // no-query-on-open are asserted inside the shared lifecycle for both
+        // providers.
+        graph_lifecycle(cx, GraphFixtureProvider::Gradle, MavenGraphOutcome::Success).await;
+        graph_lifecycle(cx, GraphFixtureProvider::Maven, MavenGraphOutcome::Success).await;
+    }
+
+    #[gpui::test]
     async fn gradle_graph_admission_preserves_resolution_and_switches_configuration(
         cx: &mut TestAppContext,
     ) {
@@ -13428,6 +13925,149 @@ mod tests {
                 panel.host.select(inspection_target.clone());
                 panel.show_dependency_diagram(cx);
             });
+            // The canvas editor tab: exactly one focused tab for the
+            // selection, and re-show focuses the open tab instead of
+            // duplicating it, still without querying the provider.
+            let (tab_count, active_is_diagram) = workspace.read_with(cx, |workspace, cx| {
+                let items = workspace
+                    .items_of_type::<DependencyDiagramItem>(cx)
+                    .collect::<Vec<_>>();
+                let diagram_id = items.first().map(|item| item.entity_id());
+                let active_id = workspace.active_item(cx).map(|item| item.item_id());
+                (items.len(), diagram_id.is_some() && active_id == diagram_id)
+            });
+            assert_eq!(tab_count, 1, "Show diagram opens exactly one canvas tab");
+            assert!(
+                active_is_diagram,
+                "the canvas tab is focused after Show diagram"
+            );
+            panel.update(cx, |panel, cx| {
+                panel.show_dependency_diagram(cx);
+            });
+            let tab_count_after = workspace.read_with(cx, |workspace, cx| {
+                workspace.items_of_type::<DependencyDiagramItem>(cx).count()
+            });
+            assert_eq!(
+                tab_count_after, tab_count,
+                "re-show focuses the open diagram tab"
+            );
+
+            // Popup surface: opens over the same admitted facts without a
+            // provider query, and Escape dismisses it. The entry points route
+            // through the same handler as the toolbar button and the tree
+            // context menu.
+            panel.update(cx, |panel, cx| panel.show_dependency_diagram_popup(cx));
+            let popup_notice = panel.read_with(cx, |panel, _| panel.graph_notice.clone());
+            assert!(
+                workspace.read_with(cx, |workspace, cx| workspace
+                    .active_modal::<DependencyDiagramPopup>(cx)
+                    .is_some()),
+                "Show diagram popup opens the modal canvas; notice: {popup_notice:?}"
+            );
+            assert_eq!(
+                commands.load(Ordering::SeqCst),
+                3,
+                "diagram surfaces must never query or execute provider"
+            );
+            cx.simulate_keystrokes("escape");
+            cx.run_until_parked();
+            assert!(
+                workspace.read_with(cx, |workspace, cx| workspace
+                    .active_modal::<DependencyDiagramPopup>(cx)
+                    .is_none()),
+                "Escape dismisses the diagram popup"
+            );
+
+            // Diagram toolbar scope admission: the scope picker offers the
+            // configurations the provider reports (including the current
+            // one), the reported scope re-derives without a provider query,
+            // and an unreported scope is rejected without changing the
+            // canvas.
+            let diagram_item = workspace
+                .read_with(cx, |workspace, cx| {
+                    workspace.items_of_type::<DependencyDiagramItem>(cx).next()
+                })
+                .expect("diagram tab item");
+            let (scope_options, current_scope) = cx.update(|_, cx| {
+                (
+                    diagram_item.read(cx).scope_options().to_vec(),
+                    diagram_item.read(cx).scope().label(),
+                )
+            });
+            assert!(
+                !scope_options.is_empty() && scope_options.contains(&current_scope),
+                "the scope picker offers reported configurations including the current one: {scope_options:?}"
+            );
+            diagram_item.update(cx, |item, cx| item.apply_scope(current_scope.clone(), cx));
+            cx.update(|_, cx| {
+                assert!(
+                    diagram_item.read(cx).notice.is_none(),
+                    "the reported scope re-derives the admitted canvas"
+                )
+            });
+            if provider == GraphFixtureProvider::Gradle {
+                let edges_before =
+                    cx.update(|_, cx| diagram_item.read(cx).canvas.read(cx).graph.edges.len());
+                diagram_item.update(cx, |item, cx| {
+                    item.apply_scope("__unreported-configuration__".into(), cx)
+                });
+                let rejected = cx.update(|_, cx| {
+                    diagram_item.read(cx).notice.as_ref().is_some_and(|notice| {
+                        notice.contains("No admitted graph facts match the chosen scope")
+                    })
+                });
+                assert!(rejected, "an unreported scope is rejected");
+                let edges_after =
+                    cx.update(|_, cx| diagram_item.read(cx).canvas.read(cx).graph.edges.len());
+                assert_eq!(
+                    edges_after, edges_before,
+                    "a rejected scope leaves the canvas unchanged"
+                );
+            }
+
+            // Ineligible selection: a non-graph row cannot open a diagram and
+            // the rejection never queries the provider.
+            let non_graph_row = panel.read_with(cx, |panel, _| {
+                panel
+                    .host
+                    .visible_rows()
+                    .iter()
+                    .find(|row| !row.id.0.starts_with("graph:"))
+                    .map(|row| row.id.clone())
+            });
+            if let Some(non_graph_row) = non_graph_row {
+                panel.update(cx, |panel, cx| {
+                    panel.host.select(non_graph_row);
+                    panel.show_dependency_diagram(cx);
+                });
+                assert!(
+                    panel.read_with(cx, |panel, _| panel.graph_notice.as_ref().is_some_and(
+                        |notice| {
+                            notice.contains("Select a current Maven occurrence")
+                                || notice.contains("A current admitted graph is required")
+                        }
+                    )),
+                    "ineligible selection is rejected with selection or collection guidance"
+                );
+                assert_eq!(
+                    workspace.read_with(cx, |workspace, cx| workspace
+                        .items_of_type::<DependencyDiagramItem>(cx)
+                        .count()),
+                    tab_count,
+                    "ineligible selection opens no diagram tab"
+                );
+            }
+            assert_eq!(
+                commands.load(Ordering::SeqCst),
+                3,
+                "diagram rejection must never query or execute provider"
+            );
+
+            // Refocus the panel so the export dispatch stays inside the
+            // panel's action scope after the diagram surfaces moved focus.
+            panel.update_in(cx, |panel, window, cx| {
+                window.focus(&panel.focus_handle, cx)
+            });
 
             // Export equivalent: the copied source is the exact input the
             // displayed diagram renders, and the legend navigates back into
@@ -13445,6 +14085,30 @@ mod tests {
                 let source = panel.graph_diagram_source.as_ref().expect("diagram source");
                 assert_eq!(copied.as_deref(), Some(source.as_str()));
                 assert!(source.contains("flowchart LR"));
+            });
+            // Enablement parity: the diagram toolbar's Copy Diagram Source
+            // produces the exact same payload as the panel action.
+            let diagram_item = workspace
+                .read_with(cx, |workspace, cx| {
+                    workspace.items_of_type::<DependencyDiagramItem>(cx).next()
+                })
+                .expect("diagram tab item");
+            diagram_item.update(cx, |item, cx| item.copy_diagram_source(cx));
+            let item_copied = cx.cx.update(|cx| {
+                cx.read_from_clipboard().and_then(|item| {
+                    item.entries().iter().find_map(|entry| match entry {
+                        gpui::ClipboardEntry::String(text) => Some(text.text().to_string()),
+                        _ => None,
+                    })
+                })
+            });
+            panel.read_with(cx, |panel, _| {
+                let source = panel.graph_diagram_source.as_ref().expect("diagram source");
+                assert_eq!(
+                    item_copied.as_deref(),
+                    Some(source.as_str()),
+                    "toolbar Copy Diagram Source matches the panel action"
+                );
             });
             let legend_row = panel.read_with(cx, |panel, _| {
                 let legend = &panel.graph_diagram_legend;
@@ -13621,7 +14285,10 @@ mod tests {
                 cx.notify();
             });
             if provider == GraphFixtureProvider::Maven {
-                for _ in 0..40 {
+                // The diagram tab's canvas nodes and toolbar are tab stops
+                // too, so the walk may need to cycle through the whole window
+                // before it lands on the panel's scope control.
+                for _ in 0..200 {
                     let focused = cx.update(|window, cx| {
                         window.draw(cx).clear(cx);
                         let tree: serde_json::Value = serde_json::from_str(

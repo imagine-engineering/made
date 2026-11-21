@@ -1,5 +1,9 @@
 mod dependencies_panel;
+pub mod dependency_diagram_item;
+pub mod dependency_diagram_menu;
+pub mod dependency_graph_canvas;
 
+pub(crate) use dependencies_panel::{BuildToolView, GraphSelection};
 pub use dependencies_panel::{DependenciesPanel, ShowGradle, ShowMaven, ToggleDependenciesPanel};
 
 use gpui::{App, KeyBinding};
@@ -15,6 +19,7 @@ pub fn init(cx: &mut App) {
 
 fn init_for_product(product_id: &'static str, cx: &mut App) {
     let default_jvm = product_id == "jvm";
+    workspace::register_serializable_item::<dependency_diagram_item::DependencyDiagramItem>(cx);
     cx.observe_new(move |workspace: &mut Workspace, _, cx| {
         workspace.register_action(DependenciesPanel::toggle_focus);
         workspace.register_action(DependenciesPanel::show_gradle);
@@ -37,6 +42,11 @@ fn init_for_product(product_id: &'static str, cx: &mut App) {
 
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
+        KeyBinding::new(
+            "escape",
+            dependency_diagram_item::DismissDependencyDiagramPopup,
+            Some("DependencyDiagramPopup"),
+        ),
         KeyBinding::new(
             "up",
             SelectPrevious,
