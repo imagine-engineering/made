@@ -1183,12 +1183,13 @@ fn run_collaborative_workspace_visual_tests(
     })?;
 
     if matches!(variant, CollaborativeVisualVariant::Expanded) {
-        window.update(cx, |_, window, cx| {
+        window.update(cx, |multi_workspace, window, cx| {
             workspace.focus_handle(cx).dispatch_action(
                 &workspace::SwitchToCollaborativeWorkspace,
                 window,
                 cx,
             );
+            multi_workspace.open_sidebar(cx);
         })?;
         cx.run_until_parked();
         cx.resize_native_window(window.into(), size(px(1000.), px(682.)))?;
@@ -1339,7 +1340,7 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             anyhow::Ok(())
         })?;
         let composer_bounds = cx
-            .debug_bounds(window.into(), "COLLABORATIVE-COMPOSER")?
+            .debug_bounds(window.into(), "COLLABORATIVE-NATIVE-ACP-COMPOSER")?
             .context("empty draft composer must be rendered")?;
         anyhow::ensure!(
             composer_bounds.size.height > px(0.),
@@ -1643,7 +1644,7 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
         participant_registration,
         project_review_registration,
         agent_review_registration,
-    ) = window.update(cx, |_, window, cx| {
+    ) = window.update(cx, |multi_workspace, window, cx| {
         let composer = agent_ui::collaborative_composer::CollaborativeComposerAdapter::from_agent_panel(
             &agent_panel,
             &workspace,
@@ -1712,12 +1713,31 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             window,
             cx,
         );
+        multi_workspace.open_sidebar(cx);
         Ok::<_, anyhow::Error>(registrations)
     })??;
     for _ in 0..10 {
         cx.advance_clock(Duration::from_millis(100));
         cx.run_until_parked();
     }
+
+    let visual_window = window.into();
+    cx.resize_native_window(visual_window, size(px(1100.), bounds.size.height))?;
+    let rail_width =
+        workspace.read_with(cx, |workspace, cx| workspace.collaborative_rail_width(cx));
+    drag_collaborative_visual_divider(
+        visual_window,
+        "COLLABORATIVE-RAIL-RESIZE-HANDLE",
+        px(226.) - rail_width,
+        cx,
+    )?;
+    let rail_width =
+        workspace.read_with(cx, |workspace, cx| workspace.collaborative_rail_width(cx));
+    anyhow::ensure!(
+        (rail_width - px(226.)).abs() <= px(1.),
+        "reference rail must measure 226 logical pixels, measured {rail_width:?}"
+    );
+    cx.resize_native_window(visual_window, bounds.size)?;
 
     let visual_thread_id = window.update(cx, |_, window, cx| {
         let thread_id = agent_panel.read(cx).active_thread_id(cx);
@@ -1769,6 +1789,18 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
         review_requested != matches!(variant, CollaborativeVisualVariant::Collapsed),
         "collaborative review state does not match the requested visual variant"
     );
+    if matches!(variant, CollaborativeVisualVariant::Expanded) {
+        let selector = "COLLABORATIVE-REVIEW-RESIZE-HANDLE";
+        let divider = cx
+            .debug_bounds(visual_window, selector)?
+            .context("expanded reference review divider")?;
+        drag_collaborative_visual_divider(
+            visual_window,
+            selector,
+            px(610.5) - divider.center().x,
+            cx,
+        )?;
+    }
     for (entry_index, selector) in [
         (1, "AGENT-THREAD-MARKDOWN-CODE-BLOCK"),
         (2, "AGENT-THREAD-TOOL-DIFF"),
@@ -1846,17 +1878,22 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                 },
                 bounds.size,
                 window.into(),
+                &thread_view,
                 cx,
             )
         }
         CollaborativeVisualVariant::Expanded | CollaborativeVisualVariant::Collapsed => {
-            capture_collaborative_reference_comparison(
-                if matches!(variant, CollaborativeVisualVariant::Expanded) {
-                    "screenshot-1"
-                } else {
-                    "screenshot-2"
-                },
+            let name = if matches!(variant, CollaborativeVisualVariant::Expanded) {
+                "screenshot-1"
+            } else {
+                "screenshot-2"
+            };
+            capture_collaborative_reference_comparison(name, window.into(), cx)?;
+            capture_collaborative_accessibility_state(
+                name,
+                bounds.size,
                 window.into(),
+                &thread_view,
                 cx,
             )
         }
@@ -1872,6 +1909,7 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             },
             bounds.size,
             window.into(),
+            &thread_view,
             cx,
         ),
     }?;
@@ -1883,7 +1921,13 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             ("resized-expanded", bounds.size),
         ] {
             cx.resize_native_window(window.into(), viewport)?;
-            capture_collaborative_accessibility_state(name, viewport, window.into(), cx)?;
+            capture_collaborative_accessibility_state(
+                name,
+                viewport,
+                window.into(),
+                &thread_view,
+                cx,
+            )?;
             anyhow::ensure!(
                 cx.debug_bounds(window.into(), "COLLABORATIVE-REVIEW-REGION")?
                     .is_some()
@@ -1894,6 +1938,10 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
     }
 
     if let Some(output_directory) = std::env::var_os("VISUAL_TEST_OUTPUT_DIR") {
+        if matches!(variant, CollaborativeVisualVariant::Narrow) {
+            // The responsive rail is hidden at 602px. Exercise its pointer controls after reopening it.
+            cx.resize_native_window(visual_window, size(px(965.), bounds.size.height))?;
+        }
         let target = cx
             .read(|cx| {
                 agent_ui::thread_metadata_store::ThreadMetadataStore::global(cx)
@@ -2200,10 +2248,25 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                 window.update(cx, |_, window, cx| window.simulate_next_frame(cx))?;
                 cx.run_until_parked();
             }
+            let pane_visible = cx
+                .debug_bounds(window.into(), "NATIVE-WORKSPACE-PANE")?
+                .is_some();
+            let timeline = cx
+                .debug_bounds(window.into(), "COLLABORATIVE-TIMELINE-REGION")?
+                .context("resizing the native source pane must preserve the conversation")?;
             anyhow::ensure!(
-                cx.debug_bounds(window.into(), "NATIVE-WORKSPACE-PANE")?
-                    .is_some(),
-                "OpenExcerpts must render the canonical source pane: {name}"
+                pane_visible == (name != "review-source-file-narrow")
+                    && (pane_visible || timeline.size.width == viewport.width),
+                "{name}: native source pane visibility={pane_visible}, timeline={timeline:?}, viewport={viewport:?}"
+            );
+            anyhow::ensure!(
+                cx.read(|cx| {
+                    let workspace = workspace.read(cx);
+                    workspace.collaborative_native_editor_active(cx)
+                        && workspace.active_item_as::<editor::Editor>(cx)
+                            == Some(source_editor.clone())
+                }),
+                "{name}: viewport resizing must retain the canonical source editor"
             );
             cx.capture_screenshot(window.into())?
                 .save(PathBuf::from(&output_directory).join(format!("{name}.png")))?;
@@ -2936,20 +2999,66 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
 }
 
 #[cfg(all(target_os = "macos", feature = "multiplayer-tools"))]
+fn drag_collaborative_visual_divider(
+    window: gpui::AnyWindowHandle,
+    selector: &str,
+    distance: gpui::Pixels,
+    cx: &mut VisualTestAppContext,
+) -> Result<()> {
+    if distance.abs() <= px(1.) {
+        return Ok(());
+    }
+    let start = cx
+        .debug_bounds(window, selector)?
+        .with_context(|| format!("missing visible divider {selector}"))?
+        .center();
+    let activation_offset = if distance < px(0.) { -px(8.) } else { px(8.) };
+    let end = point(start.x + distance, start.y);
+    let button = gpui::MouseButton::Left;
+    let modifiers = Modifiers::default();
+    cx.simulate_mouse_down(window, start, button, modifiers);
+    cx.simulate_mouse_move(
+        window,
+        point(start.x + activation_offset, start.y),
+        button,
+        modifiers,
+    );
+    cx.simulate_mouse_move(window, end, button, modifiers);
+    cx.simulate_mouse_up(window, end, button, modifiers);
+    cx.update_window(window, |_, window, _| window.refresh())?;
+    cx.run_until_parked();
+    Ok(())
+}
+
+#[cfg(all(target_os = "macos", feature = "multiplayer-tools"))]
 fn capture_collaborative_accessibility_state(
     name: &str,
     viewport: gpui::Size<gpui::Pixels>,
     window: gpui::AnyWindowHandle,
+    conversation: &Entity<agent_ui::ConversationView>,
     cx: &mut VisualTestAppContext,
 ) -> Result<()> {
-    let Some(output_directory) = std::env::var_os("VISUAL_TEST_OUTPUT_DIR") else {
-        return Ok(());
-    };
-    let output_directory = PathBuf::from(output_directory);
+    let output_directory = std::env::var_os("VISUAL_TEST_OUTPUT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("target/visual_tests"));
     std::fs::create_dir_all(&output_directory)?;
+    cx.capture_screenshot(window)?
+        .save(output_directory.join(format!("{name}.png")))?;
+    let list = conversation
+        .read_with(cx, |conversation, cx| {
+            conversation
+                .active_thread()
+                .map(|thread| thread.read(cx).list_state.clone())
+        })
+        .context("active conversation should own the composer list")?;
+    let transcript_scroll = list.logical_scroll_top();
+    // The native input is the final virtualized row and can be off-screen in a transcript capture.
+    list.scroll_to_end();
+    cx.update_window(window, |_, window, _| window.refresh())?;
+    cx.run_until_parked();
     let composer = cx
-        .debug_bounds(window, "COLLABORATIVE-COMPOSER")?
-        .context("resized composer should render")?;
+        .debug_bounds(window, "COLLABORATIVE-NATIVE-ACP-COMPOSER")?
+        .context("native composer should render at the end of the conversation")?;
     let send = cx
         .debug_bounds(window, "ICON-Send")?
         .context("resized native send control should render")?;
@@ -2985,7 +3094,7 @@ fn capture_collaborative_accessibility_state(
         );
     }
     let actual = cx.capture_screenshot(window)?;
-    actual.save(output_directory.join(format!("{name}.png")))?;
+    actual.save(output_directory.join(format!("{name}-composer.png")))?;
     anyhow::ensure!(
         actual.width() == (f32::from(viewport.width) * 2.) as u32
             && actual.height() == (f32::from(viewport.height) * 2.) as u32,
@@ -2995,7 +3104,6 @@ fn capture_collaborative_accessibility_state(
         composer_footer.contains(&send.origin)
             && send.right() <= composer_footer.right()
             && send.bottom() <= composer_footer.bottom()
-            && composer_footer.right() <= composer.right()
             && composer_footer.bottom() <= viewport.height,
         "{name}: send control is clipped: send={send:?}, footer={composer_footer:?}, composer={composer:?}, viewport={viewport:?}"
     );
@@ -3022,9 +3130,6 @@ fn capture_collaborative_accessibility_state(
             && status_overflow.bottom() <= project_controls.bottom(),
         "{name}: status overflow is clipped by project controls: {status_overflow:?} / {project_controls:?}"
     );
-    let account = cx
-        .debug_bounds(window, "COLLABORATIVE-ACCOUNT-SURFACE")?
-        .context("account surface should remain visible")?;
     let footer = cx
         .debug_bounds(window, "WORKSPACE-STATUS-BAR")?
         .context("native status bar should remain visible")?;
@@ -3051,9 +3156,13 @@ fn capture_collaborative_accessibility_state(
     anyhow::ensure!(
         footer.left() == timeline.left()
             && footer.right() == timeline.right()
+            && timeline.contains(&composer.origin)
+            && composer.right() <= timeline.right()
+            && composer_footer.right() <= timeline.right()
+            && composer_footer.bottom() <= timeline.bottom()
             && footer.top() >= composer.bottom()
             && (footer.bottom() - timeline.bottom()).abs() <= gpui::px(1.),
-        "{name}: native status bar must stay below the composer within the conversation column"
+        "{name}: native status bar must stay below the composer within the conversation column: status={footer:?}, composer={composer:?}, controls={composer_footer:?}, timeline={timeline:?}"
     );
     for selector in [
         "NATIVE-PROJECT-PICKER",
@@ -3122,18 +3231,40 @@ fn capture_collaborative_accessibility_state(
             "{name}: collapsed review must release its title region"
         );
     }
-    let tasks = cx
-        .debug_bounds(window, "COLLABORATIVE-RAIL-SCROLL")?
-        .context("task navigation should remain visible")?;
-    anyhow::ensure!(
-        account.bottom() <= viewport.height && tasks.bottom() <= account.top(),
-        "{name}: navigation overlaps or clips the account controls"
-    );
-    if name == "narrow" {
+    let rail_visible = cx.update_window(window, |_, window, cx| {
+        let multi_workspace = window
+            .root::<MultiWorkspace>()
+            .flatten()
+            .context("visual workspace root")?;
+        let multi_workspace = multi_workspace.read(cx);
         anyhow::ensure!(
-            cx.debug_bounds(window, "COLLABORATIVE-REVIEW-REGION")?
-                .is_none(),
-            "narrow window should collapse the review pane"
+            multi_workspace.sidebar_requested_state(cx).open,
+            "{name}: visual fixture must request the rail"
+        );
+        Ok::<_, anyhow::Error>(multi_workspace.sidebar_render_state(window, cx).open)
+    })??;
+    let account = cx.debug_bounds(window, "COLLABORATIVE-ACCOUNT-SURFACE")?;
+    let tasks = cx.debug_bounds(window, "COLLABORATIVE-RAIL-SCROLL")?;
+    if rail_visible {
+        let account = account.context("visible rail must show account controls")?;
+        let tasks = tasks.context("visible rail must show task navigation")?;
+        anyhow::ensure!(
+            account.bottom() <= viewport.height && tasks.bottom() <= account.top(),
+            "{name}: navigation overlaps or clips the account controls"
+        );
+    } else {
+        anyhow::ensure!(
+            account.is_none() && tasks.is_none(),
+            "{name}: hidden rail still renders account or task navigation"
+        );
+    }
+    if matches!(name, "narrow" | "resized-narrow") {
+        anyhow::ensure!(
+            !rail_visible
+                && cx
+                    .debug_bounds(window, "COLLABORATIVE-REVIEW-REGION")?
+                    .is_none(),
+            "narrow window should release the rail and review pane"
         );
     }
     println!(
@@ -3141,6 +3272,9 @@ fn capture_collaborative_accessibility_state(
         actual.width(),
         actual.height()
     );
+    list.scroll_to(transcript_scroll);
+    cx.update_window(window, |_, window, _| window.refresh())?;
+    cx.run_until_parked();
     Ok(())
 }
 
@@ -3156,7 +3290,7 @@ fn capture_collaborative_reference_comparison(
         "PLATFORM-TITLE-BAR",
         "COLLABORATIVE-NATIVE-ACP-TIMELINE",
         "COLLABORATIVE-PARTICIPANT-AVATAR",
-        "COLLABORATIVE-NATIVE-ACP-COMPOSER",
+        "COLLABORATIVE-ACCOUNT-SURFACE",
         "ICON-Send",
     ] {
         anyhow::ensure!(
@@ -3167,25 +3301,6 @@ fn capture_collaborative_reference_comparison(
     let timeline_bounds = cx
         .debug_bounds(window, "COLLABORATIVE-TIMELINE-REGION")?
         .context("collaborative timeline bounds are unavailable")?;
-    let composer_bounds = cx
-        .debug_bounds(window, "COLLABORATIVE-COMPOSER")?
-        .context("collaborative composer bounds are unavailable")?;
-    let send_bounds = cx
-        .debug_bounds(window, "ICON-Send")?
-        .context("native send button bounds are unavailable")?;
-    let footer_bounds = cx
-        .debug_bounds(window, "COLLABORATIVE-COMPOSER-FOOTER")?
-        .context("native composer footer bounds are unavailable")?;
-    anyhow::ensure!(
-        footer_bounds.contains(&send_bounds.origin)
-            && send_bounds.bottom() <= footer_bounds.bottom()
-            && send_bounds.right() <= footer_bounds.right()
-            && footer_bounds.right() <= timeline_bounds.right()
-            && footer_bounds.bottom() <= timeline_bounds.bottom()
-            && composer_bounds.bottom() <= footer_bounds.top()
-            && composer_bounds.right() == timeline_bounds.right(),
-        "native composer footer controls are clipped, overlap the input, or extend into the review pane: send={send_bounds:?}, footer={footer_bounds:?}, composer={composer_bounds:?}, timeline={timeline_bounds:?}"
-    );
     let geometry_report = if name == "screenshot-1" {
         let review_bounds = cx
             .debug_bounds(window, "COLLABORATIVE-REVIEW-REGION")?
@@ -3213,11 +3328,6 @@ fn capture_collaborative_reference_comparison(
             "    geometry: review absent; timeline right edge {physical_timeline_right:.1}px (viewport 1928px, tolerance ±2px)\n"
         )
     };
-    let viewport = cx.update_window(window, |_, window, _| window.viewport_size())?;
-    anyhow::ensure!(
-        composer_bounds.bottom() <= viewport.height && composer_bounds.right() <= viewport.width,
-        "{name}: composer extends beyond the visible viewport"
-    );
     let native_actual = cx.capture_screenshot(window)?;
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

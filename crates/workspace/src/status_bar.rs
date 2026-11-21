@@ -279,15 +279,21 @@ impl StatusBar {
             .id("collaborative-project-controls")
             .debug_selector(|| "COLLABORATIVE-PROJECT-CONTROLS".to_owned())
             .min_w_0()
-            .flex_shrink_0()
             .gap_0p5()
-            .overflow_x_scroll()
-            .children(primary.into_iter().enumerate().map(|(index, item)| {
-                render_hideable_item("collaborative-footer", index, item.as_ref(), cx)
-            }))
+            .child(
+                h_flex()
+                    .id("collaborative-project-picker-scroll")
+                    .min_w_0()
+                    .gap_0p5()
+                    .overflow_x_scroll()
+                    .children(primary.into_iter().enumerate().map(|(index, item)| {
+                        render_hideable_item("collaborative-footer", index, item.as_ref(), cx)
+                    })),
+            )
             .child(
                 div()
                     .debug_selector(|| "COLLABORATIVE-STATUS-OVERFLOW".to_owned())
+                    .flex_none()
                     .child(
                         ui::PopoverMenu::new("collaborative-status-overflow")
                             .anchor(gpui::Anchor::BottomLeft)
