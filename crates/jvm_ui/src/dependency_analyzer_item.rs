@@ -1,0 +1,1780 @@
+//! The dependency analyzer editor item: a searchable list/tree over admitted
+//! Groovy provider dependency facts with a Usages pane. Rows are derived from
+//! the Dependencies panel's admitted snapshot at open (and scope-change) time
+//! and never query a provider; filters, group IDs, presentation, selection and
+//! the Usages pane live on the item so they survive tab switches.
+
+use crate::dependencies_panel::{BuildToolView, GraphQueryTarget, GraphSelection};
+use crate::dependency_diagram_item::{
+    DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
+};
+use gpui::{
+    App, AppContext as _, Context, EventEmitter, FocusHandle, Focusable, FontWeight, Pixels,
+    Render, ScrollStrategy, SharedString, actions, anchored, deferred,
+};
+use language_tools::language_tool_tree::{
+    LanguageToolNode, LanguageToolNodeId, LanguageToolProviderStatus, LanguageToolSnapshot,
+    LanguageToolTreeHost, language_tool_tree,
+};
+use project::jvm_project::{
+    GradleDependencyComponent, GradleDependencyEdge, GradleDependencySelector,
+    JdtlsProjectSnapshot, MavenDependencyComponent, MavenDependencyEdge, MavenDependencyGraph,
+    MavenDependencyNode, MavenUnavailableDescriptor,
+};
+use std::collections::{BTreeMap, HashSet};
+use ui::prelude::FluentBuilder as _;
+use workspace::Workspace;
+
+actions!(groovy_dependencies_panel, [AnalyzeDependencies]);
+
+/// Applies a scope choice from the analyzer scope picker.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct SelectDependencyAnalyzerScope {
+    pub label: String,
+}
+
+/// Applies a conflicts/unresolved fact-filter choice.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct SelectDependencyAnalyzerFilter {
+    pub filter: DependencyAnalyzerFilter,
+}
+
+/// Toggles group IDs on artifact and occurrence labels.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct ToggleDependencyAnalyzerGroupIds;
+
+/// Switches between the tree and flat presentations.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct ToggleDependencyAnalyzerPresentation;
+
+/// Expands every admitted analyzer row.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct ExpandDependencyAnalyzerRows;
+
+/// Collapses every admitted analyzer row.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct CollapseDependencyAnalyzerRows;
+
+/// Reveals and selects the row with the chosen label, from the search popup.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct RevealDependencyAnalyzerRow {
+    pub label: String,
+}
+
+/// Shows the analyzer row's dependency in the diagram tab for the analyzer's
+/// own module and configuration scope, revealing the row's node when the
+/// canvas admits it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct ShowInDependencyDiagram {
+    pub node_key: String,
+}
+
+/// Navigates to the Gradle build script that declares the row's dependency;
+/// the row's admitted reverse edge must report a trustworthy origin.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct GoToDependencyDeclaration {
+    pub declaring: String,
+}
+
+/// Conflicts/unresolved fact filter over the admitted analyzer facts.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyAnalyzerFilter {
+    All,
+    Conflicts,
+    Unresolved,
+}
+
+impl DependencyAnalyzerFilter {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "All dependencies",
+            Self::Conflicts => "Conflicts",
+            Self::Unresolved => "Unresolved",
+        }
+    }
+}
+
+/// Tree/list presentation switch over the same admitted facts.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyAnalyzerPresentation {
+    Tree,
+    Flat,
+}
+
+/// The admitted facts the analyzer presents. The extraction keeps the item
+/// bounded to graph facts (never a second store) and keeps exactly the graph
+/// the provider admitted at derivation time.
+#[derive(Clone, Debug)]
+pub enum DependencyAnalyzerGraph {
+    Gradle {
+        configuration: String,
+        components: Vec<GradleDependencyComponent>,
+        edges: Vec<GradleDependencyEdge>,
+    },
+    Maven {
+        nodes: Vec<MavenDependencyNode>,
+        components: Vec<MavenDependencyComponent>,
+        edges: Vec<MavenDependencyEdge>,
+        unavailable_descriptors: Vec<MavenUnavailableDescriptor>,
+    },
+}
+
+/// One analyzer derivation: admitted facts plus the scope the picker applied.
+pub struct DependencyAnalyzerDerivation {
+    pub target: DependencyDiagramTarget,
+    pub graph: DependencyAnalyzerGraph,
+    pub scope: DependencyDiagramScope,
+    pub scope_options: Vec<String>,
+}
+
+/// Where the analyzer's facts came from, so scope changes re-derive from the
+/// same admitted selection without a provider query.
+#[derive(Clone)]
+pub struct DependencyAnalyzerSource {
+    pub project: gpui::Entity<project::Project>,
+    pub selection: GraphSelection,
+    pub view: BuildToolView,
+    pub panel: gpui::WeakEntity<crate::dependencies_panel::DependenciesPanel>,
+}
+
+pub enum DependencyAnalyzerEvent {}
+
+pub struct DependencyAnalyzerItem {
+    host: LanguageToolTreeHost,
+    derivation: DependencyAnalyzerDerivation,
+    source: Option<DependencyAnalyzerSource>,
+    filter: DependencyAnalyzerFilter,
+    presentation: DependencyAnalyzerPresentation,
+    show_group_ids: bool,
+    selected_key: Option<String>,
+    usages: Vec<AnalyzerUsage>,
+    usages_truncated: bool,
+    notice: Option<String>,
+    /// Staged row context menu, anchored at the invoking position until
+    /// dismissed; shared by the tree rows and the Usages pane rows.
+    row_context_menu: Option<(
+        gpui::Entity<ui::ContextMenu>,
+        gpui::Point<Pixels>,
+        gpui::Subscription,
+    )>,
+    focus_handle: FocusHandle,
+}
+
+impl EventEmitter<DependencyAnalyzerEvent> for DependencyAnalyzerItem {}
+
+impl Focusable for DependencyAnalyzerItem {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+/// Occurrence rows are bounded like the diagram's node budget so an oversized
+/// admitted graph cannot grow the item without an explicit boundary.
+const MAX_ANALYZER_OCCURRENCES: usize = 256;
+/// The Usages pane is bounded; excess usages are counted, never silently dropped.
+const MAX_USAGE_ROWS: usize = 64;
+/// Bounded search results, matching the diagram search popup.
+const MAX_SEARCH_MATCHES: usize = 16;
+
+pub(crate) fn analyzer_row_id_for_node(key: &str) -> LanguageToolNodeId {
+    LanguageToolNodeId(format!("analyzer-node:{key}"))
+}
+
+pub(crate) fn analyzer_node_key(id: &LanguageToolNodeId) -> Option<&str> {
+    id.0.strip_prefix("analyzer-node:")
+}
+
+fn node_row(
+    key: &str,
+    label: String,
+    secondary_label: Option<String>,
+    accessibility_label: String,
+) -> LanguageToolNode {
+    LanguageToolNode {
+        id: analyzer_row_id_for_node(key),
+        label,
+        secondary_label,
+        icon: None,
+        accessibility_label,
+        children: Vec::new(),
+        enabled: false,
+        activation_label: None,
+    }
+}
+
+fn wrapper_row(
+    id: LanguageToolNodeId,
+    label: String,
+    accessibility_label: String,
+    children: Vec<LanguageToolNode>,
+) -> LanguageToolNode {
+    LanguageToolNode {
+        id,
+        label,
+        secondary_label: None,
+        icon: None,
+        accessibility_label,
+        children,
+        enabled: false,
+        activation_label: None,
+    }
+}
+
+/// Occurrence badge suffix shared by both providers: admitted conflict and
+/// unresolved facts, in a stable order.
+fn badges_secondary(conflict: bool, unresolved: bool) -> Option<String> {
+    let mut badges = Vec::new();
+    if conflict {
+        badges.push("conflict");
+    }
+    if unresolved {
+        badges.push("unresolved");
+    }
+    if badges.is_empty() {
+        None
+    } else {
+        Some(badges.join("; "))
+    }
+}
+
+/// Maven coordinate with the group ID shown or hidden by the user's toggle.
+fn maven_coordinate(component: &MavenDependencyComponent, show_group_ids: bool) -> String {
+    if show_group_ids {
+        format!("{}:{}", component.group_id, component.artifact_id)
+    } else {
+        component.artifact_id.clone()
+    }
+}
+
+fn maven_component<'a>(
+    components: &'a [MavenDependencyComponent],
+    id: &str,
+) -> Option<&'a MavenDependencyComponent> {
+    components.iter().find(|component| component.id == id)
+}
+
+/// Occurrence keys involved in Maven mediation: the loser keeps an omitted
+/// incoming edge and the winner is its selected reference.
+fn maven_conflict_occurrences(edges: &[MavenDependencyEdge]) -> HashSet<&str> {
+    edges
+        .iter()
+        .filter(|edge| edge.omitted)
+        .flat_map(|edge| [edge.target_node.as_str(), edge.selected_node.as_str()])
+        .collect()
+}
+
+/// Component IDs with unavailable descriptors, the admitted unresolved facts.
+fn maven_unavailable_components(
+    unavailable_descriptors: &[MavenUnavailableDescriptor],
+) -> HashSet<&str> {
+    unavailable_descriptors
+        .iter()
+        .map(|descriptor| descriptor.component.as_str())
+        .collect()
+}
+
+/// The scope of the first admitted edge targeting the occurrence; occurrence
+/// rows report it because one artifact can be admitted at several scopes.
+fn maven_occurrence_scope(edges: &[MavenDependencyEdge], occurrence: &str) -> Option<String> {
+    edges
+        .iter()
+        .find(|edge| edge.target_node == occurrence)
+        .map(|edge| edge.scope.clone())
+}
+
+struct MavenOccurrence<'a> {
+    key: &'a str,
+    component: &'a MavenDependencyComponent,
+    scope: Option<String>,
+    conflict: bool,
+    unresolved: bool,
+}
+
+fn maven_occurrences<'a>(
+    nodes: &'a [MavenDependencyNode],
+    components: &'a [MavenDependencyComponent],
+    edges: &[MavenDependencyEdge],
+    unavailable_descriptors: &[MavenUnavailableDescriptor],
+) -> Vec<MavenOccurrence<'a>> {
+    let conflicts = maven_conflict_occurrences(edges);
+    let unavailable = maven_unavailable_components(unavailable_descriptors);
+    let mut occurrences = Vec::new();
+    for node in nodes.iter().take(MAX_ANALYZER_OCCURRENCES) {
+        let Some(component) = maven_component(components, &node.component) else {
+            continue;
+        };
+        occurrences.push(MavenOccurrence {
+            key: node.id.as_str(),
+            component,
+            scope: maven_occurrence_scope(edges, &node.id),
+            conflict: conflicts.contains(node.id.as_str()),
+            unresolved: unavailable.contains(node.component.as_str()),
+        });
+    }
+    occurrences
+}
+
+fn maven_occurrence_label(
+    occurrence: &MavenOccurrence,
+    flat: bool,
+    show_group_ids: bool,
+) -> String {
+    let coordinate = maven_coordinate(occurrence.component, show_group_ids);
+    let version = occurrence.component.version.as_str();
+    let subject = if flat {
+        format!("{coordinate}:{version}")
+    } else {
+        version.to_owned()
+    };
+    match &occurrence.scope {
+        Some(scope) => format!("{subject} — {scope}"),
+        None => subject,
+    }
+}
+
+fn maven_occurrence_accessibility(occurrence: &MavenOccurrence, show_group_ids: bool) -> String {
+    let coordinate = maven_coordinate(occurrence.component, show_group_ids);
+    let mut text = format!("Maven dependency {coordinate}");
+    if let Some(scope) = &occurrence.scope {
+        text.push_str(&format!(" scope {scope}"));
+    }
+    if occurrence.conflict {
+        text.push_str("; conflict");
+    }
+    if occurrence.unresolved {
+        text.push_str("; unresolved");
+    }
+    text
+}
+
+fn maven_analyzer_rows(
+    nodes: &[MavenDependencyNode],
+    components: &[MavenDependencyComponent],
+    edges: &[MavenDependencyEdge],
+    unavailable_descriptors: &[MavenUnavailableDescriptor],
+    filter: DependencyAnalyzerFilter,
+    presentation: DependencyAnalyzerPresentation,
+    show_group_ids: bool,
+) -> Vec<LanguageToolNode> {
+    let kept: Vec<MavenOccurrence> =
+        maven_occurrences(nodes, components, edges, unavailable_descriptors)
+            .into_iter()
+            .filter(|occurrence| match filter {
+                DependencyAnalyzerFilter::All => true,
+                DependencyAnalyzerFilter::Conflicts => occurrence.conflict,
+                DependencyAnalyzerFilter::Unresolved => occurrence.unresolved,
+            })
+            .collect();
+    match presentation {
+        DependencyAnalyzerPresentation::Flat => kept
+            .iter()
+            .map(|occurrence| {
+                node_row(
+                    occurrence.key,
+                    maven_occurrence_label(occurrence, true, show_group_ids),
+                    badges_secondary(occurrence.conflict, occurrence.unresolved),
+                    maven_occurrence_accessibility(occurrence, show_group_ids),
+                )
+            })
+            .collect(),
+        DependencyAnalyzerPresentation::Tree => {
+            let mut groups: BTreeMap<String, BTreeMap<String, Vec<&MavenOccurrence>>> =
+                BTreeMap::new();
+            for occurrence in &kept {
+                groups
+                    .entry(occurrence.component.group_id.clone())
+                    .or_default()
+                    .entry(format!(
+                        "{}:{}",
+                        occurrence.component.group_id, occurrence.component.artifact_id
+                    ))
+                    .or_default()
+                    .push(occurrence);
+            }
+            groups
+                .into_iter()
+                .map(|(group_id, artifacts)| {
+                    let artifact_rows = artifacts
+                        .into_iter()
+                        .map(|(artifact_key, occurrences)| {
+                            let occurrence_rows = occurrences
+                                .iter()
+                                .map(|occurrence| {
+                                    node_row(
+                                        occurrence.key,
+                                        maven_occurrence_label(occurrence, false, show_group_ids),
+                                        badges_secondary(
+                                            occurrence.conflict,
+                                            occurrence.unresolved,
+                                        ),
+                                        maven_occurrence_accessibility(occurrence, show_group_ids),
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            let count = occurrence_rows.len();
+                            wrapper_row(
+                                LanguageToolNodeId(format!("analyzer-artifact:{artifact_key}")),
+                                maven_coordinate(occurrences[0].component, show_group_ids),
+                                format!("Maven artifact {artifact_key} with {count} occurrences"),
+                                occurrence_rows,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let artifacts_len = artifact_rows.len();
+                    wrapper_row(
+                        LanguageToolNodeId(format!("analyzer-group:{group_id}")),
+                        group_id.clone(),
+                        format!("Maven dependency group {group_id} with {artifacts_len} artifacts"),
+                        artifact_rows,
+                    )
+                })
+                .collect()
+        }
+    }
+}
+
+/// Gradle coordinate with the group ID shown or hidden by the user's toggle;
+/// project components fall back to their project path or build-tree path.
+fn gradle_coordinate(component: &GradleDependencyComponent, show_group_ids: bool) -> String {
+    let module = component.module.clone().unwrap_or_else(|| {
+        component
+            .project_path
+            .clone()
+            .or_else(|| component.build_tree_path.clone())
+            .unwrap_or_else(|| component.id.clone())
+    });
+    match (&component.group, show_group_ids) {
+        (Some(group), true) => format!("{group}:{module}"),
+        _ => module,
+    }
+}
+
+struct GradleOccurrence {
+    key: String,
+    group: String,
+    artifact: String,
+    label: String,
+    conflict: bool,
+    unresolved: bool,
+}
+
+fn gradle_occurrence_accessibility(occurrence: &GradleOccurrence) -> String {
+    let mut text = format!("Gradle dependency {}", occurrence.label);
+    if occurrence.conflict {
+        text.push_str("; conflict");
+    }
+    if occurrence.unresolved {
+        text.push_str("; unresolved");
+    }
+    text
+}
+
+fn gradle_analyzer_rows(
+    components: &[GradleDependencyComponent],
+    edges: &[GradleDependencyEdge],
+    filter: DependencyAnalyzerFilter,
+    presentation: DependencyAnalyzerPresentation,
+    show_group_ids: bool,
+) -> Vec<LanguageToolNode> {
+    // Dependency structure comes from resolved non-constraint edges; constraint
+    // edges introduce no dependency rows (the same rule the inspection walks
+    // apply) and unresolved edges become explicit placeholder rows.
+    let mut occurrences: Vec<GradleOccurrence> = Vec::new();
+    for component in components {
+        let artifact = component
+            .module
+            .clone()
+            .or_else(|| {
+                component
+                    .project_path
+                    .clone()
+                    .or_else(|| component.build_tree_path.clone())
+            })
+            .unwrap_or_else(|| component.id.clone());
+        let group = component
+            .group
+            .clone()
+            .unwrap_or_else(|| "(project)".into());
+        occurrences.push(GradleOccurrence {
+            key: component.id.clone(),
+            label: component
+                .version
+                .clone()
+                .unwrap_or_else(|| component.id.clone()),
+            group,
+            artifact,
+            conflict: component.conflict_resolution,
+            unresolved: false,
+        });
+    }
+    let mut placeholders: BTreeMap<String, GradleOccurrence> = BTreeMap::new();
+    for edge in edges {
+        if edge.constraint || edge.resolved {
+            continue;
+        }
+        let (key, label) = match &edge.requested {
+            GradleDependencySelector::Module {
+                group,
+                module,
+                version,
+                ..
+            } => (
+                format!("unresolved:{group}:{module}:{version}"),
+                format!("{group}:{module}:{version}"),
+            ),
+            GradleDependencySelector::Project { project_path, .. } => (
+                format!("unresolved-project:{project_path}"),
+                project_path.clone(),
+            ),
+        };
+        let occurrence = GradleOccurrence {
+            key: key.clone(),
+            label: label.clone(),
+            group: "(unresolved)".into(),
+            artifact: label,
+            conflict: false,
+            unresolved: true,
+        };
+        placeholders.entry(key).or_insert(occurrence);
+    }
+    let kept: Vec<&GradleOccurrence> = occurrences
+        .iter()
+        .chain(placeholders.values())
+        .filter(|occurrence| match filter {
+            DependencyAnalyzerFilter::All => true,
+            DependencyAnalyzerFilter::Conflicts => occurrence.conflict,
+            DependencyAnalyzerFilter::Unresolved => occurrence.unresolved,
+        })
+        .collect();
+    match presentation {
+        DependencyAnalyzerPresentation::Flat => kept
+            .iter()
+            .map(|occurrence| {
+                let label = if show_group_ids {
+                    format!(
+                        "{}:{}",
+                        gradle_coordinate_label(occurrence),
+                        occurrence.label
+                    )
+                } else {
+                    format!("{}:{}", occurrence.artifact, occurrence.label)
+                };
+                node_row(
+                    &occurrence.key,
+                    label,
+                    badges_secondary(occurrence.conflict, occurrence.unresolved),
+                    gradle_occurrence_accessibility(occurrence),
+                )
+            })
+            .collect(),
+        DependencyAnalyzerPresentation::Tree => {
+            let mut groups: BTreeMap<String, BTreeMap<String, Vec<&GradleOccurrence>>> =
+                BTreeMap::new();
+            for occurrence in &kept {
+                let artifact_key = format!("{}:{}", occurrence.group, occurrence.artifact);
+                groups
+                    .entry(occurrence.group.clone())
+                    .or_default()
+                    .entry(artifact_key)
+                    .or_default()
+                    .push(occurrence);
+            }
+            groups
+                .into_iter()
+                .map(|(group_id, artifacts)| {
+                    let artifact_rows = artifacts
+                        .into_iter()
+                        .map(|(artifact_key, group_occurrences)| {
+                            let occurrence_rows = group_occurrences
+                                .iter()
+                                .map(|occurrence| {
+                                    node_row(
+                                        &occurrence.key,
+                                        occurrence.label.clone(),
+                                        badges_secondary(
+                                            occurrence.conflict,
+                                            occurrence.unresolved,
+                                        ),
+                                        gradle_occurrence_accessibility(occurrence),
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            let count = occurrence_rows.len();
+                            wrapper_row(
+                                LanguageToolNodeId(format!("analyzer-artifact:{artifact_key}")),
+                                artifact_key.clone(),
+                                format!("Gradle artifact {artifact_key} with {count} versions"),
+                                occurrence_rows,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let artifacts_len = artifact_rows.len();
+                    wrapper_row(
+                        LanguageToolNodeId(format!("analyzer-group:{group_id}")),
+                        group_id.clone(),
+                        format!(
+                            "Gradle dependency group {group_id} with {artifacts_len} artifacts"
+                        ),
+                        artifact_rows,
+                    )
+                })
+                .collect()
+        }
+    }
+}
+
+/// The Gradle flat label keeps the coordinate stable across the group-ID
+/// toggle for project components, whose artifact already carries the path.
+fn gradle_coordinate_label(occurrence: &GradleOccurrence) -> String {
+    if occurrence.group == "(project)" || occurrence.group == "(unresolved)" {
+        occurrence.artifact.clone()
+    } else {
+        format!("{}:{}", occurrence.group, occurrence.artifact)
+    }
+}
+
+/// One Usages pane row: the displayed label plus the trustworthy Gradle
+/// declaration target when the underlying reverse edge reports a known origin.
+#[derive(Clone, Debug)]
+pub(crate) struct AnalyzerUsage {
+    pub label: String,
+    pub declaration: Option<String>,
+}
+
+/// Reverse-edge usage rows for one occurrence or component key, bounded with
+/// an explicit truncation count.
+pub(crate) struct AnalyzerUsages {
+    pub rows: Vec<AnalyzerUsage>,
+    pub truncated: bool,
+}
+
+pub(crate) fn analyzer_usages(graph: &DependencyAnalyzerGraph, node_key: &str) -> AnalyzerUsages {
+    let mut rows = Vec::new();
+    let mut truncated = false;
+    match graph {
+        DependencyAnalyzerGraph::Gradle {
+            components, edges, ..
+        } => {
+            for edge in edges {
+                let Some(target) = edge.selected.as_ref() else {
+                    continue;
+                };
+                if target != node_key || edge.constraint {
+                    continue;
+                }
+                if rows.len() == MAX_USAGE_ROWS {
+                    truncated = true;
+                    break;
+                }
+                let user = components
+                    .iter()
+                    .find(|component| component.id == edge.from)
+                    .map(|component| gradle_coordinate(component, true))
+                    .unwrap_or_else(|| edge.from.clone());
+                let declaration = components
+                    .iter()
+                    .find(|component| component.id == edge.from)
+                    .filter(|_| edge.origin_known)
+                    .and_then(|component| component.project_path.clone());
+                rows.push(AnalyzerUsage {
+                    label: format!("used by {user}"),
+                    declaration,
+                });
+            }
+        }
+        DependencyAnalyzerGraph::Maven {
+            nodes,
+            components,
+            edges,
+            ..
+        } => {
+            for edge in edges {
+                if edge.target_node != node_key && edge.selected_node != node_key {
+                    continue;
+                }
+                if rows.len() == MAX_USAGE_ROWS {
+                    truncated = true;
+                    break;
+                }
+                let user = nodes
+                    .iter()
+                    .find(|node| node.id == edge.from_node)
+                    .and_then(|node| maven_component(components, &node.component))
+                    .map(|component| maven_coordinate(component, true))
+                    .unwrap_or_else(|| edge.from_node.clone());
+                let mut detail = format!("used by {user}");
+                if !edge.scope.is_empty() {
+                    detail.push_str(&format!("; scope {}", edge.scope));
+                }
+                if edge.omitted {
+                    detail.push_str("; omitted by mediation");
+                }
+                // Maven facts carry no Gradle declaration location.
+                rows.push(AnalyzerUsage {
+                    label: detail,
+                    declaration: None,
+                });
+            }
+        }
+    }
+    AnalyzerUsages { rows, truncated }
+}
+
+/// The trustworthy Gradle declaration target for an analyzer row: the
+/// declaring component's Gradle project path from the row's first admitted
+/// reverse edge whose origin the provider reports as known. Maven facts have
+/// no Gradle declaration, and unresolved placeholders have no admitted
+/// reverse edge, so both yield no target.
+pub(crate) fn analyzer_declaration_target(
+    graph: &DependencyAnalyzerGraph,
+    node_key: &str,
+) -> Option<String> {
+    let (components, edges) = match graph {
+        DependencyAnalyzerGraph::Gradle {
+            components, edges, ..
+        } => (components, edges),
+        DependencyAnalyzerGraph::Maven { .. } => return None,
+    };
+    for edge in edges {
+        if edge.constraint || edge.selected.as_deref() != Some(node_key) {
+            continue;
+        }
+        if !edge.origin_known {
+            continue;
+        }
+        if let Some(declaring) = components
+            .iter()
+            .find(|component| component.id == edge.from)
+            .and_then(|component| component.project_path.clone())
+        {
+            return Some(declaring);
+        }
+    }
+    None
+}
+
+/// Builds the analyzer rows for one admitted graph under the current filters.
+pub(crate) fn analyzer_rows(
+    graph: &DependencyAnalyzerGraph,
+    filter: DependencyAnalyzerFilter,
+    presentation: DependencyAnalyzerPresentation,
+    show_group_ids: bool,
+) -> Vec<LanguageToolNode> {
+    match graph {
+        DependencyAnalyzerGraph::Gradle {
+            components, edges, ..
+        } => gradle_analyzer_rows(components, edges, filter, presentation, show_group_ids),
+        DependencyAnalyzerGraph::Maven {
+            nodes,
+            components,
+            edges,
+            unavailable_descriptors,
+            ..
+        } => maven_analyzer_rows(
+            nodes,
+            components,
+            edges,
+            unavailable_descriptors,
+            filter,
+            presentation,
+            show_group_ids,
+        ),
+    }
+}
+
+/// The analyzer tab title; the provider's configuration stays explicit so
+/// Gradle configuration scopes are distinguishable at a glance.
+fn analyzer_title(target: &DependencyDiagramTarget) -> String {
+    match (&target.provider, &target.configuration) {
+        (DependencyDiagramProvider::Gradle, Some(configuration)) => {
+            format!(
+                "Dependency Analyzer — {module} ({configuration})",
+                module = target.module_label
+            )
+        }
+        _ => format!("Dependency Analyzer — {}", target.module_label),
+    }
+}
+
+impl DependencyAnalyzerItem {
+    pub fn new(
+        derivation: DependencyAnalyzerDerivation,
+        source: Option<DependencyAnalyzerSource>,
+        cx: &mut App,
+    ) -> Self {
+        let focus_handle = cx.focus_handle();
+        let mut item = Self {
+            host: LanguageToolTreeHost::with_focus_handle(focus_handle.clone()),
+            derivation,
+            source,
+            filter: DependencyAnalyzerFilter::All,
+            presentation: DependencyAnalyzerPresentation::Tree,
+            show_group_ids: true,
+            selected_key: None,
+            usages: Vec::new(),
+            usages_truncated: false,
+            notice: None,
+            row_context_menu: None,
+            focus_handle,
+        };
+        let roots = analyzer_rows(
+            &item.derivation.graph,
+            item.filter,
+            item.presentation,
+            item.show_group_ids,
+        );
+        item.host.replace_snapshot(LanguageToolSnapshot {
+            roots,
+            status: LanguageToolProviderStatus::Current,
+        });
+        item
+    }
+
+    /// Opens the analyzer as a focused editor tab in the workspace's active
+    /// pane and returns the item handle.
+    pub fn open(
+        derivation: DependencyAnalyzerDerivation,
+        source: Option<DependencyAnalyzerSource>,
+        workspace: &mut Workspace,
+        window: &mut gpui::Window,
+        cx: &mut App,
+    ) -> gpui::Entity<Self> {
+        let item = cx.new(|cx| Self::new(derivation, source, cx));
+        workspace.add_item_to_active_pane(Box::new(item.clone()), None, true, window, cx);
+        item
+    }
+
+    pub fn target(&self) -> &DependencyDiagramTarget {
+        &self.derivation.target
+    }
+
+    pub fn scope(&self) -> &DependencyDiagramScope {
+        &self.derivation.scope
+    }
+
+    pub fn scope_options(&self) -> &[String] {
+        &self.derivation.scope_options
+    }
+
+    pub fn filter(&self) -> DependencyAnalyzerFilter {
+        self.filter
+    }
+
+    pub fn presentation(&self) -> DependencyAnalyzerPresentation {
+        self.presentation
+    }
+
+    pub fn show_group_ids(&self) -> bool {
+        self.show_group_ids
+    }
+
+    #[cfg(test)]
+    pub(crate) fn usages(&self) -> &[AnalyzerUsage] {
+        &self.usages
+    }
+
+    /// Whether a row context menu is staged; tests read this to assert the
+    /// menu's lifecycle.
+    #[cfg(test)]
+    pub(crate) fn row_context_menu_is_deployed(&self) -> bool {
+        self.row_context_menu.is_some()
+    }
+
+    pub fn usages_truncated(&self) -> bool {
+        self.usages_truncated
+    }
+
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
+    }
+
+    pub fn selected_key(&self) -> Option<&str> {
+        self.selected_key.as_deref()
+    }
+
+    /// Bounded row-label matches for the search popup, in row order.
+    pub fn search_matches(&self, query: &str) -> Vec<String> {
+        let query = query.to_lowercase();
+        let mut matches = Vec::new();
+        for row in self.host.visible_rows() {
+            if row.label.to_lowercase().contains(&query) {
+                matches.push(row.label.clone());
+                if matches.len() == MAX_SEARCH_MATCHES {
+                    break;
+                }
+            }
+        }
+        matches
+    }
+
+    /// Reveals and selects the row with the chosen label.
+    pub fn reveal_row(&mut self, label: &str, cx: &mut Context<Self>) {
+        let row = self
+            .host
+            .visible_rows()
+            .iter()
+            .find(|row| row.label == label)
+            .map(|row| row.id.clone());
+        match row {
+            Some(id) => {
+                self.host.select(id);
+                self.host.reveal_selection(ScrollStrategy::Center);
+                self.refresh_selection(cx);
+            }
+            None => {
+                self.notice = Some(
+                    "The search result is no longer part of the admitted facts; re-apply the filters, then search again"
+                        .into(),
+                );
+                cx.notify();
+            }
+        }
+    }
+
+    /// Re-derives the rows from admitted facts under the chosen scope without
+    /// any provider query.
+    pub fn apply_scope(&mut self, label: String, cx: &mut Context<Self>) {
+        let Some(source) = self.source.clone() else {
+            return;
+        };
+        let scope = match &self.derivation.scope {
+            DependencyDiagramScope::GradleConfiguration(_) => {
+                DependencyDiagramScope::GradleConfiguration(label)
+            }
+            DependencyDiagramScope::MavenScope(_) => DependencyDiagramScope::MavenScope(label),
+        };
+        let project = source.project.read(cx);
+        match crate::dependencies_panel::derive_dependency_analyzer(
+            project,
+            source.view,
+            &source.selection,
+            Some(&scope),
+            cx,
+        ) {
+            Some(derivation) => {
+                self.derivation = derivation;
+                self.selected_key = None;
+                self.usages.clear();
+                self.usages_truncated = false;
+                self.notice = None;
+                self.replace_rows(cx);
+            }
+            None => {
+                self.notice = Some(
+                    "No admitted graph facts for the chosen scope; refresh provider graph facts and retry"
+                        .into(),
+                );
+                cx.notify();
+            }
+        }
+    }
+
+    /// Stages the context menu for a tree row: Show in Diagram targets the
+    /// row's dependency node and Go to Gradle Declaration requires the row's
+    /// admitted reverse edge to report a trustworthy origin. Wrapper rows
+    /// (group and artifact) carry no node target, so both entries stay
+    /// disabled for them.
+    pub fn show_row_context_menu(
+        &mut self,
+        id: LanguageToolNodeId,
+        position: gpui::Point<Pixels>,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let node_key = analyzer_node_key(&id).map(|key| key.to_owned());
+        self.host.select(id);
+        let declaration = node_key
+            .as_ref()
+            .and_then(|key| analyzer_declaration_target(&self.derivation.graph, key));
+        self.stage_row_context_menu(node_key, declaration, position, window, cx);
+    }
+
+    /// Stages the context menu for a Usages pane row; the menu targets the
+    /// specific usage occurrence the row displays, so Go to Gradle
+    /// Declaration uses that usage's own edge origin.
+    pub fn show_usage_context_menu(
+        &mut self,
+        index: usize,
+        position: gpui::Point<Pixels>,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let node_key = self.selected_key.clone();
+        let declaration = self
+            .usages
+            .get(index)
+            .and_then(|usage| usage.declaration.clone())
+            .filter(|_| node_key.is_some());
+        self.stage_row_context_menu(node_key, declaration, position, window, cx);
+    }
+
+    fn stage_row_context_menu(
+        &mut self,
+        node_key: Option<String>,
+        declaration: Option<String>,
+        position: gpui::Point<Pixels>,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let show_in_diagram = node_key.is_some() && self.source.is_some();
+        let focus_handle = self.focus_handle.clone();
+        let menu = ui::ContextMenu::build(window, cx, |menu, _, _| {
+            menu.context(focus_handle).map(|menu| {
+                let node_key = node_key.clone().unwrap_or_default();
+                let declaring = declaration.clone().unwrap_or_default();
+                menu.action_disabled_when(
+                    !show_in_diagram,
+                    "Show in Dependency Diagram",
+                    Box::new(ShowInDependencyDiagram { node_key }),
+                )
+                .separator()
+                .action_disabled_when(
+                    declaration.is_none(),
+                    "Go to Gradle Declaration",
+                    Box::new(GoToDependencyDeclaration { declaring }),
+                )
+            })
+        });
+        window.focus(&menu.focus_handle(cx), cx);
+        let subscription = cx.subscribe(&menu, |this, _, _: &gpui::DismissEvent, cx| {
+            this.row_context_menu.take();
+            cx.notify();
+        });
+        self.row_context_menu = Some((menu, position, subscription));
+        cx.notify();
+    }
+
+    /// Routes Show in Diagram through the opening panel so the diagram tab
+    /// shares one derivation and open/focus path with the panel's own
+    /// diagram surfaces; the row's node key lets the diagram emphasize the
+    /// targeted dependency when the canvas admits it.
+    pub fn show_in_dependency_diagram(&mut self, node_key: &str, cx: &mut Context<Self>) {
+        let Some(source) = self.source.clone() else {
+            self.notice = Some(
+                "The analyzer's opening panel is unavailable; reopen the analyzer from the Dependencies panel, then retry Show in Diagram"
+                    .into(),
+            );
+            cx.notify();
+            return;
+        };
+        let selection = source.selection.clone();
+        let node_key = node_key.to_owned();
+        let result = source.panel.update(cx, |panel, cx| {
+            panel.show_dependency_diagram_for_analyzer(&selection, &node_key, cx)
+        });
+        self.notice = match result {
+            Ok(()) => None,
+            Err(error) => Some(error.to_string()),
+        };
+        cx.notify();
+    }
+
+    /// Routes Go to Gradle Declaration through the opening panel, which owns
+    /// the snapshot-to-build-script mapping and the workspace navigation.
+    pub fn go_to_dependency_declaration(
+        &mut self,
+        declaring: &str,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(source) = self.source.clone() else {
+            self.notice = Some(
+                "The analyzer's opening panel is unavailable; reopen the analyzer from the Dependencies panel, then retry Go to Gradle Declaration"
+                    .into(),
+            );
+            cx.notify();
+            return;
+        };
+        let selection = source.selection.clone();
+        let declaring = declaring.to_owned();
+        let result = source.panel.update(cx, |panel, cx| {
+            panel.open_gradle_declaration(&selection, &declaring, window, cx)
+        });
+        self.notice = match result {
+            Ok(Ok(())) => None,
+            Ok(Err(error)) | Err(error) => Some(error.to_string()),
+        };
+        cx.notify();
+    }
+
+    /// Applies the conflicts/unresolved fact filter; the selection is
+    /// re-resolved against the filtered rows.
+    pub fn apply_filter(&mut self, filter: DependencyAnalyzerFilter, cx: &mut Context<Self>) {
+        self.filter = filter;
+        self.replace_rows(cx);
+    }
+
+    pub fn toggle_group_ids(&mut self, cx: &mut Context<Self>) {
+        self.show_group_ids = !self.show_group_ids;
+        self.replace_rows(cx);
+    }
+
+    pub fn toggle_presentation(&mut self, cx: &mut Context<Self>) {
+        self.presentation = match self.presentation {
+            DependencyAnalyzerPresentation::Tree => DependencyAnalyzerPresentation::Flat,
+            DependencyAnalyzerPresentation::Flat => DependencyAnalyzerPresentation::Tree,
+        };
+        self.replace_rows(cx);
+    }
+
+    pub fn expand_all_rows(&mut self, cx: &mut Context<Self>) {
+        self.host.expand_all();
+        cx.notify();
+    }
+
+    pub fn collapse_all_rows(&mut self, cx: &mut Context<Self>) {
+        self.host.collapse_all();
+        cx.notify();
+    }
+
+    /// The click path for one tree row: selection drives the Usages pane.
+    /// Preselects a node by its admitted key when the analyzer is opened with
+    /// an explicit target (All usages from the diagram); a key the current
+    /// filters or rows cannot represent leaves the selection empty.
+    pub fn preselect_node(&mut self, key: &str, cx: &mut Context<Self>) {
+        let id = analyzer_row_id_for_node(key);
+        if self.host.visible_rows().iter().any(|row| row.id == id) {
+            self.select_node_row(id, cx);
+        }
+    }
+
+    pub fn select_node_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
+        self.host.select(id);
+        self.refresh_selection(cx);
+    }
+
+    /// The disclosure path: the panel selects before toggling so a collapsed
+    /// branch keeps its selection.
+    pub fn toggle_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
+        self.host.select(id.clone());
+        self.host.toggle(&id);
+        self.refresh_selection(cx);
+    }
+
+    fn refresh_selection(&mut self, cx: &mut Context<Self>) {
+        self.selected_key = self
+            .host
+            .selected()
+            .and_then(|id| analyzer_node_key(id))
+            .map(|key| key.to_owned());
+        self.refresh_usages();
+        cx.notify();
+    }
+
+    fn refresh_usages(&mut self) {
+        self.usages.clear();
+        self.usages_truncated = false;
+        if let Some(key) = &self.selected_key {
+            let usages = analyzer_usages(&self.derivation.graph, key);
+            self.usages = usages.rows;
+            self.usages_truncated = usages.truncated;
+        }
+    }
+
+    fn replace_rows(&mut self, cx: &mut Context<Self>) {
+        let roots = analyzer_rows(
+            &self.derivation.graph,
+            self.filter,
+            self.presentation,
+            self.show_group_ids,
+        );
+        self.host.replace_snapshot(LanguageToolSnapshot {
+            roots,
+            status: LanguageToolProviderStatus::Current,
+        });
+        // Re-resolve the selected occurrence against the new rows so a
+        // filtered or re-derived tree never keeps a selection its rows cannot
+        // represent.
+        let retained = self.selected_key.as_ref().and_then(|key| {
+            let id = analyzer_row_id_for_node(key);
+            self.host
+                .visible_rows()
+                .iter()
+                .find(|row| row.id == id)
+                .map(|_| id)
+        });
+        match retained {
+            Some(id) => self.host.select(id),
+            None => self.selected_key = None,
+        }
+        self.refresh_usages();
+        cx.notify();
+    }
+}
+
+impl Render for DependencyAnalyzerItem {
+    fn render(
+        &mut self,
+        _window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> impl gpui::IntoElement {
+        use ui::prelude::*;
+
+        let theme = cx.theme().colors().clone();
+        let title = analyzer_title(&self.derivation.target);
+        let scope_label = self.derivation.scope.label();
+        let scope_options = self.derivation.scope_options.clone();
+        let filter = self.filter;
+        let filter_label = filter.label();
+        let presentation = self.presentation;
+        let show_group_ids = self.show_group_ids;
+        let search_matches = self.search_matches("");
+        let usages_rows = self.usages.clone();
+        // Right-click handlers are built per row up front because the render
+        // children closure cannot borrow the render context.
+        let usage_row_handlers: Vec<_> = (0..usages_rows.len())
+            .map(|index| {
+                cx.listener(move |item, event: &gpui::MouseDownEvent, window, cx| {
+                    item.show_usage_context_menu(index, event.position, window, cx);
+                })
+            })
+            .collect();
+        let usages_truncated = self.usages_truncated;
+        let usages_selected = self
+            .selected_key
+            .clone()
+            .unwrap_or_else(|| "no selection".into());
+        let notice = self.notice.clone();
+        let rows = self.host.visible_rows_snapshot();
+        let selected = self.host.selected().cloned();
+        let scroll_handle = self.host.scroll_handle().clone();
+        let click_item = cx.weak_entity();
+        let toggle_item = cx.weak_entity();
+        let menu_item = cx.weak_entity();
+
+        let toolbar = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .px_2()
+            .py_1()
+            .border_1()
+            .border_color(theme.border)
+            .text_color(theme.text)
+            .child(
+                div()
+                    .flex_1()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(title),
+            )
+            .child(
+                ui::PopoverMenu::new("dependency-analyzer-search")
+                    .trigger(
+                        ui::IconButton::new(
+                            "dependency-analyzer-search-icon",
+                            ui::IconName::MagnifyingGlass,
+                        )
+                        .shape(ui::IconButtonShape::Square)
+                        .tab_index(0_isize)
+                        .aria_label("Search dependency analyzer rows")
+                        .tooltip(ui::Tooltip::text("Search dependencies")),
+                    )
+                    .menu({
+                        move |window, cx| {
+                            Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
+                                let mut menu = menu;
+                                if search_matches.is_empty() {
+                                    menu = menu.action_disabled_when(
+                                        true,
+                                        "No admitted dependency rows",
+                                        Box::new(RevealDependencyAnalyzerRow {
+                                            label: String::new(),
+                                        }),
+                                    );
+                                }
+                                for label in &search_matches {
+                                    menu = menu.action(
+                                        label.clone(),
+                                        Box::new(RevealDependencyAnalyzerRow {
+                                            label: label.clone(),
+                                        }),
+                                    );
+                                }
+                                menu
+                            }))
+                        }
+                    }),
+            )
+            .child(
+                ui::PopoverMenu::new("dependency-analyzer-scope")
+                    .trigger(
+                        ui::IconButton::new("dependency-analyzer-scope-icon", ui::IconName::Filter)
+                            .shape(ui::IconButtonShape::Square)
+                            .tab_index(0_isize)
+                            .aria_label(format!(
+                                "Dependency analyzer scope; current scope {scope_label}"
+                            ))
+                            .tooltip(ui::Tooltip::text(format!("Scope: {scope_label}"))),
+                    )
+                    .menu(move |window, cx| {
+                        Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
+                            let mut menu = menu;
+                            for option in &scope_options {
+                                menu = menu.action(
+                                    option.clone(),
+                                    Box::new(SelectDependencyAnalyzerScope {
+                                        label: option.clone(),
+                                    }),
+                                );
+                            }
+                            menu
+                        }))
+                    }),
+            )
+            .child({
+                let menu_entries: Vec<(&'static str, DependencyAnalyzerFilter)> = vec![
+                    (
+                        DependencyAnalyzerFilter::All.label(),
+                        DependencyAnalyzerFilter::All,
+                    ),
+                    (
+                        DependencyAnalyzerFilter::Conflicts.label(),
+                        DependencyAnalyzerFilter::Conflicts,
+                    ),
+                    (
+                        DependencyAnalyzerFilter::Unresolved.label(),
+                        DependencyAnalyzerFilter::Unresolved,
+                    ),
+                ];
+                ui::PopoverMenu::new("dependency-analyzer-filter")
+                    .trigger(
+                        ui::IconButton::new(
+                            "dependency-analyzer-filter-icon",
+                            ui::IconName::Filter,
+                        )
+                        .shape(ui::IconButtonShape::Square)
+                        .tab_index(0_isize)
+                        .aria_label(format!(
+                            "Dependency analyzer fact filter; current filter {filter_label}"
+                        ))
+                        .tooltip(ui::Tooltip::text(format!("Filter: {filter_label}"))),
+                    )
+                    .menu(move |window, cx| {
+                        Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
+                            let mut menu = menu;
+                            for (label, entry_filter) in &menu_entries {
+                                menu = menu.action(
+                                    label.to_string(),
+                                    Box::new(SelectDependencyAnalyzerFilter {
+                                        filter: *entry_filter,
+                                    }),
+                                );
+                            }
+                            menu
+                        }))
+                    })
+            })
+            .child(
+                ui::IconButton::new("dependency-analyzer-group-ids-icon", ui::IconName::Hash)
+                    .shape(ui::IconButtonShape::Square)
+                    .tab_index(0_isize)
+                    .aria_label(if show_group_ids {
+                        "Hide dependency analyzer group IDs"
+                    } else {
+                        "Show dependency analyzer group IDs"
+                    })
+                    .tooltip(ui::Tooltip::text("Group IDs"))
+                    .on_click(cx.listener(|item, _, _, cx| item.toggle_group_ids(cx))),
+            )
+            .child(
+                ui::IconButton::new(
+                    "dependency-analyzer-presentation-icon",
+                    ui::IconName::ListCollapse,
+                )
+                .shape(ui::IconButtonShape::Square)
+                .tab_index(0_isize)
+                .aria_label(match presentation {
+                    DependencyAnalyzerPresentation::Tree => {
+                        "Switch the dependency analyzer to the flat list"
+                    }
+                    DependencyAnalyzerPresentation::Flat => {
+                        "Switch the dependency analyzer to the tree"
+                    }
+                })
+                .tooltip(ui::Tooltip::text(match presentation {
+                    DependencyAnalyzerPresentation::Tree => "Flat list",
+                    DependencyAnalyzerPresentation::Flat => "Tree",
+                }))
+                .on_click(cx.listener(|item, _, _, cx| item.toggle_presentation(cx))),
+            )
+            .child(
+                ui::IconButton::new(
+                    "dependency-analyzer-expand-icon",
+                    ui::IconName::ExpandVertical,
+                )
+                .shape(ui::IconButtonShape::Square)
+                .tab_index(0_isize)
+                .aria_label("Expand all dependency analyzer rows")
+                .tooltip(ui::Tooltip::text("Expand all"))
+                .on_click(cx.listener(|item, _, _, cx| item.expand_all_rows(cx))),
+            )
+            .child(
+                ui::IconButton::new(
+                    "dependency-analyzer-collapse-icon",
+                    ui::IconName::ChevronDownUp,
+                )
+                .shape(ui::IconButtonShape::Square)
+                .tab_index(0_isize)
+                .aria_label("Collapse all dependency analyzer rows")
+                .tooltip(ui::Tooltip::text("Collapse all"))
+                .on_click(cx.listener(|item, _, _, cx| item.collapse_all_rows(cx))),
+            );
+
+        div()
+            .id("groovy-dependency-analyzer-item")
+            .key_context("DependencyAnalyzer")
+            .size_full()
+            .flex()
+            .flex_col()
+            .text_color(theme.text)
+            .on_action(cx.listener(
+                |item, event: &SelectDependencyAnalyzerScope, _, cx| {
+                    item.apply_scope(event.label.clone(), cx)
+                },
+            ))
+            .on_action(cx.listener(
+                |item, event: &SelectDependencyAnalyzerFilter, _, cx| {
+                    item.apply_filter(event.filter, cx)
+                },
+            ))
+            .on_action(cx.listener(|item, _: &ToggleDependencyAnalyzerGroupIds, _, cx| {
+                item.toggle_group_ids(cx)
+            }))
+            .on_action(cx.listener(
+                |item, _: &ToggleDependencyAnalyzerPresentation, _, cx| {
+                    item.toggle_presentation(cx)
+                },
+            ))
+            .on_action(cx.listener(|item, _: &ExpandDependencyAnalyzerRows, _, cx| {
+                item.expand_all_rows(cx)
+            }))
+            .on_action(cx.listener(|item, _: &CollapseDependencyAnalyzerRows, _, cx| {
+                item.collapse_all_rows(cx)
+            }))
+            .on_action(cx.listener(
+                |item, event: &RevealDependencyAnalyzerRow, _, cx| {
+                    item.reveal_row(&event.label, cx)
+                },
+            ))
+            .on_action(cx.listener(
+                |item, event: &ShowInDependencyDiagram, _, cx| {
+                    item.show_in_dependency_diagram(&event.node_key, cx)
+                },
+            ))
+            .on_action(cx.listener(
+                |item, event: &GoToDependencyDeclaration, window, cx| {
+                    item.go_to_dependency_declaration(&event.declaring, window, cx)
+                },
+            ))
+            .children(self.row_context_menu.as_ref().map(|(menu, position, _)| {
+                deferred(
+                    anchored()
+                        .position(*position)
+                        .anchor(gpui::Anchor::TopLeft)
+                        .child(menu.clone()),
+                )
+                .with_priority(3)
+            }))
+            .child(toolbar)
+            .when_some(notice, |this, notice| {
+                this.child(
+                    div()
+                        .id("groovy-dependency-analyzer-notice")
+                        .role(gpui::Role::Note)
+                        .aria_label("Dependency analyzer notice")
+                        .px_2()
+                        .py_1()
+                        .text_size(px(12.0))
+                        .text_color(theme.text_muted)
+                        .child(notice),
+                )
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .border_1()
+                    .border_color(theme.border)
+                    .child(language_tool_tree(
+                        rows,
+                        selected,
+                        None,
+                        scroll_handle,
+                        move |id, _, _window, cx| {
+                            if let Err(error) = click_item.update(cx, |item, cx| {
+                                item.select_node_row(id, cx);
+                            }) {
+                                log::debug!("Dependency analyzer closed during click: {error:#}");
+                            }
+                        },
+                        move |id, _, cx| {
+                            if let Err(error) = toggle_item.update(cx, |item, cx| {
+                                item.toggle_row(id, cx);
+                            }) {
+                                log::debug!(
+                                    "Dependency analyzer closed during toggle: {error:#}"
+                                );
+                            }
+                        },
+                        move |id, position, window, cx| {
+                            if let Err(error) = menu_item.update(cx, |item, cx| {
+                                item.show_row_context_menu(id, position, window, cx);
+                            }) {
+                                log::debug!(
+                                    "Dependency analyzer closed during context menu: {error:#}"
+                                );
+                            }
+                        },
+                    )),
+            )
+            .child(
+                div()
+                    .id("groovy-dependency-analyzer-usages")
+                    .role(gpui::Role::Group)
+                    .aria_label("Dependency analyzer usages")
+                    .aria_description(
+                        "Usage occurrences for the selected artifact: every admitted reverse edge that reaches it, bounded with an explicit count.",
+                    )
+                    .border_1()
+                    .border_color(theme.border)
+                    .px_2()
+                    .py_1()
+                    .max_h(px(240.0))
+                    .overflow_y_scroll()
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(if usages_rows.is_empty() {
+                                "Usages — select an artifact to see its usages".to_owned()
+                            } else {
+                                let mut header = format!(
+                                    "Usages — {} occurrence{}",
+                                    usages_rows.len(),
+                                    if usages_rows.len() == 1 { "" } else { "s" }
+                                );
+                                if usages_truncated {
+                                    header.push_str("; more admitted usages exist beyond the bounded pane");
+                                }
+                                header
+                            }),
+                    )
+                    .children(
+                        usages_rows
+                            .iter()
+                            .enumerate()
+                            .zip(usage_row_handlers)
+                            .map(|((index, usage), handler)| {
+                                div()
+                                    .text_size(px(12.0))
+                                    .on_mouse_down(gpui::MouseButton::Right, handler)
+                                    .child(SharedString::from(format!(
+                                        "{}. {}",
+                                        index + 1,
+                                        usage.label
+                                    )))
+                            }),
+                    )
+                    .when(usages_rows.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .text_size(px(12.0))
+                                .text_color(theme.text_muted)
+                                .child(format!("Selected: {usages_selected}")),
+                        )
+                    }),
+            )
+    }
+}
+
+/// Analyzer tabs are session-scoped: admitted facts come from provider
+/// collections and are not persisted, so restored sessions drop the tab
+/// instead of reopening a stale or empty analyzer.
+impl workspace::SerializableItem for DependencyAnalyzerItem {
+    fn serialized_item_kind() -> &'static str {
+        "DependencyAnalyzerItem"
+    }
+
+    fn cleanup(
+        _: workspace::WorkspaceId,
+        _: Vec<workspace::ItemId>,
+        _: &mut gpui::Window,
+        _: &mut App,
+    ) -> gpui::Task<anyhow::Result<()>> {
+        gpui::Task::ready(Ok(()))
+    }
+
+    fn deserialize(
+        _: gpui::Entity<project::Project>,
+        _: gpui::WeakEntity<Workspace>,
+        _: workspace::WorkspaceId,
+        _: workspace::ItemId,
+        _: &mut gpui::Window,
+        _: &mut App,
+    ) -> gpui::Task<anyhow::Result<gpui::Entity<Self>>> {
+        gpui::Task::ready(Err(anyhow::anyhow!(
+            "Dependency analyzer tabs are session-scoped and are not restored"
+        )))
+    }
+
+    fn serialize(
+        &mut self,
+        _: &mut Workspace,
+        _: workspace::ItemId,
+        _: bool,
+        _: &mut Context<Self>,
+    ) -> Option<gpui::Task<anyhow::Result<()>>> {
+        Some(gpui::Task::ready(Ok(())))
+    }
+
+    fn should_serialize(&self, _: &Self::Event) -> bool {
+        false
+    }
+}
+
+impl workspace::Item for DependencyAnalyzerItem {
+    type Event = DependencyAnalyzerEvent;
+
+    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
+        analyzer_title(&self.derivation.target).into()
+    }
+
+    fn tab_icon(&self, _window: &gpui::Window, _cx: &App) -> Option<ui::Icon> {
+        Some(ui::Icon::new(match self.derivation.target.provider {
+            DependencyDiagramProvider::Gradle => ui::IconName::Gradle,
+            DependencyDiagramProvider::Maven => ui::IconName::Maven,
+        }))
+    }
+}
+
+/// Derives analyzer facts for one admitted selection from the panel's
+/// snapshot: matches the selection target and applies the chosen scope.
+/// Read-only; never queries a provider.
+pub(crate) fn dependency_analyzer_for_selection(
+    snapshot: &JdtlsProjectSnapshot,
+    view: BuildToolView,
+    selection: &GraphSelection,
+    scope: Option<&DependencyDiagramScope>,
+) -> Option<DependencyAnalyzerDerivation> {
+    for module in &snapshot.projects {
+        match selection.target() {
+            GraphQueryTarget::Maven(pom) if view != BuildToolView::Gradle => {
+                let Some(maven) = module.maven.as_ref().filter(|maven| maven.pom == *pom) else {
+                    continue;
+                };
+                let Some(graph) = &maven.dependency_graph else {
+                    continue;
+                };
+                // Maven scope filtering keeps the existing fact-filter
+                // semantics: edges outside the chosen scope are not admitted.
+                let (admitted, chosen_scope) = match scope {
+                    Some(DependencyDiagramScope::MavenScope(label)) => {
+                        let chosen = crate::dependencies_panel::maven_graph_scope_from_label(label);
+                        let mut filtered = (**graph).clone();
+                        filtered.edges.retain(|edge| chosen.matches(&edge.scope));
+                        (Some(filtered), chosen)
+                    }
+                    Some(_) => continue,
+                    None => (None, crate::dependencies_panel::MavenGraphScope::default()),
+                };
+                let admitted_graph: &MavenDependencyGraph = admitted.as_ref().unwrap_or(graph);
+                return Some(DependencyAnalyzerDerivation {
+                    graph: DependencyAnalyzerGraph::Maven {
+                        nodes: admitted_graph.nodes.clone(),
+                        components: admitted_graph.components.clone(),
+                        edges: admitted_graph.edges.clone(),
+                        unavailable_descriptors: admitted_graph.unavailable_descriptors.clone(),
+                    },
+                    target: DependencyDiagramTarget {
+                        module_label: crate::dependencies_panel::dependency_module_label(
+                            &module.module_root,
+                        ),
+                        provider: DependencyDiagramProvider::Maven,
+                        configuration: None,
+                    },
+                    scope: DependencyDiagramScope::MavenScope(chosen_scope.label().to_owned()),
+                    scope_options: crate::dependencies_panel::maven_graph_scope_labels(),
+                });
+            }
+            GraphQueryTarget::Gradle {
+                module: module_root,
+                configuration,
+            } if view != BuildToolView::Maven => {
+                if module.module_root != *module_root {
+                    continue;
+                }
+                let Some(gradle) = &module.gradle else {
+                    continue;
+                };
+                // The scope picker offers the configurations the provider
+                // reports for the module; the chosen one admits its matching
+                // graph only.
+                let mut scope_options: Vec<String> = gradle
+                    .configurations
+                    .iter()
+                    .filter(|configuration| gradle.configurations_known && configuration.resolvable)
+                    .map(|configuration| configuration.name.clone())
+                    .collect();
+                let chosen_configuration = match scope {
+                    Some(DependencyDiagramScope::GradleConfiguration(name)) => Some(name.clone()),
+                    Some(_) => continue,
+                    None => None,
+                };
+                let configuration = chosen_configuration.unwrap_or_else(|| configuration.clone());
+                if !scope_options.iter().any(|option| option == &configuration) {
+                    scope_options.push(configuration.clone());
+                    scope_options.sort();
+                }
+                let Some(graph) = gradle
+                    .dependency_graph
+                    .as_ref()
+                    .filter(|graph| graph.resolution.configuration == configuration)
+                else {
+                    continue;
+                };
+                return Some(DependencyAnalyzerDerivation {
+                    graph: DependencyAnalyzerGraph::Gradle {
+                        configuration: configuration.clone(),
+                        components: graph.resolution.components.clone(),
+                        edges: graph.resolution.edges.clone(),
+                    },
+                    target: DependencyDiagramTarget {
+                        module_label: crate::dependencies_panel::dependency_module_label(
+                            &module.module_root,
+                        ),
+                        provider: DependencyDiagramProvider::Gradle,
+                        configuration: Some(configuration.clone()),
+                    },
+                    scope: DependencyDiagramScope::GradleConfiguration(configuration),
+                    scope_options,
+                });
+            }
+            _ => {}
+        }
+    }
+    None
+}

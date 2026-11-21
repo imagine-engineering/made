@@ -1,4 +1,7 @@
 mod dependencies_panel;
+pub mod dependency_analyzer_item;
+#[cfg(test)]
+mod dependency_analyzer_item_tests;
 pub mod dependency_diagram_item;
 pub mod dependency_diagram_menu;
 pub mod dependency_graph_canvas;
@@ -20,6 +23,7 @@ pub fn init(cx: &mut App) {
 fn init_for_product(product_id: &'static str, cx: &mut App) {
     let default_jvm = product_id == "jvm";
     workspace::register_serializable_item::<dependency_diagram_item::DependencyDiagramItem>(cx);
+    workspace::register_serializable_item::<dependency_analyzer_item::DependencyAnalyzerItem>(cx);
     cx.observe_new(move |workspace: &mut Workspace, _, cx| {
         workspace.register_action(DependenciesPanel::toggle_focus);
         workspace.register_action(DependenciesPanel::show_gradle);
@@ -46,6 +50,16 @@ pub fn bind_keys(cx: &mut App) {
             "escape",
             dependency_diagram_item::DismissDependencyDiagramPopup,
             Some("DependencyDiagramPopup"),
+        ),
+        KeyBinding::new(
+            "shift-f10",
+            dependency_diagram_item::ShowDependencyDiagramContextMenu,
+            Some("DependencyDiagram"),
+        ),
+        KeyBinding::new(
+            "escape",
+            dependency_diagram_item::DismissDependencyDiagramMenu,
+            Some("DependencyDiagram"),
         ),
         KeyBinding::new(
             "up",

@@ -9,8 +9,8 @@ use std::sync::Mutex;
 
 use crate::dependencies_panel::{
     AddGraphSelectionToSet, ClearGraphInspection, ClearGraphSelectionSet,
-    CopyDependencyDiagramSource, InspectGraphNeighbours, InspectGraphPathsBetween,
-    InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
+    CopyDependencyDiagramSource, InspectGraphAllUsages, InspectGraphNeighbours,
+    InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
 };
 use crate::dependency_diagram_item::{
     ExportDependencyDiagramImage, FitDependencyDiagram, ShowDependencyDiagramPopup,
@@ -54,6 +54,7 @@ pub enum DependencyDiagramMenuCommand {
     InspectNeighbours,
     InspectRootPaths,
     PathsBetween,
+    AllUsages,
     PinSelection,
     AddToSelectionSet,
     InspectSelectionSet,
@@ -97,6 +98,7 @@ pub fn dependency_diagram_menu_available(
         DependencyDiagramMenuCommand::InspectRootPaths => {
             matches!(target, DependencyDiagramContextTarget::Node(_))
         }
+        DependencyDiagramMenuCommand::AllUsages => node_or_selection,
         DependencyDiagramMenuCommand::PathsBetween => {
             node_or_selection && snapshot.selection_set_len >= 2
         }
@@ -124,6 +126,7 @@ pub fn dependency_diagram_menu_label(command: DependencyDiagramMenuCommand) -> &
     match command {
         DependencyDiagramMenuCommand::InspectNeighbours => "Inspect neighbours",
         DependencyDiagramMenuCommand::InspectRootPaths => "Inspect root paths",
+        DependencyDiagramMenuCommand::AllUsages => "All usages",
         DependencyDiagramMenuCommand::PathsBetween => "Inspect paths between",
         DependencyDiagramMenuCommand::PinSelection => "Pin dependency",
         DependencyDiagramMenuCommand::AddToSelectionSet => "Add to selection set",
@@ -150,6 +153,7 @@ pub fn dependency_diagram_menu_groups(
         DependencyDiagramMenuCommand::InspectNeighbours,
         DependencyDiagramMenuCommand::InspectRootPaths,
         DependencyDiagramMenuCommand::PathsBetween,
+        DependencyDiagramMenuCommand::AllUsages,
         DependencyDiagramMenuCommand::PinSelection,
         DependencyDiagramMenuCommand::AddToSelectionSet,
         DependencyDiagramMenuCommand::InspectSelectionSet,
@@ -189,6 +193,7 @@ pub fn dependency_diagram_menu_action(
     match command {
         DependencyDiagramMenuCommand::InspectNeighbours => Box::new(InspectGraphNeighbours),
         DependencyDiagramMenuCommand::InspectRootPaths => Box::new(InspectGraphRootPaths),
+        DependencyDiagramMenuCommand::AllUsages => Box::new(InspectGraphAllUsages),
         DependencyDiagramMenuCommand::PathsBetween => Box::new(InspectGraphPathsBetween),
         DependencyDiagramMenuCommand::PinSelection => Box::new(PinGraphSelection),
         DependencyDiagramMenuCommand::AddToSelectionSet => Box::new(AddGraphSelectionToSet),
@@ -385,5 +390,54 @@ mod tests {
             &canvas,
             &snapshot
         ));
+    }
+
+    #[gpui::test]
+    fn analyzer_diagram_linkage_all_usages_targets_dependencies(cx: &mut gpui::TestAppContext) {
+        let _ = cx;
+        let node = DependencyDiagramContextTarget::Node("n1".into());
+        let selection = DependencyDiagramContextTarget::Selection;
+        let canvas = DependencyDiagramContextTarget::Canvas;
+        let snapshot = DependencyDiagramMenuSnapshot {
+            selection_len: 1,
+            selection_set_len: 1,
+            has_inspection: false,
+            has_source: true,
+        };
+        // All usages targets a dependency node or an in-selection click, and
+        // rides in the inspection group one level deep.
+        assert!(dependency_diagram_menu_available(
+            DependencyDiagramMenuCommand::AllUsages,
+            &node,
+            &snapshot
+        ));
+        assert!(dependency_diagram_menu_available(
+            DependencyDiagramMenuCommand::AllUsages,
+            &selection,
+            &snapshot
+        ));
+        assert!(
+            !dependency_diagram_menu_available(
+                DependencyDiagramMenuCommand::AllUsages,
+                &canvas,
+                &snapshot
+            ),
+            "a blank-canvas menu does not offer All usages"
+        );
+        let groups = dependency_diagram_menu_groups(&node, &snapshot);
+        assert!(
+            groups[0].contains(&DependencyDiagramMenuCommand::AllUsages),
+            "All usages stays in the inspection group"
+        );
+        assert_eq!(
+            dependency_diagram_menu_label(DependencyDiagramMenuCommand::AllUsages),
+            "All usages"
+        );
+        // The entry dispatches the shared InspectGraphAllUsages command.
+        let mapped = dependency_diagram_menu_action(DependencyDiagramMenuCommand::AllUsages);
+        assert!(
+            mapped.partial_eq(&InspectGraphAllUsages),
+            "All usages dispatches the panel's shared command"
+        );
     }
 }

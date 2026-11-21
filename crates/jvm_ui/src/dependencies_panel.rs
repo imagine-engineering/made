@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 
 use db::kvp::KeyValueStore;
 use editor::{Editor, EditorEvent};
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use gpui::{
     Action, App, AsyncWindowContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
     IntoElement, Pixels, Render, Role, ScrollStrategy, Subscription, WeakEntity, Window, actions,
-    div, px,
+    anchored, deferred, div, px,
 };
 use language_tools::language_tool_tree::{
     self, LanguageToolNode, LanguageToolNodeId, LanguageToolProviderStatus, LanguageToolSnapshot,
@@ -31,6 +32,9 @@ use workspace::{
     Panel, Workspace, dock::DockPosition, dock::PanelEvent, workspace_scoped_state_key,
 };
 
+use crate::dependency_analyzer_item::{
+    AnalyzeDependencies, DependencyAnalyzerDerivation, DependencyAnalyzerItem,
+};
 use crate::dependency_diagram_item::{
     DependencyDiagramDerivation, DependencyDiagramItem, DependencyDiagramOpen,
     DependencyDiagramPopup, DependencyDiagramProvider, DependencyDiagramScope,
@@ -76,6 +80,17 @@ actions!(
         RunSelectedConfiguration
     ]
 );
+
+/// Runs one saved configuration, dispatched by the ordered-operations queue
+/// menu's run-configuration selector; the worktree identity travels as its
+/// numeric handle because action payloads stay plain data.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
+#[action(namespace = groovy_dependencies_panel)]
+#[serde(deny_unknown_fields)]
+pub struct RunOrderedConfiguration {
+    pub worktree_id: usize,
+    pub label: String,
+}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -173,7 +188,7 @@ pub enum MavenGraphScope {
 }
 
 impl MavenGraphScope {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::All => "All scopes",
             Self::Compile => "compile",
@@ -199,7 +214,7 @@ impl MavenGraphScope {
         }
     }
 
-    fn matches(self, scope: &str) -> bool {
+    pub(crate) fn matches(self, scope: &str) -> bool {
         match self {
             Self::All => true,
             Self::Other => !matches!(
@@ -213,7 +228,7 @@ impl MavenGraphScope {
 
 const PANEL_KEY: &str = "GroovyDependenciesPanel";
 const VIEW_STATE_KEY: &str = "GroovyBuildViewState";
-const VIEW_STATE_VERSION: u32 = 8;
+const VIEW_STATE_VERSION: u32 = 9;
 const MAX_VIEW_STATE_BYTES: usize = 4096;
 const MAX_GRAPH_SEARCH_BYTES: usize = 512;
 const BASIC_MAVEN_PHASES: &[&str] = &[
@@ -238,6 +253,7 @@ struct BuildViewPreferences {
     graph_fact_filter: GraphFactFilter,
     maven_graph_scope: MavenGraphScope,
     graph_fact_presentation: GraphFactPresentation,
+    ordered_operations_expanded: bool,
 }
 
 impl Default for BuildViewPreferences {
@@ -258,6 +274,7 @@ impl Default for BuildViewPreferences {
             graph_fact_filter: GraphFactFilter::All,
             maven_graph_scope: MavenGraphScope::All,
             graph_fact_presentation: GraphFactPresentation::Tree,
+            ordered_operations_expanded: false,
         }
     }
 }
@@ -522,6 +539,49 @@ impl BuildViewPreferences {
                     ..Default::default()
                 })
             }
+            8 => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct PreviousPreferences {
+                    version: u32,
+                    dock_position: settings::DockPosition,
+                    view: BuildToolView,
+                    group_gradle_tasks: bool,
+                    group_gradle_modules: bool,
+                    group_maven_modules: bool,
+                    show_maven_artifact_id: bool,
+                    show_maven_version: bool,
+                    show_gradle_toolbar: bool,
+                    show_maven_toolbar: bool,
+                    show_basic_maven_phases: bool,
+                    show_ignored: bool,
+                    graph_fact_filter: GraphFactFilter,
+                    maven_graph_scope: MavenGraphScope,
+                    graph_fact_presentation: GraphFactPresentation,
+                }
+                let previous: PreviousPreferences = serde_json::from_str(serialized)?;
+                anyhow::ensure!(
+                    previous.version == 8,
+                    "Unsupported previous preferences version"
+                );
+                Ok(Self {
+                    dock_position: previous.dock_position,
+                    view: previous.view,
+                    group_gradle_tasks: previous.group_gradle_tasks,
+                    group_gradle_modules: previous.group_gradle_modules,
+                    group_maven_modules: previous.group_maven_modules,
+                    show_maven_artifact_id: previous.show_maven_artifact_id,
+                    show_maven_version: previous.show_maven_version,
+                    show_gradle_toolbar: previous.show_gradle_toolbar,
+                    show_maven_toolbar: previous.show_maven_toolbar,
+                    show_basic_maven_phases: previous.show_basic_maven_phases,
+                    show_ignored: previous.show_ignored,
+                    graph_fact_filter: previous.graph_fact_filter,
+                    maven_graph_scope: previous.maven_graph_scope,
+                    graph_fact_presentation: previous.graph_fact_presentation,
+                    ..Default::default()
+                })
+            }
             VIEW_STATE_VERSION => Ok(serde_json::from_str(serialized)?),
             _ => anyhow::bail!("Unsupported build view preferences version"),
         }
@@ -754,6 +814,10 @@ pub struct GraphSelection {
 }
 
 impl GraphSelection {
+    pub(crate) fn target(&self) -> &GraphQueryTarget {
+        &self.target
+    }
+
     fn worktree_id(&self) -> settings::WorktreeId {
         match &self.target {
             GraphQueryTarget::Maven(pom) => pom.worktree_id,
@@ -870,7 +934,7 @@ fn dependency_diagram_markdown(
 }
 
 /// Derives a short module display name from the module root path.
-fn dependency_module_label(module_root: &ProjectPath) -> String {
+pub(crate) fn dependency_module_label(module_root: &ProjectPath) -> String {
     let path = module_root.path.as_unix_str();
     match path.rsplit('/').next() {
         Some(label) if !label.is_empty() => label.to_owned(),
@@ -1021,6 +1085,45 @@ pub(crate) fn derive_dependency_diagram(
     None
 }
 
+/// Derives analyzer facts for the analyzer surfaces from admitted provider
+/// state: walks visible trusted worktrees and matches the selection under the
+/// chosen scope. Read-only; never queries a provider.
+pub(crate) fn derive_dependency_analyzer(
+    project: &Project,
+    view: BuildToolView,
+    selection: &GraphSelection,
+    scope: Option<&DependencyDiagramScope>,
+    cx: &App,
+) -> Option<crate::dependency_analyzer_item::DependencyAnalyzerDerivation> {
+    let worktrees = project.worktree_store();
+    let Some(trusted) = TrustedWorktrees::try_get_global(cx) else {
+        return None;
+    };
+    let restricted = trusted
+        .read(cx)
+        .restricted_worktrees(&worktrees, cx)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect::<HashSet<_>>();
+    let store = project.lsp_store();
+    let store = store.read(cx);
+    for worktree in worktrees.read(cx).worktrees() {
+        let worktree = worktree.read(cx);
+        if !worktree.is_visible() || restricted.contains(&worktree.id()) {
+            continue;
+        }
+        let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
+            continue;
+        };
+        if let Some(derivation) = crate::dependency_analyzer_item::dependency_analyzer_for_selection(
+            snapshot, view, selection, scope,
+        ) {
+            return Some(derivation);
+        }
+    }
+    None
+}
+
 /// Re-derives the exact Mermaid export payload for a diagram from admitted
 /// facts, so the diagram toolbar's Copy Diagram Source behaves identically to
 /// the panel's existing action.
@@ -1058,7 +1161,7 @@ pub(crate) fn dependency_diagram_source_export(
 }
 
 /// Maps a Maven fact-filter scope label back to its enum value.
-fn maven_graph_scope_from_label(label: &str) -> MavenGraphScope {
+pub(crate) fn maven_graph_scope_from_label(label: &str) -> MavenGraphScope {
     maven_graph_scope_labels()
         .into_iter()
         .zip([
@@ -1076,7 +1179,7 @@ fn maven_graph_scope_from_label(label: &str) -> MavenGraphScope {
         .unwrap_or(MavenGraphScope::All)
 }
 
-fn maven_graph_scope_labels() -> Vec<String> {
+pub(crate) fn maven_graph_scope_labels() -> Vec<String> {
     [
         MavenGraphScope::All,
         MavenGraphScope::Compile,
@@ -3177,21 +3280,31 @@ impl DependenciesPanel {
             return None;
         }
         let (selection, node) = self.resolve_selected_canvas_graph(cx)?;
+        self.canvas_diagram_load_for(panel, &selection, &node, cx)
+    }
+
+    /// Derives the diagram open bundle for an explicit selection and node so
+    /// the analyzer's Show in Diagram shares one derivation path with the
+    /// panel's own diagram surfaces; read-only, no provider query.
+    fn canvas_diagram_load_for(
+        &self,
+        panel: gpui::WeakEntity<DependenciesPanel>,
+        selection: &GraphSelection,
+        node: &str,
+        cx: &App,
+    ) -> Option<DependencyDiagramOpen> {
+        if self.host_unavailable(cx) {
+            return None;
+        }
         let project = self.project.clone();
-        let derivation = derive_dependency_diagram(
-            self.project.read(cx),
-            self.view,
-            &selection,
-            &node,
-            None,
-            cx,
-        )?;
+        let derivation =
+            derive_dependency_diagram(self.project.read(cx), self.view, selection, node, None, cx)?;
         Some(DependencyDiagramOpen {
             derivation,
             source: DependencyDiagramSource {
                 project,
-                selection,
-                node,
+                selection: selection.clone(),
+                node: node.to_owned(),
                 view: self.view,
                 panel,
             },
@@ -3247,6 +3360,128 @@ impl DependenciesPanel {
         }
     }
 
+    /// Opens (or focuses) the diagram tab for the analyzer's selection and
+    /// emphasizes the targeted node, sharing the panel's own derivation and
+    /// open/focus path; never queries a provider.
+    pub(crate) fn show_dependency_diagram_for_analyzer(
+        &mut self,
+        selection: &GraphSelection,
+        node: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.graph_notice = None;
+        self.graph_diagram_selection = Some(selection.clone());
+        self.graph_diagram = None;
+        self.graph_diagram_source = None;
+        self.graph_diagram_legend.clear();
+        self.rebuild(cx);
+        if self.graph_diagram.is_none() && self.graph_notice.is_none() {
+            self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram"), cx);
+            return;
+        }
+        let Some(open) = self.canvas_diagram_load_for(cx.weak_entity(), selection, node, cx) else {
+            // No admitted facts: show the collection affordance without
+            // starting a provider query.
+            self.graph_notice = Some("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram".into());
+            cx.notify();
+            return;
+        };
+        let target = open.derivation.target.clone();
+        self.open_or_focus_diagram_tab(open, cx);
+        let _ = self.workspace.update(cx, |workspace, cx| {
+            let diagram = workspace
+                .items_of_type::<DependencyDiagramItem>(cx)
+                .find(|item| item.read(cx).target() == &target);
+            if let Some(item) = diagram {
+                item.update(cx, |item, cx| item.reveal_node_by_id(node, cx));
+            }
+        });
+    }
+
+    /// Opens the Gradle build script that declares a dependency, routed from
+    /// the analyzer's Go to Gradle Declaration entry. The declaring module
+    /// resolves from the current Jdtls snapshot so the location is never
+    /// stale, and the build script must exist in the trusted worktree before
+    /// it is opened.
+    pub(crate) fn open_gradle_declaration(
+        &mut self,
+        selection: &GraphSelection,
+        declaring: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
+            "Gradle declaration navigation requires a connected local project host"
+        );
+        let worktree_id = selection.worktree_id();
+        let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) else {
+            anyhow::bail!("Project trust is required before navigating to a Gradle declaration");
+        };
+        let project = self.project.read(cx);
+        let worktree_store = project.worktree_store();
+        anyhow::ensure!(
+            !trusted_worktrees
+                .read(cx)
+                .restricted_worktrees(&worktree_store, cx)
+                .into_iter()
+                .any(|(restricted, _)| restricted == worktree_id),
+            "The declaring module's worktree is restricted; trust the project before navigating to a Gradle declaration"
+        );
+        let lsp_store = project.lsp_store();
+        let lsp_store = lsp_store.read(cx);
+        let Some((snapshot, true)) = lsp_store.jdtls_project_snapshot(worktree_id) else {
+            anyhow::bail!("Refresh the Gradle provider before navigating to a Gradle declaration");
+        };
+        let module_root = snapshot
+            .projects
+            .iter()
+            .find(|module| {
+                module
+                    .gradle
+                    .as_ref()
+                    .is_some_and(|gradle| gradle.project_path == declaring)
+            })
+            .map(|module| module.module_root.clone());
+        let Some(module_root) = module_root else {
+            anyhow::bail!(
+                "No Gradle module {declaring} in the current snapshot; refresh the provider and retry Go to Gradle Declaration"
+            );
+        };
+        let mut declaration_path = None;
+        for script in ["build.gradle.kts", "build.gradle"] {
+            let script = RelPath::from_unix_str(script)?;
+            let candidate = ProjectPath {
+                worktree_id,
+                path: Arc::from(module_root.path.join(&script)),
+            };
+            if project
+                .entry_for_path(&candidate, cx)
+                .is_some_and(|entry| entry.is_file())
+            {
+                declaration_path = Some(candidate);
+                break;
+            }
+        }
+        let Some(declaration_path) = declaration_path else {
+            anyhow::bail!(
+                "The declaring module {declaring} has no build script in the project; Go to Gradle Declaration is unavailable"
+            );
+        };
+        if let Some(workspace) = self.workspace.upgrade() {
+            workspace
+                .update(cx, |workspace, cx| {
+                    workspace.open_path(declaration_path, None, true, window, cx)
+                })
+                .detach_and_log_err(cx);
+        } else {
+            anyhow::bail!(
+                "The workspace is unavailable; reopen the project before navigating to a Gradle declaration"
+            );
+        }
+        Ok(())
+    }
+
     fn show_dependency_diagram_popup(&mut self, cx: &mut Context<Self>) {
         let has_selection = self.selected_graph().is_some()
             || self
@@ -3276,9 +3511,115 @@ impl DependenciesPanel {
         }
     }
 
-    /// Builds the tree context menu for the selected row: diagram entry points
-    /// grouped above the shared tree commands, availability-filtered through
-    /// the same eligibility logic as the panel controls.
+    /// Opens the dependency analyzer tab over the selected admitted graph
+    /// facts, or focuses the matching open analyzer tab.
+    fn analyze_dependencies(&mut self, cx: &mut Context<Self>) {
+        let selection = self.selected_graph().or_else(|| {
+            self.selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
+                .map(|inspection| inspection.selection)
+        });
+        let Some(selection) = selection else {
+            self.show_graph_error(anyhow::anyhow!("Select a current Maven occurrence or Gradle configuration/component, refresh provider graph facts and retry Analyze Dependencies"), cx);
+            return;
+        };
+        if self.host_unavailable(cx) {
+            self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Analyze Dependencies"), cx);
+            return;
+        }
+        let derivation = crate::dependencies_panel::derive_dependency_analyzer(
+            self.project.read(cx),
+            self.view,
+            &selection,
+            None,
+            cx,
+        );
+        let Some(derivation) = derivation else {
+            // Collection affordance without a provider query.
+            self.graph_notice = Some("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Analyze Dependencies".into());
+            cx.notify();
+            return;
+        };
+        let panel = cx.weak_entity();
+        let source = crate::dependency_analyzer_item::DependencyAnalyzerSource {
+            project: self.project.clone(),
+            selection,
+            view: self.view,
+            panel,
+        };
+        self.open_or_focus_analyzer_tab(derivation, Some(source), cx);
+    }
+
+    /// Opens the analyzer tab or focuses the matching open one.
+    fn open_or_focus_analyzer_tab(
+        &self,
+        derivation: DependencyAnalyzerDerivation,
+        source: Option<crate::dependency_analyzer_item::DependencyAnalyzerSource>,
+        cx: &mut Context<Self>,
+    ) {
+        let _ = self.workspace.update_in(cx, |workspace, window, cx| {
+            let existing = workspace
+                .items_of_type::<DependencyAnalyzerItem>(cx)
+                .find(|item| item.read(cx).target() == &derivation.target);
+            if let Some(item) = existing {
+                workspace.activate_item(&item, true, true, window, cx);
+            } else {
+                DependencyAnalyzerItem::open(derivation, source, workspace, window, cx);
+            }
+        });
+    }
+
+    /// Opens the analyzer for the diagram's All usages command: the diagram's
+    /// selection, node and scope choice carry over so the analyzer opens on
+    /// the same dependency and configuration, without a provider query.
+    pub(crate) fn open_analyzer_for_diagram(
+        &mut self,
+        selection: &GraphSelection,
+        node: Option<String>,
+        scope: &crate::dependency_diagram_item::DependencyDiagramScope,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let Some(derivation) = derive_dependency_analyzer(
+            self.project.read(cx),
+            self.view,
+            selection,
+            Some(scope),
+            cx,
+        ) else {
+            // Collection affordance without a provider query.
+            anyhow::bail!(
+                "A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying All usages"
+            );
+        };
+        let target = derivation.target.clone();
+        let source = crate::dependency_analyzer_item::DependencyAnalyzerSource {
+            project: self.project.clone(),
+            selection: selection.clone(),
+            view: self.view,
+            panel: cx.weak_entity(),
+        };
+        self.open_or_focus_analyzer_tab(derivation, Some(source), cx);
+        let _ = self.workspace.update(cx, |workspace, cx| {
+            let analyzer = workspace
+                .items_of_type::<DependencyAnalyzerItem>(cx)
+                .find(|item| item.read(cx).target() == &target);
+            if let Some(item) = analyzer {
+                item.update(cx, |item, cx| {
+                    if let Some(node) = &node {
+                        item.preselect_node(node, cx);
+                    }
+                });
+            }
+        });
+        Ok(())
+    }
+
+    /// Builds the tree context menu for the selected row. Menu contents come
+    /// from the object under the pointer: operation rows offer Add to Queue,
+    /// the ordered-operations strip offers the queue family (Remove Last,
+    /// Clear Queue, a run-configuration selector, Run Ordered Operations
+    /// Offline), and graph fact rows offer the diagram entry points grouped
+    /// above the shared tree commands — availability-filtered through the
+    /// same eligibility logic as the panel controls.
     fn show_graph_context_menu(
         &mut self,
         id: LanguageToolNodeId,
@@ -3286,11 +3627,69 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let is_queue_row = id == ordered_operation_root_id();
         self.host.select(id);
+        let is_operation_row = self
+            .host
+            .selected()
+            .is_some_and(|selected| self.operation_selections.contains_key(selected));
+        let queue = self.ordered_queue_menu(cx);
         let eligible = self.resolve_selected_canvas_graph(cx).is_some();
+        let can_cancel_import = self.build_phase_is_pending(cx);
         let focus_handle = self.focus_handle.clone();
-        let context_menu = ui::ContextMenu::build(window, cx, |menu, _, _| {
+        let context_menu = ui::ContextMenu::build(window, cx, move |menu, _, _| {
             menu.context(focus_handle).map(|menu| {
+                let mut menu = menu;
+                if is_operation_row {
+                    return menu.action_disabled_when(
+                        !queue.add_to_queue,
+                        "Add to Queue",
+                        Box::new(AddSelectedOrderedOperation),
+                    );
+                }
+                if is_queue_row {
+                    menu = menu
+                        .action_disabled_when(
+                            !queue.remove_last,
+                            "Remove Last Ordered Operation",
+                            Box::new(RemoveLastOrderedOperation),
+                        )
+                        .action_disabled_when(
+                            !queue.clear_queue,
+                            "Clear Ordered Selection",
+                            Box::new(ClearOrderedOperations),
+                        )
+                        .separator();
+                    if queue.configurations.is_empty() {
+                        menu = menu.action_disabled_when(
+                            true,
+                            "No saved run configuration",
+                            Box::new(RunSelectedConfiguration),
+                        );
+                    } else {
+                        // The submenu builder is stored for re-invocation, so
+                        // it owns its configuration list.
+                        let queue_configurations = queue.configurations.clone();
+                        menu = menu.submenu("Run Configuration", move |submenu, _, _| {
+                            let mut submenu = submenu;
+                            for (worktree_id, label) in &queue_configurations {
+                                submenu = submenu.action(
+                                    label.clone(),
+                                    Box::new(RunOrderedConfiguration {
+                                        worktree_id: *worktree_id,
+                                        label: label.clone(),
+                                    }),
+                                );
+                            }
+                            submenu
+                        });
+                    }
+                    return menu.action_disabled_when(
+                        !queue.run_ordered,
+                        "Run Ordered Operations Offline",
+                        Box::new(RunOrderedOfflineOperations),
+                    );
+                }
                 menu.action_disabled_when(
                     !eligible,
                     "Show Dependency Diagram",
@@ -3300,6 +3699,16 @@ impl DependenciesPanel {
                     !eligible,
                     "Show Dependency Diagram Popup",
                     Box::new(ShowDependencyDiagramPopup),
+                )
+                .action_disabled_when(
+                    !eligible,
+                    "Analyze Dependencies",
+                    Box::new(crate::dependency_analyzer_item::AnalyzeDependencies),
+                )
+                .action_disabled_when(
+                    !can_cancel_import,
+                    "Cancel selected import",
+                    Box::new(CancelSelectedImport),
                 )
             })
         });
@@ -3949,6 +4358,15 @@ impl DependenciesPanel {
         if !self.saved_configurations.is_empty() {
             self.host.expand_nodes([saved_configuration_root_id()]);
         }
+        // The ordered-operations section is a preference-owned disclosure;
+        // rebuilds re-apply its expansion so the section never drifts from the
+        // persisted state.
+        let ordered_root = ordered_operation_root_id();
+        if self.preferences.ordered_operations_expanded
+            != self.host.expanded().contains(&ordered_root)
+        {
+            self.host.toggle(&ordered_root);
+        }
         cx.notify();
     }
 
@@ -4381,11 +4799,45 @@ impl DependenciesPanel {
         self.rebuild(cx);
     }
 
+    /// Toggles a tree row's disclosure. The ordered-operations section is a
+    /// preference-owned disclosure collapsed by default, so its toggle flips
+    /// and persists the preference; rebuild re-applies it to the tree. Every
+    /// other row keeps the tree's own expansion state.
+    fn toggle_tree_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
+        self.host.select(id.clone());
+        if id == ordered_operation_root_id() {
+            self.preferences.ordered_operations_expanded =
+                !self.preferences.ordered_operations_expanded;
+            self.persist_preferences(cx);
+            self.rebuild(cx);
+            return;
+        }
+        self.host.toggle(&id);
+        cx.notify();
+    }
+
     fn clear_ordered_operations(&mut self, cx: &mut Context<Self>) {
         self.ordered_operations.clear();
         self.operation_notice =
             Some("Ordered selection cleared; running Tasks remain under terminal controls.".into());
         self.rebuild(cx);
+    }
+
+    /// The ordered-operations queue menu family's availability for the
+    /// currently selected row, mirroring the strip's buttons.
+    fn ordered_queue_menu(&self, cx: &App) -> OrderedQueueMenuAvailability {
+        let operation_row_selected = self
+            .host
+            .selected()
+            .is_some_and(|id| self.operation_selections.contains_key(id));
+        ordered_queue_menu_availability(
+            operation_row_selected,
+            self.ordered_operations.len(),
+            compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
+                .is_ok(),
+            !self.host_unavailable(cx) && !self.project.read(cx).is_remote(),
+            &self.configuration_selections,
+        )
     }
 
     fn run_ordered_offline_operations(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -6236,6 +6688,59 @@ fn has_current_operation(
     current.values().any(|candidate| candidate == &target)
 }
 
+/// The ordered-operations queue menu family's availability. The rules mirror
+/// the strip's buttons exactly so menu, toolbar and keyboard invocations
+/// share one enablement path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct OrderedQueueMenuAvailability {
+    pub add_to_queue: bool,
+    pub remove_last: bool,
+    pub clear_queue: bool,
+    pub run_ordered: bool,
+    /// Saved configurations for the run-configuration selector, deduplicated
+    /// by label, sorted, and bounded like the other menu families.
+    pub configurations: Vec<(usize, String)>,
+}
+
+/// The maximum run configurations the queue menu's selector lists.
+const MAX_QUEUE_MENU_CONFIGURATIONS: usize = 8;
+
+/// Bounds the run-configuration selector: dedup by label, sort, truncate.
+pub(crate) fn bounded_saved_configurations(
+    saved: &HashMap<LanguageToolNodeId, (WorktreeId, String)>,
+) -> Vec<(usize, String)> {
+    let mut configurations: Vec<(usize, String)> = saved
+        .values()
+        .map(|(worktree_id, label)| (usize::from(*worktree_id), label.clone()))
+        .collect();
+    configurations.sort_by(|(worktree_a, label_a), (worktree_b, label_b)| {
+        label_a
+            .cmp(label_b)
+            .then_with(|| worktree_a.cmp(worktree_b))
+    });
+    configurations.dedup_by(|(.., label_a), (.., label_b)| label_a == label_b);
+    configurations.truncate(MAX_QUEUE_MENU_CONFIGURATIONS);
+    configurations
+}
+
+/// The queue menu family's availability rules, explicit so tests cover the
+/// gating without a panel window.
+pub(crate) fn ordered_queue_menu_availability(
+    operation_row_selected: bool,
+    operations_len: usize,
+    ordered_composes: bool,
+    host_ok: bool,
+    saved_configurations: &HashMap<LanguageToolNodeId, (WorktreeId, String)>,
+) -> OrderedQueueMenuAvailability {
+    OrderedQueueMenuAvailability {
+        add_to_queue: operation_row_selected && operations_len < 32 && host_ok,
+        remove_last: operations_len > 0,
+        clear_queue: operations_len > 0,
+        run_ordered: host_ok && ordered_composes,
+        configurations: bounded_saved_configurations(saved_configurations),
+    }
+}
+
 fn compose_ordered_operations(
     ordered: &[JvmBuildOperationReceipt],
     current: &HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
@@ -7017,6 +7522,15 @@ impl Render for DependenciesPanel {
             .aria_label(format!("{} panel", self.view.label()))
             .key_context(PANEL_KEY)
             .track_focus(&self.focus_handle)
+            .children(self.graph_context_menu.as_ref().map(|(menu, position, _)| {
+                deferred(
+                    anchored()
+                        .position(*position)
+                        .anchor(gpui::Anchor::TopLeft)
+                        .child(menu.clone()),
+                )
+                .with_priority(3)
+            }))
             .size_full()
             .on_action(cx.listener(|panel, _: &RunSelectedOfflineOperation, window, cx| panel.run_selected_offline_operation(window,cx)))
             .on_action(cx.listener(
@@ -7028,6 +7542,16 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &RemoveLastOrderedOperation, _, cx| panel.remove_last_ordered_operation(cx)))
             .on_action(cx.listener(|panel, _: &ClearOrderedOperations, _, cx| panel.clear_ordered_operations(cx)))
             .on_action(cx.listener(|panel, _: &RunOrderedOfflineOperations, window, cx| panel.run_ordered_offline_operations(window, cx)))
+            .on_action(cx.listener(
+                |panel, event: &RunOrderedConfiguration, window, cx| {
+                    panel.run_configuration(
+                        WorktreeId::from_usize(event.worktree_id),
+                        event.label.clone(),
+                        window,
+                        cx,
+                    );
+                },
+            ))
             .on_action(cx.listener(|panel, _: &ApplySavedMavenSelection, _, cx| panel.apply_saved_build_selection(true, cx)))
             .on_action(cx.listener(|panel, _: &ImportGradleSelection, _, cx| panel.apply_saved_build_selection(false, cx)))
             .on_action(cx.listener(|panel, _: &UnlinkSelectedGradleProject, _, cx| panel.unlink_selected_gradle_project(cx)))
@@ -7104,12 +7628,15 @@ impl Render for DependenciesPanel {
             )
             .on_action(cx.listener(|panel, _: &ShowDependencyDiagram, _, cx| panel.show_dependency_diagram(cx)))
             .on_action(cx.listener(|panel, _: &ShowDependencyDiagramPopup, _, cx| panel.show_dependency_diagram_popup(cx)))
+            .on_action(cx.listener(|panel, _: &AnalyzeDependencies, _, cx| panel.analyze_dependencies(cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
             .on_action(cx.listener(|panel, _: &CopyDependencyDiagramSource, _, cx| panel.copy_dependency_diagram_source(cx)))
             .on_action(
                 cx.listener(|panel, _: &language_tool_tree::ToggleExpanded, _, cx| {
-                    panel.host.toggle_selected();
-                    cx.notify();
+                    match panel.host.selected().cloned() {
+                        Some(id) => panel.toggle_tree_row(id, cx),
+                        None => panel.host.toggle_selected(),
+                    }
                 }),
             )
             .on_action(cx.listener(
@@ -7278,6 +7805,17 @@ impl Render for DependenciesPanel {
                                     .aria_label("Show the dependency diagram popup over the current admitted dependency graph facts; dismissed by Escape")
                                     .tooltip(Tooltip::text("Show diagram popup"))
                                     .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram_popup(cx))),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-analyze-dependencies-icon",
+                                        ui::IconName::ListCollapse,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label("Analyze Dependencies: open the searchable dependency analyzer over the current admitted dependency graph facts")
+                                    .tooltip(Tooltip::text("Analyze Dependencies"))
+                                    .on_click(cx.listener(|panel, _, _, cx| panel.analyze_dependencies(cx))),
                                 )
                                 .when(self.view != BuildToolView::Dependencies, |row| {
                                     row.child(
@@ -7732,9 +8270,7 @@ impl Render for DependenciesPanel {
                 },
                 move |id, _, cx| {
                     if let Err(error) = toggle_panel.update(cx, |panel, cx| {
-                        panel.host.select(id.clone());
-                        panel.host.toggle(&id);
-                        cx.notify();
+                        panel.toggle_tree_row(id, cx);
                     }) {
                         log::debug!("Dependencies panel closed during toggle: {error:#}");
                     }
@@ -7780,6 +8316,78 @@ mod tests {
             worktree_id,
             path: Arc::from(RelPath::from_unix_str(value).expect("fixture path")),
         }
+    }
+
+    #[test]
+    fn dependency_menu_targets_queue_eligibility_gates() {
+        let saved = HashMap::from([
+            (
+                LanguageToolNodeId("groovy-configuration:build-a".into()),
+                (WorktreeId::from_usize(1), "build".into()),
+            ),
+            (
+                LanguageToolNodeId("groovy-configuration:build-b".into()),
+                (WorktreeId::from_usize(2), "build".into()),
+            ),
+            (
+                LanguageToolNodeId("groovy-configuration:assemble".into()),
+                (WorktreeId::from_usize(3), "assemble".into()),
+            ),
+        ]);
+
+        // An operation row with room and a connected host admits the family.
+        let availability = ordered_queue_menu_availability(true, 3, true, true, &saved);
+        assert!(availability.add_to_queue);
+        assert!(availability.remove_last && availability.clear_queue);
+        assert!(availability.run_ordered);
+        // The run-configuration selector deduplicates by label, sorts and
+        // keeps the first worktree per label.
+        assert_eq!(
+            availability.configurations,
+            [(3, "assemble".to_owned()), (1, "build".to_owned())]
+        );
+
+        // Add to Queue only applies to eligible operation rows.
+        assert!(
+            !ordered_queue_menu_availability(false, 3, true, true, &saved).add_to_queue,
+            "a non-operation row offers no Add to Queue"
+        );
+        assert!(
+            !ordered_queue_menu_availability(true, 32, true, true, &saved).add_to_queue,
+            "a full queue offers no Add to Queue"
+        );
+        assert!(
+            !ordered_queue_menu_availability(true, 3, true, false, &saved).add_to_queue,
+            "an unavailable host offers no Add to Queue"
+        );
+
+        // An empty queue removes nothing and cannot run.
+        let availability = ordered_queue_menu_availability(true, 0, false, true, &saved);
+        assert!(!availability.remove_last && !availability.clear_queue);
+        assert!(
+            !availability.run_ordered,
+            "an empty queue cannot run ordered operations"
+        );
+
+        // Ordered execution requires a composable run even with a host.
+        assert!(
+            !ordered_queue_menu_availability(true, 3, false, true, &saved).run_ordered,
+            "a non-composable ordered selection cannot run"
+        );
+
+        // The selector is bounded.
+        let mut saved = HashMap::new();
+        for index in 0..12 {
+            saved.insert(
+                LanguageToolNodeId(format!("groovy-configuration:c{index}")),
+                (WorktreeId::from_usize(index), format!("config-{index}")),
+            );
+        }
+        assert_eq!(
+            bounded_saved_configurations(&saved).len(),
+            8,
+            "the run-configuration selector stays bounded"
+        );
     }
 
     #[gpui::test]
@@ -8056,6 +8664,39 @@ mod tests {
     }
 
     #[test]
+    fn ordered_operations_section_persists_collapsed_by_default() {
+        // The ordered-operations section is disclosure-collapsed by default.
+        assert!(!BuildViewPreferences::default().ordered_operations_expanded);
+
+        // A current-version round trip preserves an expanded section.
+        let state = BuildViewPreferences {
+            ordered_operations_expanded: true,
+            ..Default::default()
+        };
+        let serialized = serde_json::to_string(&state).expect("serialize preferences");
+        let restored = BuildViewPreferences::restore(Some(&serialized)).expect("restore");
+        assert!(restored.ordered_operations_expanded);
+
+        // A version-8 payload predates the disclosure state: every saved
+        // preference survives the migration and the section stays collapsed.
+        let mut previous: serde_json::Value =
+            serde_json::from_str(&serialized).expect("schema 8 fixture");
+        if let Some(object) = previous.as_object_mut() {
+            object.remove("ordered_operations_expanded");
+            object.insert("version".into(), serde_json::json!(8));
+        }
+        let migrated =
+            BuildViewPreferences::restore(Some(&previous.to_string())).expect("schema 8 migration");
+        assert_eq!(migrated.version, VIEW_STATE_VERSION);
+        assert!(!migrated.ordered_operations_expanded);
+        assert_eq!(migrated.view, BuildToolView::Dependencies);
+        assert_eq!(
+            migrated.ordered_operations_expanded, false,
+            "the migrated section stays collapsed"
+        );
+    }
+
+    #[test]
     fn build_view_preferences_reject_foreign_or_unbounded_state() {
         let state = BuildViewPreferences {
             view: BuildToolView::Maven,
@@ -8090,6 +8731,10 @@ mod tests {
         previous_three["version"] = serde_json::json!(3);
         previous_three
             .as_object_mut()
+            .expect("schema fixture")
+            .remove("ordered_operations_expanded");
+        previous_three
+            .as_object_mut()
             .expect("old schema")
             .remove("graph_fact_filter");
         previous_three
@@ -8118,6 +8763,10 @@ mod tests {
         let mut previous_two: serde_json::Value =
             serde_json::from_str(&serialized).expect("schema 2 fixture");
         previous_two["version"] = serde_json::json!(2);
+        previous_two
+            .as_object_mut()
+            .expect("schema fixture")
+            .remove("ordered_operations_expanded");
         previous_two
             .as_object_mut()
             .expect("old schema")
@@ -9508,6 +10157,10 @@ mod tests {
         previous["version"] = serde_json::json!(5);
         previous
             .as_object_mut()
+            .expect("schema fixture")
+            .remove("ordered_operations_expanded");
+        previous
+            .as_object_mut()
             .expect("schema 5")
             .remove("show_ignored");
         previous
@@ -9544,6 +10197,10 @@ mod tests {
         );
         let mut previous = serialized.clone();
         previous["version"] = serde_json::json!(6);
+        previous
+            .as_object_mut()
+            .expect("schema fixture")
+            .remove("ordered_operations_expanded");
         previous
             .as_object_mut()
             .expect("schema 6")
@@ -9693,6 +10350,10 @@ mod tests {
         );
         let mut previous = serialized.clone();
         previous["version"] = serde_json::json!(7);
+        previous
+            .as_object_mut()
+            .expect("schema fixture")
+            .remove("ordered_operations_expanded");
         previous
             .as_object_mut()
             .expect("schema 7")
@@ -10341,6 +11002,10 @@ mod tests {
         );
         let mut previous = serde_json::to_value(&state).expect("prefs");
         previous["version"] = serde_json::json!(4);
+        previous
+            .as_object_mut()
+            .expect("schema fixture")
+            .remove("ordered_operations_expanded");
         previous
             .as_object_mut()
             .expect("old prefs")

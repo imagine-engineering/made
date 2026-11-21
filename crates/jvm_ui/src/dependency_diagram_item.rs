@@ -6,8 +6,8 @@
 
 use crate::dependencies_panel::{
     AddGraphSelectionToSet, ClearGraphInspection, ClearGraphSelectionSet,
-    CopyDependencyDiagramSource, InspectGraphNeighbours, InspectGraphPathsBetween,
-    InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
+    CopyDependencyDiagramSource, InspectGraphAllUsages, InspectGraphNeighbours,
+    InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
 };
 use crate::dependency_graph_canvas::CanvasState;
 use gpui::{
@@ -26,7 +26,9 @@ actions!(
         ZoomDependencyDiagramIn,
         ZoomDependencyDiagramOut,
         ExportDependencyDiagramImage,
-        ToggleDependencyDiagramStructure
+        ToggleDependencyDiagramStructure,
+        ShowDependencyDiagramContextMenu,
+        DismissDependencyDiagramMenu
     ]
 );
 
@@ -349,9 +351,91 @@ impl DependencyDiagramItem {
         cx.notify();
     }
 
+    /// Selects and reveals the admitted node with the given identity, used by
+    /// the analyzer's Show in Diagram entry so the targeted dependency is
+    /// emphasized even when its canvas label differs from the analyzer row
+    /// label. A node the canvas does not admit leaves the diagram unchanged.
+    pub fn reveal_node_by_id(&mut self, id: &str, cx: &mut Context<Self>) {
+        let node_id = self
+            .canvas
+            .read(cx)
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.id == id)
+            .map(|node| node.id.clone());
+        let Some(node_id) = node_id else {
+            return;
+        };
+        self.canvas.update(cx, |canvas, cx| {
+            canvas.reveal_node(&node_id);
+            cx.notify();
+        });
+        self.notice = None;
+        cx.notify();
+    }
+
     /// Toggles the minimap-style Structure overview panel.
     pub fn toggle_structure(&mut self, cx: &mut Context<Self>) {
         self.structure_visible = !self.structure_visible;
+        cx.notify();
+    }
+
+    /// Opens the context menu for the keyboard-focused node: the platform
+    /// context-menu gesture stages the same target a right-click would and
+    /// shows the menu at the node's screen position.
+    fn show_context_menu_for_focus(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let staged = {
+            let canvas = self.canvas.read(cx);
+            let focused = canvas
+                .focus
+                .clone()
+                .or_else(|| canvas.selection.iter().next().cloned());
+            let Some(focused) = focused else {
+                return;
+            };
+            let Some(node_position) = canvas.graph.positions.get(&focused).copied() else {
+                return;
+            };
+            let target = if canvas.selection.len() > 1 && canvas.selection.contains(&focused) {
+                crate::dependency_diagram_menu::DependencyDiagramContextTarget::Selection
+            } else {
+                crate::dependency_diagram_menu::DependencyDiagramContextTarget::Node(focused)
+            };
+            let origin = *canvas.canvas_origin.lock().expect("canvas origin");
+            Some((target, node_position, canvas.viewport.clone(), origin))
+        };
+        let Some((target, node_position, viewport, origin)) = staged else {
+            return;
+        };
+        let screen = viewport.graph_to_screen(node_position);
+        let position = gpui::Point::<gpui::Pixels>::new(
+            gpui::Pixels::from(origin.x + screen.x),
+            gpui::Pixels::from(origin.y + screen.y),
+        );
+        self.context_state.stage(
+            crate::dependency_diagram_menu::DependencyDiagramContextInvocation {
+                target,
+                screen_position: sim_runtime::graph::GraphPoint {
+                    x: position.x.into(),
+                    y: position.y.into(),
+                },
+            },
+        );
+        self.context_handle.show_at(position, window, cx);
+    }
+
+    /// Dismisses the staged context menu and restores focus to the diagram
+    /// item: the Escape path for the keyboard context-menu gesture.
+    fn dismiss_context_menu(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if self.context_handle.is_deployed() {
+            self.context_handle.hide(cx);
+        }
+        window.focus(&self.focus_handle, cx);
+        // Re-assert the restoration on the next frame so a deferred focus
+        // claim from the dismissed overlay cannot outlast the gesture.
+        let focus_handle = self.focus_handle.clone();
+        window.on_next_frame(move |window, cx| window.focus(&focus_handle, cx));
         cx.notify();
     }
 
@@ -372,6 +456,40 @@ impl DependencyDiagramItem {
         if let Some(focus) = focus {
             focus.dispatch_action(event, window, cx);
         }
+    }
+
+    /// Opens the analyzer on the diagram's current dependency and
+    /// configuration: the canvas selection (or the diagram's own node) is
+    /// preselected and the diagram's scope choice carries over, through the
+    /// opening panel's shared derivation path. All usages never queries a
+    /// provider.
+    fn open_analyzer_for_selection(&mut self, _window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let Some(source) = self.source.clone() else {
+            self.notice = Some(
+                "The diagram's opening panel is unavailable; reopen the diagram from the Dependencies panel, then retry All usages"
+                    .into(),
+            );
+            cx.notify();
+            return;
+        };
+        let node = self
+            .canvas
+            .read(cx)
+            .selection
+            .iter()
+            .next()
+            .cloned()
+            .or_else(|| Some(source.node.clone()));
+        let selection = source.selection.clone();
+        let scope = self.scope.clone();
+        let result = source.panel.update(cx, |panel, cx| {
+            panel.open_analyzer_for_diagram(&selection, node, &scope, cx)
+        });
+        self.notice = match result {
+            Ok(Ok(())) => None,
+            Ok(Err(error)) | Err(error) => Some(error.to_string()),
+        };
+        cx.notify();
     }
 
     /// Exports the current canvas as a deterministic SVG image and copies it
@@ -590,6 +708,8 @@ impl Render for DependencyDiagramItem {
 
         div()
             .id("groovy-dependency-diagram-item")
+            .key_context("DependencyDiagram")
+            .track_focus(&self.focus_handle)
             .size_full()
             .flex()
             .flex_col()
@@ -634,6 +754,9 @@ impl Render for DependencyDiagramItem {
                     item.forward_to_panel(event, window, cx)
                 }),
             )
+            .on_action(cx.listener(|item, _: &InspectGraphAllUsages, window, cx| {
+                item.open_analyzer_for_selection(window, cx)
+            }))
             .on_action(
                 cx.listener(|item, event: &InspectGraphPathsBetween, window, cx| {
                     item.forward_to_panel(event, window, cx)
@@ -660,6 +783,16 @@ impl Render for DependencyDiagramItem {
             .on_action(
                 cx.listener(|item, event: &ClearGraphInspection, window, cx| {
                     item.forward_to_panel(event, window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|item, _: &ShowDependencyDiagramContextMenu, window, cx| {
+                    item.show_context_menu_for_focus(window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|item, _: &DismissDependencyDiagramMenu, window, cx| {
+                    item.dismiss_context_menu(window, cx)
                 }),
             )
             .child(toolbar)
@@ -1500,6 +1633,150 @@ mod tests {
         assert!(
             !svg.contains("flowchart"),
             "the export is not the Mermaid payload"
+        );
+    }
+
+    #[gpui::test]
+    async fn dependency_diagram_menu_keyboard_gesture_navigates_and_restores_focus(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(|cx| init(cx));
+        let fs = project::FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/groovy-diagram",
+            serde_json::json!({"pom.xml": "<project/>"}),
+        )
+        .await;
+        let project = project::Project::test(fs, ["/groovy-diagram".as_ref()], cx).await;
+        let (container, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+        let derivation = DependencyDiagramDerivation {
+            canvas: fixture_graph(),
+            target: DependencyDiagramTarget {
+                module_label: "app".into(),
+                provider: DependencyDiagramProvider::Gradle,
+                configuration: Some(":core".into()),
+            },
+            selected: Default::default(),
+            scope: DependencyDiagramScope::GradleConfiguration(":core".into()),
+            scope_options: vec![":core".into()],
+        };
+        let item = workspace.update_in(cx, |workspace, window, cx| {
+            DependencyDiagramItem::open(derivation, None, workspace, window, cx)
+        });
+        // Draw once so the right-click menu handle is attached to the rendered
+        // element tree before the keyboard gesture.
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+        });
+        let context_handle = cx.update(|_, cx| item.read(cx).context_handle.clone());
+
+        // Focus the item and one of its nodes; the platform keyboard
+        // context-menu gesture stages the focused node's target and shows the
+        // menu at the node's screen position.
+        item.update(cx, |item, cx| {
+            item.canvas
+                .update(cx, |canvas, _| canvas.focus = Some("c1".into()));
+        });
+        cx.update(|window, cx| {
+            window.focus(&item.read(cx).focus_handle(cx), cx);
+            // Flush the pending focus so the menu's dismissal restores this
+            // exact handle (focus becomes effective on the next frame).
+            window.draw(cx).clear(cx);
+        });
+        cx.update(|window, cx| {
+            item.update(cx, |item, cx| item.show_context_menu_for_focus(window, cx));
+        });
+        assert!(
+            context_handle.is_deployed(),
+            "the keyboard gesture deploys the context menu at the focused node"
+        );
+
+        // Escape dismisses the menu and restores focus to the diagram item:
+        // the item's key context binds Escape to the dismissal action, which
+        // hides the menu and re-focuses the item handle. The navigation
+        // keystroke runs first, like a user arrowing through the menu before
+        // cancelling.
+        cx.simulate_keystrokes("down");
+        cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+        });
+        let (dismissed, restored) = cx.update(|window, cx| {
+            (
+                !context_handle.is_deployed(),
+                item.read(cx).focus_handle(cx).is_focused(window),
+            )
+        });
+        assert!(dismissed, "Escape dismisses the keyboard context menu");
+        assert!(restored, "focus returns to the diagram item after Escape");
+
+        // Second gesture: the shared ui::ContextMenu keeps arrow-key
+        // navigation inside the deployed menu without dismissing it. The
+        // handle's focus API mirrors the platform gesture handing focus to
+        // the menu (the test window does not flush the deferred focus frames).
+        cx.update(|window, cx| {
+            item.update(cx, |item, cx| item.show_context_menu_for_focus(window, cx));
+        });
+        assert!(
+            context_handle.is_deployed(),
+            "the gesture re-deploys the menu"
+        );
+        cx.update(|window, cx| context_handle.focus(window, cx));
+        cx.simulate_keystrokes("down");
+        let navigating = cx.update(|window, cx| {
+            context_handle.is_deployed() && context_handle.is_focused(window, cx)
+        });
+        assert!(navigating, "arrow keys navigate the deployed menu");
+        cx.simulate_keystrokes("escape");
+        assert!(
+            !context_handle.is_deployed(),
+            "Escape dismisses the navigated menu"
+        );
+    }
+
+    #[gpui::test]
+    async fn analyzer_diagram_linkage_all_usages_requires_opening_panel(cx: &mut TestAppContext) {
+        cx.update(|cx| init(cx));
+        let fs = project::FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/groovy-diagram-linkage",
+            serde_json::json!({"pom.xml": "<project/>"}),
+        )
+        .await;
+        let project = project::Project::test(fs, ["/groovy-diagram-linkage".as_ref()], cx).await;
+        let (container, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+        let derivation = DependencyDiagramDerivation {
+            canvas: fixture_graph(),
+            target: DependencyDiagramTarget {
+                module_label: "app".into(),
+                provider: DependencyDiagramProvider::Gradle,
+                configuration: Some(":core".into()),
+            },
+            selected: Default::default(),
+            scope: DependencyDiagramScope::GradleConfiguration(":core".into()),
+            scope_options: vec![":core".into()],
+        };
+        let item = workspace.update_in(cx, |workspace, window, cx| {
+            DependencyDiagramItem::open(derivation, None, workspace, window, cx)
+        });
+        // All usages without an opening panel reports guidance instead of
+        // dispatching; the same rejection covers a stale diagram whose panel
+        // is gone.
+        cx.update(|window, cx| {
+            item.update(cx, |item, cx| item.open_analyzer_for_selection(window, cx));
+        });
+        let notice = cx.update(|_, cx| item.read(cx).notice.clone());
+        assert!(
+            notice
+                .as_deref()
+                .is_some_and(|notice| notice.contains("opening panel is unavailable")),
+            "All usages without an opening panel reports guidance: {notice:?}"
         );
     }
 }
