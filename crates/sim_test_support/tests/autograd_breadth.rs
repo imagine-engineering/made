@@ -42,7 +42,7 @@ use std::{
 
 const BREADTH_FIXTURE: &[u8] = include_bytes!("../fixtures/autograd/breadth-v1.json");
 const BREADTH_FIXTURE_SHA256: &str =
-    "d8d0c41d9873dcc376489403fcc3bf9a19428719ac49eaee9ecc6fd0dee99c1a";
+    "ff20a0ff6200a2b30cdc15ae9c377554b918b2059fcbe2889b51232c6e1cdf8e";
 const AUTOGRAD_CATALOG_PATH: &str = "crates/sim_test_support/parity/catalogs/backend-autograd.csv";
 const AUTOGRAD_CATALOG: &[u8] =
     include_bytes!("../../../crates/sim_test_support/parity/catalogs/backend-autograd.csv");

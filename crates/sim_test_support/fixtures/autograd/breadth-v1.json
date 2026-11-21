@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
-  "owner_task_id": "sim-parity-native-autograd-breadth",
+  "owner_task_id": "comfy-parity-native-autograd-breadth",
   "oracle": {
-    "simui_version": "0.27.1",
-    "simui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
+    "comfyui_version": "0.27.1",
+    "comfyui_tree_sha256": "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f",
     "source_files": {
-      "sim/ldm/cascade/stage_a.py": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
-      "sim/ldm/modules/diffusionmodules/util.py": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
-      "sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
-      "sim/weight_adapter/loha.py": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
-      "sim/ldm/hunyuan3dv2_1/hunyuandit.py": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
-      "sim_extras/nodes_train.py": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+      "comfy/ldm/cascade/stage_a.py": "8c1399846647a3376738daa90578ad8f6af224640e74dfdd23250c36676dc546",
+      "comfy/ldm/modules/diffusionmodules/util.py": "fb58652a35521fc23bdcb75d91adace8e4cc79e2d5b13af1617a38d0c0f7142e",
+      "comfy/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+      "comfy/weight_adapter/loha.py": "579ca1e33e0d244e0d7eedd30fb727913341f8e7bfbd74b51221f567612286d5",
+      "comfy/ldm/hunyuan3dv2_1/hunyuandit.py": "183c09de7cadde60417916836a9be5bb8512553ea804d9cfdacac0ab2cdf0e45",
+      "comfy_extras/nodes_train.py": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
     },
     "development_only": true
   },

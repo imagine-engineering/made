@@ -63,9 +63,9 @@
         ]
       }
     },
-    "generator": "crates/sim_test_support/parity/oracles/generate_quant_linear_oracle.py",
+    "generator": ".agents/specs/comfy-parity/oracles/generate_quant_linear_oracle.py",
     "generator_sha256": "beac9521a7dc3e1676e049504c665a4c372868e8c4cf3fe52cc24b9dae44c662",
-    "manifest": "crates/sim_test_support/parity/oracles/quant_linear_oracle_manifest.json",
+    "manifest": ".agents/specs/comfy-parity/oracles/quant_linear_oracle_manifest.json",
     "manifest_sha256": "0f1dc92eb5987737003e536f5a9841b8d0893e6ba3d028243fce39a5df5940dd",
     "determinism": {
       "algorithms": true,

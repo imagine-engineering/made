@@ -2310,17 +2310,17 @@
         {
           "name": "headless-cancellation-delegates-to-canonical-token",
           "path": "crates/sim_api/src/headless.rs",
-          "pattern": "sim_types::CancellationToken|use comfy_types.*CancellationToken"
+          "pattern": "use sim_types::(?:\\{[^}]*\\b)?CancellationToken\\b"
         },
         {
           "name": "plugin-host-uses-canonical-token",
           "path": "crates/sim_plugin_host/src/capabilities.rs",
-          "pattern": "sim_types::CancellationToken|use comfy_types.*CancellationToken"
+          "pattern": "use sim_types::(?:\\{[^}]*\\b)?CancellationToken\\b"
         },
         {
           "name": "api-transport-uses-canonical-token",
           "path": "crates/sim_api/src/transport.rs",
-          "pattern": "use comfy_types.*CancellationToken"
+          "pattern": "use sim_types::(?:\\{[^}]*\\b)?CancellationToken\\b"
         },
         {
           "name": "worker-cancellation-observation-cannot-own-terminal-state",
@@ -2492,7 +2492,7 @@
         "VAL-OWNERSHIP-DOMAIN-001",
         "VAL-OWNERSHIP-001"
       ],
-      "decision_reason": "Cancellation state belongs in the dependency-neutral comfy_types crate so every execution boundary observes the same monotonic signal and maps only its domain-specific error or reason."
+      "decision_reason": "Cancellation state belongs in the dependency-neutral sim_types crate so every execution boundary observes the same monotonic signal and maps only its domain-specific error or reason."
     },
     {
       "concern": "credential_secret_storage",

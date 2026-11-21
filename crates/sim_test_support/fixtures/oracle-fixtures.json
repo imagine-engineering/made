@@ -3,7 +3,7 @@
   "fixtures": [
     {
       "schema_version": 1,
-      "fixture_id": "simui-source-version-0.27.1",
+      "fixture_id": "comfyui-source-version-0.27.1",
       "feature_ids": [],
       "observation_kind": "source_snapshot",
       "source": {
@@ -16,7 +16,7 @@
         "program": "read-version-declarations",
         "arguments": [
           "pyproject.toml",
-          "simui_version.py"
+          "comfyui_version.py"
         ],
         "configuration": {
           "fields": [
@@ -33,7 +33,7 @@
           "sha256": "b3b1e7553e6433dd2dde8d64e82654eed3b1f82f27d1e9497eea0f694bb7d7ab"
         },
         {
-          "name": "ComfyUI/simui_version.py",
+          "name": "ComfyUI/comfyui_version.py",
           "sha256": "9c02921cf9fe9b81184033d436352787c99a57e7141df5c7da0cdcf900bb7a0f"
         }
       ],
@@ -74,7 +74,7 @@
     },
     {
       "schema_version": 1,
-      "fixture_id": "sim-cli-cuda-host-not-observed",
+      "fixture_id": "comfy-cli-cuda-host-not-observed",
       "feature_ids": [
         "COMFY-CLI-ENV-79F23AF44C50"
       ],
@@ -85,8 +85,8 @@
         "tree_sha256": "09d0b5f262bce3105f83777a310f1e391c4624f95142da5e3230626b68a276e6"
       },
       "command": {
-        "adapter": "sim-cli-device-probe-v1",
-        "program": "sim-cli-cuda-detect",
+        "adapter": "comfy-cli-device-probe-v1",
+        "program": "comfy-cli-cuda-detect",
         "arguments": [],
         "configuration": {
           "environment_key": "CUDA_VISIBLE_DEVICES",
@@ -95,7 +95,7 @@
       },
       "inputs": [
         {
-          "name": "sim-cli/sim_cli/cuda_detect.py",
+          "name": "comfy-cli/comfy_cli/cuda_detect.py",
           "sha256": "cd4b0d2ea459de7495753c6a446f5aebbfc94698411e6fbd2deb3076df934695"
         }
       ],
@@ -137,7 +137,7 @@
     },
     {
       "schema_version": 1,
-      "fixture_id": "sim-cli-cloud-login-not-observed",
+      "fixture_id": "comfy-cli-cloud-login-not-observed",
       "feature_ids": [
         "COMFY-CLI-CMD-8E7E3F798F2B"
       ],
@@ -148,8 +148,8 @@
         "tree_sha256": "09d0b5f262bce3105f83777a310f1e391c4624f95142da5e3230626b68a276e6"
       },
       "command": {
-        "adapter": "sim-cli-cloud-login-v1",
-        "program": "sim cloud login",
+        "adapter": "comfy-cli-cloud-login-v1",
+        "program": "comfy cloud login",
         "arguments": [],
         "configuration": {
           "oauth": "pkce",
@@ -158,7 +158,7 @@
       },
       "inputs": [
         {
-          "name": "sim-cli/sim_cli/cloud/command.py",
+          "name": "comfy-cli/comfy_cli/cloud/command.py",
           "sha256": "2feb99bf909017c21b86a1a4d43688756a3141f31711efd6b12f7d12f8858954"
         }
       ],
@@ -191,7 +191,7 @@
         "detail": "No Comfy Cloud account or credential was authorized, so the paid/account-backed login flow was not invoked.",
         "evidence": [
           "the specification baseline does not authorize account use, credentials, paid calls, or network access",
-          "the feature catalog classifies sim cloud login as cloud/paid"
+          "the feature catalog classifies comfy cloud login as cloud/paid"
         ],
         "uncertainty": "OAuth browser, callback, token, cancellation, and provider error behavior remain unobserved and no output is inferred."
       }

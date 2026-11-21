@@ -86,7 +86,7 @@
         }
       ],
       "properties": {
-        "cnr_id": "sim-core",
+        "cnr_id": "comfy-core",
         "ver": "0.3.26",
         "Node name for S&R": "CheckpointLoaderSimple"
       },
@@ -120,7 +120,7 @@
         }
       ],
       "properties": {
-        "cnr_id": "sim-core",
+        "cnr_id": "comfy-core",
         "ver": "0.3.26",
         "Node name for S&R": "VAEDecode"
       },

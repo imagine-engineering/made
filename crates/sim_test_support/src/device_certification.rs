@@ -1275,7 +1275,7 @@ mod tests {
         let manifest = include_str!("../Cargo.toml");
         assert!(manifest.contains("default = [\"cpu\"]"));
         assert!(manifest.contains("hardware-certification = []"));
-        assert!(manifest.contains("name = \"device_cpu_comfy_model_0016\""));
+        assert!(manifest.contains("name = \"device_cpu_sim_model_0016\""));
         assert!(manifest.contains("required-features = [\"hardware-certification\"]"));
     }
 
