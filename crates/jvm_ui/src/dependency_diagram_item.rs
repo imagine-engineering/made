@@ -12,9 +12,10 @@ use crate::dependencies_panel::{
 use crate::dependency_graph_canvas::CanvasState;
 use gpui::{
     App, AppContext as _, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
-    Render, SharedString, actions,
+    Render, SharedString, Task, Window, actions,
 };
-use std::collections::BTreeSet;
+use picker::{Picker, PickerDelegate};
+use std::{collections::BTreeSet, sync::Arc};
 use workspace::Workspace;
 
 actions!(
@@ -40,12 +41,128 @@ pub struct SelectDependencyDiagramScope {
     pub label: String,
 }
 
-/// Reveals and selects the node with the chosen label, from the search popup.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
-#[action(namespace = groovy_dependencies_panel)]
-#[serde(deny_unknown_fields)]
-pub struct RevealDependencyDiagramNode {
+#[derive(Clone)]
+pub(crate) struct DependencySearchEntry {
+    pub id: String,
     pub label: String,
+}
+
+pub(crate) struct DependencySearch {
+    entries: Vec<DependencySearchEntry>,
+    matches: Vec<usize>,
+    selected_index: usize,
+    reveal: Box<dyn Fn(&str, &mut App)>,
+}
+
+impl DependencySearch {
+    pub(crate) fn new(
+        entries: Vec<DependencySearchEntry>,
+        reveal: impl Fn(&str, &mut App) + 'static,
+    ) -> Self {
+        let mut search = Self {
+            entries,
+            matches: Vec::new(),
+            selected_index: 0,
+            reveal: Box::new(reveal),
+        };
+        search.filter("");
+        search
+    }
+
+    fn filter(&mut self, query: &str) {
+        let query = query.trim().to_lowercase();
+        self.matches = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.label.to_lowercase().contains(&query))
+            .map(|(index, _)| index)
+            .take(16)
+            .collect();
+        self.selected_index = 0;
+    }
+
+    fn entry(&self, index: usize) -> Option<&DependencySearchEntry> {
+        self.entries.get(*self.matches.get(index)?)
+    }
+
+    pub(crate) fn popover(self, window: &mut Window, cx: &mut App) -> gpui::Entity<Picker<Self>> {
+        cx.new(|cx| Picker::uniform_list(self, window, cx).popover())
+    }
+}
+
+impl PickerDelegate for DependencySearch {
+    type ListItem = ui::ListItem;
+
+    fn name() -> &'static str {
+        "groovy-dependency-search"
+    }
+
+    fn match_count(&self) -> usize {
+        self.matches.len()
+    }
+
+    fn selected_index(&self) -> usize {
+        self.selected_index
+    }
+
+    fn set_selected_index(&mut self, index: usize, _: &mut Window, _: &mut Context<Picker<Self>>) {
+        self.selected_index = index;
+    }
+
+    fn placeholder_text(&self, _: &mut Window, _: &mut App) -> Arc<str> {
+        "Search dependencies".into()
+    }
+
+    fn no_matches_text(&self, _: &mut Window, _: &mut App) -> Option<SharedString> {
+        Some(
+            if self.entries.is_empty() {
+                "No admitted dependencies"
+            } else {
+                "No matching dependencies"
+            }
+            .into(),
+        )
+    }
+
+    fn update_matches(
+        &mut self,
+        query: String,
+        _: &mut Window,
+        _: &mut Context<Picker<Self>>,
+    ) -> Task<()> {
+        self.filter(&query);
+        Task::ready(())
+    }
+
+    fn confirm(&mut self, _: bool, _: &mut Window, cx: &mut Context<Picker<Self>>) {
+        if let Some(entry) = self.entry(self.selected_index) {
+            (self.reveal)(&entry.id, cx);
+        }
+    }
+
+    fn dismissed(&mut self, _: &mut Window, _: &mut Context<Picker<Self>>) {}
+
+    fn render_match(
+        &self,
+        index: usize,
+        selected: bool,
+        _: &mut Window,
+        _: &mut Context<Picker<Self>>,
+    ) -> Option<Self::ListItem> {
+        use ui::prelude::*;
+
+        let entry = self.entry(index)?;
+        Some(
+            ui::ListItem::new(index)
+                .inset(true)
+                .toggle_state(selected)
+                .aria_role(gpui::Role::MenuItem)
+                .aria_label(entry.label.clone())
+                .when(selected, ui::ListItem::aria_active_descendant)
+                .child(ui::Label::new(entry.label.clone())),
+        )
+    }
 }
 
 /// The scope choice applied when re-deriving the canvas from admitted facts.
@@ -310,68 +427,33 @@ impl DependencyDiagramItem {
         cx.notify();
     }
 
-    /// Bounded node-label matches for the search popup, in node order.
-    pub fn search_matches(&self, query: &str, cx: &App) -> Vec<String> {
-        const MAX_SEARCH_MATCHES: usize = 16;
-        let query = query.to_lowercase();
+    fn search_entries(&self, cx: &App) -> Vec<DependencySearchEntry> {
         self.canvas
             .read(cx)
             .graph
             .nodes
             .iter()
-            .filter(|node| node.label.to_lowercase().contains(&query))
-            .map(|node| node.label.clone())
-            .take(MAX_SEARCH_MATCHES)
+            .map(|node| DependencySearchEntry {
+                id: node.id.clone(),
+                label: match &node.version {
+                    Some(version) => format!("{}:{version}", node.label),
+                    None => node.label.clone(),
+                },
+            })
             .collect()
     }
 
-    /// Selects and reveals the first admitted node whose label matches, panning
-    /// the canvas so the node sits at its centre.
-    pub fn reveal_node_by_label(&mut self, label: &str, cx: &mut Context<Self>) {
-        let node_id = self
-            .canvas
-            .read(cx)
-            .graph
-            .nodes
-            .iter()
-            .find(|node| node.label == label)
-            .map(|node| node.id.clone());
-        let Some(node_id) = node_id else {
-            self.notice = Some(
-                "The search result is no longer part of the admitted graph; re-derive the diagram, then search again".into(),
-            );
-            cx.notify();
-            return;
-        };
-        self.canvas.update(cx, |canvas, cx| {
-            canvas.reveal_node(&node_id);
-            cx.notify();
-        });
-        self.notice = None;
-        cx.notify();
-    }
-
-    /// Selects and reveals the admitted node with the given identity, used by
-    /// the analyzer's Show in Diagram entry so the targeted dependency is
-    /// emphasized even when its canvas label differs from the analyzer row
-    /// label. A node the canvas does not admit leaves the diagram unchanged.
     pub fn reveal_node_by_id(&mut self, id: &str, cx: &mut Context<Self>) {
-        let node_id = self
-            .canvas
-            .read(cx)
-            .graph
-            .nodes
-            .iter()
-            .find(|node| node.id == id)
-            .map(|node| node.id.clone());
-        let Some(node_id) = node_id else {
-            return;
-        };
-        self.canvas.update(cx, |canvas, cx| {
-            canvas.reveal_node(&node_id);
-            cx.notify();
+        let revealed = self.canvas.update(cx, |canvas, cx| {
+            let revealed = canvas.reveal_node(id);
+            if revealed {
+                cx.notify();
+            }
+            revealed
         });
-        self.notice = None;
+        self.notice = (!revealed).then(|| {
+            "The dependency is no longer part of the admitted graph; refresh the diagram and retry".into()
+        });
         cx.notify();
     }
 
@@ -517,7 +599,7 @@ impl Render for DependencyDiagramItem {
         let title = self.target.title();
         let scope_label = self.scope.label();
         let scope_options = self.scope_options.clone();
-        let search_matches = self.search_matches("", cx);
+        let search_item = cx.weak_entity();
         let structure_visible = self.structure_visible;
         let notice = self.notice.clone();
 
@@ -602,30 +684,18 @@ impl Render for DependencyDiagramItem {
                         .aria_label("Search dependency diagram nodes")
                         .tooltip(ui::Tooltip::text("Search dependencies")),
                     )
-                    .menu({
-                        move |window, cx| {
-                            Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
-                                let mut menu = menu;
-                                if search_matches.is_empty() {
-                                    menu = menu.action_disabled_when(
-                                        true,
-                                        "No admitted dependency nodes",
-                                        Box::new(RevealDependencyDiagramNode {
-                                            label: String::new(),
-                                        }),
-                                    );
+                    .menu(move |window, cx| {
+                        let item = search_item.upgrade()?;
+                        let entries = item.read(cx).search_entries(cx);
+                        let item = search_item.clone();
+                        Some(
+                            DependencySearch::new(entries, move |id, cx| {
+                                if let Some(item) = item.upgrade() {
+                                    item.update(cx, |item, cx| item.reveal_node_by_id(id, cx));
                                 }
-                                for label in &search_matches {
-                                    menu = menu.action(
-                                        label.clone(),
-                                        Box::new(RevealDependencyDiagramNode {
-                                            label: label.clone(),
-                                        }),
-                                    );
-                                }
-                                menu
-                            }))
-                        }
+                            })
+                            .popover(window, cx),
+                        )
                     }),
             )
             .child(
@@ -737,11 +807,6 @@ impl Render for DependencyDiagramItem {
             .on_action(
                 cx.listener(|item, event: &SelectDependencyDiagramScope, _, cx| {
                     item.apply_scope(event.label.clone(), cx)
-                }),
-            )
-            .on_action(
-                cx.listener(|item, event: &RevealDependencyDiagramNode, _, cx| {
-                    item.reveal_node_by_label(&event.label, cx)
                 }),
             )
             .on_action(
@@ -1328,11 +1393,9 @@ mod tests {
 
         // Search lists admitted node labels; selecting one selects and
         // reveals it on the canvas.
-        let matches = cx.update(|_, cx| item.read(cx).search_matches("", cx));
+        let matches = cx.update(|_, cx| item.read(cx).search_entries(cx));
         assert_eq!(matches.len(), 3, "all admitted nodes are searchable");
-        item.update(cx, |item, cx| {
-            item.reveal_node_by_label("org.example:right", cx)
-        });
+        item.update(cx, |item, cx| item.reveal_node_by_id("c2", cx));
         let revealed = cx.update(|_, cx| item.read(cx).canvas.read(cx).selection.contains("c2"));
         assert!(revealed, "search result is selected and revealed");
     }
@@ -1357,12 +1420,12 @@ mod tests {
                 .map(|index| CanvasNode {
                     id: format!("n{index}"),
                     component_id: format!("c{index}"),
-                    label: if index == 7 {
+                    label: if index >= 22 {
                         "org.example:special".into()
                     } else {
                         format!("org.example:shared{index}")
                     },
-                    version: Some("1.0".into()),
+                    version: Some(format!("{index}.0")),
                     kind: CanvasNodeKind::Module,
                 })
                 .collect(),
@@ -1410,39 +1473,34 @@ mod tests {
             });
         });
 
-        // Bounded results: the popup lists at most the bounded window even
-        // when more nodes are admitted.
-        let all = cx.update(|_, cx| item.read(cx).search_matches("", cx));
-        assert_eq!(all.len(), 16, "search results are bounded");
-        // Matching: the query narrows to the admitted labels containing it.
-        let matched = cx.update(|_, cx| item.read(cx).search_matches("special", cx));
-        assert_eq!(matched, ["org.example:special".to_owned()]);
-        // Empty: an unknown query yields no entries.
-        let empty = cx.update(|_, cx| item.read(cx).search_matches("absent-dependency", cx));
-        assert!(empty.is_empty(), "an unknown query yields no matches");
-        // Reveal: selecting a match selects and centres the node on canvas.
-        item.update(cx, |item, cx| {
-            item.reveal_node_by_label("org.example:special", cx)
-        });
+        let entries = cx.update(|_, cx| item.read(cx).search_entries(cx));
+        let mut search = DependencySearch::new(entries, |_, _| {});
+        assert_eq!(search.match_count(), 16);
+        search.filter("absent-dependency");
+        assert_eq!(search.match_count(), 0);
+        search.filter(" SPECIAL ");
+        assert_eq!(search.match_count(), 2);
+        let result = search.entry(1).expect("second occurrence");
+        assert_eq!(result.id, "n23");
+        assert_eq!(result.label, "org.example:special:23.0");
+        item.update(cx, |item, cx| item.reveal_node_by_id(&result.id, cx));
         let (selected, offset) = cx.update(|_, cx| {
             let canvas = item.read(cx).canvas.read(cx);
-            (canvas.selection.contains("n7"), canvas.viewport.offset)
+            (canvas.selection.contains("n23"), canvas.viewport.offset)
         });
         assert!(selected, "the revealed node is selected");
         // The node sits at the canvas centre: offset = centre - position*scale.
         let expected_offset = {
             let scale = cx.update(|_, cx| item.read(cx).canvas.read(cx).viewport.scale);
             sim_runtime::graph::GraphPoint {
-                x: 400.0 - 700.0 * scale,
+                x: 400.0 - 2300.0 * scale,
                 y: 300.0,
             }
         };
         assert_eq!(offset, expected_offset, "the reveal centres the node");
         // Selecting a label that is no longer admitted reports guidance
         // instead of failing.
-        item.update(cx, |item, cx| {
-            item.reveal_node_by_label("org.example:absent", cx)
-        });
+        item.update(cx, |item, cx| item.reveal_node_by_id("absent", cx));
         let notice = cx.update(|_, cx| item.read(cx).notice.clone());
         assert!(
             notice

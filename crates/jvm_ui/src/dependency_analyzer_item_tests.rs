@@ -12,7 +12,7 @@ use crate::dependency_diagram_item::{
     DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
 };
 use gpui::TestAppContext;
-use language_tools::language_tool_tree::LanguageToolNode;
+use language_tools::language_tool_tree::{LanguageToolNode, LanguageToolNodeId};
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencyKind,
     GradleDependencySelector, MavenDependencyComponent, MavenDependencyEdge, MavenDependencyNode,
@@ -599,9 +599,15 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
     assert_eq!(usages, ["used by org.example:left".to_owned()]);
 
     // Search lists admitted rows and selecting a match selects and reveals it.
-    let matches = cx.update(|_, cx| item.read(cx).search_matches(""));
-    assert!(!matches.is_empty(), "admitted rows are searchable");
-    item.update(cx, |item, cx| item.reveal_row("1.0", cx));
+    item.update(cx, |item, cx| item.collapse_all_rows(cx));
+    let matches = cx.update(|_, cx| item.read(cx).search_entries());
+    let result = matches
+        .iter()
+        .find(|entry| entry.label == "org.example:left:1.0")
+        .expect("collapsed dependency is still searchable");
+    item.update(cx, |item, cx| {
+        item.reveal_row(LanguageToolNodeId(result.id.clone()), cx)
+    });
     let (selected_key, usages) = cx.update(|_, cx| {
         (
             item.read(cx).selected_key().map(|key| key.to_owned()),

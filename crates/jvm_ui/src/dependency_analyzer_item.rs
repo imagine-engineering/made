@@ -6,7 +6,8 @@
 
 use crate::dependencies_panel::{BuildToolView, GraphQueryTarget, GraphSelection};
 use crate::dependency_diagram_item::{
-    DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
+    DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget, DependencySearch,
+    DependencySearchEntry,
 };
 use gpui::{
     App, AppContext as _, Context, EventEmitter, FocusHandle, Focusable, FontWeight, Pixels,
@@ -66,14 +67,6 @@ pub struct ExpandDependencyAnalyzerRows;
 #[action(namespace = groovy_dependencies_panel)]
 #[serde(deny_unknown_fields)]
 pub struct CollapseDependencyAnalyzerRows;
-
-/// Reveals and selects the row with the chosen label, from the search popup.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
-#[action(namespace = groovy_dependencies_panel)]
-#[serde(deny_unknown_fields)]
-pub struct RevealDependencyAnalyzerRow {
-    pub label: String,
-}
 
 /// Shows the analyzer row's dependency in the diagram tab for the analyzer's
 /// own module and configuration scope, revealing the row's node when the
@@ -197,9 +190,6 @@ impl Focusable for DependencyAnalyzerItem {
 const MAX_ANALYZER_OCCURRENCES: usize = 256;
 /// The Usages pane is bounded; excess usages are counted, never silently dropped.
 const MAX_USAGE_ROWS: usize = 64;
-/// Bounded search results, matching the diagram search popup.
-const MAX_SEARCH_MATCHES: usize = 16;
-
 pub(crate) fn analyzer_row_id_for_node(key: &str) -> LanguageToolNodeId {
     LanguageToolNodeId(format!("analyzer-node:{key}"))
 }
@@ -916,42 +906,58 @@ impl DependencyAnalyzerItem {
         self.selected_key.as_deref()
     }
 
-    /// Bounded row-label matches for the search popup, in row order.
-    pub fn search_matches(&self, query: &str) -> Vec<String> {
-        let query = query.to_lowercase();
-        let mut matches = Vec::new();
-        for row in self.host.visible_rows() {
-            if row.label.to_lowercase().contains(&query) {
-                matches.push(row.label.clone());
-                if matches.len() == MAX_SEARCH_MATCHES {
-                    break;
-                }
-            }
-        }
-        matches
+    pub(crate) fn search_entries(&self) -> Vec<DependencySearchEntry> {
+        analyzer_rows(
+            &self.derivation.graph,
+            self.filter,
+            DependencyAnalyzerPresentation::Flat,
+            self.show_group_ids,
+        )
+        .into_iter()
+        .map(|row| DependencySearchEntry {
+            id: row.id.0,
+            label: row.label,
+        })
+        .collect()
     }
 
-    /// Reveals and selects the row with the chosen label.
-    pub fn reveal_row(&mut self, label: &str, cx: &mut Context<Self>) {
-        let row = self
-            .host
-            .visible_rows()
-            .iter()
-            .find(|row| row.label == label)
-            .map(|row| row.id.clone());
-        match row {
-            Some(id) => {
-                self.host.select(id);
-                self.host.reveal_selection(ScrollStrategy::Center);
-                self.refresh_selection(cx);
+    pub(crate) fn reveal_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
+        fn find_ancestors(
+            rows: &[LanguageToolNode],
+            id: &LanguageToolNodeId,
+            ancestors: &mut Vec<LanguageToolNodeId>,
+        ) -> bool {
+            for row in rows {
+                if &row.id == id {
+                    return true;
+                }
+                ancestors.push(row.id.clone());
+                if find_ancestors(&row.children, id, ancestors) {
+                    return true;
+                }
+                ancestors.pop();
             }
-            None => {
-                self.notice = Some(
-                    "The search result is no longer part of the admitted facts; re-apply the filters, then search again"
-                        .into(),
-                );
-                cx.notify();
-            }
+            false
+        }
+
+        let rows = analyzer_rows(
+            &self.derivation.graph,
+            self.filter,
+            self.presentation,
+            self.show_group_ids,
+        );
+        let mut ancestors = Vec::new();
+        if find_ancestors(&rows, &id, &mut ancestors) {
+            self.host.expand_nodes(ancestors);
+            self.host.select(id);
+            self.host.reveal_selection(ScrollStrategy::Center);
+            self.notice = None;
+            self.refresh_selection(cx);
+        } else {
+            self.notice = Some(
+                "The dependency is no longer part of the admitted facts; refresh the analyzer and retry".into(),
+            );
+            cx.notify();
         }
     }
 
@@ -1242,7 +1248,7 @@ impl Render for DependencyAnalyzerItem {
         let filter_label = filter.label();
         let presentation = self.presentation;
         let show_group_ids = self.show_group_ids;
-        let search_matches = self.search_matches("");
+        let search_item = cx.weak_entity();
         let usages_rows = self.usages.clone();
         // Right-click handlers are built per row up front because the render
         // children closure cannot borrow the render context.
@@ -1294,30 +1300,20 @@ impl Render for DependencyAnalyzerItem {
                         .aria_label("Search dependency analyzer rows")
                         .tooltip(ui::Tooltip::text("Search dependencies")),
                     )
-                    .menu({
-                        move |window, cx| {
-                            Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
-                                let mut menu = menu;
-                                if search_matches.is_empty() {
-                                    menu = menu.action_disabled_when(
-                                        true,
-                                        "No admitted dependency rows",
-                                        Box::new(RevealDependencyAnalyzerRow {
-                                            label: String::new(),
-                                        }),
-                                    );
+                    .menu(move |window, cx| {
+                        let item = search_item.upgrade()?;
+                        let entries = item.read(cx).search_entries();
+                        let item = search_item.clone();
+                        Some(
+                            DependencySearch::new(entries, move |id, cx| {
+                                if let Some(item) = item.upgrade() {
+                                    item.update(cx, |item, cx| {
+                                        item.reveal_row(LanguageToolNodeId(id.into()), cx);
+                                    });
                                 }
-                                for label in &search_matches {
-                                    menu = menu.action(
-                                        label.clone(),
-                                        Box::new(RevealDependencyAnalyzerRow {
-                                            label: label.clone(),
-                                        }),
-                                    );
-                                }
-                                menu
-                            }))
-                        }
+                            })
+                            .popover(window, cx),
+                        )
                     }),
             )
             .child(
@@ -1476,11 +1472,6 @@ impl Render for DependencyAnalyzerItem {
             .on_action(cx.listener(|item, _: &CollapseDependencyAnalyzerRows, _, cx| {
                 item.collapse_all_rows(cx)
             }))
-            .on_action(cx.listener(
-                |item, event: &RevealDependencyAnalyzerRow, _, cx| {
-                    item.reveal_row(&event.label, cx)
-                },
-            ))
             .on_action(cx.listener(
                 |item, event: &ShowInDependencyDiagram, _, cx| {
                     item.show_in_dependency_diagram(&event.node_key, cx)

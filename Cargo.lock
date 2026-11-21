@@ -11075,6 +11075,7 @@ dependencies = [
  "lsp",
  "markdown",
  "mermaid_render",
+ "picker",
  "product_flavor",
  "project",
  "remote",
