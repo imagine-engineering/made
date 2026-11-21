@@ -33,7 +33,7 @@ use thiserror::Error;
 // The checked-in fixture pins the digest produced by its materialized canonical VAE so identity
 // discovery never privately materializes a second execution owner.
 const SD15_TINY_VAE_EXECUTION_DIGEST: &str =
-    "a7cd5a39f5a1cd2dbfc4ade4fe7743683b1d22e621b042f0bcd61ff33fe98d95";
+    "a7b200b32a061a06002b398af224d11a27c36755f38a3d4dd164584a183d57f6";
 const SD15_TINY_MODEL_DIGEST: &str =
     "063b21b57d085ff0e93fa5d1bb219f8954016cd24a1218063645bbcfdfa6300f";
 

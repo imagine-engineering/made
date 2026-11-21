@@ -16,7 +16,7 @@ DIRECTORY = Path(__file__).resolve().parent
 ROOT = DIRECTORY.parents[3]
 FIXTURE = DIRECTORY.parent / "models/sd15-tiny-v1"
 OUTPUT = DIRECTORY / "source-equations.json"
-COMFY = ROOT / "projects/sim/ComfyUI/sim"
+COMFY = ROOT / "projects/comfy/ComfyUI/comfy"
 ADDITIONAL_SOURCES = {
     "clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
     "model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
@@ -93,7 +93,7 @@ def generate(sampler_override=None, raw_initial_noise=False):
                                  Embedding=SourceEmbedding)
     namespace = {"torch": torch, "math": math,
                  "optimized_attention_for_device": lambda *args, **kwargs: attention,
-                 "sim": SimpleNamespace(ops=SimpleNamespace(cast_to=lambda value, **options: value.to(**options)))}
+                 "comfy": SimpleNamespace(ops=SimpleNamespace(cast_to=lambda value, **options: value.to(**options)))}
     extract("clip_model.py", {"CLIPAttention", "ACTIVATIONS", "CLIPMLP", "CLIPLayer",
                               "CLIPEncoder", "CLIPEmbeddings", "CLIPTextModel_"}, namespace)
     configuration = {"num_hidden_layers": 2, "hidden_size": 32, "num_attention_heads": 4,

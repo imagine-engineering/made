@@ -10,7 +10,7 @@ import generate_source_equations as source
 
 DIRECTORY = Path(__file__).resolve().parent
 OUTPUT = DIRECTORY / "void-source-equations.json"
-VOID_SOURCE = source.ROOT / "projects/sim/ComfyUI/sim_extras/nodes_void.py"
+VOID_SOURCE = source.ROOT / "projects/comfy/ComfyUI/comfy_extras/nodes_void.py"
 VOID_SOURCE_SHA256 = "b80cd0b5831335087fd29f959be2659820b7927c8b7622cb4b3e9c9fde2c6d4f"
 
 
@@ -22,7 +22,7 @@ def generate():
     if len(selected) != 1:
         raise RuntimeError("Pinned VOID sampler class missing")
     namespace = {"torch": torch, "trange": lambda count, **options: range(count),
-                 "sim": SimpleNamespace(samplers=SimpleNamespace(Sampler=object))}
+                 "comfy": SimpleNamespace(samplers=SimpleNamespace(Sampler=object))}
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(VOID_SOURCE), "exec"), namespace)
 
     def sample(guided, initial, sigmas, callback):
