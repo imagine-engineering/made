@@ -32,6 +32,7 @@ const SIM_MENU_SOURCE: &str = include_str!("../../sim_ui/src/shell.rs");
 const WORKER_SOURCE: &[u8] = include_bytes!("../../sim_worker/src/sim_worker.rs");
 const RUNTIME_SUPERVISOR_SOURCE: &str = include_str!("../../sim_runtime/src/runtime_supervisor.rs");
 const MAC_BUNDLE: &str = include_str!("../../../script/bundle-mac");
+const MAC_SIGNING_HELPERS: &str = include_str!("../../../script/lib/macos-signing.sh");
 const LINUX_BUNDLE: &str = include_str!("../../../script/bundle-linux");
 const WINDOWS_BUNDLE: &str = include_str!("../../../script/bundle-windows.ps1");
 const WINDOWS_INSTALLER: &str = include_str!("../../zed/resources/windows/zed.iss");
@@ -303,7 +304,11 @@ fn packaging_cases() -> BTreeMap<&'static str, bool> {
             MAC_BUNDLE.contains("zed/sim,zed/metal,sim_worker/metal")
                 && MAC_BUNDLE.contains("--package sim_worker --no-default-features --features \"${zed_build_features}\"")
                 && MAC_BUNDLE.contains("Contents/MacOS/sim-worker")
-                && MAC_BUNDLE.contains("--sign \"$IDENTITY\" \"${app_path}/Contents/MacOS/sim-worker\""),
+                && MAC_BUNDLE.contains("source script/lib/macos-signing.sh")
+                && MAC_BUNDLE.contains("macos_nested_signing_paths \"$app_path\" \"$ZED_PRODUCT_EXECUTABLE\" > \"$nested_paths\"")
+                && MAC_SIGNING_HELPERS.contains("application.rglob(\"*\")")
+                && MAC_SIGNING_HELPERS.contains("path.is_file() and not path.is_symlink() and path != main_executable")
+                && MAC_BUNDLE.contains("--sign \"$IDENTITY\" \"${signing_keychain_arguments[@]}\" \"$binary_path\""),
         ),
         (
             "linux_default_bundle_omits_native_worker",
@@ -332,7 +337,9 @@ fn packaging_cases() -> BTreeMap<&'static str, bool> {
             WINDOWS_BUNDLE.contains("zed/sim,zed/rocm,sim_worker/rocm,zed/directml,sim_worker/directml")
                 && WINDOWS_BUNDLE.contains("--package sim_worker --package auto_update_helper --no-default-features --features $features")
                 && WINDOWS_BUNDLE.contains("sim-worker.exe\" -Destination \"$innoDir\\sim-worker.exe")
-                && WINDOWS_BUNDLE.contains("$files += \",$innoDir\\sim-worker.exe\"")
+                && WINDOWS_BUNDLE.contains("Get-ChildItem -LiteralPath $innoDir -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' }")
+                && WINDOWS_BUNDLE.contains("& \"$innoDir\\sign.ps1\" $file.FullName")
+                && WINDOWS_BUNDLE.contains("\nSignZedAndItsFriends\nBuildInstaller")
                 && WINDOWS_INSTALLER.contains("#ifdef Sim")
                 && WINDOWS_INSTALLER.contains("Source: \"{#ResourcesDir}\\sim-worker.exe\"; DestDir: \"{code:GetInstallDir}\"")
                 && WINDOWS_INSTALLER.contains("#endif"),

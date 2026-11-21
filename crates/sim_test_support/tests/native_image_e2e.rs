@@ -16,7 +16,7 @@ use sim_runtime::{
     NATIVE_IMAGE_REGISTRY_VERSION, NativeImageOutputProposal, NativeImageWorkerEvent,
     NativeImageWorkerPlan, NativeValue, OutputCommitReceipt, OutputCommitter, RuntimeSupervisor,
     RuntimeSupervisorError, SharedAssetService, SupervisorPolicy, WorkerHealth, WorkerLaunchConfig,
-    authorize_native_input_reader, authorize_native_output_committer,
+    WorkflowFormatDocument, authorize_native_input_reader, authorize_native_output_committer,
     compile_native_image_workflow,
 };
 use sim_tensor::CancellationToken;
@@ -134,6 +134,12 @@ impl NativeFixture {
 
 #[test]
 fn val_native_e2e_001() -> Result<(), Box<dyn Error>> {
+    let workflow = WorkflowFormatDocument::parse(WORKFLOW_FIXTURE)?;
+    assert!(
+        workflow.validation_issues().is_empty(),
+        "workflow must be editable in the desktop: {:?}",
+        workflow.validation_issues()
+    );
     let input: InputFixture = serde_json::from_slice(INPUT_FIXTURE)?;
     let expected: ExpectedFixture = serde_json::from_slice(EXPECTED_FIXTURE)?;
     let fixture = NativeFixture::new(&input)?;
