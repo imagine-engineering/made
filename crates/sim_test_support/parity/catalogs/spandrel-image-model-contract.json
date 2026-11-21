@@ -5814,7 +5814,7 @@
       "support_disposition": "rejected"
     }
   ],
-  "contract_id": "zed-comfy-spandrel-image-model-contract-v1",
+  "contract_id": "zed-sim-spandrel-image-model-contract-v1",
   "optional_extra_outcomes": [
     {
       "diagnostic": "typed extra import unavailable",

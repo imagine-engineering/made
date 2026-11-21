@@ -1,5 +1,5 @@
 {
-  "catalog_sha256": "dd46b24dbbb59f90d125e0f37394478a0087f646df3a1ada07677f32d57d032e",
+  "catalog_sha256": "3f7b4f71d1c49c96b97b89093c83f97aa9db60adeaa76a8558c43b6c5344ead6",
   "contract_id": "zed-sim-spandrel-image-model-contract-v1",
   "optional_extra_outcomes": [
     {
@@ -29,9 +29,9 @@
       "included_file_count": 180,
       "model_use_disposition": "no model weights approved or bundled; every model license is evaluated independently; unknown or incompatible rights fail closed",
       "package": "spandrel",
-      "path": "projects/sim/Spandrel",
+      "path": "projects/comfy/Spandrel",
       "registry_entry_count": 42,
-      "registry_source": "projects/sim/Spandrel/spandrel/__helpers/main_registry.py",
+      "registry_source": "projects/comfy/Spandrel/spandrel/__helpers/main_registry.py",
       "registry_source_sha256": "927b4d045a726e9ed24928ec5456546e1d3dd48335d87d2464bfb2fc34570e22",
       "sdist": "spandrel-0.4.2.tar.gz",
       "sdist_sha256": "fefa4ea966c6a5b7721dcf24f3e2062a5a96a395c8bedcb570fb55971fdcbccb",
@@ -49,9 +49,9 @@
       "included_file_count": 52,
       "model_use_disposition": "no model weights approved or bundled; every model license is evaluated independently; unknown or incompatible rights fail closed",
       "package": "spandrel-extra-arches",
-      "path": "projects/sim/spandrel-extra-arches",
+      "path": "projects/comfy/spandrel-extra-arches",
       "registry_entry_count": 10,
-      "registry_source": "projects/sim/spandrel-extra-arches/spandrel_extra_arches/__helper.py",
+      "registry_source": "projects/comfy/spandrel-extra-arches/spandrel_extra_arches/__helper.py",
       "registry_source_sha256": "a28daa554e42d8ccb755be91693f473b912477eebcd4fc86eda37e3fa2511624",
       "sdist": "spandrel_extra_arches-0.2.0.tar.gz",
       "sdist_sha256": "9216877ecabc9c97e001ad5d49c4f8d2b1f6c6f82d1e77c8e2b350c586b6e64a",
@@ -70,8 +70,8 @@
     "rejected_count": 52
   },
   "task_projection": {
-    "final_integration_task_id": "sim-parity-native-upscale-model-resource-foundation",
+    "final_integration_task_id": "comfy-parity-native-upscale-model-resource-foundation",
     "implementation_leaves": [],
-    "shared_runtime_contract_task_id": "sim-parity-native-upscale-runtime-contract-foundation"
+    "shared_runtime_contract_task_id": "comfy-parity-native-upscale-runtime-contract-foundation"
   }
 }

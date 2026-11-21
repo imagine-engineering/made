@@ -10,7 +10,7 @@ const EMBEDDED_CONTRACT: &str = include_str!(
 pub const NATIVE_UPSCALE_CONTRACT_SCHEMA_VERSION: u32 = 1;
 pub const NATIVE_UPSCALE_CONTRACT_ID: &str = "zed-sim-spandrel-image-model-contract-v1";
 pub const NATIVE_UPSCALE_CONTRACT_SHA256: &str =
-    "dd46b24dbbb59f90d125e0f37394478a0087f646df3a1ada07677f32d57d032e";
+    "3f7b4f71d1c49c96b97b89093c83f97aa9db60adeaa76a8558c43b6c5344ead6";
 pub const NATIVE_UPSCALE_ARCHITECTURE_COUNT: usize = 52;
 pub const NATIVE_UPSCALE_ADMITTED_ARCHITECTURE_COUNT: usize = 0;
 
@@ -352,8 +352,8 @@ struct OptionalOutcomeWire {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SourceBoundaryWire {
-    sim_source: String,
-    sim_source_sha256: String,
+    comfy_source: String,
+    comfy_source_sha256: String,
     fixtures: String,
     production_runtime: String,
     requirements_source: String,
@@ -449,7 +449,7 @@ fn validate_source_snapshots(
     validate_source_snapshot(
         &snapshots.spandrel,
         "spandrel",
-        "projects/sim/Spandrel",
+        "projects/comfy/Spandrel",
         "0.4.2",
         "v0.4.2",
         "724cca389f28c38e1050689d4862a452fd644484",
@@ -462,7 +462,7 @@ fn validate_source_snapshots(
     validate_source_snapshot(
         &snapshots.spandrel_extra_arches,
         "spandrel-extra-arches",
-        "projects/sim/spandrel-extra-arches",
+        "projects/comfy/spandrel-extra-arches",
         "0.2.0",
         "v0.4.0",
         "a1db3f5debbeeacbe02fb4114c69feee56ba5e21",
@@ -520,8 +520,8 @@ fn validate_source_snapshot(
 fn validate_source_boundary(
     boundary: &SourceBoundaryWire,
 ) -> Result<(), NativeUpscaleContractError> {
-    let valid = boundary.sim_source == "projects/comfy/ComfyUI/comfy_extras/nodes_upscale_model.py"
-        && boundary.sim_source_sha256
+    let valid = boundary.comfy_source == "projects/comfy/ComfyUI/comfy_extras/nodes_upscale_model.py"
+        && boundary.comfy_source_sha256
             == "da11e6f46a473fad3fdfdf068ae07a022802cf122240e4b99e639a380e9772f4"
         && boundary.requirements_source == "projects/comfy/ComfyUI/requirements.txt"
         && boundary.requirements_source_sha256

@@ -153,6 +153,18 @@ fn spandrel_contract_preserves_optional_outcomes_and_json_only_boundary() -> Res
         fixture.get("catalog_sha256").and_then(Value::as_str),
         Some(actual_digest.as_str())
     );
+    for field in [
+        "contract_id",
+        "source_snapshots",
+        "optional_extra_outcomes",
+        "summary",
+        "task_projection",
+    ] {
+        let value = contract
+            .get(field)
+            .ok_or_else(|| format!("missing contract field {field}"))?;
+        assert_eq!(fixture.get(field), Some(value), "{field}");
+    }
     assert!(!String::from_utf8_lossy(FIXTURE_BYTES).contains(".safetensors"));
     assert!(!String::from_utf8_lossy(FIXTURE_BYTES).contains(".pth"));
     Ok(())
