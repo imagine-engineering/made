@@ -1290,6 +1290,7 @@ impl ThreadView {
         &mut self,
         terminal_id: crate::TerminalId,
         terminal: Entity<terminal_view::TerminalView>,
+        reveal: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
@@ -1302,6 +1303,9 @@ impl ThreadView {
             placement.live_view.as_ref() == Some(&terminal),
             "The inline terminal's current live execution does not match its occurrence"
         );
+        if !reveal {
+            return Ok(());
+        }
         placement.editor.update(cx, |editor, cx| {
             editor.scroll_to_inline_terminal(placement.block_id, window, cx)
         })?;
@@ -1344,24 +1348,19 @@ impl ThreadView {
         Ok(())
     }
 
-    #[cfg(feature = "multiplayer-tools")]
-    fn detach_inline_terminal_presentations(
+    fn consume_editor_input(
         &mut self,
         editor: &Entity<MessageEditor>,
+        revision: crate::message_editor::MessageEditorSubmissionRevision,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let terminal_ids = self
-            .inline_terminals
-            .iter()
-            .filter(|(_, placement)| placement.editor.entity_id() == editor.entity_id())
-            .map(|(terminal_id, _)| *terminal_id)
-            .collect::<Vec<_>>();
-        for terminal_id in terminal_ids {
-            if let Some(placement) = self.inline_terminals.remove(&terminal_id) {
-                editor.update(cx, |editor, cx| {
-                    editor.remove_inline_terminal(placement.block_id, cx)
-                });
-            }
+        if editor.update(cx, |editor, cx| {
+            editor.clear_if_unchanged(revision, window, cx)
+        }) {
+            #[cfg(feature = "multiplayer-tools")]
+            self.inline_terminals
+                .retain(|_, placement| placement.editor != *editor);
         }
     }
 
@@ -2309,7 +2308,7 @@ impl ThreadView {
         cx: &mut Context<Self>,
     ) {
         // Capture before asynchronous resolution so consuming the command cannot clear later edits.
-        let input_revision = message_editor.read(cx).input_revision(cx);
+        let submission_revision = message_editor.read(cx).submission_revision(cx);
         #[cfg(feature = "multiplayer-tools")]
         let input_source = message_editor.read(cx).text(cx);
         let contents = self.resolve_message_contents(&message_editor, cx);
@@ -2387,13 +2386,7 @@ impl ThreadView {
                 acp::ContentBlock::Text(acp::TextContent::new(format!("/{command_name}")));
 
             this.update_in(cx, |this, window, cx| {
-                #[cfg(feature = "multiplayer-tools")]
-                if message_editor.read(cx).input_revision(cx) == input_revision {
-                    this.detach_inline_terminal_presentations(&message_editor, cx);
-                }
-                message_editor.update(cx, |editor, cx| {
-                    editor.clear_if_unchanged(input_revision, window, cx);
-                });
+                this.consume_editor_input(&message_editor, submission_revision, window, cx);
                 // Queue the remainder first, then start the command turn; the
                 // queue auto-processes when the command turn stops.
                 if !content.is_empty() {
@@ -2418,15 +2411,15 @@ impl ThreadView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let input_revision = message_editor.read(cx).input_revision(cx);
+        let submission_revision = message_editor.read(cx).submission_revision(cx);
         let contents = self.resolve_message_contents(&message_editor, cx);
-        self.send_resolved_impl(message_editor, input_revision, contents, window, cx);
+        self.send_resolved_impl(message_editor, submission_revision, contents, window, cx);
     }
 
     fn send_resolved_impl(
         &mut self,
         message_editor: Entity<MessageEditor>,
-        input_revision: crate::message_editor::MessageEditorInputRevision,
+        submission_revision: crate::message_editor::MessageEditorSubmissionRevision,
         contents: Task<Result<(Vec<acp::ContentBlock>, Vec<Entity<Buffer>>)>>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -2453,14 +2446,8 @@ impl ThreadView {
                 return Ok(None);
             }
 
-            this.update_in(cx, |_thread_view, window, cx| {
-                #[cfg(feature = "multiplayer-tools")]
-                if message_editor.read(cx).input_revision(cx) == input_revision {
-                    _thread_view.detach_inline_terminal_presentations(&message_editor, cx);
-                }
-                message_editor.update(cx, |message_editor, cx| {
-                    message_editor.clear_if_unchanged(input_revision, window, cx);
-                });
+            this.update_in(cx, |this, window, cx| {
+                this.consume_editor_input(&message_editor, submission_revision, window, cx);
             })?;
 
             Ok(Some((contents, tracked_buffers)))
@@ -2475,21 +2462,19 @@ impl ThreadView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let input_revision = message_editor.read(cx).input_revision(cx);
+        let submission_revision = message_editor.read(cx).submission_revision(cx);
         let contents = self.resolve_message_contents(&message_editor, cx);
         self.thread_error.take();
         self.thread_feedback.clear();
         self.editing_message.take();
 
-        let contents_task = cx.spawn_in(window, async move |_this, cx| {
+        let contents_task = cx.spawn_in(window, async move |this, cx| {
             let (contents, tracked_buffers) = contents.await?;
             if contents.is_empty() {
                 return Ok(None);
             }
-            cx.update(|window, cx| {
-                message_editor.update(cx, |message_editor, cx| {
-                    message_editor.clear_if_unchanged(input_revision, window, cx);
-                });
+            this.update_in(cx, |this, window, cx| {
+                this.consume_editor_input(&message_editor, submission_revision, window, cx);
             })?;
             Ok(Some((contents, tracked_buffers)))
         });
@@ -2678,7 +2663,7 @@ impl ThreadView {
     ) {
         let thread = self.thread.clone();
         self.message_queue.pause();
-        let input_revision = message_editor.read(cx).input_revision(cx);
+        let submission_revision = message_editor.read(cx).submission_revision(cx);
         let contents = self.resolve_message_contents(&message_editor, cx);
 
         let cancelled = thread.update(cx, |thread, cx| thread.cancel(cx));
@@ -2687,7 +2672,7 @@ impl ThreadView {
             cancelled.await;
 
             this.update_in(cx, |this, window, cx| {
-                this.send_resolved_impl(message_editor, input_revision, contents, window, cx);
+                this.send_resolved_impl(message_editor, submission_revision, contents, window, cx);
             })?;
             anyhow::Ok(())
         })
@@ -2935,7 +2920,7 @@ impl ThreadView {
             return;
         }
 
-        let input_revision = message_editor.read(cx).input_revision(cx);
+        let submission_revision = message_editor.read(cx).submission_revision(cx);
         let contents = self.resolve_message_contents(&message_editor, cx);
 
         cx.spawn_in(window, async move |this, cx| {
@@ -2946,14 +2931,8 @@ impl ThreadView {
             }
 
             this.update_in(cx, |this, window, cx| {
-                #[cfg(feature = "multiplayer-tools")]
-                if message_editor.read(cx).input_revision(cx) == input_revision {
-                    this.detach_inline_terminal_presentations(&message_editor, cx);
-                }
                 this.add_to_queue(content, tracked_buffers, window, cx);
-                message_editor.update(cx, |message_editor, cx| {
-                    message_editor.clear_if_unchanged(input_revision, window, cx);
-                });
+                this.consume_editor_input(&message_editor, submission_revision, window, cx);
                 #[cfg(feature = "multiplayer-tools")]
                 if let Err(error) = this.sync_inline_terminal_history(window, cx) {
                     this.handle_thread_error(

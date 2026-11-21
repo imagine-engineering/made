@@ -148,6 +148,13 @@ pub(crate) struct MessageEditorInputRevision {
     edit_count: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MessageEditorSubmissionRevision {
+    input: MessageEditorInputRevision,
+    #[cfg(feature = "multiplayer-tools")]
+    inline_terminal_revision: u64,
+}
+
 #[derive(Clone, Copy)]
 enum ContentWhitespace {
     Preserve,
@@ -219,6 +226,8 @@ pub struct MessageEditor {
         editor::display_map::CustomBlockId,
         Option<gpui::WeakEntity<crate::inline_terminal_view::InlineTerminalView>>,
     >,
+    #[cfg(feature = "multiplayer-tools")]
+    inline_terminal_revision: u64,
     #[cfg(feature = "multiplayer-tools")]
     inline_terminal_scope: Option<(crate::thread_metadata_store::ThreadId, acp::SessionId)>,
     workspace: WeakEntity<Workspace>,
@@ -628,6 +637,8 @@ impl MessageEditor {
             #[cfg(feature = "multiplayer-tools")]
             inline_terminal_blocks: collections::HashMap::default(),
             #[cfg(feature = "multiplayer-tools")]
+            inline_terminal_revision: 0,
+            #[cfg(feature = "multiplayer-tools")]
             inline_terminal_scope: None,
             workspace,
             session_capabilities,
@@ -929,6 +940,7 @@ impl MessageEditor {
         })?;
         self.inline_terminal_blocks
             .insert(block_id, inline_view_handle);
+        self.inline_terminal_revision = self.inline_terminal_revision.wrapping_add(1);
         terminal_view.update(cx, |view, cx| {
             view.set_embedded_mode(Some(1000), cx);
             view.set_show_workspace_actions(false, cx);
@@ -943,7 +955,9 @@ impl MessageEditor {
         block_id: editor::display_map::CustomBlockId,
         cx: &mut Context<Self>,
     ) {
-        self.inline_terminal_blocks.remove(&block_id);
+        if self.inline_terminal_blocks.remove(&block_id).is_some() {
+            self.inline_terminal_revision = self.inline_terminal_revision.wrapping_add(1);
+        }
         self.editor.update(cx, |editor, cx| {
             editor.remove_blocks([block_id].into_iter().collect(), None, cx)
         });
@@ -1362,14 +1376,22 @@ impl MessageEditor {
         }
     }
 
+    pub(crate) fn submission_revision(&self, cx: &App) -> MessageEditorSubmissionRevision {
+        MessageEditorSubmissionRevision {
+            input: self.input_revision(cx),
+            #[cfg(feature = "multiplayer-tools")]
+            inline_terminal_revision: self.inline_terminal_revision,
+        }
+    }
+
     pub(crate) fn clear_if_unchanged(
         &mut self,
-        input_revision: MessageEditorInputRevision,
+        submission_revision: MessageEditorSubmissionRevision,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         // Edit counters distinguish a later draft even after Undo restores identical text.
-        if self.input_revision(cx) != input_revision {
+        if self.submission_revision(cx) != submission_revision {
             return false;
         }
         self.clear(window, cx);
@@ -1379,6 +1401,10 @@ impl MessageEditor {
     pub fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         #[cfg(feature = "multiplayer-tools")]
         let inline_terminal_blocks = std::mem::take(&mut self.inline_terminal_blocks);
+        #[cfg(feature = "multiplayer-tools")]
+        if !inline_terminal_blocks.is_empty() {
+            self.inline_terminal_revision = self.inline_terminal_revision.wrapping_add(1);
+        }
         self.editor.update(cx, |editor, cx| {
             #[cfg(feature = "multiplayer-tools")]
             editor.remove_blocks(inline_terminal_blocks.into_keys().collect(), None, cx);
@@ -6973,7 +6999,7 @@ mod tests {
         init_test(cx);
         let (message_editor, cx) = setup_message_editor(cx).await;
         message_editor.update_in(cx, |editor, window, cx| editor.set_text("λ", window, cx));
-        let revision = message_editor.read_with(cx, |editor, cx| editor.input_revision(cx));
+        let revision = message_editor.read_with(cx, |editor, cx| editor.submission_revision(cx));
         message_editor.update_in(cx, |editor, window, cx| {
             editor.editor.update(cx, |editor, cx| {
                 editor.handle_input("🦀", window, cx);
@@ -6985,7 +7011,7 @@ mod tests {
                 "Undo returning identical text must not erase a later input revision"
             );
             assert_eq!(editor.text(cx), "λ");
-            let current = editor.input_revision(cx);
+            let current = editor.submission_revision(cx);
             assert!(editor.clear_if_unchanged(current, window, cx));
             assert!(
                 editor.text(cx).is_empty(),

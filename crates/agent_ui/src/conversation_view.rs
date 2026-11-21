@@ -13164,13 +13164,27 @@ pub(crate) mod tests {
     async fn test_inline_command_remainder_preserves_later_draft_during_resolution(
         cx: &mut TestAppContext,
     ) {
-        assert_inline_delayed_source_ownership(true, cx).await;
+        assert_inline_delayed_source_ownership(true, "\nLATER_DRAFT β", cx).await;
     }
 
     #[cfg(feature = "multiplayer-tools")]
     #[gpui::test]
     async fn test_inline_send_preserves_later_draft_during_resolution(cx: &mut TestAppContext) {
-        assert_inline_delayed_source_ownership(false, cx).await;
+        assert_inline_delayed_source_ownership(false, "\nLATER_DRAFT β", cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_command_remainder_preserves_terminal_added_during_resolution(
+        cx: &mut TestAppContext,
+    ) {
+        assert_inline_delayed_source_ownership(true, "", cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_send_preserves_terminal_added_during_resolution(cx: &mut TestAppContext) {
+        assert_inline_delayed_source_ownership(false, "", cx).await;
     }
 
     #[gpui::test]
@@ -13435,6 +13449,7 @@ pub(crate) mod tests {
     #[cfg(feature = "multiplayer-tools")]
     async fn assert_inline_delayed_source_ownership(
         command_remainder: bool,
+        later_suffix: &str,
         cx: &mut TestAppContext,
     ) {
         use crate::terminal_thread_metadata_store::{
@@ -13538,18 +13553,25 @@ pub(crate) mod tests {
             "pending mention must gate actual submission"
         );
         parent.read_with(cx, |parent, _| assert!(parent.is_loading_contents));
-        let later_suffix = "\nLATER_DRAFT β";
-        editor.update_in(cx, |editor, window, cx| {
-            let end = editor.text(cx).len();
-            editor.editor().update(cx, |editor, cx| {
-                assert!(!editor.read_only(cx), "fixture input must remain editable");
-                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
-                    selections.select_ranges([MultiBufferOffset(end)..MultiBufferOffset(end)]);
+        if !later_suffix.is_empty() {
+            editor.update_in(cx, |editor, window, cx| {
+                let end = editor.text(cx).len();
+                editor.editor().update(cx, |editor, cx| {
+                    assert!(!editor.read_only(cx), "fixture input must remain editable");
+                    editor.change_selections(
+                        SelectionEffects::no_scroll(),
+                        window,
+                        cx,
+                        |selections| {
+                            selections
+                                .select_ranges([MultiBufferOffset(end)..MultiBufferOffset(end)]);
+                        },
+                    );
+                    editor.insert(later_suffix, window, cx);
                 });
-                editor.insert(later_suffix, window, cx);
             });
-        });
-        cx.run_until_parked();
+            cx.run_until_parked();
+        }
         let later_source = format!("{captured_source}{later_suffix}");
         assert_eq!(
             editor.read_with(cx, |editor, cx| editor.text(cx)),

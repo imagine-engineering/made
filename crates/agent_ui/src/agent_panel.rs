@@ -2098,8 +2098,8 @@ impl AgentPanel {
             return true;
         }
         if let Some(thread_view) = cv.active_thread() {
-            let text = thread_view.read(cx).message_editor.read(cx).text(cx);
-            if !text.trim().is_empty() {
+            let editor = thread_view.read(cx).message_editor.read(cx);
+            if !editor.is_empty(cx) {
                 return true;
             }
         }
@@ -2358,6 +2358,17 @@ impl AgentPanel {
         cx.spawn_in(window, async move |this, cx| {
             let result = async {
                 let (terminal_id, terminal) = spawn.await?;
+                let reveal = this.read_with(cx, |panel, cx| {
+                    panel.active_thread_view(cx).as_ref() == Some(&parent)
+                        && panel.workspace.upgrade().is_some_and(|workspace| {
+                            let workspace = workspace.read(cx);
+                            workspace.workspace_presentation()
+                                == workspace::WorkspacePresentation::Collaborative
+                                && workspace.panel::<AgentPanel>(cx).is_some_and(|panel| {
+                                    panel.entity_id() == this.entity_id()
+                                })
+                        })
+                })?;
                 let attached = parent
                     .update_in(cx, |parent, window, cx| {
                         if let Some((history, retained, _, created)) = &reused {
@@ -2374,8 +2385,9 @@ impl AgentPanel {
                                 history.save_inline(created.clone(), cx)
                             })?;
                         }
-                        let attached =
-                            parent.attach_inline_terminal(terminal_id, terminal, window, cx);
+                        let attached = parent.attach_inline_terminal(
+                            terminal_id, terminal, reveal, window, cx,
+                        );
                         if let Err(error) = attached {
                             if let Some((history, _, previous, created)) = &reused {
                                 anyhow::ensure!(
@@ -3964,14 +3976,12 @@ impl AgentPanel {
         if let Some(draft) = &self.draft_thread {
             let draft_entity = draft.entity_id();
             let agent_matches = *draft.read(cx).agent_key() == desired_agent;
-            let has_editor_content = draft.read(cx).root_thread_view().is_some_and(|tv| {
-                !tv.read(cx)
-                    .message_editor
-                    .read(cx)
-                    .text(cx)
-                    .trim()
-                    .is_empty()
-            });
+            let has_editor_content = draft
+                .read(cx)
+                .root_thread_view()
+                .is_some_and(|thread_view| {
+                    !thread_view.read(cx).message_editor.read(cx).is_empty(cx)
+                });
             // Only retarget the empty draft when the user is actively
             // viewing it — that's the case where switching agents in the
             // toolbar should replace the draft with one bound to the
@@ -4093,15 +4103,9 @@ impl AgentPanel {
         let cv = conversation_view.clone();
         self._active_draft_reclaim_observation =
             Some(cx.observe(&editor, move |this, _editor, cx| {
-                let editor_has_text = cv.read(cx).active_thread().is_some_and(|tv| {
-                    !tv.read(cx)
-                        .message_editor
-                        .read(cx)
-                        .text(cx)
-                        .trim()
-                        .is_empty()
-                });
-                if editor_has_text {
+                if cv.read(cx).active_thread().is_some_and(|thread_view| {
+                    !thread_view.read(cx).message_editor.read(cx).is_empty(cx)
+                }) {
                     return;
                 }
                 if this.ephemeral_draft_thread_id(cx) == Some(thread_id) {
@@ -4130,13 +4134,7 @@ impl AgentPanel {
                 .root_thread(cx)
                 .is_some_and(|thread| thread.read(cx).is_draft_thread());
             let is_empty = if let Some(thread_view) = conversation.active_thread() {
-                thread_view
-                    .read(cx)
-                    .message_editor
-                    .read(cx)
-                    .text(cx)
-                    .trim()
-                    .is_empty()
+                thread_view.read(cx).message_editor.read(cx).is_empty(cx)
             } else {
                 !self.draft_has_content(&conversation_view, cx)
             };
@@ -9475,7 +9473,7 @@ mod tests {
                     .expect("independent canonical sibling execution");
                 parent
                     .update_in(cx, |parent, window, cx| {
-                        parent.attach_inline_terminal(terminal_id, terminal, window, cx)
+                        parent.attach_inline_terminal(terminal_id, terminal, true, window, cx)
                     })
                     .expect("independent sibling inline placement");
             } else {
@@ -11373,7 +11371,7 @@ mod tests {
             .expect("actual canonical PTY");
         parent
             .update_in(&mut cx, |parent, window, cx| {
-                parent.attach_inline_terminal(terminal_id, terminal_view.clone(), window, cx)
+                parent.attach_inline_terminal(terminal_id, terminal_view.clone(), true, window, cx)
             })
             .expect("mount real PTY inside draft");
         let terminal = terminal_view.read_with(&cx, |view, _| view.terminal().clone());
@@ -12154,6 +12152,178 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         assert_inline_terminal_parent_lifecycle(InlineTerminalAdmissionFailure::None, cx).await;
+    }
+
+    #[cfg(all(unix, feature = "multiplayer-tools"))]
+    #[gpui::test]
+    async fn test_late_inline_terminal_does_not_take_focus_from_new_conversation(
+        cx: &mut TestAppContext,
+    ) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        cx.executor().allow_parking();
+        crate::test_support::open_draft_with_connection(
+            &panel,
+            StubAgentConnection::new(),
+            &mut cx,
+        );
+        crate::test_support::type_draft_prompt(&panel, "Original conversation", &mut cx);
+        initialize_inline_terminal_test_state(&mut cx);
+        cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+        cx.run_until_parked();
+        let (original_conversation, original) = panel.read_with(&cx, |panel, cx| {
+            (
+                panel
+                    .active_conversation_view()
+                    .expect("original conversation")
+                    .clone(),
+                panel.active_thread_view(cx).expect("original thread"),
+            )
+        });
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.open_draft_with_server(
+                Rc::new(StubAgentServer::new(StubAgentConnection::new())),
+                window,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        let next_conversation = panel.read_with(&cx, |panel, cx| {
+            assert!(
+                panel.active_thread_view(cx).is_some(),
+                "next thread is ready"
+            );
+            panel
+                .active_conversation_view()
+                .expect("next conversation")
+                .clone()
+        });
+        let original_editor = original.read_with(&cx, |thread, _| thread.message_editor.clone());
+        let focus = panel.update_in(&mut cx, |panel, window, cx| {
+            panel.set_base_view(
+                BaseView::AgentThread {
+                    conversation_view: original_conversation,
+                },
+                false,
+                window,
+                cx,
+            );
+            assert!(panel.terminals.is_empty());
+            panel.open_conversation_terminal(None, window, cx);
+            let workspace = panel.workspace.upgrade().expect("mounted workspace");
+            assert_eq!(
+                workspace.read(cx).workspace_presentation(),
+                workspace::WorkspacePresentation::Collaborative
+            );
+            let focus = workspace.focus_handle(cx);
+            panel.set_base_view(
+                BaseView::AgentThread {
+                    conversation_view: next_conversation,
+                },
+                false,
+                window,
+                cx,
+            );
+            focus.focus(window, cx);
+            assert!(
+                focus.is_focused(window),
+                "the active workspace owns focus before the PTY completes"
+            );
+            focus
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (terminal_id, terminal) = loop {
+            cx.run_until_parked();
+            if let Some(terminal) = panel.read_with(&cx, |panel, cx| {
+                use crate::terminal_thread_metadata_store::InlineTerminalPromptReference;
+                let blocks = original_editor
+                    .read(cx)
+                    .draft_content_blocks_snapshot(cx)
+                    .ok()?;
+                let reference = blocks.iter().find_map(|block| {
+                    InlineTerminalPromptReference::from_content(block)
+                        .ok()
+                        .flatten()
+                })?;
+                let terminal_id = reference.terminal_id;
+                panel
+                    .inline_terminal_view(terminal_id)
+                    .map(|terminal| (terminal_id, terminal))
+            }) {
+                break terminal;
+            }
+            assert!(Instant::now() < deadline, "original terminal did not mount");
+            cx.executor().timer(Duration::from_millis(50)).await;
+        };
+        cx.update(|window, cx| {
+            let active = panel
+                .read(cx)
+                .active_thread_view(cx)
+                .expect("new conversation");
+            assert_ne!(active, original);
+            assert!(focus.is_focused(window));
+            assert!(!terminal.focus_handle(cx).contains_focused(window, cx));
+        });
+        panel.update_in(&mut cx, |panel, window, cx| {
+            panel.close_terminal_without_activating_draft(terminal_id, window, cx);
+        });
+    }
+
+    #[cfg(all(unix, feature = "multiplayer-tools"))]
+    #[gpui::test]
+    async fn test_agent_selection_preserves_terminal_only_draft(cx: &mut TestAppContext) {
+        let (panel, mut cx) = setup_visible_panel(cx).await;
+        cx.executor().allow_parking();
+        crate::test_support::open_draft_with_connection(
+            &panel,
+            StubAgentConnection::new(),
+            &mut cx,
+        );
+        initialize_inline_terminal_test_state(&mut cx);
+        let (conversation, parent) = panel.read_with(&cx, |panel, cx| {
+            (
+                panel.active_conversation_view().expect("draft").clone(),
+                panel.active_thread_view(cx).expect("draft root"),
+            )
+        });
+        let context = parent
+            .read_with(&cx, |parent, cx| parent.inline_terminal_context(cx))
+            .expect("inline context for empty draft");
+        let (terminal_id, terminal) = panel
+            .update_in(&mut cx, |panel, window, cx| {
+                panel.spawn_inline_terminal(context, None, window, cx)
+            })
+            .await
+            .expect("canonical inline terminal");
+        parent
+            .update_in(&mut cx, |parent, window, cx| {
+                parent.attach_inline_terminal(terminal_id, terminal, false, window, cx)
+            })
+            .expect("terminal mounted in original draft");
+        parent.read_with(&cx, |parent, cx| {
+            let editor = parent.message_editor.read(cx);
+            assert!(editor.text(cx).is_empty());
+            assert!(!editor.is_empty(cx));
+        });
+        let original_agent = conversation.read_with(&cx, |draft, _| draft.agent_key().clone());
+        assert_ne!(original_agent, Agent::NativeAgent);
+        panel.update_in(&mut cx, |panel, window, cx| {
+            assert!(panel.draft_has_content(&conversation, cx));
+            panel.select_agent(Agent::NativeAgent, window, cx);
+            assert_eq!(panel.active_conversation_view(), Some(&conversation));
+            assert_eq!(conversation.read(cx).agent_key(), &original_agent);
+            panel.close_terminal_without_activating_draft(terminal_id, window, cx);
+        });
+    }
+
+    #[cfg(all(unix, feature = "multiplayer-tools"))]
+    fn initialize_inline_terminal_test_state(cx: &mut VisualTestContext) {
+        cx.update(|_, cx| {
+            TerminalThreadMetadataStore::init_global(cx);
+            let mut settings = TerminalSettings::get_global(cx).clone();
+            settings.shell = task::Shell::Program("/bin/sh".into());
+            settings.working_directory = settings::WorkingDirectory::AlwaysHome;
+            TerminalSettings::override_global(settings, cx);
+        });
     }
 
     #[cfg(all(unix, feature = "multiplayer-tools"))]
