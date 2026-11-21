@@ -7,7 +7,7 @@
   "cases": [
     {
       "id": "hunyuan-shape-v1",
-      "catalog_contract_id": "conditioning-vae-architecture-sd-sim-ldm-hunyuan3d-vae-shapevae-e9c6b443",
+      "catalog_contract_id": "conditioning-vae-architecture-sd-comfy-ldm-hunyuan3d-vae-shapevae-e9c6b443",
       "profile": "HunyuanShapeV1",
       "architecture": "sim.ldm.hunyuan3d.vae.ShapeVAE.v1",
       "structured_kind": "shape",
@@ -22,7 +22,7 @@
     },
     {
       "id": "tripo-splat-v1",
-      "catalog_contract_id": "conditioning-vae-architecture-sd-sim-ldm-triposplat-vae-octreegaussiandecoder-71f21635",
+      "catalog_contract_id": "conditioning-vae-architecture-sd-comfy-ldm-triposplat-vae-octreegaussiandecoder-71f21635",
       "profile": "TripoSplatV1",
       "architecture": "sim.ldm.triposplat.vae.OctreeGaussianDecoder.v1",
       "structured_kind": "gaussian_splats",

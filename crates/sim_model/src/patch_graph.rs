@@ -3873,7 +3873,7 @@ mod tests {
             }),
         };
         let cases = match (source_path, source_symbol) {
-            ("projects/comfy/ComfyUI/sim/weight_adapter/base.py", "weight_decompose") => {
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/base.py", "weight_decompose") => {
                 let dora = |shape: &[u64]| PatchPayload::Dora {
                     difference: tensor(shape, &[1.0; 4]),
                     scale: tensor(
@@ -3906,9 +3906,9 @@ mod tests {
                 convolution.strength = 0.25;
                 vec![linear, convolution]
             }
-            ("projects/comfy/ComfyUI/sim/weight_adapter/base.py", "pad_tensor_to_shape")
-            | ("projects/comfy/ComfyUI/sim/lora.py", "pad_tensor_to_shape")
-            | ("projects/comfy/ComfyUI/sim/lora.py", "calculate_shape") => vec![
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/base.py", "pad_tensor_to_shape")
+            | ("projects/comfy/ComfyUI/comfy/lora.py", "pad_tensor_to_shape")
+            | ("projects/comfy/ComfyUI/comfy/lora.py", "calculate_shape") => vec![
                 catalog_case(
                     "linear-pad-and-shape",
                     &[1, 1],
@@ -3933,7 +3933,7 @@ mod tests {
                 ),
             ],
             (
-                "projects/comfy/ComfyUI/sim/weight_adapter/base.py",
+                "projects/comfy/ComfyUI/comfy/weight_adapter/base.py",
                 "tucker_weight_from_conv" | "tucker_weight",
             ) => vec![
                 catalog_case(
@@ -3953,7 +3953,7 @@ mod tests {
                     &[3.0, 4.0, 6.0, 8.0],
                 ),
             ],
-            ("projects/comfy/ComfyUI/sim/weight_adapter/base.py", "factorization") => {
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/base.py", "factorization") => {
                 assert_eq!(factorize_patch_dimension(360, None)?, (18, 20));
                 assert_eq!(factorize_patch_dimension(360, Some(16))?, (15, 24));
                 assert!(factorize_patch_dimension(0, None).is_err());
@@ -3999,7 +3999,7 @@ mod tests {
                     ),
                 ]
             }
-            ("projects/comfy/ComfyUI/sim/lora.py", "calculate_weight") => {
+            ("projects/comfy/ComfyUI/comfy/lora.py", "calculate_weight") => {
                 let nested = |shape: &[u64]| PatchPayload::Nested {
                     base: tensor(shape, &[1.0; 4]),
                     base_transform: PatchValueTransform::default(),
@@ -4032,7 +4032,7 @@ mod tests {
                     ),
                 ]
             }
-            ("projects/comfy/ComfyUI/sim/weight_adapter/boft.py", "calculate_weight") => {
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/boft.py", "calculate_weight") => {
                 let boft = || PatchPayload::Boft {
                     blocks: tensor(&[1, 1, 2, 2], &[0.0, 0.25, -0.25, 0.0]),
                     rescale: Some(tensor(&[1], &[2.0])),
@@ -4058,7 +4058,7 @@ mod tests {
                     ),
                 ]
             }
-            ("projects/comfy/ComfyUI/sim/weight_adapter/glora.py", "calculate_weight") => vec![
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/glora.py", "calculate_weight") => vec![
                 catalog_case(
                     "linear-glora",
                     &[2, 2],
@@ -4090,7 +4090,7 @@ mod tests {
                     &[7.0, 11.0],
                 ),
             ],
-            ("projects/comfy/ComfyUI/sim/weight_adapter/loha.py", "calculate_weight") => vec![
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/loha.py", "calculate_weight") => vec![
                 catalog_case(
                     "linear-loha",
                     &[2, 2],
@@ -4126,7 +4126,7 @@ mod tests {
                     &[9.0, 16.0, 36.0, 64.0],
                 ),
             ],
-            ("projects/comfy/ComfyUI/sim/weight_adapter/lokr.py", "calculate_weight") => vec![
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/lokr.py", "calculate_weight") => vec![
                 catalog_case(
                     "linear-lokr-decomposed",
                     &[2, 2],
@@ -4164,7 +4164,7 @@ mod tests {
                     &[3.0, 4.0, 6.0, 8.0],
                 ),
             ],
-            ("projects/comfy/ComfyUI/sim/weight_adapter/lora.py", "calculate_weight") => vec![
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/lora.py", "calculate_weight") => vec![
                 catalog_case(
                     "linear-lora",
                     &[2, 2],
@@ -4189,7 +4189,7 @@ mod tests {
                     &[3.0, 4.0, 6.0, 8.0],
                 ),
             ],
-            ("projects/comfy/ComfyUI/sim/weight_adapter/oft.py", "calculate_weight") => {
+            ("projects/comfy/ComfyUI/comfy/weight_adapter/oft.py", "calculate_weight") => {
                 let oft = || PatchPayload::Oft {
                     blocks: tensor(&[1, 2, 2], &[0.0, 0.25, -0.25, 0.0]),
                     rescale: None,
@@ -5395,12 +5395,12 @@ mod tests {
             "../../../crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"
         );
         assert!(SOURCE_CONTRACTS.contains(concat!(
-            "projects/comfy/ComfyUI/sim/weight_adapter/oft.py,calculate_weight,172,",
+            "projects/comfy/ComfyUI/comfy/weight_adapter/oft.py,calculate_weight,172,",
             "88be3c32f610478bc6900a10009eaadf6fe2af973ed4861731e4f21e1afacf89,",
             "a01a25e6e53a021e86e4df70556eeef5fc8b33c597c72cbf33d6cc0703a12772"
         )));
         assert!(SOURCE_CONTRACTS.contains(concat!(
-            "projects/comfy/ComfyUI/sim/weight_adapter/boft.py,calculate_weight,158,",
+            "projects/comfy/ComfyUI/comfy/weight_adapter/boft.py,calculate_weight,158,",
             "2850e0b4c2295cd87445415e287061fa3bfd69e88bd0aeb3eb16064864bd078d,",
             "94f4949f38d7f37f8267d68aac1f9e5389d8b3e1845cf7efd4f69357856d0c4d"
         )));

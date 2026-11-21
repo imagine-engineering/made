@@ -11,7 +11,7 @@ use sim_types::{CancellationError, CancellationToken, DeviceKind};
 use std::sync::Arc;
 use thiserror::Error;
 
-pub const VAE_SELECTOR_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/sd.py";
+pub const VAE_SELECTOR_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/sd.py";
 pub const VAE_SELECTOR_SOURCE_SHA256: &str =
     "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42";
 pub const VAE_SELECTOR_ROW_COUNT: usize = 32;

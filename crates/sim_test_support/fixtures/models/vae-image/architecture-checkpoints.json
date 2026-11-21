@@ -3,7 +3,7 @@
   "fixture_id": "sim-native-image-vae-source-checkpoints-v1",
   "oracle_kind": "immutable-source-derived-checkpoints",
   "production_dependency": false,
-  "provenance_sha256": "d90cc80730950d8c11644542d9742c8b475104e4689291eee76784aee1bfda5c",
+  "provenance_sha256": "0da595349647763ef2319c075c89b94119f2f3029594b94943633d4405dd1a0b",
   "cases": [
     {
       "id": "temporal-autoencoding-engine-image",
@@ -47,7 +47,7 @@
     {
       "id": "taesd-sd15",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taesd-taesd-d0ccd20f"
+        "conditioning-vae-architecture-sd-comfy-taesd-taesd-taesd-d0ccd20f"
       ],
       "profile": "TaesdV1",
       "loader_configuration": {
@@ -109,7 +109,7 @@
     {
       "id": "taesd-flux2-128",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taesd-taesd-d0ccd20f"
+        "conditioning-vae-architecture-sd-comfy-taesd-taesd-taesd-d0ccd20f"
       ],
       "profile": "TaesdV1",
       "loader_configuration": {
@@ -735,7 +735,7 @@
     {
       "id": "pixel-space",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-pixel-space-convert-pixelspaceconversionvae-3ec12255"
+        "conditioning-vae-architecture-sd-comfy-pixel-space-convert-pixelspaceconversionvae-3ec12255"
       ],
       "profile": "PixelSpaceV1",
       "loader_configuration": {

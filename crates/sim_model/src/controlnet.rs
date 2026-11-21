@@ -3030,7 +3030,7 @@ mod tests {
                 .ok_or_else(|| format!("unexpected ControlNet contract {contract_id}"))?;
             assert!(seen.insert(contract_id));
             assert_eq!(columns[1], "controlnet");
-            assert_eq!(columns[2], "projects/comfy/ComfyUI/sim/controlnet.py");
+            assert_eq!(columns[2], "projects/comfy/ComfyUI/comfy/controlnet.py");
             assert_eq!(columns[3], expected_row.3);
             assert_eq!(columns[4], expected_row.1);
             assert_eq!(columns[5], expected_row.2);

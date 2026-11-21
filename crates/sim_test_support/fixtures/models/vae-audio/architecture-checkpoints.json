@@ -46,7 +46,7 @@
     {
       "id": "music-dcae",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-ace-vae-music-dcae-pipeline-musicdcae-adb8d824"
+        "conditioning-vae-architecture-sd-comfy-ldm-ace-vae-music-dcae-pipeline-musicdcae-adb8d824"
       ],
       "profile": "MusicDcaeV1",
       "input_sample_rate": 44100,
@@ -67,7 +67,7 @@
     {
       "id": "mmaudio-16k",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-mmaudio-vae-autoencoder-audioautoencoder-929e9c62"
+        "conditioning-vae-architecture-sd-comfy-ldm-mmaudio-vae-autoencoder-audioautoencoder-929e9c62"
       ],
       "profile": "MmAudio16KhzV1",
       "input_sample_rate": 44100,
@@ -88,7 +88,7 @@
     {
       "id": "ltx-audio",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-audio-vae-audiovae-1024d260"
+        "conditioning-vae-architecture-sd-comfy-ldm-lightricks-vae-audio-vae-audiovae-1024d260"
       ],
       "profile": "LtxAudioV1",
       "input_sample_rate": 44100,
@@ -109,7 +109,7 @@
     {
       "id": "stable-audio-3-deep",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-audio-vae-sa3-sa3audiovae-637f1b5c"
+        "conditioning-vae-architecture-sd-comfy-ldm-audio-vae-sa3-sa3audiovae-637f1b5c"
       ],
       "profile": "StableAudio3DeepV1",
       "input_sample_rate": 44100,
@@ -129,7 +129,7 @@
     {
       "id": "stable-audio-3-shallow",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-audio-vae-sa3-sa3audiovae-637f1b5c"
+        "conditioning-vae-architecture-sd-comfy-ldm-audio-vae-sa3-sa3audiovae-637f1b5c"
       ],
       "profile": "StableAudio3ShallowV1",
       "input_sample_rate": 44100,

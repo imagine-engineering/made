@@ -3,7 +3,7 @@
   "fixture_id": "sim-native-video-vae-source-checkpoints-v1",
   "oracle_kind": "immutable-source-derived-checkpoints",
   "production_dependency": false,
-  "provenance_sha256": "fb6222852c118c9206e4e0e5779181f7303aa3a0f9fea72b5028906f06012504",
+  "provenance_sha256": "8a6a53a1601a434e8eaeb5249aaa8c54ea09ac399ba4295a4987b7711075f2d0",
   "cases": [
     {
       "id": "hunyuan-image-refiner",
@@ -30,7 +30,7 @@
     {
       "id": "mochi",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-genmo-vae-model-videovae-b1621cfc"
+        "conditioning-vae-architecture-sd-comfy-ldm-genmo-vae-model-videovae-b1621cfc"
       ],
       "profile": "MochiV1",
       "latent": "Mochi",
@@ -56,7 +56,7 @@
     {
       "id": "ltx-video-v0",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
+        "conditioning-vae-architecture-sd-comfy-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
       ],
       "profile": "LtxVideoV0",
       "latent": "LTXV",
@@ -78,7 +78,7 @@
     {
       "id": "ltx-video-v1",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
+        "conditioning-vae-architecture-sd-comfy-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
       ],
       "profile": "LtxVideoV1",
       "latent": "LTXV",
@@ -100,7 +100,7 @@
     {
       "id": "ltx-video-v2",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
+        "conditioning-vae-architecture-sd-comfy-ldm-lightricks-vae-causal-video-autoencoder-videovae-238bf43d"
       ],
       "profile": "LtxVideoV2",
       "latent": "LTXV",
@@ -144,7 +144,7 @@
     {
       "id": "cogvideox",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-cogvideo-vae-autoencoderklcogvideox-18fb0b1a"
+        "conditioning-vae-architecture-sd-comfy-ldm-cogvideo-vae-autoencoderklcogvideox-18fb0b1a"
       ],
       "profile": "CogVideoXV1",
       "latent": "CogVideoX",
@@ -174,7 +174,7 @@
     {
       "id": "cogvideox-1-5",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-cogvideo-vae-autoencoderklcogvideox-18fb0b1a"
+        "conditioning-vae-architecture-sd-comfy-ldm-cogvideo-vae-autoencoderklcogvideox-18fb0b1a"
       ],
       "profile": "CogVideoXV1",
       "latent": "CogVideoX1_5",
@@ -229,7 +229,7 @@
     {
       "id": "cosmos",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-cosmos-vae-causalcontinuousvideotokenizer-ba589e82"
+        "conditioning-vae-architecture-sd-comfy-ldm-cosmos-vae-causalcontinuousvideotokenizer-ba589e82"
       ],
       "profile": "CosmosV1",
       "latent": "Cosmos1CV8x8x8",
@@ -251,7 +251,7 @@
     {
       "id": "wan-2-1",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-wan-vae-wanvae-ce05ff38"
+        "conditioning-vae-architecture-sd-comfy-ldm-wan-vae-wanvae-ce05ff38"
       ],
       "profile": "Wan21V1",
       "latent": "Wan21",
@@ -281,7 +281,7 @@
     {
       "id": "wan-2-2",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-ldm-wan-vae2-2-wanvae-69fa166b"
+        "conditioning-vae-architecture-sd-comfy-ldm-wan-vae2-2-wanvae-69fa166b"
       ],
       "profile": "Wan22V1",
       "latent": "Wan22",
@@ -307,7 +307,7 @@
     {
       "id": "taehv-wan-2-2",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-4688008a"
+        "conditioning-vae-architecture-sd-comfy-taesd-taehv-taehv-4688008a"
       ],
       "profile": "TaeHvWan22V1",
       "latent": "Wan22",
@@ -333,7 +333,7 @@
     {
       "id": "taehv-ltx2",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-4688008a"
+        "conditioning-vae-architecture-sd-comfy-taesd-taehv-taehv-4688008a"
       ],
       "profile": "TaeHvLtx2V1",
       "latent": "LTXV",
@@ -359,7 +359,7 @@
     {
       "id": "lighttae-hunyuan-1-5",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-baed411e"
+        "conditioning-vae-architecture-sd-comfy-taesd-taehv-taehv-baed411e"
       ],
       "profile": "LightTaeHv15V1",
       "latent": "HunyuanVideo15",
@@ -385,7 +385,7 @@
     {
       "id": "taehv-hunyuan",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-ff3688fd"
+        "conditioning-vae-architecture-sd-comfy-taesd-taehv-taehv-ff3688fd"
       ],
       "profile": "TaeHvHunyuanV1",
       "latent": "HunyuanVideo",
@@ -411,7 +411,7 @@
     {
       "id": "lighttae-wan-2-1",
       "catalog_contract_ids": [
-        "conditioning-vae-architecture-sd-sim-taesd-taehv-taehv-ff3688fd"
+        "conditioning-vae-architecture-sd-comfy-taesd-taehv-taehv-ff3688fd"
       ],
       "profile": "LightTaeWan21V1",
       "latent": "Wan21",

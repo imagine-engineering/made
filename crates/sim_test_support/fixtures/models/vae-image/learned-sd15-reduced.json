@@ -4,11 +4,11 @@
   "oracle_kind": "independent-pytorch-cpu-source-equations",
   "production_dependency": false,
   "source": {
-    "path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/model.py",
+    "path": "projects/comfy/ComfyUI/comfy/ldm/modules/diffusionmodules/model.py",
     "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
   },
   "latent_source": {
-    "path": "projects/sim/ComfyUI/sim/latent_formats.py",
+    "path": "projects/comfy/ComfyUI/comfy/latent_formats.py",
     "sha256": "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"
   },
   "generator_sha256": "87329d5b976013f3de9efdd2a2afc80e88c8916d632b1f8641ece932f8935e34",
