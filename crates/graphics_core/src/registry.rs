@@ -67,10 +67,12 @@ mod tests {
     use std::collections::HashSet;
 
     use graphite_core_types::{
-        Color, Context, NodeParameter, Type, concrete, fn_type_fut,
+        Color, Context, NodeParameter, Type, concrete, fn_type_fut, item, list,
         list::{Item, List},
         registry::{RegistryValueSource, RegistryWidgetOverride},
     };
+    use graphite_glam::DVec2;
+    use graphite_math_nodes::subtract;
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
@@ -89,6 +91,66 @@ mod tests {
             Type::Future(Box::new(concrete!(List<T>))),
             vec![fn_type_fut!(Context<'static>, List<T>)],
         )
+    }
+
+    #[test]
+    fn at_gra_node_087_1_subtract_has_exact_native_ports_and_signatures() {
+        fn binary_signature(left: Type, right: Type, output: Type) -> NodeIOTypes {
+            let input = |value| {
+                Type::Fn(
+                    Box::new(concrete!(Context<'static>)),
+                    Box::new(Type::Future(Box::new(value))),
+                )
+            };
+            NodeIOTypes::new(
+                concrete!(Context<'static>),
+                Type::Future(Box::new(output)),
+                vec![input(left), input(right)],
+            )
+        }
+
+        let identifier = subtract::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "math_nodes::SubtractNode");
+        assert_eq!(subtract::MinuendInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(subtract::MinuendInput::INDEX, 0);
+        assert_eq!(subtract::SubtrahendInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(subtract::SubtrahendInput::INDEX, 1);
+        let registered = registered_node(identifier.as_str()).expect("native Subtract entry");
+        assert_eq!(registered.metadata.display_name, "Subtract");
+        assert_eq!(registered.metadata.category, "Math: Arithmetic");
+        assert_eq!(registered.metadata.properties, None);
+        assert_eq!(registered.metadata.fields.len(), 2);
+        for (field, (name, default_type)) in registered
+            .metadata
+            .fields
+            .iter()
+            .zip([("Minuend", list!(f64)), ("Subtrahend", concrete!(f64))])
+        {
+            assert_eq!(field.name, name);
+            assert_eq!(field.default_type.as_ref(), Some(&default_type));
+            assert!(matches!(
+                field.widget_override,
+                RegistryWidgetOverride::None
+            ));
+            assert!(matches!(field.value_source, RegistryValueSource::None));
+        }
+        let expected = HashSet::from([
+            binary_signature(item!(f64), item!(f64), concrete!(Item<f64>)),
+            binary_signature(item!(i64), item!(i64), concrete!(Item<i64>)),
+            binary_signature(item!(DVec2), item!(DVec2), concrete!(Item<DVec2>)),
+            binary_signature(item!(f64), item!(DVec2), concrete!(Item<DVec2>)),
+            binary_signature(item!(DVec2), item!(f64), concrete!(Item<DVec2>)),
+            binary_signature(list!(f64), list!(f64), concrete!(List<f64>)),
+            binary_signature(list!(i64), list!(i64), concrete!(List<i64>)),
+            binary_signature(list!(DVec2), list!(DVec2), concrete!(List<DVec2>)),
+            binary_signature(list!(f64), list!(DVec2), concrete!(List<DVec2>)),
+            binary_signature(list!(DVec2), list!(f64), concrete!(List<DVec2>)),
+        ]);
+        assert_eq!(registered.signatures.len(), expected.len());
+        assert_eq!(
+            registered.signatures.into_iter().collect::<HashSet<_>>(),
+            expected
+        );
     }
 
     #[test]

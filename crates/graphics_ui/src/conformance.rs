@@ -1177,6 +1177,66 @@ fn at_graphite_sort_malformed_inputs_and_operation_changes_preserve_commit() {
 }
 
 #[gpui::test]
+fn at_gra_node_087_subtract_modes_accept_native_edits_and_recover(cx: &mut TestAppContext) {
+    use workspace::item::Item as _;
+
+    init(cx);
+    let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);
+    let scalar = cx
+        .debug_bounds("GRAPHITE-MODE-SUBTRACT-SCALAR")
+        .expect("scalar Subtract is selectable");
+    cx.simulate_click(scalar.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-RESULT--1").is_some());
+    let (minuend, subtrahend) = item.read_with(cx, |item, cx| {
+        assert_eq!(item.tab_content_text(0, cx), "Graphite Subtract");
+        (item.augend_editor.clone(), item.addend_editor.clone())
+    });
+
+    let lists = cx
+        .debug_bounds("GRAPHITE-MODE-SUBTRACT-LISTS")
+        .expect("list Subtract is selectable");
+    cx.simulate_click(lists.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    minuend.update_in(cx, |editor, window, cx| {
+        editor.set_text("2, -3, 7", window, cx)
+    });
+    subtrahend.update_in(cx, |editor, window, cx| editor.set_text("5, 1", window, cx));
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("GRAPHITE-RESULT-[-3.0, -4.0, 6.0]")
+            .is_some()
+    );
+    let revision = item.read_with(cx, |item, cx| item.session.read(cx).revision());
+
+    subtrahend.update_in(cx, |editor, window, cx| {
+        editor.set_text("invalid", window, cx)
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-INPUT-ERROR").is_some());
+    assert!(
+        cx.debug_bounds("GRAPHITE-RESULT-[-3.0, -4.0, 6.0]")
+            .is_some()
+    );
+    assert_eq!(
+        item.read_with(cx, |item, cx| item.session.read(cx).revision()),
+        revision
+    );
+
+    subtrahend.update_in(cx, |editor, window, cx| editor.set_text("-1", window, cx));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-INPUT-ERROR").is_none());
+    assert!(
+        cx.debug_bounds("GRAPHITE-RESULT-[3.0, -2.0, 8.0]")
+            .is_some()
+    );
+    assert_eq!(
+        item.read_with(cx, |item, cx| item.session.read(cx).revision()),
+        revision + 1
+    );
+}
+
+#[gpui::test]
 fn at_graphite_multiply_native_edit_renders_all_twelve_source_pairs(cx: &mut TestAppContext) {
     init(cx);
     let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);

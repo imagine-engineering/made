@@ -1,7 +1,10 @@
 use std::{fmt, panic::AssertUnwindSafe, sync::Arc};
 
 use futures::FutureExt as _;
-use graphite_core_types::{Color, Context, list::List};
+use graphite_core_types::{
+    Color, Context, Node,
+    list::{Item, List},
+};
 use graphite_glam::{DAffine2, DVec2};
 use graphite_graph_craft::{
     application_io::{
@@ -23,7 +26,37 @@ use graphite_std::{
     transform_nodes::replace_transform,
 };
 
-use crate::resources::PreparedEncodedPngSource;
+use crate::{AddEvaluationError, Input, resources::PreparedEncodedPngSource};
+
+pub fn evaluate_subtract(minuend: f64, subtrahend: f64) -> Result<f64, AddEvaluationError> {
+    let node = graphite_math_nodes::SubtractNode::new(
+        Input(Item::new_from_element(minuend)),
+        Input(Item::new_from_element(subtrahend)),
+    );
+    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
+        .map(Item::into_element)
+        .map_err(|_| AddEvaluationError)
+}
+
+pub fn evaluate_subtract_lists(
+    minuends: &[f64],
+    subtrahends: &[f64],
+) -> Result<Vec<f64>, AddEvaluationError> {
+    let minuends = minuends
+        .iter()
+        .copied()
+        .map(Item::new_from_element)
+        .collect();
+    let subtrahends = subtrahends
+        .iter()
+        .copied()
+        .map(Item::new_from_element)
+        .collect();
+    let node = graphite_math_nodes::SubtractNodeMapped::new(Input(minuends), Input(subtrahends));
+    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
+        .map(|result| result.into_iter().map(Item::into_element).collect())
+        .map_err(|_| AddEvaluationError)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CpuSvgArtboardParameters {

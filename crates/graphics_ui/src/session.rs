@@ -10,6 +10,8 @@ pub(crate) enum AddMode {
     VectorLists,
     ScalarVectorLists,
     VectorScalarLists,
+    SubtractScalar,
+    SubtractLists,
     Sort,
     MultiplyScalar,
     MultiplyLists,
@@ -28,6 +30,10 @@ pub(crate) enum AddMode {
 }
 
 impl AddMode {
+    pub(crate) fn is_subtract(self) -> bool {
+        matches!(self, Self::SubtractScalar | Self::SubtractLists)
+    }
+
     pub(crate) fn is_multiply(self) -> bool {
         matches!(
             self,
@@ -58,6 +64,7 @@ impl AddMode {
                 | Self::VectorLists
                 | Self::ScalarVectorLists
                 | Self::VectorScalarLists
+                | Self::SubtractLists
                 | Self::MultiplyLists
                 | Self::MultiplyIntegerLists
                 | Self::MultiplyVectorLists
@@ -107,6 +114,8 @@ enum Inputs {
     VectorLists(Vec<[f64; 2]>, Vec<[f64; 2]>),
     ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
+    SubtractScalar(f64, f64),
+    SubtractLists(Vec<f64>, Vec<f64>),
     Sort(Vec<f64>, Vec<f64>, bool),
     Multiply(MultiplyInputs),
     InvertColor([f32; 4]),
@@ -393,6 +402,19 @@ impl Inputs {
                 augend.to_bits() == other_augend.to_bits()
                     && addend.to_bits() == other_addend.to_bits()
             }
+            (
+                Self::SubtractScalar(minuend, subtrahend),
+                Self::SubtractScalar(other_minuend, other_subtrahend),
+            ) => {
+                minuend.to_bits() == other_minuend.to_bits()
+                    && subtrahend.to_bits() == other_subtrahend.to_bits()
+            }
+            (
+                Self::SubtractLists(minuends, subtrahends),
+                Self::SubtractLists(other_minuends, other_subtrahends),
+            ) => {
+                same_values(minuends, other_minuends) && same_values(subtrahends, other_subtrahends)
+            }
             (Self::Lists(augend, addend), Self::Lists(other_augend, other_addend)) => {
                 same_values(augend, other_augend) && same_values(addend, other_addend)
             }
@@ -458,6 +480,12 @@ impl Inputs {
                 graphics_core::raster::evaluate_invert_color_channels(*channels)?,
             ),
             Self::Multiply(inputs) => inputs.evaluate()?,
+            Self::SubtractScalar(minuend, subtrahend) => Output::Scalar(
+                graphics_core::evaluate::evaluate_subtract(*minuend, *subtrahend)?,
+            ),
+            Self::SubtractLists(minuends, subtrahends) => Output::Lists(
+                graphics_core::evaluate::evaluate_subtract_lists(minuends, subtrahends)?,
+            ),
             Self::Scalar(augend, addend) => {
                 Output::Scalar(graphics_core::evaluate_add(*augend, *addend))
             }
@@ -510,6 +538,8 @@ impl Inputs {
             ),
             Self::InvertColor(channels) => format!("Invert RGBA {channels:?}"),
             Self::Multiply(inputs) => inputs.expression(),
+            Self::SubtractScalar(minuend, subtrahend) => format!("{minuend} − {subtrahend}"),
+            Self::SubtractLists(minuends, subtrahends) => format!("{minuends:?} − {subtrahends:?}"),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
             Self::Lists(augend, addend) => format!("{augend:?} + {addend:?}"),
             Self::Integer(augend, addend) => format!("{augend} + {addend}"),
@@ -1038,6 +1068,14 @@ impl GraphicsSession {
                 parse_number(augend, "augend")?,
                 parse_number(addend, "addend")?,
             ),
+            AddMode::SubtractScalar => Inputs::SubtractScalar(
+                parse_number(augend, "minuend")?,
+                parse_number(addend, "subtrahend")?,
+            ),
+            AddMode::SubtractLists => Inputs::SubtractLists(
+                parse_number_list(augend, "minuends")?,
+                parse_number_list(addend, "subtrahends")?,
+            ),
             AddMode::Lists => Inputs::Lists(
                 parse_number_list(augend, "augend")?,
                 parse_number_list(addend, "addend")?,
@@ -1141,6 +1179,10 @@ impl GraphicsSession {
                 != matches!(self.evaluation.inputs, Inputs::InvertColor(..))
             || (self.mode == AddMode::Sort) != matches!(self.evaluation.inputs, Inputs::Sort(..))
             || self.mode.is_multiply() != matches!(self.evaluation.inputs, Inputs::Multiply(..))
+            || (self.mode == AddMode::SubtractScalar)
+                != matches!(self.evaluation.inputs, Inputs::SubtractScalar(..))
+            || (self.mode == AddMode::SubtractLists)
+                != matches!(self.evaluation.inputs, Inputs::SubtractLists(..))
         {
             return format!("Last valid result: {}", self.result_text());
         }

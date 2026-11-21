@@ -8,6 +8,25 @@ use std::{collections::HashSet, error::Error, time::Duration};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+#[test]
+fn at_gra_node_087_2_subtract_f64_preserves_operand_order_and_source_mapping() -> TestResult {
+    assert_eq!(evaluate_subtract(2., 5.)?, -3.);
+    assert_eq!(evaluate_subtract(0., -3.)?, 3.);
+    assert_eq!(evaluate_subtract(-0., 0.)?.to_bits(), (-0_f64).to_bits());
+    assert!(evaluate_subtract(f64::INFINITY, f64::INFINITY)?.is_nan());
+    assert_eq!(
+        evaluate_subtract_lists(&[2., -3., 7.], &[5., 1.])?,
+        vec![-3., -4., 6.]
+    );
+    assert_eq!(
+        evaluate_subtract_lists(&[2.], &[5., 1., -3.])?,
+        vec![-3., 1., 5.]
+    );
+    assert!(evaluate_subtract_lists(&[], &[5.])?.is_empty());
+    assert!(evaluate_subtract_lists(&[5.], &[])?.is_empty());
+    Ok(())
+}
+
 fn configuration() -> RenderConfig {
     RenderConfig {
         viewport: Footprint {

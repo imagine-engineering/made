@@ -11,7 +11,7 @@ use crate::session::{AddMode, GraphicsSession};
 actions!(
     graphite,
     [
-        /// Opens native Graphite Add, Multiply, Sort, Invert and Color Mix evaluations.
+        /// Opens native Graphite Add, Subtract, Multiply, Sort, Invert and Color Mix evaluations.
         OpenGraphite,
         /// Focuses the next control in the current Graphite Artboard.
         FocusNextArtboardControl,
@@ -77,13 +77,13 @@ impl GraphicsWorkspaceItem {
         let augend_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_text(augend, window, cx);
-            editor.set_placeholder_text("augend", window, cx);
+            editor.set_placeholder_text("First input", window, cx);
             editor
         });
         let addend_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_text(addend, window, cx);
-            editor.set_placeholder_text("addend", window, cx);
+            editor.set_placeholder_text("Second input", window, cx);
             editor
         });
         let augend_y_editor = cx.new(|cx| {
@@ -426,6 +426,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Graphite Invert"
             } else if mode == AddMode::Sort {
                 "Graphite Sort"
+            } else if mode.is_subtract() {
+                "Graphite Subtract"
             } else if mode.is_multiply() {
                 "Graphite Multiply"
             } else {
@@ -437,6 +439,10 @@ impl Render for GraphicsWorkspaceItem {
                 "Edit gamma sRGB red, green and blue with straight alpha. Invert preserves alpha."
             } else if mode == AddMode::Sort {
                 "Edit the values to sort them. Leave the sort keys blank to sort by value."
+            } else if mode == AddMode::SubtractLists {
+                "Enter comma-separated numbers in each list."
+            } else if mode == AddMode::SubtractScalar {
+                "Edit the inputs to calculate their difference."
             } else if mode.is_multiply() {
                 "Edit the inputs to calculate their product."
             } else {
@@ -482,6 +488,8 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::MixColor, "Mix Color", "GRAPHITE-MODE-MIX-COLOR"),
                         (AddMode::Sort, "Sort", "GRAPHITE-MODE-SORT"),
                         (AddMode::InvertColor, "Invert Color", "GRAPHITE-MODE-INVERT-COLOR"),
+                        (AddMode::SubtractScalar, "Subtract Scalar", "GRAPHITE-MODE-SUBTRACT-SCALAR"),
+                        (AddMode::SubtractLists, "Subtract Lists", "GRAPHITE-MODE-SUBTRACT-LISTS"),
                         (AddMode::MultiplyScalar, "Multiply Scalar", "GRAPHITE-MODE-MULTIPLY-SCALAR"),
                         (AddMode::MultiplyLists, "Multiply Lists", "GRAPHITE-MODE-MULTIPLY-LISTS"),
                         (AddMode::MultiplyInteger, "Multiply Integer", "GRAPHITE-MODE-MULTIPLY-INTEGER"),
@@ -620,6 +628,10 @@ impl Render for GraphicsWorkspaceItem {
                         "red"
                     } else if mode == AddMode::Sort {
                         "values"
+                    } else if mode == AddMode::SubtractScalar {
+                        "minuend"
+                    } else if mode == AddMode::SubtractLists {
+                        "minuends"
                     } else if mode.is_multiply() {
                         if mode.augend_is_vector() { "multiplier.x" } else { "multiplier" }
                     } else if mode.augend_is_vector() {
@@ -636,6 +648,10 @@ impl Render for GraphicsWorkspaceItem {
                                 "red"
                             } else if mode == AddMode::Sort {
                                 "values"
+                            } else if mode == AddMode::SubtractScalar {
+                                "minuend"
+                            } else if mode == AddMode::SubtractLists {
+                                "minuends"
                             } else if mode.is_multiply() {
                                 "multiplier"
                             } else {
@@ -663,6 +679,10 @@ impl Render for GraphicsWorkspaceItem {
                         "blue"
                     } else if mode == AddMode::Sort {
                         "sort keys (optional)"
+                    } else if mode == AddMode::SubtractScalar {
+                        "subtrahend"
+                    } else if mode == AddMode::SubtractLists {
+                        "subtrahends"
                     } else if mode.is_multiply() {
                         if mode.addend_is_vector() { "multiplicand.x" } else { "multiplicand" }
                     } else if mode.addend_is_vector() {
@@ -679,6 +699,10 @@ impl Render for GraphicsWorkspaceItem {
                                 "blue"
                             } else if mode == AddMode::Sort {
                                 "sort keys"
+                            } else if mode == AddMode::SubtractScalar {
+                                "subtrahend"
+                            } else if mode == AddMode::SubtractLists {
+                                "subtrahends"
                             } else if mode.is_multiply() {
                                 "multiplicand"
                             } else {
@@ -762,6 +786,8 @@ impl Item for GraphicsWorkspaceItem {
             "Graphite Invert".into()
         } else if self.session.read(cx).mode() == AddMode::Sort {
             "Graphite Sort".into()
+        } else if self.session.read(cx).mode().is_subtract() {
+            "Graphite Subtract".into()
         } else if self.session.read(cx).mode().is_multiply() {
             "Graphite Multiply".into()
         } else {
