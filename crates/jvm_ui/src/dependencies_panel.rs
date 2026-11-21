@@ -3487,6 +3487,7 @@ impl DependenciesPanel {
             roots.push(selection_review_tree(&review_snapshot, &jvm_builds));
         }
         self.operation_selections = operation_selections;
+        apply_tool_window_icons(&mut roots, self.view);
         self.host
             .replace_snapshot(LanguageToolSnapshot { roots, status });
         self.host.expand_nodes(graph_search_expansion);
@@ -4421,6 +4422,146 @@ fn gradle_option_node(
         children,
         enabled: false,
         activation_label: None,
+    }
+}
+
+/// IntelliJ-style tool-window row icons for the Gradle and Maven views. The
+/// Dependencies view keeps its text-only presentation, so the pass is a no-op
+/// there.
+fn apply_tool_window_icons(roots: &mut [LanguageToolNode], view: BuildToolView) {
+    if view == BuildToolView::Dependencies {
+        return;
+    }
+    for root in roots {
+        assign_tool_window_row_icon(root, view);
+    }
+}
+
+fn assign_tool_window_row_icon(node: &mut LanguageToolNode, view: BuildToolView) {
+    if node.icon.is_none() {
+        node.icon = tool_window_row_icon(&node.id.0, view);
+    }
+    for child in &mut node.children {
+        assign_tool_window_row_icon(child, view);
+    }
+}
+
+fn tool_window_row_icon(id: &str, view: BuildToolView) -> Option<ui::IconName> {
+    use ui::IconName as Icon;
+
+    const CHILD_SUFFIXES: [&str; 16] = [
+        ":project:",
+        ":maven-artifact:",
+        ":library:",
+        ":unnamed-libraries",
+        ":libraries",
+        ":gradle-tasks",
+        ":gradle-task:",
+        ":gradle-option:",
+        ":gradle-source-sets",
+        ":gradle-source-set:",
+        ":gradle-source-root:",
+        ":gradle-saved-configurations",
+        ":maven-source-roots",
+        ":maven-source-root:",
+        ":group:",
+        ":maven:",
+    ];
+
+    if id.starts_with("graph:") {
+        // Component, edge, node and descriptor fact rows are dependencies;
+        // graph roots and component/edge groupings are folders.
+        return Some(
+            if id.contains(":gradle-component")
+                || id.contains(":gradle-edge")
+                || id.contains(":maven-node")
+                || id.contains(":maven-edge")
+                || id.contains(":maven-descriptor")
+            {
+                Icon::Box
+            } else {
+                Icon::Folder
+            },
+        );
+    }
+    if id.starts_with("review:") {
+        return if id.starts_with("review:group:") {
+            Some(Icon::Folder)
+        } else {
+            None
+        };
+    }
+    if id == "groovy-ordered-operations"
+        || id == "groovy-saved-configurations"
+        || id == "groovy-selection-review"
+    {
+        return Some(Icon::Folder);
+    }
+    if id.starts_with("groovy-ordered-operation:")
+        || id.starts_with("groovy-configuration:")
+        || id.starts_with("gradle-configuration:")
+    {
+        return Some(Icon::PlayOutlined);
+    }
+    if id.starts_with("jdtls-gradle-module-group:") {
+        return Some(Icon::Folder);
+    }
+    if id.starts_with("kotlin:") {
+        return if id.contains(":artifact:") {
+            Some(Icon::Box)
+        } else if id.contains(":module:") {
+            Some(Icon::ArrowRight)
+        } else {
+            None
+        };
+    }
+    let is_module_root =
+        id.starts_with("jdtls:") && !CHILD_SUFFIXES.iter().any(|suffix| id.contains(suffix));
+    if !is_module_root {
+        // Group and directory rows.
+        if id.ends_with(":gradle-tasks")
+            || id.ends_with(":gradle-source-sets")
+            || id.ends_with(":libraries")
+            || id.ends_with(":gradle-saved-configurations")
+            || id.ends_with(":maven-source-roots")
+            || id.contains(":gradle-source-set:")
+            || id.contains(":gradle-source-root:")
+            || id.contains(":maven-source-root:")
+            || id.contains(":group:")
+            || id.contains(":maven:lifecycles")
+            || id.contains(":maven:plugins")
+            || id.contains(":maven:profiles")
+            || id.contains(":maven:reactor")
+            || id.contains(":maven:lifecycle:")
+            || id.contains(":maven:plugin:")
+        {
+            return Some(Icon::Folder);
+        }
+        // Runnable rows: Gradle tasks use the task glyph; Maven phases and
+        // plugin goals use the run glyph.
+        if id.contains(":gradle-task:") {
+            return Some(Icon::ListTodo);
+        }
+        if id.contains(":maven:phase:") || id.contains(":maven:goal:") {
+            return Some(Icon::PlayOutlined);
+        }
+        // Artifact rows.
+        if id.contains(":maven-artifact:")
+            || id.contains(":library:")
+            || id.ends_with(":unnamed-libraries")
+        {
+            return Some(Icon::Box);
+        }
+        // Module-dependency and reactor links.
+        if id.contains(":project:") || id.contains(":maven:module:") {
+            return Some(Icon::ArrowRight);
+        }
+        return None;
+    }
+    match view {
+        BuildToolView::Gradle => Some(Icon::Gradle),
+        BuildToolView::Maven => Some(Icon::Maven),
+        BuildToolView::Dependencies => None,
     }
 }
 
@@ -6320,7 +6461,11 @@ impl Panel for DependenciesPanel {
     }
 
     fn icon(&self, _: &Window, _: &App) -> Option<ui::IconName> {
-        None
+        match self.view {
+            BuildToolView::Gradle => Some(ui::IconName::Gradle),
+            BuildToolView::Maven => Some(ui::IconName::Maven),
+            BuildToolView::Dependencies => None,
+        }
     }
 
     fn icon_tooltip(&self, _: &Window, _: &App) -> Option<&'static str> {
@@ -6376,6 +6521,7 @@ impl Render for DependenciesPanel {
         let can_expand_all = self.host.can_expand_all();
         let can_collapse_all = self.host.can_collapse_all();
         let show_toolbar = self.preferences.show_toolbar(self.view);
+        let icon_toolbar_active = show_toolbar && self.view != BuildToolView::Dependencies;
         let can_collect_graph = self.selected_graph().is_some()
             && self.graph_query_token.is_none()
             && !self.project.read(cx).is_remote();
@@ -6526,7 +6672,152 @@ impl Render for DependenciesPanel {
                     .gap_1()
                     .justify_between()
                     .child(self.view.label())
-                    .when(self.view != BuildToolView::Dependencies, |header| header.child(
+                    .when(icon_toolbar_active, |header| {
+                        header.child(
+                            h_flex()
+                                .gap_1()
+                                .when(self.view == BuildToolView::Gradle, |row| {
+                                    row.child(
+                                        IconButton::new(
+                                            "groovy-gradle-synchronize-metadata-icon",
+                                            ui::IconName::RotateCcw,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .tab_index(0_isize)
+                                        .aria_label(if self.project.read(cx).is_remote() {
+                                            "Gradle metadata synchronization unavailable for remote projects"
+                                        } else {
+                                            "Synchronize local Gradle metadata; executes trusted build configuration scripts"
+                                        })
+                                        .tooltip(Tooltip::text("Synchronize metadata"))
+                                        .disabled(self.project.read(cx).is_remote())
+                                        .on_click(cx.listener(|panel, _, _, cx| panel.synchronize_gradle_metadata(cx))),
+                                    )
+                                    .child(
+                                        IconButton::new(
+                                            "groovy-import-gradle-selection-icon",
+                                            ui::IconName::Download,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .tab_index(0_isize)
+                                        .aria_label(if self.project.read(cx).is_remote() { "Gradle selection import unavailable for remote projects" } else { "Import effective Gradle selection for the selected local project folder; executes trusted build configuration" })
+                                        .tooltip(Tooltip::text("Import Gradle selection"))
+                                        .disabled(!can_apply_build_selection)
+                                        .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(false, cx))),
+                                    )
+                                })
+                                .when(self.view == BuildToolView::Maven, |row| {
+                                    row.child(
+                                        IconButton::new(
+                                            "groovy-reload-maven-projects-icon",
+                                            ui::IconName::RotateCw,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .tab_index(0_isize)
+                                        .aria_label("Reload selected or provider-default Maven projects on the local host")
+                                        .tooltip(Tooltip::text("Reload Maven projects"))
+                                        .disabled(!can_apply_build_selection)
+                                        .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadMaven, cx))),
+                                    )
+                                    .child(
+                                        IconButton::new(
+                                            "groovy-apply-saved-maven-selection-icon",
+                                            ui::IconName::Download,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .tab_index(0_isize)
+                                        .aria_label(if self.project.read(cx).is_remote() { "Saved Maven selection unavailable for remote projects" } else { "Apply saved Maven roots and exclusions for the selected local project folder; executes trusted build configuration" })
+                                        .tooltip(Tooltip::text("Apply saved Maven selection"))
+                                        .disabled(!can_apply_build_selection)
+                                        .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(true, cx))),
+                                    )
+                                    .child(
+                                        IconButton::new(
+                                            "groovy-maven-graph-scope-icon",
+                                            ui::IconName::ArrowRightLeft,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .tab_index(0_isize)
+                                        .aria_label(format!("Maven dependency graph scope: {}; activate for {}; filters admitted edge scopes without resolving dependencies", self.preferences.maven_graph_scope.label(), self.preferences.maven_graph_scope.next().label()))
+                                        .aria_value(self.preferences.maven_graph_scope.label())
+                                        .tooltip(Tooltip::text("Maven scope"))
+                                        .on_click(cx.listener(|panel, _, _, cx| panel.cycle_maven_graph_scope(cx))),
+                                    )
+                                })
+                                .child(
+                                    IconButton::new(
+                                        "groovy-build-view-options-icon",
+                                        ui::IconName::Settings,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label(format!("{} view options", self.view.label()))
+                                    .tooltip(Tooltip::text("Options"))
+                                    .toggle_state(self.show_options)
+                                    .on_click(cx.listener(|panel, _, _, cx| {
+                                        panel.show_options = !panel.show_options;
+                                        cx.notify();
+                                    })),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-graph-facts-filter-icon",
+                                        ui::IconName::Filter,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label(format!("Dependency graph fact filter: {}; activate for {}; filters admitted metadata without resolving dependencies", self.preferences.graph_fact_filter.label(), self.preferences.graph_fact_filter.next().label()))
+                                    .aria_value(self.preferences.graph_fact_filter.label())
+                                    .tooltip(Tooltip::text("Graph fact filter"))
+                                    .toggle_state(self.preferences.graph_fact_filter != GraphFactFilter::All)
+                                    .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_filter(cx))),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-collect-offline-graph-icon",
+                                        ui::IconName::CloudDownload,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label(if self.project.read(cx).is_remote() {
+                                        "Offline dependency graph collection unavailable for remote projects"
+                                    } else {
+                                        "Collect offline dependency graph for selected Maven project or Gradle resolvable configuration; executes trusted build configuration scripts and resolves cached metadata"
+                                    })
+                                    .tooltip(Tooltip::text("Collect offline graph"))
+                                    .disabled(!can_collect_graph)
+                                    .on_click(cx.listener(|panel, _, _, cx| panel.collect_selected_graph(cx))),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-cancel-graph-collection-icon",
+                                        ui::IconName::XCircle,
+                                    )
+                                    .shape(ui::IconButtonShape::Square)
+                                    .tab_index(0_isize)
+                                    .aria_label("Cancel only this panel's current dependency graph collection")
+                                    .tooltip(Tooltip::text("Cancel graph collection"))
+                                    .disabled(!can_cancel_graph)
+                                    .on_click(cx.listener(|panel, _, _, cx| panel.cancel_graph_collection(cx))),
+                                )
+                                .when(self.view != BuildToolView::Dependencies, |row| {
+                                    row.child(
+                                        IconButton::new(
+                                            "groovy-run-selected-offline-operation-icon",
+                                            ui::IconName::PlayFilled,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .tab_index(0_isize)
+                                        .aria_label(if self.project.read(cx).is_remote(){"Discovered offline build execution unavailable for remote projects"}
+                                            else{"Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"})
+                                        .tooltip(Tooltip::text("Run selected offline operation"))
+                                        .disabled(!can_run_operation)
+                                        .on_click(cx.listener(|panel, _, window, cx| panel.run_selected_offline_operation(window, cx))),
+                                    )
+                                }),
+                        )
+                    })
+                    .when(self.view != BuildToolView::Dependencies && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-build-view-options", "Options")
                             .aria_label(format!("{} view options", self.view.label()))
                             .toggle_state(self.show_options)
@@ -6536,7 +6827,7 @@ impl Render for DependenciesPanel {
                                 cx.notify();
                             })),
                     ))
-                    .when(self.view == BuildToolView::Gradle, |header| header.child(
+                    .when(self.view == BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-gradle-synchronize-metadata", "Synchronize metadata")
                             .aria_label(if self.project.read(cx).is_remote() {
                                 "Gradle metadata synchronization unavailable for remote projects"
@@ -6547,13 +6838,13 @@ impl Render for DependenciesPanel {
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.synchronize_gradle_metadata(cx)))
                     ))
-                    .when(self.view != BuildToolView::Gradle, |header| header.child(
+                    .when(self.view != BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-apply-saved-maven-selection", "Apply saved Maven selection")
                             .aria_label(if self.project.read(cx).is_remote() { "Saved Maven selection unavailable for remote projects" } else { "Apply saved Maven roots and exclusions for the selected local project folder; executes trusted build configuration" })
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(true, cx)))
                     ))
-                    .when(self.view == BuildToolView::Maven, |header| header.child(
+                    .when(self.view == BuildToolView::Maven && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-reload-maven-projects", "Reload Maven projects")
                             .aria_label("Reload selected or provider-default Maven projects on the local host")
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
@@ -6565,7 +6856,7 @@ impl Render for DependenciesPanel {
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadAll, cx)))
                     ))
-                    .when(self.view != BuildToolView::Maven, |header| header.child(
+                    .when(self.view != BuildToolView::Maven && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-import-gradle-selection", "Import Gradle selection")
                             .aria_label(if self.project.read(cx).is_remote() { "Gradle selection import unavailable for remote projects" } else { "Import effective Gradle selection for the selected local project folder; executes trusted build configuration" })
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
@@ -6605,14 +6896,14 @@ impl Render for DependenciesPanel {
                             panel.quick_run_recent_configuration(window, cx)
                         })),
                     )
-                    .child(
+                    .when(!icon_toolbar_active, |header| header.child(
                         Button::new("groovy-graph-facts-filter", format!("Graph: {}", self.preferences.graph_fact_filter.label()))
                             .aria_label(format!("Dependency graph fact filter: {}; activate for {}; filters admitted metadata without resolving dependencies", self.preferences.graph_fact_filter.label(), self.preferences.graph_fact_filter.next().label()))
                             .aria_value(self.preferences.graph_fact_filter.label())
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_filter(cx)))
-                    )
-                    .when(self.view != BuildToolView::Gradle, |header| header.child(
+                    ))
+                    .when(self.view != BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-maven-graph-scope", format!("Maven scope: {}", self.preferences.maven_graph_scope.label()))
                             .aria_label(format!("Maven dependency graph scope: {}; activate for {}; filters admitted edge scopes without resolving dependencies", self.preferences.maven_graph_scope.label(), self.preferences.maven_graph_scope.next().label()))
                             .aria_value(self.preferences.maven_graph_scope.label())
@@ -6679,7 +6970,7 @@ impl Render for DependenciesPanel {
                         .aria_label("Clear selected dependency graph inspection")
                         .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, _, cx| panel.clear_graph_inspection(cx))))
-                    .child(
+                    .when(!icon_toolbar_active, |header| header.child(
                         Button::new("groovy-collect-offline-graph", "Collect offline graph")
                             .aria_label(if self.project.read(cx).is_remote() {
                                 "Offline dependency graph collection unavailable for remote projects"
@@ -6689,15 +6980,15 @@ impl Render for DependenciesPanel {
                             .disabled(!can_collect_graph)
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.collect_selected_graph(cx)))
-                    )
-                    .child(
+                    ))
+                    .when(!icon_toolbar_active, |header| header.child(
                         Button::new("groovy-cancel-graph-collection", "Cancel graph collection")
                             .aria_label("Cancel only this panel's current dependency graph collection")
                             .disabled(!can_cancel_graph)
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.cancel_graph_collection(cx)))
-                    )
-                    .when(self.view!=BuildToolView::Dependencies,|header|header.child(
+                    ))
+                    .when(self.view!=BuildToolView::Dependencies && !icon_toolbar_active,|header|header.child(
                         Button::new("groovy-run-selected-offline-operation","Run selected offline operation")
                             .aria_label(if self.project.read(cx).is_remote(){"Discovered offline build execution unavailable for remote projects"}
                                 else{"Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"})
@@ -6775,6 +7066,7 @@ impl Render for DependenciesPanel {
                                     "groovy-dependencies-expand-all",
                                     IconName::ExpandVertical,
                                 )
+                                .shape(ui::IconButtonShape::Square)
                                 .aria_label("Expand All")
                                 .tooltip(Tooltip::text("Expand All"))
                                 .disabled(!can_expand_all)
@@ -6790,6 +7082,7 @@ impl Render for DependenciesPanel {
                                     "groovy-dependencies-collapse-all",
                                     IconName::ListCollapse,
                                 )
+                                .shape(ui::IconButtonShape::Square)
                                 .aria_label("Collapse All")
                                 .tooltip(Tooltip::text("Collapse All"))
                                 .disabled(!can_collapse_all)
@@ -6805,6 +7098,7 @@ impl Render for DependenciesPanel {
                                     "groovy-dependencies-refresh",
                                     ui::IconName::RefreshTitle,
                                 )
+                                .shape(ui::IconButtonShape::Square)
                                 .aria_label("Refresh Dependencies")
                                 .on_click(cx.listener(|panel, _, _, cx| panel.refresh(cx))),
                             ),

@@ -67,6 +67,14 @@ impl IconButton {
         self
     }
 
+    /// Sets the current value reported to assistive technology, for icon
+    /// buttons that represent a control with a value, such as a cycling
+    /// filter whose value is the current selection.
+    pub fn aria_value(mut self, value: impl Into<SharedString>) -> Self {
+        self.base = self.base.aria_value(value);
+        self
+    }
+
     /// Sets the expanded state reported to assistive technology, for buttons
     /// that control a popup (e.g. dropdown or disclosure triggers).
     pub fn aria_expanded(mut self, expanded: bool) -> Self {
