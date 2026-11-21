@@ -1,4 +1,4 @@
-use std::{fmt, panic::AssertUnwindSafe, sync::Arc};
+use std::{fmt, ops::Sub, panic::AssertUnwindSafe, sync::Arc};
 
 use futures::FutureExt as _;
 use graphite_core_types::{
@@ -26,35 +26,122 @@ use graphite_std::{
     transform_nodes::replace_transform,
 };
 
-use crate::{AddEvaluationError, Input, resources::PreparedEncodedPngSource};
+use crate::{
+    AddEvaluationError, Input, resources::PreparedEncodedPngSource, vector_elements, vector_items,
+};
 
 pub fn evaluate_subtract(minuend: f64, subtrahend: f64) -> Result<f64, AddEvaluationError> {
-    let node = graphite_math_nodes::SubtractNode::new(
-        Input(Item::new_from_element(minuend)),
-        Input(Item::new_from_element(subtrahend)),
-    );
-    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
-        .map(Item::into_element)
-        .map_err(|_| AddEvaluationError)
+    subtract_value(minuend, subtrahend)
 }
 
 pub fn evaluate_subtract_lists(
     minuends: &[f64],
     subtrahends: &[f64],
 ) -> Result<Vec<f64>, AddEvaluationError> {
-    let minuends = minuends
-        .iter()
-        .copied()
-        .map(Item::new_from_element)
-        .collect();
-    let subtrahends = subtrahends
-        .iter()
-        .copied()
-        .map(Item::new_from_element)
-        .collect();
+    subtract_list_items(numeric_items(minuends), numeric_items(subtrahends))
+        .map(|items| items.into_iter().map(Item::into_element).collect())
+}
+
+pub fn evaluate_subtract_i64(minuend: i64, subtrahend: i64) -> Result<i64, AddEvaluationError> {
+    subtract_value(minuend, subtrahend)
+}
+
+pub fn evaluate_subtract_i64_lists(
+    minuends: &[i64],
+    subtrahends: &[i64],
+) -> Result<Vec<i64>, AddEvaluationError> {
+    subtract_list_items(numeric_items(minuends), numeric_items(subtrahends))
+        .map(|items| items.into_iter().map(Item::into_element).collect())
+}
+
+pub fn evaluate_subtract_vector(
+    minuend: [f64; 2],
+    subtrahend: [f64; 2],
+) -> Result<[f64; 2], AddEvaluationError> {
+    subtract_value(DVec2::from_array(minuend), DVec2::from_array(subtrahend))
+        .map(|result| result.to_array())
+}
+
+pub fn evaluate_subtract_scalar_vector(
+    minuend: f64,
+    subtrahend: [f64; 2],
+) -> Result<[f64; 2], AddEvaluationError> {
+    subtract_value(minuend, DVec2::from_array(subtrahend)).map(|result| result.to_array())
+}
+
+pub fn evaluate_subtract_vector_scalar(
+    minuend: [f64; 2],
+    subtrahend: f64,
+) -> Result<[f64; 2], AddEvaluationError> {
+    subtract_value(DVec2::from_array(minuend), subtrahend).map(|result| result.to_array())
+}
+
+pub fn evaluate_subtract_vector_lists(
+    minuends: &[[f64; 2]],
+    subtrahends: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    subtract_list_items(vector_items(minuends), vector_items(subtrahends)).map(vector_elements)
+}
+
+pub fn evaluate_subtract_scalar_vector_lists(
+    minuends: &[f64],
+    subtrahends: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    subtract_list_items(numeric_items(minuends), vector_items(subtrahends)).map(vector_elements)
+}
+
+pub fn evaluate_subtract_vector_scalar_lists(
+    minuends: &[[f64; 2]],
+    subtrahends: &[f64],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    subtract_list_items(vector_items(minuends), numeric_items(subtrahends)).map(vector_elements)
+}
+
+fn numeric_items<Value: Copy>(values: &[Value]) -> List<Value> {
+    values.iter().copied().map(Item::new_from_element).collect()
+}
+
+fn subtract_value<Left, Right>(
+    minuend: Left,
+    subtrahend: Right,
+) -> Result<Left::Output, AddEvaluationError>
+where
+    Left: Sub<Right> + Clone + Send + Sync + 'static,
+    Right: Clone + Send + Sync + 'static,
+    Left::Output: Send + Sync + 'static,
+{
+    subtract_item(
+        Item::new_from_element(minuend),
+        Item::new_from_element(subtrahend),
+    )
+    .map(Item::into_element)
+}
+
+fn subtract_item<Left, Right>(
+    minuend: Item<Left>,
+    subtrahend: Item<Right>,
+) -> Result<Item<Left::Output>, AddEvaluationError>
+where
+    Left: Sub<Right> + Clone + Send + Sync + 'static,
+    Right: Clone + Send + Sync + 'static,
+    Left::Output: Send + Sync + 'static,
+{
+    let node = graphite_math_nodes::SubtractNode::new(Input(minuend), Input(subtrahend));
+    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
+        .map_err(|_| AddEvaluationError)
+}
+
+fn subtract_list_items<Left, Right>(
+    minuends: List<Left>,
+    subtrahends: List<Right>,
+) -> Result<List<Left::Output>, AddEvaluationError>
+where
+    Left: Sub<Right> + Clone + Send + Sync + 'static,
+    Right: Clone + Send + Sync + 'static,
+    Left::Output: Clone + Send + Sync + 'static,
+{
     let node = graphite_math_nodes::SubtractNodeMapped::new(Input(minuends), Input(subtrahends));
     futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
-        .map(|result| result.into_iter().map(Item::into_element).collect())
         .map_err(|_| AddEvaluationError)
 }
 

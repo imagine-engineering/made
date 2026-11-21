@@ -1237,6 +1237,90 @@ fn at_gra_node_087_subtract_modes_accept_native_edits_and_recover(cx: &mut TestA
 }
 
 #[gpui::test]
+fn at_gra_node_087_native_subtract_selects_integer_and_vector_pairs(cx: &mut TestAppContext) {
+    init(cx);
+    let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);
+    let editors = item.read_with(cx, |item, _| {
+        [
+            item.augend_editor.clone(),
+            item.augend_y_editor.clone(),
+            item.addend_editor.clone(),
+            item.addend_y_editor.clone(),
+        ]
+    });
+
+    for (selector, inputs, expected, result_selector) in [
+        (
+            "GRAPHITE-MODE-SUBTRACT-INTEGER",
+            ["9007199254740993", "", "2", ""],
+            "9007199254740991",
+            "GRAPHITE-RESULT-9007199254740991",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-VECTOR",
+            ["1", "-2", "3", "5"],
+            "[-2.0, -7.0]",
+            "GRAPHITE-RESULT-[-2.0, -7.0]",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-SCALAR-VECTOR",
+            ["2", "", "3", "-5"],
+            "[-1.0, 7.0]",
+            "GRAPHITE-RESULT-[-1.0, 7.0]",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-VECTOR-SCALAR",
+            ["3", "-5", "2", ""],
+            "[1.0, -7.0]",
+            "GRAPHITE-RESULT-[1.0, -7.0]",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-INTEGER-LISTS",
+            ["9007199254740993, -3", "", "2", ""],
+            "[9007199254740991, -5]",
+            "GRAPHITE-RESULT-[9007199254740991, -5]",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-VECTOR-LISTS",
+            ["1, 4", "-2, 1", "3", "5"],
+            "[[-2.0, -7.0], [1.0, -4.0]]",
+            "GRAPHITE-RESULT-[[-2.0, -7.0], [1.0, -4.0]]",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-SCALAR-VECTOR-LISTS",
+            ["2", "", "3, -1", "-5, 0"],
+            "[[-1.0, 7.0], [3.0, 2.0]]",
+            "GRAPHITE-RESULT-[[-1.0, 7.0], [3.0, 2.0]]",
+        ),
+        (
+            "GRAPHITE-MODE-SUBTRACT-VECTOR-SCALAR-LISTS",
+            ["3", "-5", "2, -1", ""],
+            "[[1.0, -7.0], [4.0, -4.0]]",
+            "GRAPHITE-RESULT-[[1.0, -7.0], [4.0, -4.0]]",
+        ),
+    ] {
+        let button = cx
+            .debug_bounds(selector)
+            .expect("admitted typed Subtract option");
+        cx.simulate_click(button.center(), gpui::Modifiers::default());
+        for (editor, input) in editors.iter().zip(inputs) {
+            editor.update_in(cx, |editor, window, cx| editor.set_text(input, window, cx));
+        }
+        cx.run_until_parked();
+        item.read_with(cx, |item, cx| {
+            let session = item.session.read(cx);
+            assert!(
+                session.diagnostic().is_none(),
+                "{selector}: {:?}",
+                session.diagnostic()
+            );
+            assert_eq!(session.result_text(), expected, "{selector}");
+        });
+        assert!(cx.debug_bounds(result_selector).is_some());
+    }
+}
+
+#[gpui::test]
 fn at_graphite_multiply_native_edit_renders_all_twelve_source_pairs(cx: &mut TestAppContext) {
     init(cx);
     let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);

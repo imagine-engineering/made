@@ -27,6 +27,87 @@ fn at_gra_node_087_2_subtract_f64_preserves_operand_order_and_source_mapping() -
     Ok(())
 }
 
+#[test]
+fn at_gra_node_087_2_subtract_uses_exact_integer_and_vector_pairs() -> TestResult {
+    assert_eq!(
+        evaluate_subtract_i64(9_007_199_254_740_993, 2)?,
+        9_007_199_254_740_991
+    );
+    assert_eq!(
+        evaluate_subtract_i64_lists(&[9_007_199_254_740_993, -3], &[2])?,
+        [9_007_199_254_740_991, -5]
+    );
+    assert_eq!(evaluate_subtract_vector([1., -2.], [3., 5.])?, [-2., -7.]);
+    assert_eq!(evaluate_subtract_scalar_vector(2., [3., -5.])?, [-1., 7.]);
+    assert_eq!(evaluate_subtract_vector_scalar([3., -5.], 2.)?, [1., -7.]);
+    assert_eq!(
+        evaluate_subtract_vector_lists(&[[1., -2.], [4., 1.]], &[[3., 5.]])?,
+        [[-2., -7.], [1., -4.]]
+    );
+    assert_eq!(
+        evaluate_subtract_scalar_vector_lists(&[2.], &[[3., -5.], [-1., 0.]])?,
+        [[-1., 7.], [3., 2.]]
+    );
+    assert_eq!(
+        evaluate_subtract_vector_scalar_lists(&[[3., -5.]], &[2., -1.])?,
+        [[1., -7.], [4., -4.]]
+    );
+    assert!(evaluate_subtract_i64_lists(&[], &[2])?.is_empty());
+    assert!(evaluate_subtract_vector_lists(&[], &[[3., 5.]])?.is_empty());
+    assert!(evaluate_subtract_scalar_vector_lists(&[2.], &[])?.is_empty());
+    assert!(evaluate_subtract_vector_scalar_lists(&[[3., 5.]], &[])?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_087_2_subtract_integer_overflow_follows_source_profile() -> TestResult {
+    let scalar_underflow = evaluate_subtract_i64(i64::MIN, 1);
+    let late_list_underflow = evaluate_subtract_i64_lists(&[8, i64::MIN], &[1]);
+    if cfg!(debug_assertions) {
+        assert_eq!(scalar_underflow, Err(AddEvaluationError));
+        assert_eq!(late_list_underflow, Err(AddEvaluationError));
+    } else {
+        assert_eq!(scalar_underflow?, i64::MAX);
+        assert_eq!(late_list_underflow?, [7, i64::MAX]);
+    }
+    assert_eq!(evaluate_subtract_i64(i64::MIN, 0)?, i64::MIN);
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_087_2_subtract_preserves_left_attributes_in_items_and_mapped_slots() -> TestResult {
+    let minuend =
+        Item::new_from_element(DVec2::new(5., -3.)).with_attribute("name", String::from("minuend"));
+    let subtrahend = Item::new_from_element(2_f64).with_attribute("right-only", true);
+    let scalar = subtract_item(minuend.clone(), subtrahend.clone())?;
+    assert_eq!(scalar.element().to_array(), [3., -5.]);
+    let (scalar, attributes) = scalar.into_parts();
+    assert_eq!(scalar.to_array(), [3., -5.]);
+    assert_eq!(attributes, minuend.clone().into_parts().1);
+
+    let list = subtract_list_items(
+        [minuend].into_iter().collect(),
+        [subtrahend, Item::new_from_element(-1.)]
+            .into_iter()
+            .collect(),
+    )?;
+    assert_eq!(list.len(), 2);
+    assert_eq!(
+        list.iter_element_values()
+            .map(|value| value.to_array())
+            .collect::<Vec<_>>(),
+        [[3., -5.], [6., -2.]]
+    );
+    for index in 0..list.len() {
+        assert_eq!(
+            list.attribute::<String>("name", index).map(String::as_str),
+            Some("minuend")
+        );
+        assert!(list.attribute::<bool>("right-only", index).is_none());
+    }
+    Ok(())
+}
+
 fn configuration() -> RenderConfig {
     RenderConfig {
         viewport: Footprint {

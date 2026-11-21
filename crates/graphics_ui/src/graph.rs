@@ -89,13 +89,13 @@ impl GraphicsWorkspaceItem {
         let augend_y_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_text("0", window, cx);
-            editor.set_placeholder_text("augend.y", window, cx);
+            editor.set_placeholder_text("First input y", window, cx);
             editor
         });
         let addend_y_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_text("0", window, cx);
-            editor.set_placeholder_text("addend.y", window, cx);
+            editor.set_placeholder_text("Second input y", window, cx);
             editor
         });
         let mix_opacity_editor = cx.new(|cx| {
@@ -408,6 +408,38 @@ impl Render for GraphicsWorkspaceItem {
             self.display_mix_opacity(window, cx);
         }
         let item = cx.entity().downgrade();
+        let minuend_label = if mode.augend_is_vector() {
+            "minuend.x"
+        } else if mode.is_list() {
+            "minuends"
+        } else {
+            "minuend"
+        };
+        let subtrahend_label = if mode.addend_is_vector() {
+            "subtrahend.x"
+        } else if mode.is_list() {
+            "subtrahends"
+        } else {
+            "subtrahend"
+        };
+        let first_y_label = if mode == AddMode::InvertColor {
+            "green"
+        } else if mode.is_multiply() {
+            "multiplier.y"
+        } else if mode.is_subtract() {
+            "minuend.y"
+        } else {
+            "augend.y"
+        };
+        let second_y_label = if mode == AddMode::InvertColor {
+            "alpha"
+        } else if mode.is_multiply() {
+            "multiplicand.y"
+        } else if mode.is_subtract() {
+            "subtrahend.y"
+        } else {
+            "addend.y"
+        };
         let mix_menu = svg_blend_mode_menu(window, cx, move |mode, _, cx| {
             if let Some(item) = item.upgrade() {
                 item.update(cx, |item, cx| item.set_mix_blend_mode(mode, cx));
@@ -417,6 +449,7 @@ impl Render for GraphicsWorkspaceItem {
             .id("graphite-add")
             .track_focus(&self.focus_handle(cx))
             .size_full()
+            .overflow_y_scroll()
             .p_4()
             .gap_3()
             .bg(cx.theme().colors().editor_background)
@@ -439,9 +472,9 @@ impl Render for GraphicsWorkspaceItem {
                 "Edit gamma sRGB red, green and blue with straight alpha. Invert preserves alpha."
             } else if mode == AddMode::Sort {
                 "Edit the values to sort them. Leave the sort keys blank to sort by value."
-            } else if mode == AddMode::SubtractLists {
+            } else if mode.is_subtract() && mode.is_list() {
                 "Enter comma-separated numbers in each list."
-            } else if mode == AddMode::SubtractScalar {
+            } else if mode.is_subtract() {
                 "Edit the inputs to calculate their difference."
             } else if mode.is_multiply() {
                 "Edit the inputs to calculate their product."
@@ -490,6 +523,14 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::InvertColor, "Invert Color", "GRAPHITE-MODE-INVERT-COLOR"),
                         (AddMode::SubtractScalar, "Subtract Scalar", "GRAPHITE-MODE-SUBTRACT-SCALAR"),
                         (AddMode::SubtractLists, "Subtract Lists", "GRAPHITE-MODE-SUBTRACT-LISTS"),
+                        (AddMode::SubtractInteger, "Subtract Integer", "GRAPHITE-MODE-SUBTRACT-INTEGER"),
+                        (AddMode::SubtractVector, "Subtract Vector − Vector", "GRAPHITE-MODE-SUBTRACT-VECTOR"),
+                        (AddMode::SubtractScalarVector, "Subtract Scalar − Vector", "GRAPHITE-MODE-SUBTRACT-SCALAR-VECTOR"),
+                        (AddMode::SubtractVectorScalar, "Subtract Vector − Scalar", "GRAPHITE-MODE-SUBTRACT-VECTOR-SCALAR"),
+                        (AddMode::SubtractIntegerLists, "Subtract Integer Lists", "GRAPHITE-MODE-SUBTRACT-INTEGER-LISTS"),
+                        (AddMode::SubtractVectorLists, "Subtract Vector Lists", "GRAPHITE-MODE-SUBTRACT-VECTOR-LISTS"),
+                        (AddMode::SubtractScalarVectorLists, "Subtract Scalar − Vector Lists", "GRAPHITE-MODE-SUBTRACT-SCALAR-VECTOR-LISTS"),
+                        (AddMode::SubtractVectorScalarLists, "Subtract Vector − Scalar Lists", "GRAPHITE-MODE-SUBTRACT-VECTOR-SCALAR-LISTS"),
                         (AddMode::MultiplyScalar, "Multiply Scalar", "GRAPHITE-MODE-MULTIPLY-SCALAR"),
                         (AddMode::MultiplyLists, "Multiply Lists", "GRAPHITE-MODE-MULTIPLY-LISTS"),
                         (AddMode::MultiplyInteger, "Multiply Integer", "GRAPHITE-MODE-MULTIPLY-INTEGER"),
@@ -604,7 +645,7 @@ impl Render for GraphicsWorkspaceItem {
                 .child(Label::new("Component order: m11, m12, m21, m22, tx, ty (column-major)."))
             })
             .when(
-                matches!(mode, AddMode::Integer | AddMode::IntegerLists | AddMode::MultiplyInteger | AddMode::MultiplyIntegerLists),
+                matches!(mode, AddMode::Integer | AddMode::IntegerLists | AddMode::MultiplyInteger | AddMode::MultiplyIntegerLists | AddMode::SubtractInteger | AddMode::SubtractIntegerLists),
                 |view| {
                     view.child(Label::new(
                         "Enter whole numbers in the 64-bit integer range.",
@@ -628,10 +669,8 @@ impl Render for GraphicsWorkspaceItem {
                         "red"
                     } else if mode == AddMode::Sort {
                         "values"
-                    } else if mode == AddMode::SubtractScalar {
-                        "minuend"
-                    } else if mode == AddMode::SubtractLists {
-                        "minuends"
+                    } else if mode.is_subtract() {
+                        minuend_label
                     } else if mode.is_multiply() {
                         if mode.augend_is_vector() { "multiplier.x" } else { "multiplier" }
                     } else if mode.augend_is_vector() {
@@ -648,10 +687,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "red"
                             } else if mode == AddMode::Sort {
                                 "values"
-                            } else if mode == AddMode::SubtractScalar {
-                                "minuend"
-                            } else if mode == AddMode::SubtractLists {
-                                "minuends"
+                            } else if mode.is_subtract() {
+                                minuend_label
                             } else if mode.is_multiply() {
                                 "multiplier"
                             } else {
@@ -662,10 +699,10 @@ impl Render for GraphicsWorkspaceItem {
             )
             .when(mode.augend_is_vector() || mode == AddMode::InvertColor, |view| {
                 view.child(
-                    v_flex().gap_1().child(Label::new(if mode == AddMode::InvertColor { "green" } else if mode.is_multiply() { "multiplier.y" } else { "augend.y" })).child(
+                    v_flex().gap_1().child(Label::new(first_y_label)).child(
                         div()
                             .id("augend-y")
-                            .aria_label(if mode == AddMode::InvertColor { "green" } else if mode.is_multiply() { "multiplier.y" } else { "augend.y" })
+                            .aria_label(first_y_label)
                             .child(self.augend_y_editor.clone()),
                     ),
                 )
@@ -679,10 +716,8 @@ impl Render for GraphicsWorkspaceItem {
                         "blue"
                     } else if mode == AddMode::Sort {
                         "sort keys (optional)"
-                    } else if mode == AddMode::SubtractScalar {
-                        "subtrahend"
-                    } else if mode == AddMode::SubtractLists {
-                        "subtrahends"
+                    } else if mode.is_subtract() {
+                        subtrahend_label
                     } else if mode.is_multiply() {
                         if mode.addend_is_vector() { "multiplicand.x" } else { "multiplicand" }
                     } else if mode.addend_is_vector() {
@@ -699,10 +734,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "blue"
                             } else if mode == AddMode::Sort {
                                 "sort keys"
-                            } else if mode == AddMode::SubtractScalar {
-                                "subtrahend"
-                            } else if mode == AddMode::SubtractLists {
-                                "subtrahends"
+                            } else if mode.is_subtract() {
+                                subtrahend_label
                             } else if mode.is_multiply() {
                                 "multiplicand"
                             } else {
@@ -713,10 +746,10 @@ impl Render for GraphicsWorkspaceItem {
             )
             .when(mode.addend_is_vector() || mode == AddMode::InvertColor, |view| {
                 view.child(
-                    v_flex().gap_1().child(Label::new(if mode == AddMode::InvertColor { "alpha" } else if mode.is_multiply() { "multiplicand.y" } else { "addend.y" })).child(
+                    v_flex().gap_1().child(Label::new(second_y_label)).child(
                         div()
                             .id("addend-y")
-                            .aria_label(if mode == AddMode::InvertColor { "alpha" } else if mode.is_multiply() { "multiplicand.y" } else { "addend.y" })
+                            .aria_label(second_y_label)
                             .child(self.addend_y_editor.clone()),
                     ),
                 )

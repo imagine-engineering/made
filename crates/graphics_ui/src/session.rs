@@ -12,6 +12,14 @@ pub(crate) enum AddMode {
     VectorScalarLists,
     SubtractScalar,
     SubtractLists,
+    SubtractInteger,
+    SubtractVector,
+    SubtractScalarVector,
+    SubtractVectorScalar,
+    SubtractIntegerLists,
+    SubtractVectorLists,
+    SubtractScalarVectorLists,
+    SubtractVectorScalarLists,
     Sort,
     MultiplyScalar,
     MultiplyLists,
@@ -31,7 +39,19 @@ pub(crate) enum AddMode {
 
 impl AddMode {
     pub(crate) fn is_subtract(self) -> bool {
-        matches!(self, Self::SubtractScalar | Self::SubtractLists)
+        matches!(
+            self,
+            Self::SubtractScalar
+                | Self::SubtractLists
+                | Self::SubtractInteger
+                | Self::SubtractVector
+                | Self::SubtractScalarVector
+                | Self::SubtractVectorScalar
+                | Self::SubtractIntegerLists
+                | Self::SubtractVectorLists
+                | Self::SubtractScalarVectorLists
+                | Self::SubtractVectorScalarLists
+        )
     }
 
     pub(crate) fn is_multiply(self) -> bool {
@@ -65,6 +85,10 @@ impl AddMode {
                 | Self::ScalarVectorLists
                 | Self::VectorScalarLists
                 | Self::SubtractLists
+                | Self::SubtractIntegerLists
+                | Self::SubtractVectorLists
+                | Self::SubtractScalarVectorLists
+                | Self::SubtractVectorScalarLists
                 | Self::MultiplyLists
                 | Self::MultiplyIntegerLists
                 | Self::MultiplyVectorLists
@@ -81,6 +105,10 @@ impl AddMode {
                 | Self::VectorScalar
                 | Self::VectorLists
                 | Self::VectorScalarLists
+                | Self::SubtractVector
+                | Self::SubtractVectorScalar
+                | Self::SubtractVectorLists
+                | Self::SubtractVectorScalarLists
                 | Self::MultiplyVector
                 | Self::MultiplyVectorScalar
                 | Self::MultiplyVectorLists
@@ -95,6 +123,10 @@ impl AddMode {
                 | Self::ScalarVector
                 | Self::VectorLists
                 | Self::ScalarVectorLists
+                | Self::SubtractVector
+                | Self::SubtractScalarVector
+                | Self::SubtractVectorLists
+                | Self::SubtractScalarVectorLists
                 | Self::MultiplyVector
                 | Self::MultiplyScalarVector
                 | Self::MultiplyVectorLists
@@ -114,8 +146,7 @@ enum Inputs {
     VectorLists(Vec<[f64; 2]>, Vec<[f64; 2]>),
     ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
-    SubtractScalar(f64, f64),
-    SubtractLists(Vec<f64>, Vec<f64>),
+    Subtract(SubtractInputs),
     Sort(Vec<f64>, Vec<f64>, bool),
     Multiply(MultiplyInputs),
     InvertColor([f32; 4]),
@@ -137,6 +168,124 @@ enum Output {
     Affine([f64; 6]),
     AffineLists(Vec<[f64; 6]>),
     Color([f32; 4]),
+}
+
+enum SubtractInputs {
+    Scalar(f64, f64),
+    Lists(Vec<f64>, Vec<f64>),
+    Integer(i64, i64),
+    Vector([f64; 2], [f64; 2]),
+    ScalarVector(f64, [f64; 2]),
+    VectorScalar([f64; 2], f64),
+    IntegerLists(Vec<i64>, Vec<i64>),
+    VectorLists(Vec<[f64; 2]>, Vec<[f64; 2]>),
+    ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
+    VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
+}
+
+impl SubtractInputs {
+    fn same_values(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Scalar(left, right), Self::Scalar(other_left, other_right)) => {
+                left.to_bits() == other_left.to_bits() && right.to_bits() == other_right.to_bits()
+            }
+            (Self::Lists(left, right), Self::Lists(other_left, other_right)) => {
+                same_values(left, other_left) && same_values(right, other_right)
+            }
+            (Self::Integer(left, right), Self::Integer(other_left, other_right)) => {
+                left == other_left && right == other_right
+            }
+            (Self::Vector(left, right), Self::Vector(other_left, other_right)) => {
+                same_values(left, other_left) && same_values(right, other_right)
+            }
+            (Self::ScalarVector(left, right), Self::ScalarVector(other_left, other_right)) => {
+                left.to_bits() == other_left.to_bits() && same_values(right, other_right)
+            }
+            (Self::VectorScalar(left, right), Self::VectorScalar(other_left, other_right)) => {
+                same_values(left, other_left) && right.to_bits() == other_right.to_bits()
+            }
+            (Self::IntegerLists(left, right), Self::IntegerLists(other_left, other_right)) => {
+                left == other_left && right == other_right
+            }
+            (Self::VectorLists(left, right), Self::VectorLists(other_left, other_right)) => {
+                same_vectors(left, other_left) && same_vectors(right, other_right)
+            }
+            (
+                Self::ScalarVectorLists(left, right),
+                Self::ScalarVectorLists(other_left, other_right),
+            ) => same_values(left, other_left) && same_vectors(right, other_right),
+            (
+                Self::VectorScalarLists(left, right),
+                Self::VectorScalarLists(other_left, other_right),
+            ) => same_vectors(left, other_left) && same_values(right, other_right),
+            _ => false,
+        }
+    }
+
+    fn evaluate(&self) -> Result<Output, graphics_core::AddEvaluationError> {
+        use graphics_core::evaluate as source;
+
+        Ok(match self {
+            Self::Scalar(left, right) => Output::Scalar(source::evaluate_subtract(*left, *right)?),
+            Self::Lists(left, right) => {
+                Output::Lists(source::evaluate_subtract_lists(left, right)?)
+            }
+            Self::Integer(left, right) => {
+                Output::Integer(source::evaluate_subtract_i64(*left, *right)?)
+            }
+            Self::Vector(left, right) => {
+                Output::Vector(source::evaluate_subtract_vector(*left, *right)?)
+            }
+            Self::ScalarVector(left, right) => {
+                Output::Vector(source::evaluate_subtract_scalar_vector(*left, *right)?)
+            }
+            Self::VectorScalar(left, right) => {
+                Output::Vector(source::evaluate_subtract_vector_scalar(*left, *right)?)
+            }
+            Self::IntegerLists(left, right) => {
+                Output::IntegerLists(source::evaluate_subtract_i64_lists(left, right)?)
+            }
+            Self::VectorLists(left, right) => {
+                Output::VectorLists(source::evaluate_subtract_vector_lists(left, right)?)
+            }
+            Self::ScalarVectorLists(left, right) => {
+                Output::VectorLists(source::evaluate_subtract_scalar_vector_lists(left, right)?)
+            }
+            Self::VectorScalarLists(left, right) => {
+                Output::VectorLists(source::evaluate_subtract_vector_scalar_lists(left, right)?)
+            }
+        })
+    }
+
+    fn expression(&self) -> String {
+        match self {
+            Self::Scalar(left, right) => format!("{left} − {right}"),
+            Self::Lists(left, right) => format!("{left:?} − {right:?}"),
+            Self::Integer(left, right) => format!("{left} − {right}"),
+            Self::Vector(left, right) => format!("{left:?} − {right:?}"),
+            Self::ScalarVector(left, right) => format!("{left} − {right:?}"),
+            Self::VectorScalar(left, right) => format!("{left:?} − {right}"),
+            Self::IntegerLists(left, right) => format!("{left:?} − {right:?}"),
+            Self::VectorLists(left, right) => format!("{left:?} − {right:?}"),
+            Self::ScalarVectorLists(left, right) => format!("{left:?} − {right:?}"),
+            Self::VectorScalarLists(left, right) => format!("{left:?} − {right:?}"),
+        }
+    }
+
+    fn mode(&self) -> AddMode {
+        match self {
+            Self::Scalar(..) => AddMode::SubtractScalar,
+            Self::Lists(..) => AddMode::SubtractLists,
+            Self::Integer(..) => AddMode::SubtractInteger,
+            Self::Vector(..) => AddMode::SubtractVector,
+            Self::ScalarVector(..) => AddMode::SubtractScalarVector,
+            Self::VectorScalar(..) => AddMode::SubtractVectorScalar,
+            Self::IntegerLists(..) => AddMode::SubtractIntegerLists,
+            Self::VectorLists(..) => AddMode::SubtractVectorLists,
+            Self::ScalarVectorLists(..) => AddMode::SubtractScalarVectorLists,
+            Self::VectorScalarLists(..) => AddMode::SubtractVectorScalarLists,
+        }
+    }
 }
 
 impl Output {
@@ -402,18 +551,8 @@ impl Inputs {
                 augend.to_bits() == other_augend.to_bits()
                     && addend.to_bits() == other_addend.to_bits()
             }
-            (
-                Self::SubtractScalar(minuend, subtrahend),
-                Self::SubtractScalar(other_minuend, other_subtrahend),
-            ) => {
-                minuend.to_bits() == other_minuend.to_bits()
-                    && subtrahend.to_bits() == other_subtrahend.to_bits()
-            }
-            (
-                Self::SubtractLists(minuends, subtrahends),
-                Self::SubtractLists(other_minuends, other_subtrahends),
-            ) => {
-                same_values(minuends, other_minuends) && same_values(subtrahends, other_subtrahends)
+            (Self::Subtract(inputs), Self::Subtract(other_inputs)) => {
+                inputs.same_values(other_inputs)
             }
             (Self::Lists(augend, addend), Self::Lists(other_augend, other_addend)) => {
                 same_values(augend, other_augend) && same_values(addend, other_addend)
@@ -480,12 +619,7 @@ impl Inputs {
                 graphics_core::raster::evaluate_invert_color_channels(*channels)?,
             ),
             Self::Multiply(inputs) => inputs.evaluate()?,
-            Self::SubtractScalar(minuend, subtrahend) => Output::Scalar(
-                graphics_core::evaluate::evaluate_subtract(*minuend, *subtrahend)?,
-            ),
-            Self::SubtractLists(minuends, subtrahends) => Output::Lists(
-                graphics_core::evaluate::evaluate_subtract_lists(minuends, subtrahends)?,
-            ),
+            Self::Subtract(inputs) => inputs.evaluate()?,
             Self::Scalar(augend, addend) => {
                 Output::Scalar(graphics_core::evaluate_add(*augend, *addend))
             }
@@ -538,8 +672,7 @@ impl Inputs {
             ),
             Self::InvertColor(channels) => format!("Invert RGBA {channels:?}"),
             Self::Multiply(inputs) => inputs.expression(),
-            Self::SubtractScalar(minuend, subtrahend) => format!("{minuend} − {subtrahend}"),
-            Self::SubtractLists(minuends, subtrahends) => format!("{minuends:?} − {subtrahends:?}"),
+            Self::Subtract(inputs) => inputs.expression(),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
             Self::Lists(augend, addend) => format!("{augend:?} + {addend:?}"),
             Self::Integer(augend, addend) => format!("{augend} + {addend}"),
@@ -1068,14 +1201,50 @@ impl GraphicsSession {
                 parse_number(augend, "augend")?,
                 parse_number(addend, "addend")?,
             ),
-            AddMode::SubtractScalar => Inputs::SubtractScalar(
+            AddMode::SubtractScalar => Inputs::Subtract(SubtractInputs::Scalar(
                 parse_number(augend, "minuend")?,
                 parse_number(addend, "subtrahend")?,
-            ),
-            AddMode::SubtractLists => Inputs::SubtractLists(
+            )),
+            AddMode::SubtractLists => Inputs::Subtract(SubtractInputs::Lists(
                 parse_number_list(augend, "minuends")?,
                 parse_number_list(addend, "subtrahends")?,
-            ),
+            )),
+            AddMode::SubtractInteger => Inputs::Subtract(SubtractInputs::Integer(
+                parse_integer(augend, "minuend")?,
+                parse_integer(addend, "subtrahend")?,
+            )),
+            AddMode::SubtractVector => Inputs::Subtract(SubtractInputs::Vector(
+                parse_vector(augend, augend_y, "minuend")?,
+                parse_vector(addend, addend_y, "subtrahend")?,
+            )),
+            AddMode::SubtractScalarVector => Inputs::Subtract(SubtractInputs::ScalarVector(
+                parse_number(augend, "minuend")?,
+                parse_vector(addend, addend_y, "subtrahend")?,
+            )),
+            AddMode::SubtractVectorScalar => Inputs::Subtract(SubtractInputs::VectorScalar(
+                parse_vector(augend, augend_y, "minuend")?,
+                parse_number(addend, "subtrahend")?,
+            )),
+            AddMode::SubtractIntegerLists => Inputs::Subtract(SubtractInputs::IntegerLists(
+                parse_integer_list(augend, "minuends")?,
+                parse_integer_list(addend, "subtrahends")?,
+            )),
+            AddMode::SubtractVectorLists => Inputs::Subtract(SubtractInputs::VectorLists(
+                parse_vector_list(augend, augend_y, "minuend")?,
+                parse_vector_list(addend, addend_y, "subtrahend")?,
+            )),
+            AddMode::SubtractScalarVectorLists => {
+                Inputs::Subtract(SubtractInputs::ScalarVectorLists(
+                    parse_number_list(augend, "minuends")?,
+                    parse_vector_list(addend, addend_y, "subtrahend")?,
+                ))
+            }
+            AddMode::SubtractVectorScalarLists => {
+                Inputs::Subtract(SubtractInputs::VectorScalarLists(
+                    parse_vector_list(augend, augend_y, "minuend")?,
+                    parse_number_list(addend, "subtrahends")?,
+                ))
+            }
             AddMode::Lists => Inputs::Lists(
                 parse_number_list(augend, "augend")?,
                 parse_number_list(addend, "addend")?,
@@ -1179,10 +1348,8 @@ impl GraphicsSession {
                 != matches!(self.evaluation.inputs, Inputs::InvertColor(..))
             || (self.mode == AddMode::Sort) != matches!(self.evaluation.inputs, Inputs::Sort(..))
             || self.mode.is_multiply() != matches!(self.evaluation.inputs, Inputs::Multiply(..))
-            || (self.mode == AddMode::SubtractScalar)
-                != matches!(self.evaluation.inputs, Inputs::SubtractScalar(..))
-            || (self.mode == AddMode::SubtractLists)
-                != matches!(self.evaluation.inputs, Inputs::SubtractLists(..))
+            || (self.mode.is_subtract() || matches!(&self.evaluation.inputs, Inputs::Subtract(_)))
+                && !matches!(&self.evaluation.inputs, Inputs::Subtract(inputs) if inputs.mode() == self.mode)
         {
             return format!("Last valid result: {}", self.result_text());
         }
