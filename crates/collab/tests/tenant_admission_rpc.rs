@@ -169,8 +169,10 @@ async fn current_principal_memberships_independent_channel_component_snapshot() 
         ("channel_status".into(), "active".into()),
         ("channel_version".into(), "8".into()),
     ]);
+    let unbound =
+        std::collections::BTreeMap::from([("community_id".into(), Option::<String>::None.into())]);
     let database = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results([vec![row]])
+        .append_query_results([vec![unbound], vec![row]])
         .append_exec_results([MockExecResult {
             last_insert_id: 0,
             rows_affected: 1,
@@ -237,8 +239,12 @@ async fn current_principal_memberships_rejects_invalid_version_component_snapsho
                 Option::<Uuid>::None.into(),
             ),
         ]);
+        let unbound = std::collections::BTreeMap::from([(
+            "community_id".into(),
+            Option::<String>::None.into(),
+        )]);
         let database = MockDatabase::new(DatabaseBackend::Postgres)
-            .append_query_results([vec![row]])
+            .append_query_results([vec![unbound], vec![row]])
             .append_exec_results([MockExecResult {
                 last_insert_id: 0,
                 rows_affected: 1,
@@ -253,10 +259,16 @@ async fn current_principal_memberships_rejects_invalid_version_component_snapsho
                 None,
             )
             .await;
-        anyhow::ensure!(
-            result.is_err(),
-            "invalid persisted version must not become membership authority"
-        );
+        let error =
+            result.expect_err("invalid persisted version must not become membership authority");
+        if version == "0" {
+            assert_eq!(error.to_string(), "invalid membership version");
+        } else {
+            assert!(
+                error.downcast_ref::<std::num::ParseIntError>().is_some(),
+                "{error:#}"
+            );
+        }
         transaction.rollback().await?;
     }
     Ok(())
@@ -377,6 +389,13 @@ async fn exercise_current_memberships(pool: &sqlx::PgPool) -> anyhow::Result<()>
         anyhow::ensure!(context.try_get::<String>("", "tenant")? == tenant_a.community_id().to_string(), "denied mismatch must not mutate caller transaction tenant");
         let foreign_visible = transaction.query_one(Statement::from_sql_and_values(DatabaseBackend::Postgres, "SELECT count(*) AS count FROM public.collaboration_community_memberships WHERE community_id=$1", [tenant_b.community_id().as_uuid().into()])).await?.ok_or_else(|| anyhow::anyhow!("missing foreign count"))?;
         anyhow::ensure!(foreign_visible.try_get::<i64>("", "count")? == 0, "forced RLS must hide unrelated tenant even with same principal UUID");
+        let rebound = current_principal_memberships_in_transaction(&transaction, &tenant_b, &actor_b, Some(channel_id)).await;
+        anyhow::ensure!(rebound.is_err(), "even a valid second tenant cannot rebind the caller's transaction");
+        let still_bound = current_principal_memberships_in_transaction(&transaction, &tenant_a, &actor_a, Some(channel_id)).await?;
+        anyhow::ensure!(still_bound == own, "denying the rebind must preserve the first tenant's snapshot");
+        transaction.rollback().await?;
+        let transaction = database.begin().await?;
+        transaction.execute(Statement::from_string(DatabaseBackend::Postgres, "SET LOCAL ROLE pg_read_all_data".to_owned())).await?;
         let foreign = current_principal_memberships_in_transaction(&transaction, &tenant_b, &actor_b, Some(channel_id)).await?;
         anyhow::ensure!(foreign.community.is_some_and(|member| member.role == MembershipRole::Owner && member.version.get() == 5)
             && foreign.channel.is_some_and(|member| member.role == MembershipRole::Admin && member.version.get() == 9), "trusted second tenant must retain its own exact snapshot");
@@ -473,8 +492,12 @@ async fn current_principal_memberships_decoder_and_coordinate_negatives() -> any
             ("channel_status".into(), status.into()),
             ("channel_version".into(), version.into()),
         ]);
+        let unbound = std::collections::BTreeMap::from([(
+            "community_id".into(),
+            Option::<String>::None.into(),
+        )]);
         let database = MockDatabase::new(DatabaseBackend::Postgres)
-            .append_query_results([vec![row]])
+            .append_query_results([vec![unbound], vec![row]])
             .append_exec_results([MockExecResult {
                 last_insert_id: 0,
                 rows_affected: 1,
@@ -489,10 +512,17 @@ async fn current_principal_memberships_decoder_and_coordinate_negatives() -> any
                 Some(channel_id),
             )
             .await;
-        anyhow::ensure!(
-            result.is_err(),
-            "invalid decoder or mismatched returned coordinate must not become membership authority"
-        );
+        let error = result.expect_err("invalid decoder or mismatched returned coordinate must not become membership authority");
+        match (role, status, version) {
+            ("invented", _, _) => assert_eq!(error.to_string(), "invalid membership role"),
+            (_, "invented", _) => assert_eq!(error.to_string(), "invalid membership status"),
+            (_, _, "0") => assert_eq!(error.to_string(), "invalid membership version"),
+            (_, _, "18446744073709551616") => assert!(
+                error.downcast_ref::<std::num::ParseIntError>().is_some(),
+                "{error:#}"
+            ),
+            _ => assert_eq!(error.to_string(), "channel access denied"),
+        }
         transaction.rollback().await?;
     }
     Ok(())
