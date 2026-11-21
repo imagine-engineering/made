@@ -7330,8 +7330,11 @@ mod tests {
     fn legacy_provider_worker_wire_fixture_is_frozen() -> Result<(), Box<dyn Error>> {
         let deployment = worker_registry_deployment()?;
         let binding = provider_binding()?;
-        let request = NativeProviderWorkerRequest::Begin(activation_start(&deployment, &binding))
-            .to_bytes()?;
+        let mut start = activation_start(&deployment, &binding);
+        // Legacy Begin carries a historical binding digest that changes when binding type IDs are renamed.
+        start.binding_set_sha256 =
+            "0ed0168acd18b196ba111839c3ece793da7e9ca6e8077d9cc5c0fbec1218b0c7".to_owned();
+        let request = NativeProviderWorkerRequest::Begin(start).to_bytes()?;
         let response = NativeProviderWorkerResponse::Begun.to_bytes()?;
         assert_eq!(
             format!("{:x}", Sha256::digest(&request)),

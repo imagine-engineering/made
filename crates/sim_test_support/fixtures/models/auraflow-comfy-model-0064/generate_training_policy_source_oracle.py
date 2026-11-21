@@ -10,8 +10,8 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[5]
 SOURCES = {
-    'projects/sim/ComfyUI/sim/model_sampling.py': '8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717',
-    'projects/sim/ComfyUI/sim_extras/nodes_train.py': 'd88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae',
+    'projects/comfy/ComfyUI/comfy/model_sampling.py': '8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717',
+    'projects/comfy/ComfyUI/comfy_extras/nodes_train.py': 'd88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae',
 }
 
 
@@ -33,7 +33,7 @@ def generate():
     namespace = {'torch': torch}
     nodes = selected_source(next(iter(SOURCES)), {'reshape_sigma','EPS','V_PREDICTION','V_PREDICTION_DDPM','EDM','CONST','X0','IMG_TO_IMG','IMG_TO_IMG_FLOW','COSMOS_RFLOW'})
     exec(compile(ast.Module(body=nodes,type_ignores=[]),'pinned model_sampling.py','exec'),namespace)
-    methods = selected_source('projects/sim/ComfyUI/sim_extras/nodes_train.py', {'make_batch_extra_option_dict'}, ('TrainSampler','fwd_bwd'))
+    methods = selected_source('projects/comfy/ComfyUI/comfy_extras/nodes_train.py', {'make_batch_extra_option_dict'}, ('TrainSampler','fwd_bwd'))
     exec(compile(ast.Module(body=methods,type_ignores=[]),'pinned nodes_train.py','exec'),namespace)
     rows=[]
     for prediction, source_class in [('epsilon','EPS'),('v_prediction','V_PREDICTION'),('v_prediction_ddpm','V_PREDICTION_DDPM'),('edm','EDM'),('constant','CONST'),('denoised','X0'),('image_to_image','IMG_TO_IMG'),('image_to_image_flow','IMG_TO_IMG_FLOW'),('cosmos_r_flow','COSMOS_RFLOW')]:

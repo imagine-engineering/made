@@ -19,7 +19,7 @@ SOURCE_HASHES = {
 
 def generate(algorithm):
     model, sources = pinned_model()
-    path = ROOT / f"projects/sim/ComfyUI/sim/weight_adapter/{algorithm}.py"
+    path = ROOT / f"projects/comfy/ComfyUI/comfy/weight_adapter/{algorithm}.py"
     source = path.read_bytes()
     if hashlib.sha256(source).hexdigest() != SOURCE_HASHES[algorithm]:
         raise ValueError("pinned adapter source changed")

@@ -13,7 +13,7 @@ from generate_source_oracle import ROOT, pinned_model
 
 def generate(input_path):
     model, sources = pinned_model()
-    source_path = ROOT / "projects/sim/ComfyUI/sim/weight_adapter/lora.py"
+    source_path = ROOT / "projects/comfy/ComfyUI/comfy/weight_adapter/lora.py"
     source = source_path.read_bytes()
     expected = "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5"
     if hashlib.sha256(source).hexdigest() != expected:
@@ -24,7 +24,7 @@ def generate(input_path):
         raise ValueError("pinned LoraDiff class is absent")
     namespace = {"torch": torch, "F": torch.nn.functional, "WeightAdapterTrainBase": torch.nn.Module}
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(source_path), "exec"), namespace)
-    sources["projects/sim/ComfyUI/sim/weight_adapter/lora.py"] = {
+    sources["projects/comfy/ComfyUI/comfy/weight_adapter/lora.py"] = {
         "sha256": expected,
         "symbols": {"LoraDiff": hashlib.sha256(ast.dump(selected[0], include_attributes=False).encode()).hexdigest()},
     }

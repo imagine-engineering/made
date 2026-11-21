@@ -15,9 +15,9 @@ from torch.nn import functional as F
 
 ROOT = Path(__file__).resolve().parents[5]
 SOURCE_HASHES = {
-    "projects/sim/ComfyUI/sim/ldm/common_dit.py": "5e2459be4a47073a17e6b806f2b93962b4df1cdcaa2ac1890c9573bf942edf82",
-    "projects/sim/ComfyUI/sim/ldm/aura/mmdit.py": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
-    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/comfy/ComfyUI/comfy/ldm/common_dit.py": "5e2459be4a47073a17e6b806f2b93962b4df1cdcaa2ac1890c9573bf942edf82",
+    "projects/comfy/ComfyUI/comfy/ldm/aura/mmdit.py": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+    "projects/comfy/ComfyUI/comfy/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
 }
 
 
@@ -50,15 +50,15 @@ def pinned_model():
     namespace = dict(torch=torch, nn=nn, F=F, math=math, einsum=einsum,
                      args=types.SimpleNamespace(dont_upcast_attention=False), FORCE_UPCAST_ATTENTION_DTYPE=None)
     sources = {}
-    attention_path = "projects/sim/ComfyUI/sim/ldm/modules/attention.py"
+    attention_path = "projects/comfy/ComfyUI/comfy/ldm/modules/attention.py"
     sources[attention_path] = extract(attention_path, ["get_attn_precision", "exists", "attention_basic"], namespace)
-    padding_path = "projects/sim/ComfyUI/sim/ldm/common_dit.py"
+    padding_path = "projects/comfy/ComfyUI/comfy/ldm/common_dit.py"
     sources[padding_path] = extract(padding_path, ["pad_to_patch_size"], namespace)
     namespace["optimized_attention"] = namespace["attention_basic"]
-    namespace["sim"] = types.SimpleNamespace(
+    namespace["comfy"] = types.SimpleNamespace(
         ops=types.SimpleNamespace(cast_to_input=lambda value, target: value.to(device=target.device, dtype=target.dtype)),
         ldm=types.SimpleNamespace(common_dit=types.SimpleNamespace(pad_to_patch_size=namespace["pad_to_patch_size"])))
-    model_path = "projects/sim/ComfyUI/sim/ldm/aura/mmdit.py"
+    model_path = "projects/comfy/ComfyUI/comfy/ldm/aura/mmdit.py"
     sources[model_path] = extract(model_path, ["modulate", "find_multiple", "MLP", "MultiHeadLayerNorm", "SingleAttention", "DoubleAttention", "MMDiTBlock", "DiTBlock", "TimestepEmbedder", "MMDiT"], namespace)
     model = namespace["MMDiT"](dim=2, n_layers=2, n_double_layers=1, n_heads=1,
                                 global_conddim=2, cond_seq_dim=2048, max_seq=16,
