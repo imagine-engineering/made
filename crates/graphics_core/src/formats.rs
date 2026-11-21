@@ -17,7 +17,7 @@ use graphite_std::{
     application_io::{ExportFormat, RenderConfig, TimingInformation},
     vector_types::vector::style::RenderMode,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
 
 use crate::{
@@ -113,6 +113,7 @@ impl PreparedArtboardEnginePayload {
 struct Payload {
     profile: String,
     source_revision: String,
+    #[serde(deserialize_with = "deserialize_original_json")]
     legacy_document: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     legacy_serialization: Option<String>,
@@ -336,7 +337,7 @@ pub fn capture_original_artboard_engine_payload(
         .encoded_png_input()
         .ok_or(ArtboardPersistenceError::MissingEncodedInput)?
         .source();
-    let legacy_document: Value = serde_json::from_slice(legacy_bytes)?;
+    let OriginalJson(legacy_document) = serde_json::from_slice(legacy_bytes)?;
     validate_original_document(&legacy_document, &capture, source)?;
     let legacy_serialization = std::str::from_utf8(legacy_bytes)
         .map_err(|_| ArtboardPersistenceError::UnsupportedPayload)?
@@ -461,7 +462,7 @@ fn reopen_artboard_engine_payload_for_profile(
             let serialization = payload
                 .legacy_serialization
                 .ok_or(ArtboardPersistenceError::UnsupportedPayload)?;
-            let original: Value = serde_json::from_str(&serialization)?;
+            let OriginalJson(original) = serde_json::from_str(&serialization)?;
             if !same_original_json(&payload.legacy_document, &original) {
                 return Err(ArtboardPersistenceError::UnsupportedPayload);
             }
@@ -608,6 +609,85 @@ fn persistent_document(
         Ok(original)
     }))
     .map_err(|_| ArtboardPersistenceError::OriginalSourcePanic)?
+}
+
+fn deserialize_original_json<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Value, D::Error> {
+    OriginalJson::deserialize(deserializer).map(|value| value.0)
+}
+
+struct OriginalJson(Value);
+
+impl<'de> Deserialize<'de> for OriginalJson {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = OriginalJson;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("JSON without duplicate object keys")
+            }
+
+            fn visit_bool<E: de::Error>(self, value: bool) -> Result<Self::Value, E> {
+                Ok(OriginalJson(Value::Bool(value)))
+            }
+
+            fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(OriginalJson(Value::Number(value.into())))
+            }
+
+            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(OriginalJson(Value::Number(value.into())))
+            }
+
+            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
+                serde_json::Number::from_f64(value)
+                    .map(Value::Number)
+                    .map(OriginalJson)
+                    .ok_or_else(|| E::custom("non-finite JSON number"))
+            }
+
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                self.visit_string(value.to_owned())
+            }
+
+            fn visit_string<E: de::Error>(self, value: String) -> Result<Self::Value, E> {
+                Ok(OriginalJson(Value::String(value)))
+            }
+
+            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(OriginalJson(Value::Null))
+            }
+
+            fn visit_seq<A: de::SeqAccess<'de>>(
+                self,
+                mut sequence: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(OriginalJson(value)) = sequence.next_element()? {
+                    values.push(value);
+                }
+                Ok(OriginalJson(Value::Array(values)))
+            }
+
+            fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut values = serde_json::Map::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    // Value normally keeps the last occurrence, masking ambiguous source state.
+                    if values.contains_key(&key) {
+                        return Err(de::Error::custom(format!("duplicate object key: {key}")));
+                    }
+                    let OriginalJson(value) = map.next_value()?;
+                    values.insert(key, value);
+                }
+                Ok(OriginalJson(Value::Object(values)))
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
 }
 
 fn same_original_json(first: &Value, second: &Value) -> bool {
@@ -946,6 +1026,78 @@ mod original_source_tests {
                 PAYLOAD_LIMIT
             )
             .is_ok()
+        );
+    }
+
+    #[test]
+    fn at_r06_9_1_original_checkpoint_rejects_duplicate_json_members() {
+        let source = encoded_source("first");
+        let document = document(source.clone());
+        let original = original_owner(&document).serialize_document();
+        let resource_id = ResourceId::from(RESOURCE_ID);
+        let payload = capture_original_artboard_engine_payload(
+            &document,
+            resource_id,
+            original.as_bytes(),
+            PAYLOAD_LIMIT,
+        )
+        .expect("original source checkpoint");
+        let envelope = std::str::from_utf8(payload.serialized_bytes()).expect("JSON envelope");
+        let budget = CpuSvgEvaluationBudget {
+            max_viewport_pixels: 31 * 17,
+            max_output_bytes: 64 * 1024,
+        };
+
+        for (member, replacement) in [
+            (
+                "\"network_interface\":",
+                "\"network_interface\":null,\"network_interface\":",
+            ),
+            ("\"network\":", r#""networ\u006b":null,"network":"#),
+        ] {
+            assert!(original.contains(member));
+            let ambiguous_original = original.replacen(member, replacement, 1);
+            assert!(matches!(
+                capture_original_artboard_engine_payload(
+                    &document,
+                    resource_id,
+                    ambiguous_original.as_bytes(),
+                    PAYLOAD_LIMIT,
+                ),
+                Err(ArtboardPersistenceError::Json(error))
+                    if error.to_string().contains("duplicate object key")
+            ));
+
+            let mut altered: Value = serde_json::from_str(envelope).expect("original envelope");
+            altered["legacy_serialization"] = Value::String(ambiguous_original);
+            let altered = serde_json::to_vec(&altered).expect("ambiguous original bytes");
+            assert!(matches!(
+                reopen_original_artboard_engine_payload_with_resource(
+                    &altered,
+                    source.clone(),
+                    budget,
+                    PAYLOAD_LIMIT,
+                ),
+                Err(ArtboardPersistenceError::Json(error))
+                    if error.to_string().contains("duplicate object key")
+            ));
+
+            assert!(envelope.contains(member));
+            let altered = envelope.replacen(member, replacement, 1);
+            assert!(matches!(
+                reopen_original_artboard_engine_payload_with_resource(
+                    altered.as_bytes(),
+                    source.clone(),
+                    budget,
+                    PAYLOAD_LIMIT,
+                ),
+                Err(ArtboardPersistenceError::Json(error))
+                    if error.to_string().contains("duplicate object key")
+            ));
+        }
+        assert_eq!(
+            reopen(&payload, source).legacy_document_bytes(),
+            original.as_bytes()
         );
     }
 
