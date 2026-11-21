@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[5]
-SOURCE = ROOT / 'projects/sim/ComfyUI/sim_api_nodes/nodes_beeble.py'
+SOURCE = ROOT / 'projects/comfy/ComfyUI/comfy_api_nodes/nodes_beeble.py'
 VALIDATION = SOURCE.parent / 'util/validation_utils.py'
 API = SOURCE.parent / 'apis/beeble.py'
 FIXTURE = Path(__file__).with_name('conformance.fixture')
@@ -90,7 +90,7 @@ async def observe(compiled, value):
                      downscale_image_tensor=lambda image, maximum: image,
                      downscale_video_to_max_pixels=lambda video, maximum: video,
                      convert_mask_to_image=lambda mask: mask,
-                     upload_image_to_simapi=upload_image, upload_video_to_simapi=upload_video,
+                     upload_image_to_comfyapi=upload_image, upload_video_to_comfyapi=upload_video,
                      CreateSwitchXRequest=lambda **fields: {key: item for key, item in fields.items() if item is not None},
                      Types=SimpleNamespace(VideoComponents=lambda **fields: fields),
                      InputImpl=SimpleNamespace(VideoFromComponents=lambda components: Video(components['images'].shape[0], 'alpha')),

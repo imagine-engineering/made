@@ -13,22 +13,22 @@ from types import SimpleNamespace
 import torch
 from verify_source_media import SOURCE, SOURCES as MEDIA_SOURCES, source_namespace
 
-SOURCES = {**MEDIA_SOURCES, "sim_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"}
+SOURCES = {**MEDIA_SOURCES, "comfy_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"}
 
 FIXTURE = Path(__file__).with_name('source_alpha_video.json')
 
 
 async def observations():
     namespace = source_namespace()
-    path = SOURCE / 'sim_api_nodes/nodes_beeble.py'
+    path = SOURCE / 'comfy_api_nodes/nodes_beeble.py'
     body = [node for node in ast.parse(path.read_text()).body
             if isinstance(node, ast.AsyncFunctionDef) and node.name == '_upload_mask_batch_as_video']
     assert len(body) == 1
     future = ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0)
     exec(compile(ast.fix_missing_locations(ast.Module(body=[future, *body], type_ignores=[])), str(path), 'exec'), namespace)
     namespace['Types'] = SimpleNamespace(VideoComponents=lambda **fields: SimpleNamespace(**fields))
-    video_path = SOURCE / 'sim_api/latest/_input_impl/video_types.py'
-    assert hashlib.sha256(video_path.read_bytes()).hexdigest() == SOURCES['sim_api/latest/_input_impl/video_types.py']
+    video_path = SOURCE / 'comfy_api/latest/_input_impl/video_types.py'
+    assert hashlib.sha256(video_path.read_bytes()).hexdigest() == SOURCES['comfy_api/latest/_input_impl/video_types.py']
     video_class = [node for node in ast.parse(video_path.read_text()).body
                    if isinstance(node, ast.ClassDef) and node.name == 'VideoFromComponents']
     assert len(video_class) == 1
@@ -83,7 +83,7 @@ async def observations():
                     return 'https://fixture.invalid/alpha.mp4'
 
                 namespace['_MAX_PIXELS'] = maximum
-                namespace['upload_video_to_simapi'] = upload
+                namespace['upload_video_to_comfyapi'] = upload
                 case = dict(shape=list(shape), pixels=values.tolist(), maximum_pixels=maximum,
                             source_frame_count=source_count, frame_rate=[30000, 1001])
                 try:

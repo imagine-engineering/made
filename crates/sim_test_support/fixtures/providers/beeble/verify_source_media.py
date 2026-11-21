@@ -16,13 +16,13 @@ import torch
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[5]
-SOURCE = ROOT / 'projects/sim/ComfyUI'
+SOURCE = ROOT / 'projects/comfy/ComfyUI'
 FIXTURE = Path(__file__).with_name('source_media.json')
 SOURCES = {
-    'sim/utils.py': '8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb',
-    'sim_api_nodes/util/conversions.py': '632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2',
-    'sim_api_nodes/util/upload_helpers.py': 'aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39',
-    'sim_api_nodes/nodes_beeble.py': 'a7d98292ba01564a4a8519ba3c8caa30d9e0aaf42bf16ca55e29944222896812',
+    'comfy/utils.py': '8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb',
+    'comfy_api_nodes/util/conversions.py': '632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2',
+    'comfy_api_nodes/util/upload_helpers.py': 'aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39',
+    'comfy_api_nodes/nodes_beeble.py': 'a7d98292ba01564a4a8519ba3c8caa30d9e0aaf42bf16ca55e29944222896812',
 }
 
 
@@ -30,11 +30,11 @@ def source_namespace():
     namespace = dict(np=np, torch=torch, Image=Image, math=math, time=time, uuid=uuid,
                      BytesIO=BytesIO, mimetype_to_extension=lambda mime: 'png')
     for relative, names in [
-        ('sim/utils.py', {'lanczos', 'common_upscale'}),
-        ('sim_api_nodes/util/conversions.py', {'_compute_downscale_dims', 'downscale_image_tensor',
+        ('comfy/utils.py', {'lanczos', 'common_upscale'}),
+        ('comfy_api_nodes/util/conversions.py', {'_compute_downscale_dims', 'downscale_image_tensor',
          'tensor_to_pil', 'tensor_to_bytesio', 'pil_to_bytesio', 'convert_mask_to_image'}),
-        ('sim_api_nodes/util/upload_helpers.py', {'upload_images_to_simapi', 'upload_image_to_simapi'}),
-        ('sim_api_nodes/nodes_beeble.py', {'_upload_mask_as_image'}),
+        ('comfy_api_nodes/util/upload_helpers.py', {'upload_images_to_comfyapi', 'upload_image_to_comfyapi'}),
+        ('comfy_api_nodes/nodes_beeble.py', {'_upload_mask_as_image'}),
     ]:
         path = SOURCE / relative
         assert hashlib.sha256(path.read_bytes()).hexdigest() == SOURCES[relative], relative
@@ -68,7 +68,7 @@ async def source_results():
                                      mode=image.mode, pixels=list(image.tobytes())))
                 return 'https://fixture.invalid/upload'
 
-            namespace['upload_file_to_simapi'] = record_upload
+            namespace['upload_file_to_comfyapi'] = record_upload
             namespace['_MAX_PIXELS'] = maximum_pixels
             case = dict(role=role, shape=shape, pixels=pixels, maximum_pixels=maximum_pixels)
             try:
@@ -78,7 +78,7 @@ async def source_results():
                         await namespace['_upload_mask_as_image'](None, tensor, wait_label='Uploading alpha')
                     else:
                         image = namespace['downscale_image_tensor'](tensor, maximum_pixels) if role == 'source' else tensor
-                        await namespace['upload_image_to_simapi'](None, image, mime_type='image/png',
+                        await namespace['upload_image_to_comfyapi'](None, image, mime_type='image/png',
                             total_pixels=None if role == 'source' else maximum_pixels)
                 assert len(observed) == 1
                 case['output'] = observed[0]
