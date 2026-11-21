@@ -11119,6 +11119,11 @@ mod tests {
                 "collab_panel",
                 #[cfg(feature = "multiplayer-tools")]
                 "collaborative_workspace",
+                // Existing user keymaps can still contain the pre-rename action names.
+                #[cfg(feature = "sim")]
+                "comfy_graph",
+                #[cfg(feature = "sim")]
+                "comfy_shell",
                 #[cfg(feature = "sim")]
                 "sim_graph",
                 #[cfg(feature = "sim")]

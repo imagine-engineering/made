@@ -3793,7 +3793,8 @@ mod tests {
                             && candidate.get(line_index) == row.get(line_index)
                     })
             })
-            .filter_map(|row| row.get(path_index).cloned())
+            .filter_map(|row| row.get(path_index))
+            .map(|path| native_cli_path_from_catalog(path).into_owned())
             .collect())
     }
 
