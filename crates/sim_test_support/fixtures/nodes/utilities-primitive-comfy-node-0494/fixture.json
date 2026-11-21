@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-utilities-primitive-sim-node-0494",
+  "stable_task_id": "comfy-parity-native-nodes-utilities-primitive-comfy-node-0494",
   "sources": [
     {
       "path": "sim_extras/nodes_primitive.py",

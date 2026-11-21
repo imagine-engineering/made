@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-partner-three-d-sim-node-0552",
+  "stable_task_id": "comfy-parity-native-nodes-partner-three-d-comfy-node-0552",
   "provider": {
     "identifier": "sim-api",
     "disposition": "provider_required",

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-image-adjustments-sim-node-0004",
+  "stable_task_id": "comfy-parity-native-nodes-image-adjustments-comfy-node-0004",
   "feature_ids": ["COMFY-NODE-0004", "COMFY-NODE-0005"],
   "source": {
     "catalog_path": "sim_extras/nodes_dataset.py",

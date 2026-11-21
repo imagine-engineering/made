@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "task_id": "sim-parity-native-nodes-utilities-sim-node-0610",
+  "task_id": "comfy-parity-native-nodes-utilities-comfy-node-0610",
   "feature_id": "COMFY-NODE-0610",
   "class_type": "SeedNode",
   "source": {

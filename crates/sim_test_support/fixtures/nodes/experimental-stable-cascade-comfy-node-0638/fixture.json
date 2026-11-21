@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-experimental-stable-cascade-sim-node-0638",
+  "stable_task_id": "comfy-parity-native-nodes-experimental-stable-cascade-comfy-node-0638",
   "feature_id": "COMFY-NODE-0638",
   "source": {
     "catalog_path": "sim_extras/nodes_stable_cascade.py",

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-image-batch-sim-node-0017",
+  "stable_task_id": "comfy-parity-native-nodes-image-batch-comfy-node-0017",
   "sources": {
     "sim_extras/nodes_post_processing.py": "96ec39e8d0e9fe9a70b332f97f994d507e1fa223a26699a3c9c9fbeedacf6575",
     "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",

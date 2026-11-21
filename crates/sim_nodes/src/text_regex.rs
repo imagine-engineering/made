@@ -1,5 +1,6 @@
-use fancy_regex::{Regex, RegexBuilder};
+use fancy_regex::{CompileError, Error as RegexError, ParseError, Regex, RegexBuilder};
 use sim_types::CancellationToken;
+use std::cell::OnceCell;
 use thiserror::Error;
 
 pub const NATIVE_TEXT_REGEX_MAX_PATTERN_BYTES: usize = 16 * 1024;
@@ -93,6 +94,7 @@ impl Default for NativeTextRegexLimits {
 #[derive(Clone)]
 pub struct NativeTextRegex {
     regex: Regex,
+    flags: NativeTextRegexFlags,
     limits: NativeTextRegexLimits,
 }
 
@@ -115,6 +117,21 @@ impl NativeTextRegex {
                 maximum_bytes: NATIVE_TEXT_REGEX_MAX_PATTERN_BYTES,
             });
         }
+        let regex = Self::builder(pattern, flags, limits)
+            .build()
+            .map_err(|error| NativeTextRegexError::InvalidPattern(error.to_string()))?;
+        Ok(Self {
+            regex,
+            flags,
+            limits,
+        })
+    }
+
+    fn builder(
+        pattern: &str,
+        flags: NativeTextRegexFlags,
+        limits: NativeTextRegexLimits,
+    ) -> RegexBuilder {
         let mut builder = RegexBuilder::new(pattern);
         builder
             .case_insensitive(flags.case_insensitive)
@@ -123,10 +140,35 @@ impl NativeTextRegex {
             .backtrack_limit(limits.backtrack_limit)
             .delegate_size_limit(NATIVE_TEXT_REGEX_DELEGATE_SIZE_LIMIT)
             .delegate_dfa_size_limit(NATIVE_TEXT_REGEX_DELEGATE_DFA_SIZE_LIMIT);
-        let regex = builder
-            .build()
-            .map_err(|error| NativeTextRegexError::InvalidPattern(error.to_string()))?;
-        Ok(Self { regex, limits })
+        builder
+    }
+
+    fn nonempty_retry(&self) -> Result<Option<Regex>, NativeTextRegexError> {
+        // Python retries at the same position after an empty match. Anchoring this retry
+        // keeps the per-position search bounded and preserves lookbehind and capture numbers.
+        let pattern = self.regex.as_str();
+        let build = |anchored: &str| {
+            Self::builder(anchored, self.flags, self.limits)
+                .find_not_empty(true)
+                .build()
+        };
+        let mut result = build(&format!(r"\G(?:{pattern})"));
+        if matches!(
+            result,
+            Err(RegexError::ParseError(_, ParseError::UnclosedOpenParen))
+        ) {
+            // A trailing verbose-mode comment can consume the wrapper's closing parenthesis.
+            result = build(&format!("\\G(?:{pattern}\n)"));
+        }
+        match result {
+            Ok(regex) => Ok(Some(regex)),
+            Err(RegexError::CompileError(error))
+                if matches!(*error, CompileError::PatternCanNeverMatch) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(NativeTextRegexError::ExecutionLimit(error.to_string())),
+        }
     }
 
     pub fn capture_count(&self) -> usize {
@@ -201,27 +243,51 @@ impl NativeTextRegex {
     ) -> Result<String, NativeTextRegexError> {
         self.validate_input(input, cancellation)?;
         let replacement = NativeTextRegexReplacement::checked(replacement, &self.regex)?;
+        let nonempty_retry = OnceCell::new();
         let mut output = String::with_capacity(input.len().min(NATIVE_TEXT_REGEX_MAX_RESULT_BYTES));
         let mut previous_end = 0usize;
         let mut search_position = 0usize;
         let mut replacement_count = 0usize;
+        let mut previous_match_was_empty = false;
         while search_position <= input.len() {
             self.check_cancellation(cancellation)?;
             if count != 0 && replacement_count >= count {
                 break;
             }
+            let regex = if previous_match_was_empty {
+                nonempty_retry
+                    .get_or_init(|| self.nonempty_retry())
+                    .as_ref()
+                    .map_err(Clone::clone)?
+                    .as_ref()
+            } else {
+                Some(&self.regex)
+            };
+            let captures = match regex {
+                Some(regex) => regex
+                    .captures_from_pos(input, search_position)
+                    .map_err(|error| NativeTextRegexError::ExecutionLimit(error.to_string()))?,
+                None => None,
+            };
+            let Some(captures) = captures else {
+                if !previous_match_was_empty {
+                    break;
+                }
+                let Some(character) = input
+                    .get(search_position..)
+                    .and_then(|suffix| suffix.chars().next())
+                else {
+                    break;
+                };
+                search_position += character.len_utf8();
+                previous_match_was_empty = false;
+                continue;
+            };
             if replacement_count >= self.limits.maximum_matches {
                 return Err(NativeTextRegexError::MatchLimit {
                     maximum_matches: self.limits.maximum_matches,
                 });
             }
-            let captures = self
-                .regex
-                .captures_from_pos(input, search_position)
-                .map_err(|error| NativeTextRegexError::ExecutionLimit(error.to_string()))?;
-            let Some(captures) = captures else {
-                break;
-            };
             let matched = captures.get(0).ok_or_else(|| {
                 NativeTextRegexError::ExecutionLimit(
                     "regex capture row did not contain the whole match".to_owned(),
@@ -238,16 +304,10 @@ impl NativeTextRegex {
             replacement.append_expansion(&captures, &mut output)?;
             previous_end = matched.end();
             replacement_count += 1;
-            if matched.start() == matched.end() {
-                let Some(character) = input
-                    .get(matched.end()..)
-                    .and_then(|value| value.chars().next())
-                else {
-                    break;
-                };
-                search_position = matched.end().saturating_add(character.len_utf8());
-            } else {
-                search_position = matched.end();
+            previous_match_was_empty = matched.start() == matched.end();
+            search_position = matched.end();
+            if previous_match_was_empty && search_position == input.len() {
+                break;
             }
         }
         append_bounded(
@@ -666,6 +726,54 @@ mod tests {
             numbered.replace("a-1 b-2", r"\2:\1:\\", 1, &CancellationToken::default(),)?,
             "1:a:\\ b-2"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn python_replacement_retries_nonempty_matches_at_the_same_position()
+    -> Result<(), Box<dyn Error>> {
+        let cancellation = CancellationToken::default();
+        for (pattern, input, replacement, count, expected) in [
+            (".*?", "ab", "X", 0, "XXXXX"),
+            (".*?", "ab", "X", 2, "XXb"),
+            (
+                r"(?=é)|(?P<letter>é)",
+                "éé",
+                r"<\g<letter>>",
+                0,
+                "<><é><><é>",
+            ),
+            ("(?x).*? # comment", "ab", "X", 0, "XXXXX"),
+            ("(?<=a)(?=b)|(?<=a)b", "ab", "X", 0, "aXX"),
+            ("a*", "baab", "X", 0, "XbXXbX"),
+        ] {
+            let regex = NativeTextRegex::checked(pattern, NativeTextRegexFlags::default())?;
+            assert_eq!(
+                regex.replace(input, replacement, count, &cancellation)?,
+                expected,
+                "{pattern:?} on {input:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn replacement_match_limit_only_rejects_excess_matches() -> Result<(), Box<dyn Error>> {
+        let cancellation = CancellationToken::default();
+        let regex = NativeTextRegex::checked_with_limits(
+            "a",
+            NativeTextRegexFlags::default(),
+            NativeTextRegexLimits {
+                maximum_matches: 1,
+                ..NativeTextRegexLimits::default()
+            },
+        )?;
+        assert_eq!(regex.replace("ab", "X", 0, &cancellation)?, "Xb");
+        assert_eq!(
+            regex.replace("aba", "X", 0, &cancellation),
+            Err(NativeTextRegexError::MatchLimit { maximum_matches: 1 })
+        );
+        assert_eq!(regex.replace("aba", "X", 1, &cancellation)?, "Xba");
         Ok(())
     }
 

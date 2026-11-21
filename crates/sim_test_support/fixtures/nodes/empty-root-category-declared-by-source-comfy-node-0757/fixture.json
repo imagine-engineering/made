@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-empty-root-category-declared-by-source-sim-node-0757",
+  "stable_task_id": "comfy-parity-native-nodes-empty-root-category-declared-by-source-comfy-node-0757",
   "feature_id": "COMFY-NODE-0757",
   "source": {
     "catalog_path": "sim_extras/nodes_nop.py",

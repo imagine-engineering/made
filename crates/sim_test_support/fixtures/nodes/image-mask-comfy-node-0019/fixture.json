@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-image-mask-sim-node-0019",
+  "stable_task_id": "comfy-parity-native-nodes-image-mask-comfy-node-0019",
   "nodes": [
     {
       "feature_id": "COMFY-NODE-0019",

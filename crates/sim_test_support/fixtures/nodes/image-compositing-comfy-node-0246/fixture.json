@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_id": "sim-parity-native-nodes-image-compositing-sim-node-0246",
+  "stable_id": "comfy-parity-native-nodes-image-compositing-comfy-node-0246",
   "source": {
     "nodes_mask_sha256": "9ff6c44f6114e36cfd17886a92b6cfb1d824013b43242ea1ee6b86c93a71b7dc",
     "nodes_compositing_sha256": "e001e2963baaa5ea9f031e6b7920e4d70dae248588a70ed31ab595706a29efae"

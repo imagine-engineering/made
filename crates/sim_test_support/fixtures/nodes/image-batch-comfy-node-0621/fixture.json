@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "task_id": "sim-parity-native-nodes-image-batch-sim-node-0621",
+  "task_id": "comfy-parity-native-nodes-image-batch-comfy-node-0621",
   "nodes": [
     {
       "feature_id": "COMFY-NODE-0621",

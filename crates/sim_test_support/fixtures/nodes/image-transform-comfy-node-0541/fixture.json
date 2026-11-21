@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-nodes-image-transform-sim-node-0541",
+  "stable_task_id": "comfy-parity-native-nodes-image-transform-comfy-node-0541",
   "feature_ids": ["COMFY-NODE-0541", "COMFY-NODE-0542", "COMFY-NODE-0543"],
   "sources": [
     {

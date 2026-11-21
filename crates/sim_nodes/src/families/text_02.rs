@@ -8,8 +8,8 @@ use crate::{
     NativeTextRegexError, NativeTextRegexFlags, NativeValue, built_in_source_schema,
     native_value_type_for_output_schema, native_value_types_for_input_schema,
 };
-use sim_types::CancellationToken;
 use futures::future::BoxFuture;
+use sim_types::CancellationToken;
 use std::{collections::BTreeMap, sync::Arc};
 
 pub const NODE_DESCRIPTOR_IDS: &[&str] = &[
@@ -81,6 +81,7 @@ impl TextKind {
         match self {
             Self::ReplaceText => "source-3b27465f-v1",
             Self::Format => NativeTextFormatter::SEMANTIC_VERSION,
+            Self::RegexReplace => "source-bb019631-v2",
             _ => "source-bb019631-v1",
         }
     }
@@ -716,9 +717,9 @@ mod tests {
         NativeHandleStore, NativeHandleStoreError, NativeHandleStoreIdentity, NativeHandleType,
         NativeOpaqueHandle, NativeResolvedPayload, NativeStoredPayload, NodeRegistry,
     };
+    use serde_json::Value;
     use sim_tensor::CpuWorkspaceAuthority;
     use sim_types::{AttemptId, NodeId, PromptId};
-    use serde_json::Value;
     use std::error::Error;
     use uuid::Uuid;
 
