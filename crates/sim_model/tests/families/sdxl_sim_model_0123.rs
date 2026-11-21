@@ -71,7 +71,7 @@ fn val_model_family_row_001_sdxl_source_layouts_precedence_and_ownership()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&store_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_300, .. })
     ));
-    support::verify_owner_delegation("sdxl_comfy_model_0123")?;
+    support::verify_owner_delegation("sdxl_sim_model_0123")?;
     Ok(())
 }
 
@@ -84,7 +84,7 @@ fn val_model_family_row_001_sdxl_native_execution_and_failures()
         sdxl::MODEL_FAMILY_FEATURE_ID,
         sdxl::MODEL_FAMILY_IDENTIFIER,
         sdxl::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sdxl_comfy_model_0123",
+        "sdxl_sim_model_0123",
         &[
             "source-and-catalog-provenance",
             "native-standalone-and-diffusers-key-detection",

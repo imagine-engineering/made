@@ -1,5 +1,5 @@
 {
-  "fixture_id": "stableaudio-sim-model-0132",
+  "fixture_id": "stableaudio-comfy-model-0132",
   "feature_id": "COMFY-MODEL-0132",
   "detector": {
     "tensor_shapes": {

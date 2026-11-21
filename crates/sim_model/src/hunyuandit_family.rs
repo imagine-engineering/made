@@ -33,8 +33,8 @@ pub const HUNYUANDIT_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const HUNYUANDIT_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.hydit.HyditTokenizer",
-        clip_model: "sim.text_encoders.hydit.HyditModel",
+        tokenizer: "comfy.text_encoders.hydit.HyditTokenizer",
+        clip_model: "comfy.text_encoders.hydit.HyditModel",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

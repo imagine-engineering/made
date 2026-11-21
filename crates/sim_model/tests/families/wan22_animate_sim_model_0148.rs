@@ -38,7 +38,7 @@ fn val_model_family_row_001_wan22_animate_source_configuration_and_state_plan() 
     let mut diffusers = probe.clone(); diffusers.metadata.insert("model_layout".to_owned(), "diffusers".to_owned());
     assert!(matches!(animate::configuration_for_probe(&diffusers), Err(ModelFamilyError::InvalidSelectorOutput(message)) if message.contains("Diffusers")));
     assert!(matches!(ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe), Err(ModelFamilyError::AmbiguousDetection { score: 1_200, .. })));
-    support::verify_owner_delegation("wan22_animate_comfy_model_0148")?;
+    support::verify_owner_delegation("wan22_animate_sim_model_0148")?;
     Ok(())
 }
 
@@ -47,6 +47,6 @@ fn val_model_family_row_001_wan22_animate_forward_patch_memory_and_platform() ->
     let fixture = support::load_fixture(animate::MODEL_FAMILY_FIXTURE)?;
     let extras = [support::TensorFixture::new("text_encoders.umt5xxl.transformer.block.weight", &[1], &[1.0]), support::TensorFixture::new("vae.decoder.weight", &[1], &[1.0])];
     support::exercise_family(&fixture, &REGISTRATIONS, &extras, &["model", "runtime_conditioning", "text_encoder", "vae"], "native.blocks.0.ffn.2.weight")?;
-    super::write_model_family_row_artifact(animate::MODEL_FAMILY_FIXTURE, animate::MODEL_FAMILY_FEATURE_ID, animate::MODEL_FAMILY_IDENTIFIER, animate::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_animate_comfy_model_0148", &["source-and-catalog-provenance", "face-adapter-source-precedence-detection", "shape-reduced-face-pose-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-conflicting-malformed-ambiguity-failures", "authoritative-owner-delegation"])?;
+    super::write_model_family_row_artifact(animate::MODEL_FAMILY_FIXTURE, animate::MODEL_FAMILY_FEATURE_ID, animate::MODEL_FAMILY_IDENTIFIER, animate::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_animate_sim_model_0148", &["source-and-catalog-provenance", "face-adapter-source-precedence-detection", "shape-reduced-face-pose-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-conflicting-malformed-ambiguity-failures", "authoritative-owner-delegation"])?;
     Ok(())
 }

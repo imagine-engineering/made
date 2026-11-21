@@ -90,16 +90,16 @@ const CLIP_FACTORY_CONFIGURATION_4B: [ModelClipConfigurationFactDefinition; 1] =
     }];
 const CLIP_CANDIDATE_2B: [ModelClipTargetCandidateDefinition; 1] =
     [ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.ace15.ACE15Tokenizer",
-        clip_model: "sim.text_encoders.ace15.te",
+        tokenizer: "comfy.text_encoders.ace15.ACE15Tokenizer",
+        clip_model: "comfy.text_encoders.ace15.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: &CLIP_FACTORY_CONFIGURATION_2B,
         },
     }];
 const CLIP_CANDIDATE_4B: [ModelClipTargetCandidateDefinition; 1] =
     [ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.ace15.ACE15Tokenizer",
-        clip_model: "sim.text_encoders.ace15.te",
+        tokenizer: "comfy.text_encoders.ace15.ACE15Tokenizer",
+        clip_model: "comfy.text_encoders.ace15.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: &CLIP_FACTORY_CONFIGURATION_4B,
         },

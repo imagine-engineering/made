@@ -33,12 +33,12 @@ pub const QWEN_IMAGE_MEMORY_ESTIMATOR: MemoryEstimatorDescriptor = MemoryEstimat
 
 pub const QWEN_IMAGE_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const QWEN_IMAGE_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.qwen_image.QwenImageTokenizer",
-        clip_model: "sim.text_encoders.qwen_image.te",
+        tokenizer: "comfy.text_encoders.qwen_image.QwenImageTokenizer",
+        clip_model: "comfy.text_encoders.qwen_image.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: QWEN_IMAGE_CLIP_CONFIGURATION,
         },

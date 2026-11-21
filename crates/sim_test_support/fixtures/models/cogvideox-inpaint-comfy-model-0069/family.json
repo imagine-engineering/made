@@ -1,5 +1,5 @@
 {
-  "fixture_id": "cogvideox-inpaint-sim-model-0069",
+  "fixture_id": "cogvideox-inpaint-comfy-model-0069",
   "feature_id": "COMFY-MODEL-0069",
   "detector": {
     "tensor_shapes": {

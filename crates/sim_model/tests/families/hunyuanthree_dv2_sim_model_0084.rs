@@ -61,7 +61,7 @@ const SPEC: RowSpec = RowSpec {
     feature_id: row_v2::MODEL_FAMILY_FEATURE_ID,
     identifier: row_v2::MODEL_FAMILY_IDENTIFIER,
     fixture: row_v2::MODEL_FAMILY_FIXTURE,
-    module: "hunyuanthree_dv2_comfy_model_0084",
+    module: "hunyuanthree_dv2_sim_model_0084",
     source_ordinal: row_v2::MODEL_FAMILY_SOURCE_ORDINAL,
     source_architecture: "model_base.Hunyuan3Dv2",
     architecture_version: "hunyuan3d-v2-flow-transformer-v1",

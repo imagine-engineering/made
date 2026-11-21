@@ -153,7 +153,7 @@ fn val_model_family_row_001_auraflow_source_bound_and_profiled_for_both_layouts(
         resolved.clip_target().candidates()[0]
             .tokenizer()
             .identifier(),
-        "sim.text_encoders.aura_t5.AuraT5Tokenizer"
+        "comfy.text_encoders.aura_t5.AuraT5Tokenizer"
     );
 
     let native_configuration = aura::configuration_for_probe(&native_probe())?;
@@ -187,7 +187,7 @@ fn val_model_family_row_001_auraflow_source_bound_and_profiled_for_both_layouts(
         aura::MODEL_FAMILY_FEATURE_ID,
         aura::MODEL_FAMILY_IDENTIFIER,
         aura::MODEL_FAMILY_REGISTRATION.source_ordinal,
-        "auraflow_comfy_model_0064",
+        "auraflow_sim_model_0064",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-and-diffusers-detection",

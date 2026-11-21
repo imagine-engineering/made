@@ -99,7 +99,7 @@ fn val_model_family_row_001_wan21_vace_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_200, .. })
     ));
-    support::verify_owner_delegation("wan21_vace_comfy_model_0147")?;
+    support::verify_owner_delegation("wan21_vace_sim_model_0147")?;
     Ok(())
 }
 
@@ -123,7 +123,7 @@ fn val_model_family_row_001_wan21_vace_forward_patch_memory_and_platform()
         vace::MODEL_FAMILY_FEATURE_ID,
         vace::MODEL_FAMILY_IDENTIFIER,
         vace::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_vace_comfy_model_0147",
+        "wan21_vace_sim_model_0147",
         &[
             "source-and-catalog-provenance",
             "vace-first-source-precedence-detection",

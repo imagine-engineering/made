@@ -193,7 +193,7 @@ fn val_model_family_row_001_ernieimage_source_configuration_and_ownership()
         ernie::MODEL_FAMILY_FEATURE_ID,
         ernie::MODEL_FAMILY_IDENTIFIER,
         ernie::MODEL_FAMILY_SOURCE_ORDINAL,
-        "ernieimage_comfy_model_0076",
+        "ernieimage_sim_model_0076",
         &[
             "source-provenance-and-ownership",
             "native-and-diffusers-configuration",
@@ -220,11 +220,11 @@ fn val_model_family_row_001_ernieimage_model_store_mapping_forward_patch_and_mem
     let candidates = resolved.clip_target().candidates();
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.ernie.ErnieTokenizer"
+        "comfy.text_encoders.ernie.ErnieTokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.ernie.te"
+        "comfy.text_encoders.ernie.te"
     );
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(4 * 1024 * 1024)?;

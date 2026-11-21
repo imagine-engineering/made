@@ -215,7 +215,7 @@ fn val_model_family_row_001_cogvideox_i2v_source_configuration_profiles_and_owne
         cogvideo::MODEL_FAMILY_FEATURE_ID,
         cogvideo::MODEL_FAMILY_IDENTIFIER,
         cogvideo::MODEL_FAMILY_SOURCE_ORDINAL,
-        "cogvideox_i2v_comfy_model_0068",
+        "cogvideox_i2v_sim_model_0068",
         &[
             "source-provenance-and-ownership",
             "spatial-and-temporal-patch-configuration",
@@ -262,11 +262,11 @@ fn val_model_family_row_001_cogvideox_i2v_model_store_mapping_forward_patch_and_
     let candidates = resolved.clip_target().candidates();
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.cogvideo.CogVideoXT5Tokenizer"
+        "comfy.text_encoders.cogvideo.CogVideoXT5Tokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.sd3_clip.T5XXLModel"
+        "comfy.text_encoders.sd3_clip.T5XXLModel"
     );
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(4 * 1024 * 1024)?;

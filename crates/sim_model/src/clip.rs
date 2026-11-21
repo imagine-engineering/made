@@ -517,12 +517,12 @@ pub fn select_clip_architecture(
         1 => single_encoder_target(clip_type, text_encoder_models[0], &probes[0]),
         2 => dual_encoder_target(clip_type, &text_encoder_models),
         3 => (
-            "sim.text_encoders.sd3_clip.SD3Tokenizer",
-            "sim.text_encoders.sd3_clip.sd3_clip",
+            "comfy.text_encoders.sd3_clip.SD3Tokenizer",
+            "comfy.text_encoders.sd3_clip.sd3_clip",
         ),
         4 => (
-            "sim.text_encoders.hidream.HiDreamTokenizer",
-            "sim.text_encoders.hidream.hidream_clip",
+            "comfy.text_encoders.hidream.HiDreamTokenizer",
+            "comfy.text_encoders.hidream.hidream_clip",
         ),
         count => return Err(ClipError::InvalidArtifactSet(count)),
     };
@@ -595,202 +595,202 @@ fn single_encoder_target(
     use TextEncoderModel as T;
     match (text_encoder_model, clip_type) {
         (Some(T::ClipG), C::StableCascade) => (
-            "sim.sdxl_clip.StableCascadeTokenizer",
-            "sim.sdxl_clip.StableCascadeClipModel",
+            "comfy.sdxl_clip.StableCascadeTokenizer",
+            "comfy.sdxl_clip.StableCascadeClipModel",
         ),
         (Some(T::ClipG), C::Sd3) => (
-            "sim.text_encoders.sd3_clip.SD3Tokenizer",
-            "sim.text_encoders.sd3_clip.sd3_clip",
+            "comfy.text_encoders.sd3_clip.SD3Tokenizer",
+            "comfy.text_encoders.sd3_clip.sd3_clip",
         ),
         (Some(T::ClipG), C::Hidream) => (
-            "sim.text_encoders.hidream.HiDreamTokenizer",
-            "sim.text_encoders.hidream.hidream_clip",
+            "comfy.text_encoders.hidream.HiDreamTokenizer",
+            "comfy.text_encoders.hidream.hidream_clip",
         ),
         (Some(T::ClipG), _) => (
-            "sim.sdxl_clip.SDXLTokenizer",
-            "sim.sdxl_clip.SDXLRefinerClipModel",
+            "comfy.sdxl_clip.SDXLTokenizer",
+            "comfy.sdxl_clip.SDXLRefinerClipModel",
         ),
         (Some(T::ClipH), _) => (
-            "sim.text_encoders.sd2_clip.SD2Tokenizer",
-            "sim.text_encoders.sd2_clip.SD2ClipModel",
+            "comfy.text_encoders.sd2_clip.SD2Tokenizer",
+            "comfy.text_encoders.sd2_clip.SD2ClipModel",
         ),
         (Some(T::T5Xxl), C::Sd3) => (
-            "sim.text_encoders.sd3_clip.SD3Tokenizer",
-            "sim.text_encoders.sd3_clip.sd3_clip",
+            "comfy.text_encoders.sd3_clip.SD3Tokenizer",
+            "comfy.text_encoders.sd3_clip.sd3_clip",
         ),
         (Some(T::T5Xxl), C::Ltxv) => (
-            "sim.text_encoders.lt.LTXVT5Tokenizer",
-            "sim.text_encoders.lt.ltxv_te",
+            "comfy.text_encoders.lt.LTXVT5Tokenizer",
+            "comfy.text_encoders.lt.ltxv_te",
         ),
         (Some(T::T5Xxl), C::Pixart | C::Chroma) => (
-            "sim.text_encoders.pixart_t5.PixArtTokenizer",
-            "sim.text_encoders.pixart_t5.pixart_te",
+            "comfy.text_encoders.pixart_t5.PixArtTokenizer",
+            "comfy.text_encoders.pixart_t5.pixart_te",
         ),
         (Some(T::T5Xxl), C::Wan) => (
-            "sim.text_encoders.wan.WanT5Tokenizer",
-            "sim.text_encoders.wan.te",
+            "comfy.text_encoders.wan.WanT5Tokenizer",
+            "comfy.text_encoders.wan.te",
         ),
         (Some(T::T5Xxl), C::Hidream) => (
-            "sim.text_encoders.hidream.HiDreamTokenizer",
-            "sim.text_encoders.hidream.hidream_clip",
+            "comfy.text_encoders.hidream.HiDreamTokenizer",
+            "comfy.text_encoders.hidream.hidream_clip",
         ),
         (Some(T::T5Xxl), C::Cogvideox) => (
-            "sim.text_encoders.cogvideo.CogVideoXTokenizer",
-            "sim.text_encoders.cogvideo.cogvideo_te",
+            "comfy.text_encoders.cogvideo.CogVideoXTokenizer",
+            "comfy.text_encoders.cogvideo.cogvideo_te",
         ),
         (Some(T::T5Xxl), _) => (
-            "sim.text_encoders.genmo.MochiT5Tokenizer",
-            "sim.text_encoders.genmo.mochi_te",
+            "comfy.text_encoders.genmo.MochiT5Tokenizer",
+            "comfy.text_encoders.genmo.mochi_te",
         ),
         (Some(T::T5XxlOld), _) => (
-            "sim.text_encoders.cosmos.CosmosT5Tokenizer",
-            "sim.text_encoders.cosmos.te",
+            "comfy.text_encoders.cosmos.CosmosT5Tokenizer",
+            "comfy.text_encoders.cosmos.te",
         ),
         (Some(T::T5Xl), _) => (
-            "sim.text_encoders.aura_t5.AuraT5Tokenizer",
-            "sim.text_encoders.aura_t5.AuraT5Model",
+            "comfy.text_encoders.aura_t5.AuraT5Tokenizer",
+            "comfy.text_encoders.aura_t5.AuraT5Model",
         ),
         (Some(T::T5Base), C::Ace) => (
-            "sim.text_encoders.ace.AceT5Tokenizer",
-            "sim.text_encoders.ace.AceT5Model",
+            "comfy.text_encoders.ace.AceT5Tokenizer",
+            "comfy.text_encoders.ace.AceT5Model",
         ),
         (Some(T::T5Base), _) if probe.tensor_shapes().contains_key("spiece_model") => (
-            "sim.text_encoders.ace.AceT5Tokenizer",
-            "sim.text_encoders.ace.AceT5Model",
+            "comfy.text_encoders.ace.AceT5Tokenizer",
+            "comfy.text_encoders.ace.AceT5Model",
         ),
         (Some(T::T5Base), _) => (
-            "sim.text_encoders.sa_t5.SAT5Tokenizer",
-            "sim.text_encoders.sa_t5.SAT5Model",
+            "comfy.text_encoders.sa_t5.SAT5Tokenizer",
+            "comfy.text_encoders.sa_t5.SAT5Model",
         ),
         (Some(T::T5Gemma), _) => (
-            "sim.text_encoders.sa3.SAT5GemmaTokenizer",
-            "sim.text_encoders.sa3.SAT5GemmaModel",
+            "comfy.text_encoders.sa3.SAT5GemmaTokenizer",
+            "comfy.text_encoders.sa3.SAT5GemmaModel",
         ),
         (Some(T::Gemma4E4b), _) => (
-            "sim.text_encoders.gemma4.Gemma4_E4B.tokenizer",
-            "sim.text_encoders.gemma4.gemma4_te",
+            "comfy.text_encoders.gemma4.Gemma4_E4B.tokenizer",
+            "comfy.text_encoders.gemma4.gemma4_te",
         ),
         (Some(T::Gemma4E2b), _) => (
-            "sim.text_encoders.gemma4.Gemma4_E2B.tokenizer",
-            "sim.text_encoders.gemma4.gemma4_te",
+            "comfy.text_encoders.gemma4.Gemma4_E2B.tokenizer",
+            "comfy.text_encoders.gemma4.gemma4_te",
         ),
         (Some(T::Gemma4_31b), _) => (
-            "sim.text_encoders.gemma4.Gemma4_31B.tokenizer",
-            "sim.text_encoders.gemma4.gemma4_te",
+            "comfy.text_encoders.gemma4.Gemma4_31B.tokenizer",
+            "comfy.text_encoders.gemma4.gemma4_te",
         ),
         (Some(T::Gemma2_2b), C::Pixeldit) => (
-            "sim.text_encoders.pixeldit.PixelDiTGemma2Tokenizer",
-            "sim.text_encoders.pixeldit.pixeldit_te",
+            "comfy.text_encoders.pixeldit.PixelDiTGemma2Tokenizer",
+            "comfy.text_encoders.pixeldit.pixeldit_te",
         ),
         (Some(T::Gemma2_2b), _) => (
-            "sim.text_encoders.lumina2.LuminaTokenizer",
-            "sim.text_encoders.lumina2.te",
+            "comfy.text_encoders.lumina2.LuminaTokenizer",
+            "comfy.text_encoders.lumina2.te",
         ),
         (Some(T::Gemma3_4b | T::Gemma3_4bVision), _) => (
-            "sim.text_encoders.lumina2.NTokenizer",
-            "sim.text_encoders.lumina2.te",
+            "comfy.text_encoders.lumina2.NTokenizer",
+            "comfy.text_encoders.lumina2.te",
         ),
         (Some(T::Gemma3_12b), _) => (
-            "sim.text_encoders.lt.Gemma3_12BTokenizer",
-            "sim.text_encoders.lt.gemma3_te",
+            "comfy.text_encoders.lt.Gemma3_12BTokenizer",
+            "comfy.text_encoders.lt.gemma3_te",
         ),
         (Some(T::Llama3_8), _) => (
-            "sim.text_encoders.hidream.HiDreamTokenizer",
-            "sim.text_encoders.hidream.hidream_clip",
+            "comfy.text_encoders.hidream.HiDreamTokenizer",
+            "comfy.text_encoders.hidream.hidream_clip",
         ),
         (Some(T::Qwen25_3b), _) => (
-            "sim.text_encoders.omnigen2.Omnigen2Tokenizer",
-            "sim.text_encoders.omnigen2.te",
+            "comfy.text_encoders.omnigen2.Omnigen2Tokenizer",
+            "comfy.text_encoders.omnigen2.te",
         ),
         (Some(T::Qwen25_7b), C::HunyuanImage) => (
-            "sim.text_encoders.hunyuan_image.HunyuanImageTokenizer",
-            "sim.text_encoders.hunyuan_image.te",
+            "comfy.text_encoders.hunyuan_image.HunyuanImageTokenizer",
+            "comfy.text_encoders.hunyuan_image.te",
         ),
         (Some(T::Qwen25_7b), C::LongcatImage) => (
-            "sim.text_encoders.longcat_image.LongCatImageTokenizer",
-            "sim.text_encoders.longcat_image.te",
+            "comfy.text_encoders.longcat_image.LongCatImageTokenizer",
+            "comfy.text_encoders.longcat_image.te",
         ),
         (Some(T::Qwen25_7b), _) => (
-            "sim.text_encoders.qwen_image.QwenImageTokenizer",
-            "sim.text_encoders.qwen_image.te",
+            "comfy.text_encoders.qwen_image.QwenImageTokenizer",
+            "comfy.text_encoders.qwen_image.te",
         ),
         (Some(T::Mistral3_24b | T::Mistral3_24bPrunedFlux2), _) => (
-            "sim.text_encoders.flux.Flux2Tokenizer",
-            "sim.text_encoders.flux.flux2_te",
+            "comfy.text_encoders.flux.Flux2Tokenizer",
+            "comfy.text_encoders.flux.flux2_te",
         ),
         (Some(T::GptOss20b), _) => (
-            "sim.text_encoders.gpt_oss.LensTokenizer",
-            "sim.text_encoders.gpt_oss.lens_te",
+            "comfy.text_encoders.gpt_oss.LensTokenizer",
+            "comfy.text_encoders.gpt_oss.lens_te",
         ),
         (Some(T::Qwen3_4b), C::Flux | C::Flux2) => (
-            "sim.text_encoders.flux.KleinTokenizer",
-            "sim.text_encoders.flux.klein_te",
+            "comfy.text_encoders.flux.KleinTokenizer",
+            "comfy.text_encoders.flux.klein_te",
         ),
         (Some(T::Qwen3_4b), _) => (
-            "sim.text_encoders.z_image.ZImageTokenizer",
-            "sim.text_encoders.z_image.te",
+            "comfy.text_encoders.z_image.ZImageTokenizer",
+            "comfy.text_encoders.z_image.te",
         ),
         (Some(T::Qwen3_2b), _) => (
-            "sim.text_encoders.ovis.OvisTokenizer",
-            "sim.text_encoders.ovis.te",
+            "comfy.text_encoders.ovis.OvisTokenizer",
+            "comfy.text_encoders.ovis.te",
         ),
         (Some(T::Qwen3_8b), C::Ideogram4) => (
-            "sim.text_encoders.ideogram4.Ideogram4Tokenizer",
-            "sim.text_encoders.ideogram4.te",
+            "comfy.text_encoders.ideogram4.Ideogram4Tokenizer",
+            "comfy.text_encoders.ideogram4.te",
         ),
         (Some(T::Qwen3_8b), _) => (
-            "sim.text_encoders.flux.KleinTokenizer8B",
-            "sim.text_encoders.flux.klein_te",
+            "comfy.text_encoders.flux.KleinTokenizer8B",
+            "comfy.text_encoders.flux.klein_te",
         ),
         (Some(T::JinaClip2), _) => (
-            "sim.text_encoders.jina_clip_2.JinaClip2TokenizerWrapper",
-            "sim.text_encoders.jina_clip_2.JinaClip2TextModelWrapper",
+            "comfy.text_encoders.jina_clip_2.JinaClip2TokenizerWrapper",
+            "comfy.text_encoders.jina_clip_2.JinaClip2TextModelWrapper",
         ),
         (Some(T::Qwen35_08b | T::Qwen35_2b | T::Qwen35_4b | T::Qwen35_9b | T::Qwen35_27b), _) => (
-            "sim.text_encoders.qwen35.tokenizer",
-            "sim.text_encoders.qwen35.te",
+            "comfy.text_encoders.qwen35.tokenizer",
+            "comfy.text_encoders.qwen35.te",
         ),
         (Some(T::Qwen3Vl8b), C::Ideogram4) => (
-            "sim.text_encoders.ideogram4.Ideogram4Qwen3VLTokenizer",
-            "sim.text_encoders.ideogram4.te_qwen3vl",
+            "comfy.text_encoders.ideogram4.Ideogram4Qwen3VLTokenizer",
+            "comfy.text_encoders.ideogram4.te_qwen3vl",
         ),
         (Some(T::Qwen3Vl8b), C::Boogu) => (
-            "sim.text_encoders.boogu.BooguTokenizer",
-            "sim.text_encoders.boogu.te",
+            "comfy.text_encoders.boogu.BooguTokenizer",
+            "comfy.text_encoders.boogu.te",
         ),
         (Some(T::Qwen3Vl4b), C::Krea2) => (
-            "sim.text_encoders.krea2.Krea2Tokenizer",
-            "sim.text_encoders.krea2.te",
+            "comfy.text_encoders.krea2.Krea2Tokenizer",
+            "comfy.text_encoders.krea2.te",
         ),
         (Some(T::Qwen3Vl8b), C::Flux | C::Flux2) => (
-            "sim.text_encoders.flux.KleinTokenizer8B",
-            "sim.text_encoders.flux.klein_te",
+            "comfy.text_encoders.flux.KleinTokenizer8B",
+            "comfy.text_encoders.flux.klein_te",
         ),
         (Some(T::Qwen3Vl4b), C::Flux | C::Flux2) => (
-            "sim.text_encoders.flux.KleinTokenizer",
-            "sim.text_encoders.flux.klein_te",
+            "comfy.text_encoders.flux.KleinTokenizer",
+            "comfy.text_encoders.flux.klein_te",
         ),
         (Some(T::Qwen3Vl4b | T::Qwen3Vl8b), _) => (
-            "sim.text_encoders.qwen3vl.tokenizer",
-            "sim.text_encoders.qwen3vl.te",
+            "comfy.text_encoders.qwen3vl.tokenizer",
+            "comfy.text_encoders.qwen3vl.te",
         ),
         (Some(T::Qwen3_06b), _) => (
-            "sim.text_encoders.anima.AnimaTokenizer",
-            "sim.text_encoders.anima.te",
+            "comfy.text_encoders.anima.AnimaTokenizer",
+            "comfy.text_encoders.anima.te",
         ),
         (Some(T::Ministral3_3b), _) => (
-            "sim.text_encoders.ernie.ErnieTokenizer",
-            "sim.text_encoders.ernie.te",
+            "comfy.text_encoders.ernie.ErnieTokenizer",
+            "comfy.text_encoders.ernie.te",
         ),
         (_, C::Sd3) => (
-            "sim.text_encoders.sd3_clip.SD3Tokenizer",
-            "sim.text_encoders.sd3_clip.sd3_clip",
+            "comfy.text_encoders.sd3_clip.SD3Tokenizer",
+            "comfy.text_encoders.sd3_clip.sd3_clip",
         ),
         (_, C::Hidream) => (
-            "sim.text_encoders.hidream.HiDreamTokenizer",
-            "sim.text_encoders.hidream.hidream_clip",
+            "comfy.text_encoders.hidream.HiDreamTokenizer",
+            "comfy.text_encoders.hidream.hidream_clip",
         ),
-        _ => ("sim.sd1_clip.SD1Tokenizer", "sim.sd1_clip.SD1ClipModel"),
+        _ => ("comfy.sd1_clip.SD1Tokenizer", "comfy.sd1_clip.SD1ClipModel"),
     }
 }
 
@@ -801,56 +801,57 @@ fn dual_encoder_target(
     use ClipType as C;
     match clip_type {
         C::Sd3 => (
-            "sim.text_encoders.sd3_clip.SD3Tokenizer",
-            "sim.text_encoders.sd3_clip.sd3_clip",
+            "comfy.text_encoders.sd3_clip.SD3Tokenizer",
+            "comfy.text_encoders.sd3_clip.sd3_clip",
         ),
         C::HunyuanDit => (
-            "sim.text_encoders.hydit.HyditTokenizer",
-            "sim.text_encoders.hydit.HyditModel",
+            "comfy.text_encoders.hydit.HyditTokenizer",
+            "comfy.text_encoders.hydit.HyditModel",
         ),
         C::Flux => (
-            "sim.text_encoders.flux.FluxTokenizer",
-            "sim.text_encoders.flux.flux_clip",
+            "comfy.text_encoders.flux.FluxTokenizer",
+            "comfy.text_encoders.flux.flux_clip",
         ),
         C::HunyuanVideo => (
-            "sim.text_encoders.hunyuan_video.HunyuanVideoTokenizer",
-            "sim.text_encoders.hunyuan_video.hunyuan_video_clip",
+            "comfy.text_encoders.hunyuan_video.HunyuanVideoTokenizer",
+            "comfy.text_encoders.hunyuan_video.hunyuan_video_clip",
         ),
         C::Hidream => (
-            "sim.text_encoders.hidream.HiDreamTokenizer",
-            "sim.text_encoders.hidream.hidream_clip",
+            "comfy.text_encoders.hidream.HiDreamTokenizer",
+            "comfy.text_encoders.hidream.hidream_clip",
         ),
         C::HunyuanImage => (
-            "sim.text_encoders.hunyuan_image.HunyuanImageTokenizer",
-            "sim.text_encoders.hunyuan_image.te",
+            "comfy.text_encoders.hunyuan_image.HunyuanImageTokenizer",
+            "comfy.text_encoders.hunyuan_image.te",
         ),
         C::HunyuanVideo15 => (
-            "sim.text_encoders.hunyuan_video.HunyuanVideo15Tokenizer",
-            "sim.text_encoders.hunyuan_image.te",
+            "comfy.text_encoders.hunyuan_video.HunyuanVideo15Tokenizer",
+            "comfy.text_encoders.hunyuan_image.te",
         ),
         C::Kandinsky5 => (
-            "sim.text_encoders.kandinsky5.Kandinsky5Tokenizer",
-            "sim.text_encoders.kandinsky5.te",
+            "comfy.text_encoders.kandinsky5.Kandinsky5Tokenizer",
+            "comfy.text_encoders.kandinsky5.te",
         ),
         C::Kandinsky5Image => (
-            "sim.text_encoders.kandinsky5.Kandinsky5TokenizerImage",
-            "sim.text_encoders.kandinsky5.te",
+            "comfy.text_encoders.kandinsky5.Kandinsky5TokenizerImage",
+            "comfy.text_encoders.kandinsky5.te",
         ),
         C::Ltxv => (
-            "sim.text_encoders.lt.LTXAVGemmaTokenizer",
-            "sim.text_encoders.lt.ltxav_te",
+            "comfy.text_encoders.lt.LTXAVGemmaTokenizer",
+            "comfy.text_encoders.lt.ltxav_te",
         ),
         C::Newbie => (
-            "sim.text_encoders.newbie.NewBieTokenizer",
-            "sim.text_encoders.newbie.te",
+            "comfy.text_encoders.newbie.NewBieTokenizer",
+            "comfy.text_encoders.newbie.te",
         ),
         C::Ace => (
-            "sim.text_encoders.ace15.ACE15Tokenizer",
-            "sim.text_encoders.ace15.te",
+            "comfy.text_encoders.ace15.ACE15Tokenizer",
+            "comfy.text_encoders.ace15.te",
         ),
-        _ if text_encoder_models.len() == 2 => {
-            ("sim.sdxl_clip.SDXLTokenizer", "sim.sdxl_clip.SDXLClipModel")
-        }
+        _ if text_encoder_models.len() == 2 => (
+            "comfy.sdxl_clip.SDXLTokenizer",
+            "comfy.sdxl_clip.SDXLClipModel",
+        ),
         _ => unreachable!("dual target is called only for two artifacts"),
     }
 }
@@ -1582,17 +1583,17 @@ fn canonical_candidate_matches(
     if tokenizer == architecture.tokenizer() && clip_model == architecture.clip_model() {
         return true;
     }
-    if architecture.tokenizer() == "sim.sd1_clip.SD1Tokenizer"
-        && architecture.clip_model() == "sim.sd1_clip.SD1ClipModel"
+    if architecture.tokenizer() == "comfy.sd1_clip.SD1Tokenizer"
+        && architecture.clip_model() == "comfy.sd1_clip.SD1ClipModel"
         && tokenizer == "sim.sd1.tokenizer"
         && clip_model == "sim.sd1.clip"
     {
         return true;
     }
-    architecture.tokenizer() == "sim.text_encoders.cogvideo.CogVideoXTokenizer"
-        && architecture.clip_model() == "sim.text_encoders.cogvideo.cogvideo_te"
-        && tokenizer == "sim.text_encoders.cogvideo.CogVideoXT5Tokenizer"
-        && clip_model == "sim.text_encoders.sd3_clip.T5XXLModel"
+    architecture.tokenizer() == "comfy.text_encoders.cogvideo.CogVideoXTokenizer"
+        && architecture.clip_model() == "comfy.text_encoders.cogvideo.cogvideo_te"
+        && tokenizer == "comfy.text_encoders.cogvideo.CogVideoXT5Tokenizer"
+        && clip_model == "comfy.text_encoders.sd3_clip.T5XXLModel"
 }
 
 #[derive(Debug)]
@@ -9982,17 +9983,17 @@ mod tests {
         );
 
         let single = select_clip_architecture(ClipType::Wan, std::slice::from_ref(&t5))?;
-        assert_eq!(single.tokenizer(), "sim.text_encoders.wan.WanT5Tokenizer");
-        assert_eq!(single.clip_model(), "sim.text_encoders.wan.te");
+        assert_eq!(single.tokenizer(), "comfy.text_encoders.wan.WanT5Tokenizer");
+        assert_eq!(single.clip_model(), "comfy.text_encoders.wan.te");
         let cogvideo = select_clip_architecture(ClipType::Cogvideox, std::slice::from_ref(&t5))?;
         let canonical_cogvideo = ModelClipTargetCandidateDescriptor::checked(
-            "sim.text_encoders.cogvideo.CogVideoXT5Tokenizer",
-            "sim.text_encoders.sd3_clip.T5XXLModel",
+            "comfy.text_encoders.cogvideo.CogVideoXT5Tokenizer",
+            "comfy.text_encoders.sd3_clip.T5XXLModel",
         )?;
         assert!(canonical_candidate_matches(&canonical_cogvideo, &cogvideo));
         let substituted_cogvideo = ModelClipTargetCandidateDescriptor::checked(
-            "sim.text_encoders.cogvideo.CogVideoXT5Tokenizer",
-            "sim.text_encoders.sd3_clip.sd3_clip",
+            "comfy.text_encoders.cogvideo.CogVideoXT5Tokenizer",
+            "comfy.text_encoders.sd3_clip.sd3_clip",
         )?;
         assert!(!canonical_candidate_matches(
             &substituted_cogvideo,
@@ -10002,7 +10003,7 @@ mod tests {
             ClipType::Flux,
             &[detector_probe(TextEncoderModel::ClipL)?, t5.clone()],
         )?;
-        assert_eq!(dual.tokenizer(), "sim.text_encoders.flux.FluxTokenizer");
+        assert_eq!(dual.tokenizer(), "comfy.text_encoders.flux.FluxTokenizer");
         let reversed = select_clip_architecture(
             ClipType::Flux,
             &[t5.clone(), detector_probe(TextEncoderModel::ClipL)?],
@@ -10016,7 +10017,7 @@ mod tests {
                 t5.clone(),
             ],
         )?;
-        assert_eq!(triple.clip_model(), "sim.text_encoders.sd3_clip.sd3_clip");
+        assert_eq!(triple.clip_model(), "comfy.text_encoders.sd3_clip.sd3_clip");
         let quadruple = select_clip_architecture(
             ClipType::StableDiffusion,
             &[
@@ -10028,7 +10029,7 @@ mod tests {
         )?;
         assert_eq!(
             quadruple.clip_model(),
-            "sim.text_encoders.hidream.hidream_clip"
+            "comfy.text_encoders.hidream.hidream_clip"
         );
         Ok(())
     }
@@ -10038,47 +10039,47 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         use TextEncoderModel as T;
         let single_rows = [
-            (T::ClipL, "sim.sd1_clip.SD1ClipModel"),
-            (T::ClipH, "sim.text_encoders.sd2_clip.SD2ClipModel"),
-            (T::ClipG, "sim.sdxl_clip.SDXLRefinerClipModel"),
-            (T::T5Xxl, "sim.text_encoders.genmo.mochi_te"),
-            (T::T5Xl, "sim.text_encoders.aura_t5.AuraT5Model"),
-            (T::T5Base, "sim.text_encoders.sa_t5.SAT5Model"),
-            (T::Llama3_8, "sim.text_encoders.hidream.hidream_clip"),
-            (T::T5XxlOld, "sim.text_encoders.cosmos.te"),
-            (T::Gemma2_2b, "sim.text_encoders.lumina2.te"),
-            (T::Qwen25_3b, "sim.text_encoders.omnigen2.te"),
-            (T::Qwen25_7b, "sim.text_encoders.qwen_image.te"),
-            (T::ByT5SmallGlyph, "sim.sd1_clip.SD1ClipModel"),
-            (T::Gemma3_4b, "sim.text_encoders.lumina2.te"),
-            (T::Mistral3_24b, "sim.text_encoders.flux.flux2_te"),
+            (T::ClipL, "comfy.sd1_clip.SD1ClipModel"),
+            (T::ClipH, "comfy.text_encoders.sd2_clip.SD2ClipModel"),
+            (T::ClipG, "comfy.sdxl_clip.SDXLRefinerClipModel"),
+            (T::T5Xxl, "comfy.text_encoders.genmo.mochi_te"),
+            (T::T5Xl, "comfy.text_encoders.aura_t5.AuraT5Model"),
+            (T::T5Base, "comfy.text_encoders.sa_t5.SAT5Model"),
+            (T::Llama3_8, "comfy.text_encoders.hidream.hidream_clip"),
+            (T::T5XxlOld, "comfy.text_encoders.cosmos.te"),
+            (T::Gemma2_2b, "comfy.text_encoders.lumina2.te"),
+            (T::Qwen25_3b, "comfy.text_encoders.omnigen2.te"),
+            (T::Qwen25_7b, "comfy.text_encoders.qwen_image.te"),
+            (T::ByT5SmallGlyph, "comfy.sd1_clip.SD1ClipModel"),
+            (T::Gemma3_4b, "comfy.text_encoders.lumina2.te"),
+            (T::Mistral3_24b, "comfy.text_encoders.flux.flux2_te"),
             (
                 T::Mistral3_24bPrunedFlux2,
-                "sim.text_encoders.flux.flux2_te",
+                "comfy.text_encoders.flux.flux2_te",
             ),
-            (T::Qwen3_4b, "sim.text_encoders.z_image.te"),
-            (T::Qwen3_2b, "sim.text_encoders.ovis.te"),
-            (T::Gemma3_12b, "sim.text_encoders.lt.gemma3_te"),
+            (T::Qwen3_4b, "comfy.text_encoders.z_image.te"),
+            (T::Qwen3_2b, "comfy.text_encoders.ovis.te"),
+            (T::Gemma3_12b, "comfy.text_encoders.lt.gemma3_te"),
             (
                 T::JinaClip2,
-                "sim.text_encoders.jina_clip_2.JinaClip2TextModelWrapper",
+                "comfy.text_encoders.jina_clip_2.JinaClip2TextModelWrapper",
             ),
-            (T::Qwen3_8b, "sim.text_encoders.flux.klein_te"),
-            (T::Qwen3_06b, "sim.text_encoders.anima.te"),
-            (T::Gemma3_4bVision, "sim.text_encoders.lumina2.te"),
-            (T::Qwen35_08b, "sim.text_encoders.qwen35.te"),
-            (T::Qwen35_2b, "sim.text_encoders.qwen35.te"),
-            (T::Qwen35_4b, "sim.text_encoders.qwen35.te"),
-            (T::Qwen35_9b, "sim.text_encoders.qwen35.te"),
-            (T::Qwen35_27b, "sim.text_encoders.qwen35.te"),
-            (T::Ministral3_3b, "sim.text_encoders.ernie.te"),
-            (T::Gemma4E4b, "sim.text_encoders.gemma4.gemma4_te"),
-            (T::Gemma4E2b, "sim.text_encoders.gemma4.gemma4_te"),
-            (T::Gemma4_31b, "sim.text_encoders.gemma4.gemma4_te"),
-            (T::T5Gemma, "sim.text_encoders.sa3.SAT5GemmaModel"),
-            (T::GptOss20b, "sim.text_encoders.gpt_oss.lens_te"),
-            (T::Qwen3Vl4b, "sim.text_encoders.qwen3vl.te"),
-            (T::Qwen3Vl8b, "sim.text_encoders.qwen3vl.te"),
+            (T::Qwen3_8b, "comfy.text_encoders.flux.klein_te"),
+            (T::Qwen3_06b, "comfy.text_encoders.anima.te"),
+            (T::Gemma3_4bVision, "comfy.text_encoders.lumina2.te"),
+            (T::Qwen35_08b, "comfy.text_encoders.qwen35.te"),
+            (T::Qwen35_2b, "comfy.text_encoders.qwen35.te"),
+            (T::Qwen35_4b, "comfy.text_encoders.qwen35.te"),
+            (T::Qwen35_9b, "comfy.text_encoders.qwen35.te"),
+            (T::Qwen35_27b, "comfy.text_encoders.qwen35.te"),
+            (T::Ministral3_3b, "comfy.text_encoders.ernie.te"),
+            (T::Gemma4E4b, "comfy.text_encoders.gemma4.gemma4_te"),
+            (T::Gemma4E2b, "comfy.text_encoders.gemma4.gemma4_te"),
+            (T::Gemma4_31b, "comfy.text_encoders.gemma4.gemma4_te"),
+            (T::T5Gemma, "comfy.text_encoders.sa3.SAT5GemmaModel"),
+            (T::GptOss20b, "comfy.text_encoders.gpt_oss.lens_te"),
+            (T::Qwen3Vl4b, "comfy.text_encoders.qwen3vl.te"),
+            (T::Qwen3Vl8b, "comfy.text_encoders.qwen3vl.te"),
         ];
         for (model, expected) in single_rows {
             let selection =
@@ -10090,92 +10091,104 @@ mod tests {
             (
                 T::ClipG,
                 ClipType::StableCascade,
-                "sim.sdxl_clip.StableCascadeClipModel",
+                "comfy.sdxl_clip.StableCascadeClipModel",
             ),
             (
                 T::ClipG,
                 ClipType::Sd3,
-                "sim.text_encoders.sd3_clip.sd3_clip",
+                "comfy.text_encoders.sd3_clip.sd3_clip",
             ),
             (
                 T::ClipG,
                 ClipType::Hidream,
-                "sim.text_encoders.hidream.hidream_clip",
+                "comfy.text_encoders.hidream.hidream_clip",
             ),
             (
                 T::T5Xxl,
                 ClipType::Sd3,
-                "sim.text_encoders.sd3_clip.sd3_clip",
+                "comfy.text_encoders.sd3_clip.sd3_clip",
             ),
-            (T::T5Xxl, ClipType::Ltxv, "sim.text_encoders.lt.ltxv_te"),
+            (T::T5Xxl, ClipType::Ltxv, "comfy.text_encoders.lt.ltxv_te"),
             (
                 T::T5Xxl,
                 ClipType::Pixart,
-                "sim.text_encoders.pixart_t5.pixart_te",
+                "comfy.text_encoders.pixart_t5.pixart_te",
             ),
             (
                 T::T5Xxl,
                 ClipType::Chroma,
-                "sim.text_encoders.pixart_t5.pixart_te",
+                "comfy.text_encoders.pixart_t5.pixart_te",
             ),
-            (T::T5Xxl, ClipType::Wan, "sim.text_encoders.wan.te"),
+            (T::T5Xxl, ClipType::Wan, "comfy.text_encoders.wan.te"),
             (
                 T::T5Xxl,
                 ClipType::Hidream,
-                "sim.text_encoders.hidream.hidream_clip",
+                "comfy.text_encoders.hidream.hidream_clip",
             ),
             (
                 T::T5Xxl,
                 ClipType::Cogvideox,
-                "sim.text_encoders.cogvideo.cogvideo_te",
+                "comfy.text_encoders.cogvideo.cogvideo_te",
             ),
-            (T::T5Base, ClipType::Ace, "sim.text_encoders.ace.AceT5Model"),
+            (
+                T::T5Base,
+                ClipType::Ace,
+                "comfy.text_encoders.ace.AceT5Model",
+            ),
             (
                 T::Gemma2_2b,
                 ClipType::Pixeldit,
-                "sim.text_encoders.pixeldit.pixeldit_te",
+                "comfy.text_encoders.pixeldit.pixeldit_te",
             ),
             (
                 T::Qwen25_7b,
                 ClipType::HunyuanImage,
-                "sim.text_encoders.hunyuan_image.te",
+                "comfy.text_encoders.hunyuan_image.te",
             ),
             (
                 T::Qwen25_7b,
                 ClipType::LongcatImage,
-                "sim.text_encoders.longcat_image.te",
+                "comfy.text_encoders.longcat_image.te",
             ),
             (
                 T::Qwen3_4b,
                 ClipType::Flux,
-                "sim.text_encoders.flux.klein_te",
+                "comfy.text_encoders.flux.klein_te",
             ),
             (
                 T::Qwen3_4b,
                 ClipType::Flux2,
-                "sim.text_encoders.flux.klein_te",
+                "comfy.text_encoders.flux.klein_te",
             ),
             (
                 T::Qwen3_8b,
                 ClipType::Ideogram4,
-                "sim.text_encoders.ideogram4.te",
+                "comfy.text_encoders.ideogram4.te",
             ),
             (
                 T::Qwen3Vl8b,
                 ClipType::Ideogram4,
-                "sim.text_encoders.ideogram4.te_qwen3vl",
+                "comfy.text_encoders.ideogram4.te_qwen3vl",
             ),
-            (T::Qwen3Vl8b, ClipType::Boogu, "sim.text_encoders.boogu.te"),
-            (T::Qwen3Vl4b, ClipType::Krea2, "sim.text_encoders.krea2.te"),
+            (
+                T::Qwen3Vl8b,
+                ClipType::Boogu,
+                "comfy.text_encoders.boogu.te",
+            ),
+            (
+                T::Qwen3Vl4b,
+                ClipType::Krea2,
+                "comfy.text_encoders.krea2.te",
+            ),
             (
                 T::Qwen3Vl4b,
                 ClipType::Flux,
-                "sim.text_encoders.flux.klein_te",
+                "comfy.text_encoders.flux.klein_te",
             ),
             (
                 T::Qwen3Vl8b,
                 ClipType::Flux2,
-                "sim.text_encoders.flux.klein_te",
+                "comfy.text_encoders.flux.klein_te",
             ),
         ];
         for (model, clip_type, expected) in conditional_rows {
@@ -10211,31 +10224,40 @@ mod tests {
                 std::slice::from_ref(&t5_base_with_spiece),
             )?
             .clip_model(),
-            "sim.text_encoders.ace.AceT5Model"
+            "comfy.text_encoders.ace.AceT5Model"
         );
 
         let clip_l = detector_probe(T::ClipL)?;
         let t5 = detector_probe(T::T5Xxl)?;
         let dual_rows = [
-            (ClipType::Sd3, "sim.text_encoders.sd3_clip.sd3_clip"),
-            (ClipType::HunyuanDit, "sim.text_encoders.hydit.HyditModel"),
-            (ClipType::Flux, "sim.text_encoders.flux.flux_clip"),
+            (ClipType::Sd3, "comfy.text_encoders.sd3_clip.sd3_clip"),
+            (ClipType::HunyuanDit, "comfy.text_encoders.hydit.HyditModel"),
+            (ClipType::Flux, "comfy.text_encoders.flux.flux_clip"),
             (
                 ClipType::HunyuanVideo,
-                "sim.text_encoders.hunyuan_video.hunyuan_video_clip",
+                "comfy.text_encoders.hunyuan_video.hunyuan_video_clip",
             ),
-            (ClipType::Hidream, "sim.text_encoders.hidream.hidream_clip"),
-            (ClipType::HunyuanImage, "sim.text_encoders.hunyuan_image.te"),
+            (
+                ClipType::Hidream,
+                "comfy.text_encoders.hidream.hidream_clip",
+            ),
+            (
+                ClipType::HunyuanImage,
+                "comfy.text_encoders.hunyuan_image.te",
+            ),
             (
                 ClipType::HunyuanVideo15,
-                "sim.text_encoders.hunyuan_image.te",
+                "comfy.text_encoders.hunyuan_image.te",
             ),
-            (ClipType::Kandinsky5, "sim.text_encoders.kandinsky5.te"),
-            (ClipType::Kandinsky5Image, "sim.text_encoders.kandinsky5.te"),
-            (ClipType::Ltxv, "sim.text_encoders.lt.ltxav_te"),
-            (ClipType::Newbie, "sim.text_encoders.newbie.te"),
-            (ClipType::Ace, "sim.text_encoders.ace15.te"),
-            (ClipType::StableDiffusion, "sim.sdxl_clip.SDXLClipModel"),
+            (ClipType::Kandinsky5, "comfy.text_encoders.kandinsky5.te"),
+            (
+                ClipType::Kandinsky5Image,
+                "comfy.text_encoders.kandinsky5.te",
+            ),
+            (ClipType::Ltxv, "comfy.text_encoders.lt.ltxav_te"),
+            (ClipType::Newbie, "comfy.text_encoders.newbie.te"),
+            (ClipType::Ace, "comfy.text_encoders.ace15.te"),
+            (ClipType::StableDiffusion, "comfy.sdxl_clip.SDXLClipModel"),
         ];
         for (clip_type, expected) in dual_rows {
             let selection = select_clip_architecture(clip_type, &[clip_l.clone(), t5.clone()])?;

@@ -86,7 +86,7 @@ fn val_model_family_row_001_sd15_instructpix2pix_inheritance_configuration_and_p
         instruct::MODEL_FAMILY_FEATURE_ID,
         instruct::MODEL_FAMILY_IDENTIFIER,
         instruct::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sd15_instructpix2pix_comfy_model_0118",
+        "sd15_instructpix2pix_sim_model_0118",
         &[
             "source-provenance-and-sd15-inheritance",
             "native-and-diffusers-eight-channel-detection",

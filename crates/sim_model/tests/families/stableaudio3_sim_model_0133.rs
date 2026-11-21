@@ -117,11 +117,11 @@ fn val_model_family_row_001_stableaudio3_source_configuration_and_state_transfor
     let clip = &resolved.clip_target().candidates()[0];
     assert_eq!(
         clip.tokenizer().identifier(),
-        "sim.text_encoders.sa3.SAT5GemmaTokenizer"
+        "comfy.text_encoders.sa3.SAT5GemmaTokenizer"
     );
     assert_eq!(
         clip.clip_model().target().as_str(),
-        "sim.text_encoders.sa3.SAT5GemmaModel"
+        "comfy.text_encoders.sa3.SAT5GemmaModel"
     );
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(16 * 1024 * 1024)?;
@@ -161,7 +161,7 @@ fn val_model_family_row_001_stableaudio3_source_configuration_and_state_transfor
         sa3::MODEL_FAMILY_FEATURE_ID,
         sa3::MODEL_FAMILY_IDENTIFIER,
         sa3::MODEL_FAMILY_SOURCE_ORDINAL,
-        "stableaudio3_comfy_model_0133",
+        "stableaudio3_sim_model_0133",
         &[
             "source-and-catalog-provenance",
             "typed-shared-global-audio-configuration",

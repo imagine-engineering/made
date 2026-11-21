@@ -114,11 +114,11 @@ fn val_model_family_row_001_stableaudio_source_projection_descriptor_and_store_a
     assert_eq!(resolved.clip_target().candidates().len(), 1);
     assert_eq!(
         resolved.clip_target().candidates()[0].tokenizer().identifier(),
-        "sim.text_encoders.sa_t5.SAT5Tokenizer"
+        "comfy.text_encoders.sa_t5.SAT5Tokenizer"
     );
     assert_eq!(
         resolved.clip_target().candidates()[0].clip_model().target().as_str(),
-        "sim.text_encoders.sa_t5.SAT5Model"
+        "comfy.text_encoders.sa_t5.SAT5Model"
     );
 
     verify_transactional_mapping(&fixture, &probe)?;
@@ -128,7 +128,7 @@ fn val_model_family_row_001_stableaudio_source_projection_descriptor_and_store_a
         MODEL_FAMILY_FEATURE_ID,
         MODEL_FAMILY_IDENTIFIER,
         MODEL_FAMILY_SOURCE_ORDINAL,
-        "stableaudio_comfy_model_0132",
+        "stableaudio_sim_model_0132",
         &[
             "source-and-catalog-provenance",
             "model-store-authoritative-probe",

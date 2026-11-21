@@ -75,7 +75,7 @@ fn val_model_family_row_001_sdxl_instructpix2pix_source_layouts_and_ownership()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&store_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_100, .. })
     ));
-    support::verify_owner_delegation("sdxl_instructpix2pix_comfy_model_0125")?;
+    support::verify_owner_delegation("sdxl_instructpix2pix_sim_model_0125")?;
     Ok(())
 }
 
@@ -88,7 +88,7 @@ fn val_model_family_row_001_sdxl_instructpix2pix_native_execution_and_failures()
         ip2p::MODEL_FAMILY_FEATURE_ID,
         ip2p::MODEL_FAMILY_IDENTIFIER,
         ip2p::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sdxl_instructpix2pix_comfy_model_0125",
+        "sdxl_instructpix2pix_sim_model_0125",
         &[
             "source-and-catalog-provenance",
             "native-standalone-and-diffusers-key-detection",

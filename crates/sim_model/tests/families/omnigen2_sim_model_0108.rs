@@ -24,7 +24,7 @@ fn source_projection_descriptor_fixture_and_fail_closed_runtime()
     support::exercise_fixture(
         &omnigen2::MODEL_FAMILY,
         omnigen2::MODEL_FAMILY_FIXTURE,
-        "omnigen2_comfy_model_0108",
+        "omnigen2_sim_model_0108",
         75,
     )?;
     Ok(())
@@ -72,7 +72,7 @@ fn both_native_layouts_execute_and_sibling_or_malformed_probes_fail()
         omnigen2::configuration_for_probe(&boogu),
         Err(ModelFamilyError::InvalidSelectorOutput(_))
     ));
-    support::assert_leaf_owner("omnigen2_comfy_model_0108", "omnigen2_boogu_family")?;
+    support::assert_leaf_owner("omnigen2_sim_model_0108", "omnigen2_boogu_family")?;
     Ok(())
 }
 

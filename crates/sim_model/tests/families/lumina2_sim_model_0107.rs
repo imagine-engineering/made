@@ -24,7 +24,7 @@ fn source_projection_descriptor_fixture_and_fail_closed_runtime()
     support::exercise_fixture(
         &lumina::MODEL_FAMILY,
         lumina::MODEL_FAMILY_FIXTURE,
-        "lumina2_comfy_model_0107",
+        "lumina2_sim_model_0107",
         49,
     )?;
     Ok(())
@@ -85,7 +85,7 @@ fn exact_native_layouts_execute_and_invalid_or_ambiguous_probes_fail()
         lumina::configuration_for_probe(&zimage),
         Err(ModelFamilyError::InvalidSelectorOutput(message)) if message.contains("cannot admit")
     ));
-    support::assert_leaf_owner("lumina2_comfy_model_0107", "lumina_zimage_family")?;
+    support::assert_leaf_owner("lumina2_sim_model_0107", "lumina_zimage_family")?;
     Ok(())
 }
 

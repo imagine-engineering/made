@@ -96,7 +96,7 @@ fn val_model_family_row_001_wan21_i2v_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("wan21_i2v_comfy_model_0143")?;
+    support::verify_owner_delegation("wan21_i2v_sim_model_0143")?;
     Ok(())
 }
 
@@ -120,7 +120,7 @@ fn val_model_family_row_001_wan21_i2v_forward_patch_memory_and_platform()
         i2v::MODEL_FAMILY_FEATURE_ID,
         i2v::MODEL_FAMILY_IDENTIFIER,
         i2v::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_i2v_comfy_model_0143",
+        "wan21_i2v_sim_model_0143",
         &[
             "source-and-catalog-provenance",
             "image-key-and-in-dim-36-detection",

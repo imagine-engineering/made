@@ -1469,8 +1469,8 @@
   "schema_version": 1,
   "scope": "Actual pinned prediction classes and unchanged TrainSampler.fwd_bwd; explicit raw-output parameter and noise/latent inputs, MSE and grad_acc2. No full model, source RNG, optimizer or BF16 equivalence claim.",
   "sources": {
-    "projects/sim/ComfyUI/sim/model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
-    "projects/sim/ComfyUI/sim_extras/nodes_train.py": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
+    "projects/comfy/ComfyUI/comfy/model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_train.py": "d88aabbc72da32e1e5d934b6e4f3a6587438fe7a7840199771530644a21916ae"
   },
   "symbols": {
     "CONST": "fb63f62cc10fd700c3f545996fa054b74ad3fdbea7e10de10165806003636f75",

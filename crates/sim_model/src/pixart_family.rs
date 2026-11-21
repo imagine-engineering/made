@@ -31,8 +31,8 @@ pub const PIXART_SIGMA_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const PIXART_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.pixart_t5.PixArtTokenizer",
-        clip_model: "sim.text_encoders.pixart_t5.PixArtT5XXL",
+        tokenizer: "comfy.text_encoders.pixart_t5.PixArtTokenizer",
+        clip_model: "comfy.text_encoders.pixart_t5.PixArtT5XXL",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 pub static PIXART_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTargetDefinition {

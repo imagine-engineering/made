@@ -69,8 +69,8 @@ fn val_model_family_row_001_sd3_source_configuration_dynamic_clip_provenance_and
     assert!(resolved.clip_target().dynamic_selection());
     let candidates = resolved.clip_target().candidates();
     assert_eq!(candidates.len(), 1);
-    assert_eq!(candidates[0].tokenizer().identifier(), "sim.text_encoders.sd3_clip.SD3Tokenizer");
-    assert_eq!(candidates[0].clip_model().target().as_str(), "sim.text_encoders.sd3_clip.sd3_clip");
+    assert_eq!(candidates[0].tokenizer().identifier(), "comfy.text_encoders.sd3_clip.SD3Tokenizer");
+    assert_eq!(candidates[0].clip_model().target().as_str(), "comfy.text_encoders.sd3_clip.sd3_clip");
     let clip_json = serde_json::to_string(resolved.clip_target())?;
     for fact in ["clip_l", "clip_g", "t5", "t5_xxl_detect"] {
         assert!(clip_json.contains(fact));
@@ -104,7 +104,7 @@ fn val_model_family_row_001_sd3_source_configuration_dynamic_clip_provenance_and
         sd3::MODEL_FAMILY_FEATURE_ID,
         sd3::MODEL_FAMILY_IDENTIFIER,
         sd3::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sd3_comfy_model_0122",
+        "sd3_sim_model_0122",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-and-diffusers-detection",

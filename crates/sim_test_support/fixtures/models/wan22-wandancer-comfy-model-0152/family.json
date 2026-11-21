@@ -1,5 +1,5 @@
 {
-  "fixture_id":"wan22-wandancer-sim-model-0152","feature_id":"COMFY-MODEL-0152",
+  "fixture_id":"wan22-wandancer-comfy-model-0152","feature_id":"COMFY-MODEL-0152",
   "detector":{"tensor_shapes":{
     "model.diffusion_model.blocks.0.ffn.0.weight":[256,128],"model.diffusion_model.blocks.0.ffn.2.weight":[2,2],
     "model.diffusion_model.head.head.weight":[64,128],"model.diffusion_model.head.modulation":[1,2,128],

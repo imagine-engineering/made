@@ -13,7 +13,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "KOALA_700M";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0098";
 pub const MODEL_FAMILY_FIXTURE: &str = "koala-700m-comfy-model-0098";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 11;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =

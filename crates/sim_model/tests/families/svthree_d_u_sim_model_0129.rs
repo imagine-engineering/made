@@ -48,7 +48,7 @@ fn case() -> VideoFamilyCase {
         identifier: sv3d_u::MODEL_FAMILY_IDENTIFIER,
         feature_id: sv3d_u::MODEL_FAMILY_FEATURE_ID,
         fixture: sv3d_u::MODEL_FAMILY_FIXTURE,
-        module: "svthree_d_u_comfy_model_0129",
+        module: "svthree_d_u_sim_model_0129",
         source_ordinal: sv3d_u::MODEL_FAMILY_SOURCE_ORDINAL,
         source_architecture: "model_base.SV3D_u",
         architecture_version: "sv3d-unconditioned-unet-v1",

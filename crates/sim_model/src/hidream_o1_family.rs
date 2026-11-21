@@ -43,8 +43,8 @@ pub const HIDREAM_O1_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const HIDREAM_O1_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.hidream_o1.HiDreamO1Tokenizer",
-        clip_model: "sim.text_encoders.hidream_o1.HiDreamO1TE",
+        tokenizer: "comfy.text_encoders.hidream_o1.HiDreamO1Tokenizer",
+        clip_model: "comfy.text_encoders.hidream_o1.HiDreamO1TE",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

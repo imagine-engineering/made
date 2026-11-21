@@ -130,7 +130,7 @@ fn val_model_family_row_001_zimage_source_configuration_and_layouts()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&direct_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 900, .. })
     ));
-    row_support::verify_owner_delegation("zimage_comfy_model_0153")?;
+    row_support::verify_owner_delegation("zimage_sim_model_0153")?;
     Ok(())
 }
 
@@ -154,7 +154,7 @@ fn val_model_family_row_001_zimage_forward_patch_memory_and_platform()
         zimage::MODEL_FAMILY_FEATURE_ID,
         zimage::MODEL_FAMILY_IDENTIFIER,
         zimage::MODEL_FAMILY_SOURCE_ORDINAL,
-        "zimage_comfy_model_0153",
+        "zimage_sim_model_0153",
         &[
             "source-and-catalog-provenance",
             "model-store-prefixed-native-probe",

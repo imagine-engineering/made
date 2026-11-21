@@ -37,12 +37,12 @@ pub const HUNYUAN_VIDEO15_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const HUNYUAN_VIDEO_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const HUNYUAN_VIDEO_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.hunyuan_video.HunyuanVideoTokenizer",
-        clip_model: "sim.text_encoders.hunyuan_video.hunyuan_video_clip",
+        tokenizer: "comfy.text_encoders.hunyuan_video.HunyuanVideoTokenizer",
+        clip_model: "comfy.text_encoders.hunyuan_video.hunyuan_video_clip",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: HUNYUAN_VIDEO_CLIP_CONFIGURATION,
         },
@@ -54,12 +54,12 @@ pub static HUNYUAN_VIDEO_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTarge
 
 pub const HUNYUAN_IMAGE_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const HUNYUAN_IMAGE_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.hunyuan_image.HunyuanImageTokenizer",
-        clip_model: "sim.text_encoders.hunyuan_image.te",
+        tokenizer: "comfy.text_encoders.hunyuan_image.HunyuanImageTokenizer",
+        clip_model: "comfy.text_encoders.hunyuan_image.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: HUNYUAN_IMAGE_CLIP_CONFIGURATION,
         },
@@ -71,8 +71,8 @@ pub static HUNYUAN_IMAGE_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTarge
 
 pub const HUNYUAN_VIDEO15_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.hunyuan_video.HunyuanVideo15Tokenizer",
-        clip_model: "sim.text_encoders.hunyuan_image.te",
+        tokenizer: "comfy.text_encoders.hunyuan_video.HunyuanVideo15Tokenizer",
+        clip_model: "comfy.text_encoders.hunyuan_image.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: HUNYUAN_IMAGE_CLIP_CONFIGURATION,
         },

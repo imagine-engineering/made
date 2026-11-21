@@ -55,9 +55,9 @@ fn val_model_family_row_001_wan21_camera_source_configuration_and_state_plan()
     let clip = &resolved.clip_target().candidates()[0];
     assert_eq!(
         clip.tokenizer().identifier(),
-        "sim.text_encoders.wan.WanT5Tokenizer"
+        "comfy.text_encoders.wan.WanT5Tokenizer"
     );
-    assert_eq!(clip.clip_model().target().as_str(), "sim.text_encoders.wan.te");
+    assert_eq!(clip.clip_model().target().as_str(), "comfy.text_encoders.wan.te");
     assert_eq!(resolved.detection().score, 1_000);
     assert_eq!(resolved.source_ordinal(), 56);
 
@@ -99,7 +99,7 @@ fn val_model_family_row_001_wan21_camera_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("wan21_camera_comfy_model_0138")?;
+    support::verify_owner_delegation("wan21_camera_sim_model_0138")?;
     Ok(())
 }
 
@@ -123,7 +123,7 @@ fn val_model_family_row_001_wan21_camera_forward_patch_memory_and_platform()
         camera::MODEL_FAMILY_FEATURE_ID,
         camera::MODEL_FAMILY_IDENTIFIER,
         camera::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_camera_comfy_model_0138",
+        "wan21_camera_sim_model_0138",
         &[
             "source-and-catalog-provenance",
             "camera-control-key-derived-detection",

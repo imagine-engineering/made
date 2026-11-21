@@ -123,7 +123,7 @@ fn val_model_family_row_001_sd_x4upscaler_source_projection_configuration_and_ow
         sd_x4::MODEL_FAMILY_FEATURE_ID,
         sd_x4::MODEL_FAMILY_IDENTIFIER,
         sd_x4::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sd_x4upscaler_comfy_model_0126",
+        "sd_x4upscaler_sim_model_0126",
         &[
             "source-provenance-catalog-and-ownership",
             "native-key-derived-normalized-configuration",

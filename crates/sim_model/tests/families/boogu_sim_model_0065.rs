@@ -46,7 +46,7 @@ fn val_model_family_row_001_boogu_source_projection_descriptor_and_ownership()
     assert_eq!(boogu::MODEL_FAMILY_SOURCE_ORDINAL, 76);
     assert_eq!(
         boogu::MODEL_FAMILY_SOURCE_PATH,
-        "projects/comfy/ComfyUI/sim/supported_models.py"
+        "projects/comfy/ComfyUI/comfy/supported_models.py"
     );
     assert_eq!(boogu::MODEL_FAMILY_REGISTRATION.source_ordinal, 76);
     assert_eq!(
@@ -178,7 +178,7 @@ fn val_model_family_row_001_boogu_source_projection_descriptor_and_ownership()
         boogu::MODEL_FAMILY_FEATURE_ID,
         boogu::MODEL_FAMILY_IDENTIFIER,
         boogu::MODEL_FAMILY_SOURCE_ORDINAL,
-        "boogu_comfy_model_0065",
+        "boogu_sim_model_0065",
         &[
             "source-provenance-registration-descriptor",
             "model-store-prefixed-and-standalone-native-detection",
@@ -215,17 +215,17 @@ fn val_model_family_row_001_boogu_model_store_mapping_forward_patch_and_memory()
     assert_eq!(candidates.len(), 1);
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.boogu.BooguTokenizer"
+        "comfy.text_encoders.boogu.BooguTokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.boogu.te"
+        "comfy.text_encoders.boogu.te"
     );
     assert!(matches!(
         candidates[0].clip_model().invocation(),
         ModelClipModelInvocation::Factory { configuration }
             if matches!(configuration.as_slice(), [ModelClipConfigurationFact::Expand { source }]
-                if source.as_str() == "sim.text_encoders.hunyuan_video.llama_detect")
+                if source.as_str() == "comfy.text_encoders.hunyuan_video.llama_detect")
     ));
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(4 * 1024 * 1024)?;

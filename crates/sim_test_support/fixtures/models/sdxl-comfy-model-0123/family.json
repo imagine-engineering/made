@@ -1,5 +1,5 @@
 {
-  "fixture_id": "sdxl-sim-model-0123",
+  "fixture_id": "sdxl-comfy-model-0123",
   "feature_id": "COMFY-MODEL-0123",
   "detector": {
     "tensor_shapes": {

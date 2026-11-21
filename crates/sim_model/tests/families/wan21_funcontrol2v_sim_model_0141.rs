@@ -96,7 +96,7 @@ fn val_model_family_row_001_wan21_funcontrol_source_configuration_and_state_plan
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("wan21_funcontrol2v_comfy_model_0141")?;
+    support::verify_owner_delegation("wan21_funcontrol2v_sim_model_0141")?;
     Ok(())
 }
 
@@ -120,7 +120,7 @@ fn val_model_family_row_001_wan21_funcontrol_forward_patch_memory_and_platform()
         fun::MODEL_FAMILY_FEATURE_ID,
         fun::MODEL_FAMILY_IDENTIFIER,
         fun::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_funcontrol2v_comfy_model_0141",
+        "wan21_funcontrol2v_sim_model_0141",
         &[
             "source-and-catalog-provenance",
             "image-key-and-in-dim-48-detection",

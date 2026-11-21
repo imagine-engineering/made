@@ -214,7 +214,7 @@ fn val_model_family_row_001_cosmost2v_source_projection_configuration_and_owners
         cosmos::MODEL_FAMILY_FEATURE_ID,
         cosmos::MODEL_FAMILY_IDENTIFIER,
         cosmos::MODEL_FAMILY_SOURCE_ORDINAL,
-        "cosmost2v_comfy_model_0074",
+        "cosmost2v_sim_model_0074",
         &[
             "source-provenance-catalog-and-ownership",
             "source-exact-seven-b-and-fourteen-b-profiles",
@@ -266,17 +266,17 @@ fn val_model_family_row_001_cosmost2v_model_store_mapping_forward_patch_and_memo
     assert_eq!(candidates.len(), 1);
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.cosmos.CosmosT5Tokenizer"
+        "comfy.text_encoders.cosmos.CosmosT5Tokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.cosmos.te"
+        "comfy.text_encoders.cosmos.te"
     );
     assert!(matches!(
         candidates[0].clip_model().invocation(),
         ModelClipModelInvocation::Factory { configuration }
             if matches!(configuration.as_slice(), [ModelClipConfigurationFact::Expand { source }]
-                if source.as_str() == "sim.text_encoders.sd3_clip.t5_xxl_detect")
+                if source.as_str() == "comfy.text_encoders.sd3_clip.t5_xxl_detect")
     ));
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(8 * 1024 * 1024)?;

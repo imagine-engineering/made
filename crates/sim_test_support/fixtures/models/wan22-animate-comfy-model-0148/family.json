@@ -1,5 +1,5 @@
 {
-  "fixture_id": "wan22-animate-sim-model-0148",
+  "fixture_id": "wan22-animate-comfy-model-0148",
   "feature_id": "COMFY-MODEL-0148",
   "detector": {"tensor_shapes": {
     "model.diffusion_model.blocks.0.ffn.0.weight": [256, 128],

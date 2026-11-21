@@ -27,7 +27,7 @@ pub(super) const SPEC: KoalaSpec = KoalaSpec {
     feature_id: row_700m::MODEL_FAMILY_FEATURE_ID,
     identifier: row_700m::MODEL_FAMILY_IDENTIFIER,
     fixture: row_700m::MODEL_FAMILY_FIXTURE,
-    module: "koala_700m_comfy_model_0098",
+    module: "koala_700m_sim_model_0098",
     source_ordinal: row_700m::MODEL_FAMILY_SOURCE_ORDINAL,
     architecture_version: "koala-700m-sdxl-unet-v1",
     variant: SdxlVariant::Koala700M,

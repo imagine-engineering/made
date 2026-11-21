@@ -216,7 +216,7 @@ fn val_model_family_row_001_depthanything3_source_profiles_provenance_and_owners
         depthanything3::MODEL_FAMILY_FEATURE_ID,
         depthanything3::MODEL_FAMILY_IDENTIFIER,
         depthanything3::MODEL_FAMILY_SOURCE_ORDINAL,
-        "depthanything3_comfy_model_0075",
+        "depthanything3_sim_model_0075",
         &[
             "source-provenance-catalog-and-ownership",
             "four-source-exact-dinov2-backbone-profiles",

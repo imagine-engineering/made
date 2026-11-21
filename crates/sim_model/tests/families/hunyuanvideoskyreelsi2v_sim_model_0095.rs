@@ -204,7 +204,7 @@ fn val_model_family_row_001_hunyuanvideoskyreelsi2v_mapping_forward_patch_and_pl
         skyreels::MODEL_FAMILY_FEATURE_ID,
         skyreels::MODEL_FAMILY_IDENTIFIER,
         skyreels::MODEL_FAMILY_SOURCE_ORDINAL,
-        "hunyuanvideoskyreelsi2v_comfy_model_0095",
+        "hunyuanvideoskyreelsi2v_sim_model_0095",
         &[
             "source-catalog-provenance-and-registration",
             "prefixed-saved-and-standalone-key-detection",

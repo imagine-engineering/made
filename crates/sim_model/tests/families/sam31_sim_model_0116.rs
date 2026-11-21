@@ -48,8 +48,8 @@ fn val_model_family_row_001_sam31_source_configuration_provenance_and_discrimina
         let resolved = registry.resolve(&probe)?;
         assert_eq!(resolved.detection().identity.feature_id(), sam31::MODEL_FAMILY_FEATURE_ID);
         let candidate = &resolved.clip_target().candidates()[0];
-        assert_eq!(candidate.tokenizer().identifier(), "sim.text_encoders.sam3_clip.SAM3TokenizerWrapper");
-        assert_eq!(candidate.clip_model().target().as_str(), "sim.text_encoders.sam3_clip.SAM3ClipModelWrapper");
+        assert_eq!(candidate.tokenizer().identifier(), "comfy.text_encoders.sam3_clip.SAM3TokenizerWrapper");
+        assert_eq!(candidate.clip_model().target().as_str(), "comfy.text_encoders.sam3_clip.SAM3ClipModelWrapper");
     }
     let sam3_probe = ModelProbe::from_parsed_facts(parsed_facts("native", DType::F32, false))?;
     assert_eq!(registry.resolve(&sam3_probe)?.detection().identity.feature_id(), sam3::MODEL_FAMILY_FEATURE_ID);
@@ -77,7 +77,7 @@ fn val_model_family_row_001_sam31_source_configuration_provenance_and_discrimina
         sam31::MODEL_FAMILY_FEATURE_ID,
         sam31::MODEL_FAMILY_IDENTIFIER,
         sam31::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sam31_comfy_model_0116",
+        "sam31_sim_model_0116",
         &[
             "source-provenance-inheritance-and-ownership",
             "source-native-and-source-checkpoint-configuration",

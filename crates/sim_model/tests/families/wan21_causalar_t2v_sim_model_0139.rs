@@ -98,7 +98,7 @@ fn val_model_family_row_001_wan21_causalar_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("wan21_causalar_t2v_comfy_model_0139")?;
+    support::verify_owner_delegation("wan21_causalar_t2v_sim_model_0139")?;
     Ok(())
 }
 
@@ -122,7 +122,7 @@ fn val_model_family_row_001_wan21_causalar_forward_patch_memory_and_platform()
         causal::MODEL_FAMILY_FEATURE_ID,
         causal::MODEL_FAMILY_IDENTIFIER,
         causal::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_causalar_t2v_comfy_model_0139",
+        "wan21_causalar_t2v_sim_model_0139",
         &[
             "source-and-catalog-provenance",
             "explicit-causal-config-selection",

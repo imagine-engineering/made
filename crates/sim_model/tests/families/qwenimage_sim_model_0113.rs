@@ -58,10 +58,10 @@ fn source_projection_descriptor_fixture_and_fail_closed_runtime()
     support::exercise_fixture(
         &qwen::MODEL_FAMILY,
         qwen::MODEL_FAMILY_FIXTURE,
-        "qwenimage_comfy_model_0113",
+        "qwenimage_sim_model_0113",
         qwen::MODEL_FAMILY_SOURCE_ORDINAL,
     )?;
-    support::assert_leaf_owner("qwenimage_comfy_model_0113", "qwen_image_family")?;
+    support::assert_leaf_owner("qwenimage_sim_model_0113", "qwen_image_family")?;
     Ok(())
 }
 
@@ -106,11 +106,11 @@ fn native_layouts_probe_derived_conditioning_transaction_and_failures()
             .ok_or("QwenImage CLIP target is missing")?;
         assert_eq!(
             candidate.tokenizer().identifier(),
-            "sim.text_encoders.qwen_image.QwenImageTokenizer"
+            "comfy.text_encoders.qwen_image.QwenImageTokenizer"
         );
         assert_eq!(
             candidate.clip_model().target().as_str(),
-            "sim.text_encoders.qwen_image.te"
+            "comfy.text_encoders.qwen_image.te"
         );
 
         let plan = resolved

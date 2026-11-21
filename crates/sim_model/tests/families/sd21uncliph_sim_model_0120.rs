@@ -124,7 +124,7 @@ fn val_model_family_row_001_sd21_unclip_h_configuration_precedence_and_provenanc
         unclip_h::MODEL_FAMILY_FEATURE_ID,
         unclip_h::MODEL_FAMILY_IDENTIFIER,
         unclip_h::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sd21uncliph_comfy_model_0120",
+        "sd21uncliph_sim_model_0120",
         &[
             "source-provenance-catalog-registration",
             "native-and-diffusers-adm-2048-configuration",

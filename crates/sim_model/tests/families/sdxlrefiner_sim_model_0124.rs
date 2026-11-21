@@ -40,7 +40,7 @@ fn val_model_family_row_001_sdxlrefiner_source_layouts_and_ownership()
     assert_eq!(descriptor.component_graph.len(), 3);
     assert_eq!(
         refiner::MODEL_FAMILY.clip_target.candidates[0].clip_model,
-        "sim.sdxl_clip.SDXLRefinerClipModel"
+        "comfy.sdxl_clip.SDXLRefinerClipModel"
     );
 
     let registry = ModelFamilyRegistry::checked_registrations(&REGISTRATIONS)?;
@@ -78,7 +78,7 @@ fn val_model_family_row_001_sdxlrefiner_source_layouts_and_ownership()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&store_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("sdxlrefiner_comfy_model_0124")?;
+    support::verify_owner_delegation("sdxlrefiner_sim_model_0124")?;
     Ok(())
 }
 
@@ -91,7 +91,7 @@ fn val_model_family_row_001_sdxlrefiner_native_execution_and_failures()
         refiner::MODEL_FAMILY_FEATURE_ID,
         refiner::MODEL_FAMILY_IDENTIFIER,
         refiner::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sdxlrefiner_comfy_model_0124",
+        "sdxlrefiner_sim_model_0124",
         &[
             "source-and-catalog-provenance",
             "native-standalone-and-diffusers-key-detection",

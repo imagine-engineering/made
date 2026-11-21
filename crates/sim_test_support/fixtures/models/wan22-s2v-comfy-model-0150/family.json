@@ -1,5 +1,5 @@
 {
-  "fixture_id":"wan22-s2v-sim-model-0150","feature_id":"COMFY-MODEL-0150",
+  "fixture_id":"wan22-s2v-comfy-model-0150","feature_id":"COMFY-MODEL-0150",
   "detector":{"tensor_shapes":{
     "model.diffusion_model.blocks.0.ffn.0.weight":[256,128],"model.diffusion_model.blocks.0.ffn.2.weight":[2,2],
     "model.diffusion_model.casual_audio_encoder.encoder.final_linear.weight":[128,64],"model.diffusion_model.head.head.weight":[64,128],

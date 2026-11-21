@@ -102,7 +102,7 @@ fn val_model_family_row_001_wan21_t2v_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 500, .. })
     ));
-    support::verify_owner_delegation("wan21_t2v_comfy_model_0146")?;
+    support::verify_owner_delegation("wan21_t2v_sim_model_0146")?;
     Ok(())
 }
 
@@ -126,7 +126,7 @@ fn val_model_family_row_001_wan21_t2v_forward_patch_memory_and_platform()
         t2v::MODEL_FAMILY_FEATURE_ID,
         t2v::MODEL_FAMILY_IDENTIFIER,
         t2v::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_t2v_comfy_model_0146",
+        "wan21_t2v_sim_model_0146",
         &[
             "source-and-catalog-provenance",
             "generic-wan-detector-fallback",

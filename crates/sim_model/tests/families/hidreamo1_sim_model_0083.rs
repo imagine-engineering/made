@@ -248,7 +248,7 @@ fn val_model_family_row_001_hidreamo1_source_configuration_provenance_and_owners
         hidream_o1::MODEL_FAMILY_FEATURE_ID,
         hidream_o1::MODEL_FAMILY_IDENTIFIER,
         hidream_o1::MODEL_FAMILY_SOURCE_ORDINAL,
-        "hidreamo1_comfy_model_0083",
+        "hidreamo1_sim_model_0083",
         &[
             "source-provenance-registration-and-ownership",
             "key-derived-native-and-standalone-layouts",
@@ -275,11 +275,11 @@ fn val_model_family_row_001_hidreamo1_model_store_mapping_forward_patch_and_memo
     assert_eq!(candidates.len(), 1);
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.hidream_o1.HiDreamO1Tokenizer"
+        "comfy.text_encoders.hidream_o1.HiDreamO1Tokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.hidream_o1.HiDreamO1TE"
+        "comfy.text_encoders.hidream_o1.HiDreamO1TE"
     );
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(64 * 1024 * 1024)?;

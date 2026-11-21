@@ -15,7 +15,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "Ideogram4";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0096";
 pub const MODEL_FAMILY_FIXTURE: &str = "ideogram4-comfy-model-0096";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 78;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -49,14 +49,14 @@ pub struct Ideogram4Configuration {
 
 const CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
     ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.qwen3vl_8b",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.qwen3vl_8b",
     },
 ];
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.ideogram4.Ideogram4Tokenizer",
-        clip_model: "sim.text_encoders.ideogram4.te",
+        tokenizer: "comfy.text_encoders.ideogram4.Ideogram4Tokenizer",
+        clip_model: "comfy.text_encoders.ideogram4.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: CLIP_CONFIGURATION,
         },

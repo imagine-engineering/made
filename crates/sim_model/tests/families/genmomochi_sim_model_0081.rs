@@ -200,7 +200,7 @@ fn val_model_family_row_001_genmomochi_source_configuration_profiles_and_ownersh
         mochi::MODEL_FAMILY_FEATURE_ID,
         mochi::MODEL_FAMILY_IDENTIFIER,
         mochi::MODEL_FAMILY_SOURCE_ORDINAL,
-        "genmomochi_comfy_model_0081",
+        "genmomochi_sim_model_0081",
         &[
             "source-provenance-and-ownership",
             "native-and-diffusers-source-configuration",
@@ -229,17 +229,17 @@ fn val_model_family_row_001_genmomochi_model_store_mapping_forward_patch_and_mem
     let candidates = resolved.clip_target().candidates();
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.genmo.MochiT5Tokenizer"
+        "comfy.text_encoders.genmo.MochiT5Tokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.genmo.mochi_te"
+        "comfy.text_encoders.genmo.mochi_te"
     );
     assert!(matches!(
         candidates[0].clip_model().invocation(),
         ModelClipModelInvocation::Factory { configuration }
             if matches!(configuration.as_slice(), [ModelClipConfigurationFact::Expand { source }]
-                if source.as_str() == "sim.text_encoders.sd3_clip.t5_xxl_detect")
+                if source.as_str() == "comfy.text_encoders.sd3_clip.t5_xxl_detect")
     ));
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(4 * 1024 * 1024)?;

@@ -151,7 +151,7 @@ fn val_model_family_row_001_ideogram4_source_descriptor_configuration_and_owners
         ideogram::MODEL_FAMILY_FEATURE_ID,
         ideogram::MODEL_FAMILY_IDENTIFIER,
         ideogram::MODEL_FAMILY_SOURCE_ORDINAL,
-        "ideogram4_comfy_model_0096",
+        "ideogram4_sim_model_0096",
         &[
             "source-provenance-registration-descriptor",
             "model-store-prefixed-and-standalone-detection",

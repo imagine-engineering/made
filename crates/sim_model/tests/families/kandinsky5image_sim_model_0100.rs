@@ -122,7 +122,7 @@ fn val_model_family_row_001_kandinsky5image_mapping_forward_patch_memory_and_pla
         image::MODEL_FAMILY_FEATURE_ID,
         image::MODEL_FAMILY_IDENTIFIER,
         image::MODEL_FAMILY_SOURCE_ORDINAL,
-        "kandinsky5image_comfy_model_0100",
+        "kandinsky5image_sim_model_0100",
         &[
             "source-provenance-registration-descriptor",
             "source-exact-image-configuration-and-profile",

@@ -89,9 +89,9 @@ fn val_model_family_row_001_lens_source_configuration_descriptor_clip_and_owners
         let candidate = &resolved.clip_target().candidates()[0];
         assert_eq!(
             candidate.tokenizer().identifier(),
-            "sim.text_encoders.gpt_oss.LensTokenizer"
+            "comfy.text_encoders.gpt_oss.LensTokenizer"
         );
-        assert_eq!(candidate.clip_model().target().as_str(), "sim.text_encoders.gpt_oss.lens_te");
+        assert_eq!(candidate.clip_model().target().as_str(), "comfy.text_encoders.gpt_oss.lens_te");
         assert!(matches!(
             candidate.clip_model().invocation(),
             ModelClipModelInvocation::Factory { configuration }
@@ -146,7 +146,7 @@ fn val_model_family_row_001_lens_source_configuration_descriptor_clip_and_owners
         lens::MODEL_FAMILY_FEATURE_ID,
         lens::MODEL_FAMILY_IDENTIFIER,
         lens::MODEL_FAMILY_SOURCE_ORDINAL,
-        "lens_comfy_model_0104",
+        "lens_sim_model_0104",
         &[
             "source-provenance-registration-descriptor",
             "model-store-prefixed-and-standalone-detection",

@@ -146,9 +146,9 @@ fn execute_clip_execution_catalog_contract(symbol: &str) -> Result<(), Box<dyn s
             )?;
             assert_eq!(
                 selection.tokenizer(),
-                "sim.text_encoders.wan.WanT5Tokenizer"
+                "comfy.text_encoders.wan.WanT5Tokenizer"
             );
-            assert_eq!(selection.clip_model(), "sim.text_encoders.wan.te");
+            assert_eq!(selection.clip_model(), "comfy.text_encoders.wan.te");
         }
         "TEModel" => {
             assert_eq!(TextEncoderModel::ALL.len(), 35);
@@ -198,8 +198,11 @@ fn execute_clip_execution_catalog_contract(symbol: &str) -> Result<(), Box<dyn s
             let t5xxl = t5xxl_execution_probe()?;
             let selected =
                 select_clip_architecture(ClipType::Flux, &[clip.clone(), t5xxl.clone()])?;
-            assert_eq!(selected.tokenizer(), "sim.text_encoders.flux.FluxTokenizer");
-            assert_eq!(selected.clip_model(), "sim.text_encoders.flux.flux_clip");
+            assert_eq!(
+                selected.tokenizer(),
+                "comfy.text_encoders.flux.FluxTokenizer"
+            );
+            assert_eq!(selected.clip_model(), "comfy.text_encoders.flux.flux_clip");
             let reversed = select_clip_architecture(ClipType::Flux, &[t5xxl, clip.clone()])?;
             assert_ne!(selected.digest(), reversed.digest());
             assert!(matches!(

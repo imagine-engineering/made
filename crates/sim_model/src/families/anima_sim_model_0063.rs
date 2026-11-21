@@ -14,7 +14,7 @@ use sim_types::DeviceKind;
 pub const MODEL_FAMILY_IDENTIFIER: &str = "Anima";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0063";
 pub const MODEL_FAMILY_FIXTURE: &str = "anima-comfy-model-0063";
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -22,13 +22,13 @@ pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
 
 const CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.anima.AnimaTokenizer",
-        clip_model: "sim.text_encoders.anima.te",
+        tokenizer: "comfy.text_encoders.anima.AnimaTokenizer",
+        clip_model: "comfy.text_encoders.anima.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: CLIP_CONFIGURATION,
         },

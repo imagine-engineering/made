@@ -31,8 +31,8 @@ pub const PIXELDIT_PID_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const PIXELDIT_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.pixeldit.PixelDiTGemma2Tokenizer",
-        clip_model: "sim.text_encoders.pixeldit.PixelDiTGemma2TE",
+        tokenizer: "comfy.text_encoders.pixeldit.PixelDiTGemma2Tokenizer",
+        clip_model: "comfy.text_encoders.pixeldit.PixelDiTGemma2TE",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 pub static PIXELDIT_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTargetDefinition {

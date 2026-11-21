@@ -19,7 +19,7 @@ use sim_types::DeviceKind;
 pub const MODEL_FAMILY_IDENTIFIER: &str = "AuraFlow";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0064";
 pub const MODEL_FAMILY_FIXTURE: &str = "auraflow-comfy-model-0064";
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -164,8 +164,8 @@ const COMPONENTS: &[ModelFamilyComponent] = &[
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.aura_t5.AuraT5Tokenizer",
-        clip_model: "sim.text_encoders.aura_t5.AuraT5Model",
+        tokenizer: "comfy.text_encoders.aura_t5.AuraT5Tokenizer",
+        clip_model: "comfy.text_encoders.aura_t5.AuraT5Model",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

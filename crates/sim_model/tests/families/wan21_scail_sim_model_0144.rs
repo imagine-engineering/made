@@ -99,7 +99,7 @@ fn val_model_family_row_001_wan21_scail_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("wan21_scail_comfy_model_0144")?;
+    support::verify_owner_delegation("wan21_scail_sim_model_0144")?;
     Ok(())
 }
 
@@ -123,7 +123,7 @@ fn val_model_family_row_001_wan21_scail_forward_patch_memory_and_platform()
         scail::MODEL_FAMILY_FEATURE_ID,
         scail::MODEL_FAMILY_IDENTIFIER,
         scail::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_scail_comfy_model_0144",
+        "wan21_scail_sim_model_0144",
         &[
             "source-and-catalog-provenance",
             "pose-key-source-precedence-detection",

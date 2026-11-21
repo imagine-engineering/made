@@ -34,13 +34,13 @@ pub type ChromaRadianceConfiguration = FluxChromaConfiguration;
 
 const CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.sd3_clip.t5_xxl_detect",
+        source: "comfy.text_encoders.sd3_clip.t5_xxl_detect",
     }];
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.pixart_t5.PixArtTokenizer",
-        clip_model: "sim.text_encoders.pixart_t5.pixart_te",
+        tokenizer: "comfy.text_encoders.pixart_t5.PixArtTokenizer",
+        clip_model: "comfy.text_encoders.pixart_t5.pixart_te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: CLIP_CONFIGURATION,
         },

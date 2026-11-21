@@ -114,7 +114,7 @@ fn val_model_family_row_001_chroma_source_projection_descriptor_and_ownership()
     );
     assert_eq!(
         catalog_row["static"]["latent_format"]["value"]["symbol"],
-        "sim.latent_formats.Flux"
+        "comfy.latent_formats.Flux"
     );
     assert_eq!(
         sha256(&serde_json::to_vec(catalog_row)?),
@@ -152,7 +152,7 @@ fn val_model_family_row_001_chroma_source_projection_descriptor_and_ownership()
         chroma::MODEL_FAMILY_FEATURE_ID,
         chroma::MODEL_FAMILY_IDENTIFIER,
         chroma::MODEL_FAMILY_SOURCE_ORDINAL,
-        "chroma_comfy_model_0066",
+        "chroma_sim_model_0066",
         &[
             "source-provenance-registration-descriptor",
             "model-store-prefixed-and-unprefixed-detection",
@@ -198,17 +198,17 @@ fn val_model_family_row_001_chroma_model_store_mapping_forward_patch_and_memory(
     assert_eq!(candidates.len(), 1);
     assert_eq!(
         candidates[0].tokenizer().identifier(),
-        "sim.text_encoders.pixart_t5.PixArtTokenizer"
+        "comfy.text_encoders.pixart_t5.PixArtTokenizer"
     );
     assert_eq!(
         candidates[0].clip_model().target().as_str(),
-        "sim.text_encoders.pixart_t5.pixart_te"
+        "comfy.text_encoders.pixart_t5.pixart_te"
     );
     assert!(matches!(
         candidates[0].clip_model().invocation(),
         ModelClipModelInvocation::Factory { configuration }
             if matches!(configuration.as_slice(), [ModelClipConfigurationFact::Expand { source }]
-                if source.as_str() == "sim.text_encoders.sd3_clip.t5_xxl_detect")
+                if source.as_str() == "comfy.text_encoders.sd3_clip.t5_xxl_detect")
     ));
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(8 * 1024 * 1024)?;

@@ -27,7 +27,7 @@ fn source_projection_descriptor_fixture_and_fail_closed_runtime()
     support::exercise_fixture(
         &pixart::MODEL_FAMILY,
         pixart::MODEL_FAMILY_FIXTURE,
-        "pixartsigma_comfy_model_0111",
+        "pixartsigma_sim_model_0111",
         24,
     )?;
     Ok(())
@@ -98,7 +98,7 @@ fn native_and_pinned_diffusers_layouts_execute_and_alpha_or_partial_probes_fail(
         pixart::configuration_for_probe(&ambiguous),
         Err(ModelFamilyError::ModelLayoutSelection(message)) if message.contains("ambiguously")
     ));
-    support::assert_leaf_owner("pixartsigma_comfy_model_0111", "pixart_family")?;
+    support::assert_leaf_owner("pixartsigma_sim_model_0111", "pixart_family")?;
     Ok(())
 }
 

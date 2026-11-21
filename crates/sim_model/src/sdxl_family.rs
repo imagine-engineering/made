@@ -36,14 +36,14 @@ pub const SDXL_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const SDXL_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.sdxl_clip.SDXLTokenizer",
-        clip_model: "sim.sdxl_clip.SDXLClipModel",
+        tokenizer: "comfy.sdxl_clip.SDXLTokenizer",
+        clip_model: "comfy.sdxl_clip.SDXLClipModel",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 pub const SDXL_REFINER_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.sdxl_clip.SDXLTokenizer",
-        clip_model: "sim.sdxl_clip.SDXLRefinerClipModel",
+        tokenizer: "comfy.sdxl_clip.SDXLTokenizer",
+        clip_model: "comfy.sdxl_clip.SDXLRefinerClipModel",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

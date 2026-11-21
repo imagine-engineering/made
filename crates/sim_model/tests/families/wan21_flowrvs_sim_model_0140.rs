@@ -95,7 +95,7 @@ fn val_model_family_row_001_wan21_flowrvs_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("wan21_flowrvs_comfy_model_0140")?;
+    support::verify_owner_delegation("wan21_flowrvs_sim_model_0140")?;
     Ok(())
 }
 
@@ -119,7 +119,7 @@ fn val_model_family_row_001_wan21_flowrvs_forward_patch_memory_and_platform()
         flow::MODEL_FAMILY_FEATURE_ID,
         flow::MODEL_FAMILY_IDENTIFIER,
         flow::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_flowrvs_comfy_model_0140",
+        "wan21_flowrvs_sim_model_0140",
         &[
             "source-and-catalog-provenance",
             "explicit-flow-rvs-config-selection",

@@ -18,7 +18,7 @@ pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0105";
 pub const MODEL_FAMILY_FIXTURE: &str = "longcatimage-comfy-model-0105";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 29;
 pub const MODEL_FAMILY_SOURCE_PATH: &str =
-    "projects/comfy/ComfyUI/sim/supported_models.py";
+    "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -32,13 +32,13 @@ pub const SOURCE_SINGLE_BLOCK_COUNT: usize = 38;
 
 const CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.qwen25_7b",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.qwen25_7b",
     }];
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.longcat_image.LongCatImageTokenizer",
-        clip_model: "sim.text_encoders.longcat_image.te",
+        tokenizer: "comfy.text_encoders.longcat_image.LongCatImageTokenizer",
+        clip_model: "comfy.text_encoders.longcat_image.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: CLIP_CONFIGURATION,
         },

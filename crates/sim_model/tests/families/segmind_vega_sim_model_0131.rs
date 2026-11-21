@@ -91,7 +91,7 @@ fn val_model_family_row_001_segmind_vega_source_layouts_precedence_and_ownership
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&store_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("segmind_vega_comfy_model_0131")?;
+    support::verify_owner_delegation("segmind_vega_sim_model_0131")?;
     Ok(())
 }
 
@@ -104,7 +104,7 @@ fn val_model_family_row_001_segmind_vega_native_execution_and_failures()
         vega::MODEL_FAMILY_FEATURE_ID,
         vega::MODEL_FAMILY_IDENTIFIER,
         vega::MODEL_FAMILY_SOURCE_ORDINAL,
-        "segmind_vega_comfy_model_0131",
+        "segmind_vega_sim_model_0131",
         &[
             "source-and-catalog-provenance",
             "native-standalone-and-diffusers-key-detection",

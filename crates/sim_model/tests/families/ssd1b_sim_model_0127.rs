@@ -66,7 +66,7 @@ fn val_model_family_row_001_ssd1b_source_layouts_and_ownership()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&store_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_100, .. })
     ));
-    support::verify_owner_delegation("ssd1b_comfy_model_0127")?;
+    support::verify_owner_delegation("ssd1b_sim_model_0127")?;
     Ok(())
 }
 
@@ -79,7 +79,7 @@ fn val_model_family_row_001_ssd1b_native_execution_and_failures()
         ssd1b::MODEL_FAMILY_FEATURE_ID,
         ssd1b::MODEL_FAMILY_IDENTIFIER,
         ssd1b::MODEL_FAMILY_SOURCE_ORDINAL,
-        "ssd1b_comfy_model_0127",
+        "ssd1b_sim_model_0127",
         &[
             "source-and-catalog-provenance",
             "native-standalone-and-diffusers-key-detection",

@@ -235,11 +235,11 @@ fn val_latent_001_hidream_o1_pinned_patch_token_conditioning_and_latent_facts() 
     let candidate = &HIDREAM_O1_CLIP_TARGET.candidates[0];
     assert_eq!(
         candidate.tokenizer,
-        "sim.text_encoders.hidream_o1.HiDreamO1Tokenizer"
+        "comfy.text_encoders.hidream_o1.HiDreamO1Tokenizer"
     );
     assert_eq!(
         candidate.clip_model,
-        "sim.text_encoders.hidream_o1.HiDreamO1TE"
+        "comfy.text_encoders.hidream_o1.HiDreamO1TE"
     );
     assert!(matches!(
         candidate.invocation,

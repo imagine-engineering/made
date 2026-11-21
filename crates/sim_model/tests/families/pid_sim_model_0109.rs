@@ -24,7 +24,7 @@ fn source_projection_descriptor_fixture_and_fail_closed_runtime()
     support::exercise_fixture(
         &pid::MODEL_FAMILY,
         pid::MODEL_FAMILY_FIXTURE,
-        "pid_comfy_model_0109",
+        "pid_sim_model_0109",
         47,
     )?;
     Ok(())
@@ -69,7 +69,7 @@ fn core_and_net_layouts_execute_branching_and_non_pid_or_partial_probes_fail()
         pid::configuration_for_probe(&ambiguous),
         Err(ModelFamilyError::ModelLayoutSelection(message)) if message.contains("ambiguously")
     ));
-    support::assert_leaf_owner("pid_comfy_model_0109", "pixeldit_pid_family")?;
+    support::assert_leaf_owner("pid_sim_model_0109", "pixeldit_pid_family")?;
     Ok(())
 }
 

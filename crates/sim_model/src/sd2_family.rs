@@ -32,8 +32,8 @@ pub const SD2_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const SD2_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.sd2_clip.SD2Tokenizer",
-        clip_model: "sim.text_encoders.sd2_clip.SD2ClipModel",
+        tokenizer: "comfy.text_encoders.sd2_clip.SD2Tokenizer",
+        clip_model: "comfy.text_encoders.sd2_clip.SD2ClipModel",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 pub static SD2_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTargetDefinition {

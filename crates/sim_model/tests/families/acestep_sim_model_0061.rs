@@ -117,7 +117,7 @@ fn val_model_family_row_001_acestep_source_projection_registration_and_descripto
         MODEL_FAMILY_FEATURE_ID,
         MODEL_FAMILY_IDENTIFIER,
         MODEL_FAMILY_SOURCE_ORDINAL,
-        "acestep_comfy_model_0061",
+        "acestep_sim_model_0061",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-and-diffusers-detection",
@@ -152,11 +152,11 @@ fn val_model_family_row_001_acestep_parsed_detection_mapping_forward_patch_and_m
     assert_eq!(clip.candidates().len(), 1);
     assert_eq!(
         clip.candidates()[0].tokenizer().identifier(),
-        "sim.text_encoders.ace.AceT5Tokenizer"
+        "comfy.text_encoders.ace.AceT5Tokenizer"
     );
     assert_eq!(
         clip.candidates()[0].clip_model().target().as_str(),
-        "sim.text_encoders.ace.AceT5Model"
+        "comfy.text_encoders.ace.AceT5Model"
     );
 
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(4 * 1024 * 1024)?;

@@ -169,7 +169,7 @@ fn val_model_family_row_001_hidream_source_configuration_provenance_and_ownershi
         hidream::MODEL_FAMILY_FEATURE_ID,
         hidream::MODEL_FAMILY_IDENTIFIER,
         hidream::MODEL_FAMILY_SOURCE_ORDINAL,
-        "hidream_comfy_model_0082",
+        "hidream_sim_model_0082",
         &[
             "source-provenance-and-ownership",
             "native-and-diffusers-key-derived-configuration",

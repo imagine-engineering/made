@@ -1,5 +1,5 @@
 {
-  "fixture_id": "kandinsky5image-sim-model-0100",
+  "fixture_id": "kandinsky5image-comfy-model-0100",
   "feature_id": "COMFY-MODEL-0100",
   "detector": {
     "tensor_shapes": {

@@ -23,7 +23,7 @@ pub(super) const SPEC: support::KoalaSpec = support::KoalaSpec {
     feature_id: row_1b::MODEL_FAMILY_FEATURE_ID,
     identifier: row_1b::MODEL_FAMILY_IDENTIFIER,
     fixture: row_1b::MODEL_FAMILY_FIXTURE,
-    module: "koala_1b_comfy_model_0097",
+    module: "koala_1b_sim_model_0097",
     source_ordinal: row_1b::MODEL_FAMILY_SOURCE_ORDINAL,
     architecture_version: "koala-1b-sdxl-unet-v1",
     variant: SdxlVariant::Koala1B,

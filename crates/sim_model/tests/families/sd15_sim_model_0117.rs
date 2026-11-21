@@ -96,7 +96,7 @@ fn val_model_family_row_001_sd15_source_configuration_provenance_store_and_owner
         sd15::MODEL_FAMILY_FEATURE_ID,
         sd15::MODEL_FAMILY_IDENTIFIER,
         sd15::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sd15_comfy_model_0117",
+        "sd15_sim_model_0117",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-and-diffusers-detection",

@@ -112,18 +112,18 @@ fn val_model_family_row_001_longcat_source_projection_configuration_and_ownershi
     let candidate = &longcat_resolved.clip_target().candidates()[0];
     assert_eq!(
         candidate.tokenizer().identifier(),
-        "sim.text_encoders.longcat_image.LongCatImageTokenizer"
+        "comfy.text_encoders.longcat_image.LongCatImageTokenizer"
     );
     assert_eq!(
         candidate.clip_model().target().as_str(),
-        "sim.text_encoders.longcat_image.te"
+        "comfy.text_encoders.longcat_image.te"
     );
     assert!(matches!(
         candidate.clip_model().invocation(),
         ModelClipModelInvocation::Factory { configuration }
             if matches!(configuration.as_slice(), [ModelClipConfigurationFact::Expand { source }]
                 if source.as_str()
-                    == "sim.text_encoders.hunyuan_video.llama_detect.qwen25_7b")
+                    == "comfy.text_encoders.hunyuan_video.llama_detect.qwen25_7b")
     ));
 
     let store_probe = probe_through_model_store(NativeLayout::Prefixed)?;
@@ -179,7 +179,7 @@ fn val_model_family_row_001_longcat_source_projection_configuration_and_ownershi
         longcat::MODEL_FAMILY_FEATURE_ID,
         longcat::MODEL_FAMILY_IDENTIFIER,
         longcat::MODEL_FAMILY_SOURCE_ORDINAL,
-        "longcatimage_comfy_model_0105",
+        "longcatimage_sim_model_0105",
         &[
             "source-provenance-registration-descriptor",
             "model-store-prefixed-standalone-diffusers-detection",

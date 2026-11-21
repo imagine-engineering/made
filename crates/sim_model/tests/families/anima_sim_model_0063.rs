@@ -158,7 +158,7 @@ fn val_model_family_row_001_anima_source_bound_transactional_and_failure_typed()
     assert_eq!(resolved.clip_target().candidates().len(), 1);
     assert_eq!(
         resolved.clip_target().candidates()[0].tokenizer().identifier(),
-        "sim.text_encoders.anima.AnimaTokenizer"
+        "comfy.text_encoders.anima.AnimaTokenizer"
     );
 
     assert!(matches!(
@@ -410,7 +410,7 @@ fn val_model_family_row_001_anima_source_bound_transactional_and_failure_typed()
         anima::MODEL_FAMILY_FEATURE_ID,
         anima::MODEL_FAMILY_IDENTIFIER,
         anima::MODEL_FAMILY_REGISTRATION.source_ordinal,
-        "anima_comfy_model_0063",
+        "anima_sim_model_0063",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-and-diffusers-detection",

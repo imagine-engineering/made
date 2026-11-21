@@ -21,11 +21,11 @@ fn val_model_family_row_001_wan22_wandancer_source_configuration_and_state_plan(
     let mut conflicting = probe.clone(); conflicting.tensor_shapes.insert(wan::MASK_PATCH_WEIGHT.to_owned(), vec![128, 28, 1, 2, 2]); assert!(dancer::configuration_for_probe(&conflicting).is_err());
     let mut diffusers = probe.clone(); diffusers.metadata.insert("model_layout".to_owned(), "diffusers".to_owned()); assert!(matches!(dancer::configuration_for_probe(&diffusers), Err(ModelFamilyError::InvalidSelectorOutput(message)) if message.contains("Diffusers")));
     assert!(matches!(ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe), Err(ModelFamilyError::AmbiguousDetection { score: 1_200, .. })));
-    support::verify_owner_delegation("wan22_wandancer_comfy_model_0152")?; Ok(())
+    support::verify_owner_delegation("wan22_wandancer_sim_model_0152")?; Ok(())
 }
 #[test]
 fn val_model_family_row_001_wan22_wandancer_forward_patch_memory_and_platform() -> Result<(), Box<dyn std::error::Error>> {
     let fixture = support::load_fixture(dancer::MODEL_FAMILY_FIXTURE)?; let extras = [support::TensorFixture::new("text_encoders.umt5xxl.transformer.block.weight", &[1], &[1.0]), support::TensorFixture::new("vae.decoder.weight", &[1], &[1.0]), support::TensorFixture::new("model.diffusion_model.music_encoder.0.self_attn.in_proj_weight", &[6, 2], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0])];
     support::exercise_family(&fixture, &REGISTRATIONS, &extras, &["model", "runtime_conditioning", "text_encoder", "vae"], "native.blocks.0.ffn.2.weight")?;
-    super::write_model_family_row_artifact(dancer::MODEL_FAMILY_FIXTURE, dancer::MODEL_FAMILY_FEATURE_ID, dancer::MODEL_FAMILY_IDENTIFIER, dancer::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_wandancer_comfy_model_0152", &["source-and-catalog-provenance", "global-patch-source-precedence-detection", "shape-reduced-music-image-configuration", "transactional-qkv-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "fixed-memory-oom-dtype-device-cancellation", "diffusers-conflicting-malformed-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
+    super::write_model_family_row_artifact(dancer::MODEL_FAMILY_FIXTURE, dancer::MODEL_FAMILY_FEATURE_ID, dancer::MODEL_FAMILY_IDENTIFIER, dancer::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_wandancer_sim_model_0152", &["source-and-catalog-provenance", "global-patch-source-precedence-detection", "shape-reduced-music-image-configuration", "transactional-qkv-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "fixed-memory-oom-dtype-device-cancellation", "diffusers-conflicting-malformed-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
 }

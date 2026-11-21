@@ -1,5 +1,5 @@
 {
-  "fixture_id": "pid-sim-model-0109",
+  "fixture_id": "pid-comfy-model-0109",
   "feature_id": "COMFY-MODEL-0109",
   "detector": {
     "tensor_shapes": { "core.lq_proj.latent_proj.0.weight": [512, 64, 3, 3] },

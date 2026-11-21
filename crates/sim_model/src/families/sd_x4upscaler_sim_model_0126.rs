@@ -16,7 +16,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "SD_X4Upscaler";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0126";
 pub const MODEL_FAMILY_FIXTURE: &str = "sd-x4upscaler-comfy-model-0126";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 14;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -39,8 +39,8 @@ pub struct SdX4UpscalerConfiguration {
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.sd2_clip.SD2Tokenizer",
-        clip_model: "sim.text_encoders.sd2_clip.SD2ClipModel",
+        tokenizer: "comfy.text_encoders.sd2_clip.SD2Tokenizer",
+        clip_model: "comfy.text_encoders.sd2_clip.SD2ClipModel",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

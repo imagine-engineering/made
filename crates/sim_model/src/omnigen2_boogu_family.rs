@@ -40,12 +40,12 @@ pub const OMNIGEN2_BOOGU_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const OMNIGEN2_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const OMNIGEN2_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.omnigen2.Omnigen2Tokenizer",
-        clip_model: "sim.text_encoders.omnigen2.te",
+        tokenizer: "comfy.text_encoders.omnigen2.Omnigen2Tokenizer",
+        clip_model: "comfy.text_encoders.omnigen2.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: OMNIGEN2_CLIP_CONFIGURATION,
         },
@@ -57,12 +57,12 @@ pub static OMNIGEN2_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTargetDefi
 
 pub const BOOGU_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const BOOGU_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.boogu.BooguTokenizer",
-        clip_model: "sim.text_encoders.boogu.te",
+        tokenizer: "comfy.text_encoders.boogu.BooguTokenizer",
+        clip_model: "comfy.text_encoders.boogu.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: BOOGU_CLIP_CONFIGURATION,
         },

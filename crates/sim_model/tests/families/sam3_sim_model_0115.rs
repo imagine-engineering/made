@@ -62,8 +62,8 @@ fn val_model_family_row_001_sam3_source_configuration_clip_provenance_and_owners
         assert!(!configuration.propagation_convolutions);
         let candidates = resolved.clip_target().candidates();
         assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].tokenizer().identifier(), "sim.text_encoders.sam3_clip.SAM3TokenizerWrapper");
-        assert_eq!(candidates[0].clip_model().target().as_str(), "sim.text_encoders.sam3_clip.SAM3ClipModelWrapper");
+        assert_eq!(candidates[0].tokenizer().identifier(), "comfy.text_encoders.sam3_clip.SAM3TokenizerWrapper");
+        assert_eq!(candidates[0].clip_model().target().as_str(), "comfy.text_encoders.sam3_clip.SAM3ClipModelWrapper");
     }
 
     let mut misleading = parsed_facts("native", DType::F32, false);
@@ -101,7 +101,7 @@ fn val_model_family_row_001_sam3_source_configuration_clip_provenance_and_owners
         sam3::MODEL_FAMILY_FEATURE_ID,
         sam3::MODEL_FAMILY_IDENTIFIER,
         sam3::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sam3_comfy_model_0115",
+        "sam3_sim_model_0115",
         &[
             "source-provenance-and-ownership",
             "source-native-and-source-checkpoint-configuration",

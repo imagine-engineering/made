@@ -18,7 +18,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "Flux2";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0078";
 pub const MODEL_FAMILY_FIXTURE: &str = "flux2-comfy-model-0078";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 80;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -29,7 +29,7 @@ pub const MODEL_FAMILY_MEMORY_DIMENSION_DIVISOR: f64 = 2_604.0;
 
 const QWEN_4B_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
     ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.qwen3_4b",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.qwen3_4b",
     },
     ModelClipConfigurationFactDefinition::Bind {
         parameter: "model_type",
@@ -38,7 +38,7 @@ const QWEN_4B_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
 ];
 const QWEN_8B_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
     ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.qwen3_8b",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.qwen3_8b",
     },
     ModelClipConfigurationFactDefinition::Bind {
         parameter: "model_type",
@@ -47,11 +47,11 @@ const QWEN_8B_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
 ];
 const MISTRAL_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.mistral3_24b",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.mistral3_24b",
     }];
 const MISTRAL_PRUNED_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
     ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.mistral3_24b",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.mistral3_24b",
     },
     ModelClipConfigurationFactDefinition::Bind {
         parameter: "pruned",
@@ -60,30 +60,30 @@ const MISTRAL_PRUNED_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
 ];
 
 const QWEN_4B_CANDIDATE: ModelClipTargetCandidateDefinition = ModelClipTargetCandidateDefinition {
-    tokenizer: "sim.text_encoders.flux.KleinTokenizer",
-    clip_model: "sim.text_encoders.flux.klein_te",
+    tokenizer: "comfy.text_encoders.flux.KleinTokenizer",
+    clip_model: "comfy.text_encoders.flux.klein_te",
     invocation: ModelClipModelInvocationDefinition::Factory {
         configuration: QWEN_4B_CONFIGURATION,
     },
 };
 const QWEN_8B_CANDIDATE: ModelClipTargetCandidateDefinition = ModelClipTargetCandidateDefinition {
-    tokenizer: "sim.text_encoders.flux.KleinTokenizer8B",
-    clip_model: "sim.text_encoders.flux.klein_te",
+    tokenizer: "comfy.text_encoders.flux.KleinTokenizer8B",
+    clip_model: "comfy.text_encoders.flux.klein_te",
     invocation: ModelClipModelInvocationDefinition::Factory {
         configuration: QWEN_8B_CONFIGURATION,
     },
 };
 const MISTRAL_CANDIDATE: ModelClipTargetCandidateDefinition = ModelClipTargetCandidateDefinition {
-    tokenizer: "sim.text_encoders.flux.Flux2Tokenizer",
-    clip_model: "sim.text_encoders.flux.flux2_te",
+    tokenizer: "comfy.text_encoders.flux.Flux2Tokenizer",
+    clip_model: "comfy.text_encoders.flux.flux2_te",
     invocation: ModelClipModelInvocationDefinition::Factory {
         configuration: MISTRAL_CONFIGURATION,
     },
 };
 const MISTRAL_PRUNED_CANDIDATE: ModelClipTargetCandidateDefinition =
     ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.flux.Flux2Tokenizer",
-        clip_model: "sim.text_encoders.flux.flux2_te",
+        tokenizer: "comfy.text_encoders.flux.Flux2Tokenizer",
+        clip_model: "comfy.text_encoders.flux.flux2_te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: MISTRAL_PRUNED_CONFIGURATION,
         },

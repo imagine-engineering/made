@@ -15,7 +15,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "Lens";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0104";
 pub const MODEL_FAMILY_FIXTURE: &str = "lens-comfy-model-0104";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 81;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -48,23 +48,23 @@ pub struct LensConfiguration {
 
 const DETECTED_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[
     ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect.gpt_oss",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect.gpt_oss",
     },
 ];
 const DEFAULT_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] = &[];
 
 const DETECTED_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.gpt_oss.LensTokenizer",
-        clip_model: "sim.text_encoders.gpt_oss.lens_te",
+        tokenizer: "comfy.text_encoders.gpt_oss.LensTokenizer",
+        clip_model: "comfy.text_encoders.gpt_oss.lens_te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: DETECTED_CLIP_CONFIGURATION,
         },
     }];
 const DEFAULT_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.gpt_oss.LensTokenizer",
-        clip_model: "sim.text_encoders.gpt_oss.lens_te",
+        tokenizer: "comfy.text_encoders.gpt_oss.LensTokenizer",
+        clip_model: "comfy.text_encoders.gpt_oss.lens_te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: DEFAULT_CLIP_CONFIGURATION,
         },

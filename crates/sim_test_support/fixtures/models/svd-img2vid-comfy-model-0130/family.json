@@ -1,5 +1,5 @@
 {
-  "fixture_id": "svd-img2vid-sim-model-0130",
+  "fixture_id": "svd-img2vid-comfy-model-0130",
   "feature_id": "COMFY-MODEL-0130",
   "detector": {
     "tensor_shapes": {

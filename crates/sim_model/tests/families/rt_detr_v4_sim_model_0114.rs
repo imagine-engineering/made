@@ -112,7 +112,7 @@ fn val_model_family_row_001_rt_detr_v4_source_configuration_provenance_and_owner
         rt_detr::MODEL_FAMILY_FEATURE_ID,
         rt_detr::MODEL_FAMILY_IDENTIFIER,
         rt_detr::MODEL_FAMILY_SOURCE_ORDINAL,
-        "rt_detr_v4_comfy_model_0114",
+        "rt_detr_v4_sim_model_0114",
         &[
             "source-provenance-and-ownership",
             "prefixed-and-standalone-native-configuration",

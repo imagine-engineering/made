@@ -95,7 +95,7 @@ fn val_model_family_row_001_triposplat_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("triposplat_comfy_model_0137")?;
+    support::verify_owner_delegation("triposplat_sim_model_0137")?;
     Ok(())
 }
 
@@ -120,7 +120,7 @@ fn val_model_family_row_001_triposplat_forward_patch_memory_and_platform()
         tripo::MODEL_FAMILY_FEATURE_ID,
         tripo::MODEL_FAMILY_IDENTIFIER,
         tripo::MODEL_FAMILY_SOURCE_ORDINAL,
-        "triposplat_comfy_model_0137",
+        "triposplat_sim_model_0137",
         &[
             "source-and-catalog-provenance",
             "paired-triposplat-key-detection",

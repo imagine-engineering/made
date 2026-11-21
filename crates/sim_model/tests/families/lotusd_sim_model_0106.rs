@@ -155,7 +155,7 @@ fn val_model_family_row_001_lotusd_mapping_forward_patch_memory_and_failures()
         lotus::MODEL_FAMILY_FEATURE_ID,
         lotus::MODEL_FAMILY_IDENTIFIER,
         lotus::MODEL_FAMILY_SOURCE_ORDINAL,
-        "lotusd_comfy_model_0106",
+        "lotusd_sim_model_0106",
         &[
             "source-provenance-registration-descriptor",
             "source-exact-lotus-configuration-and-profile",

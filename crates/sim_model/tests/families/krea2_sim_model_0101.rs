@@ -77,7 +77,7 @@ fn val_model_family_row_001_krea2_source_configuration_descriptor_and_ownership(
     assert_eq!(resolved.clip_target().candidates().len(), 1);
     assert_eq!(
         resolved.clip_target().candidates()[0].tokenizer().identifier(),
-        "sim.text_encoders.krea2.Krea2Tokenizer"
+        "comfy.text_encoders.krea2.Krea2Tokenizer"
     );
 
     validate_provenance_and_catalog()?;
@@ -115,7 +115,7 @@ fn val_model_family_row_001_krea2_source_configuration_descriptor_and_ownership(
         krea::MODEL_FAMILY_FEATURE_ID,
         krea::MODEL_FAMILY_IDENTIFIER,
         krea::MODEL_FAMILY_SOURCE_ORDINAL,
-        "krea2_comfy_model_0101",
+        "krea2_sim_model_0101",
         &[
             "source-provenance-registration-descriptor",
             "model-store-prefixed-and-standalone-detection",

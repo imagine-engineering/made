@@ -18,7 +18,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "CogVideoX_I2V";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0068";
 pub const MODEL_FAMILY_FIXTURE: &str = "cogvideox-i2v-comfy-model-0068";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 90;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str =
     "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69";
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
@@ -29,8 +29,8 @@ pub type CogVideoXI2VConfiguration = CogVideoXConfiguration;
 
 const CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.cogvideo.CogVideoXT5Tokenizer",
-        clip_model: "sim.text_encoders.sd3_clip.T5XXLModel",
+        tokenizer: "comfy.text_encoders.cogvideo.CogVideoXT5Tokenizer",
+        clip_model: "comfy.text_encoders.sd3_clip.T5XXLModel",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

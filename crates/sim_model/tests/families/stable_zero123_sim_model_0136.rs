@@ -90,7 +90,7 @@ fn val_model_family_row_001_stable_zero123_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })
     ));
-    support::verify_owner_delegation("stable_zero123_comfy_model_0136")?;
+    support::verify_owner_delegation("stable_zero123_sim_model_0136")?;
     Ok(())
 }
 
@@ -114,7 +114,7 @@ fn val_model_family_row_001_stable_zero123_forward_patch_memory_and_platform()
         zero123::MODEL_FAMILY_FEATURE_ID,
         zero123::MODEL_FAMILY_IDENTIFIER,
         zero123::MODEL_FAMILY_SOURCE_ORDINAL,
-        "stable_zero123_comfy_model_0136",
+        "stable_zero123_sim_model_0136",
         &[
             "source-and-catalog-provenance",
             "paired-cc-projection-native-detection",

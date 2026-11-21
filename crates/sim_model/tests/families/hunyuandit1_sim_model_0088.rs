@@ -27,7 +27,7 @@ const SPEC: RowSpec = RowSpec {
     feature_id: row_dit1::MODEL_FAMILY_FEATURE_ID,
     identifier: row_dit1::MODEL_FAMILY_IDENTIFIER,
     fixture: row_dit1::MODEL_FAMILY_FIXTURE,
-    module: "hunyuandit1_comfy_model_0088",
+    module: "hunyuandit1_sim_model_0088",
     source_ordinal: row_dit1::MODEL_FAMILY_SOURCE_ORDINAL,
     architecture_version: "hunyuandit1-v-prediction-transformer-v1",
     image_model: "hydit1",

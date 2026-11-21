@@ -125,7 +125,7 @@ fn val_model_family_row_001_acestep15_sim_model_0062()
         MODEL_FAMILY_FEATURE_ID,
         MODEL_FAMILY_IDENTIFIER,
         MODEL_FAMILY_REGISTRATION.source_ordinal,
-        "acestep15_comfy_model_0062",
+        "acestep15_sim_model_0062",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-and-diffusers-detection",

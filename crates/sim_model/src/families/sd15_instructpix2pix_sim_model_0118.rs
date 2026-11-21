@@ -9,7 +9,7 @@ pub const MODEL_FAMILY_IDENTIFIER: &str = "SD15_instructpix2pix";
 pub const MODEL_FAMILY_FEATURE_ID: &str = "COMFY-MODEL-0118";
 pub const MODEL_FAMILY_FIXTURE: &str = "sd15-instructpix2pix-comfy-model-0118";
 pub const MODEL_FAMILY_SOURCE_ORDINAL: u16 = 2;
-pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/supported_models.py";
+pub const MODEL_FAMILY_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/supported_models.py";
 pub const MODEL_FAMILY_SOURCE_SHA256: &str = sd15::MODEL_FAMILY_SOURCE_SHA256;
 pub const MODEL_FAMILY_PROJECTION_SHA256: &str =
     "262e9286c7741d041d2e40d593628b82590b5eda05a46d0b3007ca5dac34dd11";

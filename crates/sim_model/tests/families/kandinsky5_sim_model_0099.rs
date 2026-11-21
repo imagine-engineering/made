@@ -225,7 +225,7 @@ fn val_model_family_row_001_kandinsky5_mapping_forward_patch_memory_and_platform
         kandinsky::MODEL_FAMILY_FEATURE_ID,
         kandinsky::MODEL_FAMILY_IDENTIFIER,
         kandinsky::MODEL_FAMILY_SOURCE_ORDINAL,
-        "kandinsky5_comfy_model_0099",
+        "kandinsky5_sim_model_0099",
         &[
             "source-catalog-provenance-and-registration",
             "prefixed-and-standalone-video-key-detection",

@@ -79,8 +79,8 @@ const SUPPORTED_DEVICES: [DeviceKind; 1] = [DeviceKind::Cpu];
 
 const CLIP_CANDIDATES: [ModelClipTargetCandidateDefinition; 1] =
     [ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.ace.AceT5Tokenizer",
-        clip_model: "sim.text_encoders.ace.AceT5Model",
+        tokenizer: "comfy.text_encoders.ace.AceT5Tokenizer",
+        clip_model: "comfy.text_encoders.ace.AceT5Model",
         invocation: ModelClipModelInvocationDefinition::Reference,
     }];
 

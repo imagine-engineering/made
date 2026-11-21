@@ -26,7 +26,7 @@ const SPEC: RowSpec = RowSpec {
     feature_id: row::MODEL_FAMILY_FEATURE_ID,
     identifier: row::MODEL_FAMILY_IDENTIFIER,
     fixture: row::MODEL_FAMILY_FIXTURE,
-    module: "hunyuanthree_dv2_1_comfy_model_0085",
+    module: "hunyuanthree_dv2_1_sim_model_0085",
     source_ordinal: row::MODEL_FAMILY_SOURCE_ORDINAL,
     source_architecture: "model_base.Hunyuan3Dv2_1",
     architecture_version: "hunyuan3d-v2-1-flow-dit-v1",

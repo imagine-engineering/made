@@ -159,7 +159,7 @@ fn val_model_family_row_001_zimage_pixel_space_configuration_and_layouts()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&direct_probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_200, .. })
     ));
-    row_support::verify_owner_delegation("zimagepixelspace_comfy_model_0154")?;
+    row_support::verify_owner_delegation("zimagepixelspace_sim_model_0154")?;
     Ok(())
 }
 
@@ -184,7 +184,7 @@ fn val_model_family_row_001_zimage_pixel_space_forward_patch_memory_and_platform
         pixel::MODEL_FAMILY_FEATURE_ID,
         pixel::MODEL_FAMILY_IDENTIFIER,
         pixel::MODEL_FAMILY_SOURCE_ORDINAL,
-        "zimagepixelspace_comfy_model_0154",
+        "zimagepixelspace_sim_model_0154",
         &[
             "source-and-catalog-provenance",
             "model-store-prefixed-native-probe",

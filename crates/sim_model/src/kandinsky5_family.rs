@@ -39,20 +39,20 @@ pub const KANDINSKY5_IMAGE_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const KANDINSKY5_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const KANDINSKY5_VIDEO_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.kandinsky5.Kandinsky5Tokenizer",
-        clip_model: "sim.text_encoders.kandinsky5.te",
+        tokenizer: "comfy.text_encoders.kandinsky5.Kandinsky5Tokenizer",
+        clip_model: "comfy.text_encoders.kandinsky5.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: KANDINSKY5_CLIP_CONFIGURATION,
         },
     }];
 pub const KANDINSKY5_IMAGE_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.kandinsky5.Kandinsky5TokenizerImage",
-        clip_model: "sim.text_encoders.kandinsky5.te",
+        tokenizer: "comfy.text_encoders.kandinsky5.Kandinsky5TokenizerImage",
+        clip_model: "comfy.text_encoders.kandinsky5.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: KANDINSKY5_CLIP_CONFIGURATION,
         },

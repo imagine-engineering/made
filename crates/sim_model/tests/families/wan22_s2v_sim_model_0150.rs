@@ -22,11 +22,11 @@ fn val_model_family_row_001_wan22_s2v_source_configuration_and_state_plan() -> R
     let mut conflicting = probe.clone(); conflicting.tensor_shapes.insert(wan::AUDIO_BIAS.to_owned(), vec![128]); assert!(s2v::configuration_for_probe(&conflicting).is_err());
     let mut diffusers = probe.clone(); diffusers.metadata.insert("model_layout".to_owned(), "diffusers".to_owned()); assert!(matches!(s2v::configuration_for_probe(&diffusers), Err(ModelFamilyError::InvalidSelectorOutput(message)) if message.contains("Diffusers")));
     assert!(matches!(ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe), Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })));
-    support::verify_owner_delegation("wan22_s2v_comfy_model_0150")?; Ok(())
+    support::verify_owner_delegation("wan22_s2v_sim_model_0150")?; Ok(())
 }
 #[test]
 fn val_model_family_row_001_wan22_s2v_forward_patch_memory_and_platform() -> Result<(), Box<dyn std::error::Error>> {
     let fixture = support::load_fixture(s2v::MODEL_FAMILY_FIXTURE)?; let extras = [support::TensorFixture::new("text_encoders.umt5xxl.transformer.block.weight", &[1], &[1.0]), support::TensorFixture::new("vae.decoder.weight", &[1], &[1.0])];
     support::exercise_family(&fixture, &REGISTRATIONS, &extras, &["model", "runtime_conditioning", "text_encoder", "vae"], "native.blocks.0.ffn.2.weight")?;
-    super::write_model_family_row_artifact(s2v::MODEL_FAMILY_FIXTURE, s2v::MODEL_FAMILY_FEATURE_ID, s2v::MODEL_FAMILY_IDENTIFIER, s2v::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_s2v_comfy_model_0150", &["source-and-catalog-provenance", "causal-audio-source-precedence-detection", "shape-reduced-audio-reference-motion-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-conflicting-malformed-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
+    super::write_model_family_row_artifact(s2v::MODEL_FAMILY_FIXTURE, s2v::MODEL_FAMILY_FEATURE_ID, s2v::MODEL_FAMILY_IDENTIFIER, s2v::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_s2v_sim_model_0150", &["source-and-catalog-provenance", "causal-audio-source-precedence-detection", "shape-reduced-audio-reference-motion-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-conflicting-malformed-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
 }

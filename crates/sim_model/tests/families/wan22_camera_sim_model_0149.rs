@@ -22,11 +22,11 @@ fn val_model_family_row_001_wan22_camera_source_configuration_and_state_plan() -
     let mut misleading = probe.clone(); misleading.metadata.insert("config".to_owned(), "{\"transformer\":{\"model_type\":\"camera\"}}".to_owned()); assert!(camera::configuration_for_probe(&misleading).is_err());
     let mut diffusers = probe.clone(); diffusers.metadata.insert("model_layout".to_owned(), "diffusers".to_owned()); assert!(matches!(camera::configuration_for_probe(&diffusers), Err(ModelFamilyError::InvalidSelectorOutput(message)) if message.contains("Diffusers")));
     assert!(matches!(ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe), Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })));
-    support::verify_owner_delegation("wan22_camera_comfy_model_0149")?; Ok(())
+    support::verify_owner_delegation("wan22_camera_sim_model_0149")?; Ok(())
 }
 #[test]
 fn val_model_family_row_001_wan22_camera_forward_patch_memory_and_platform() -> Result<(), Box<dyn std::error::Error>> {
     let fixture = support::load_fixture(camera::MODEL_FAMILY_FIXTURE)?; let extras = [support::TensorFixture::new("text_encoders.umt5xxl.transformer.block.weight", &[1], &[1.0]), support::TensorFixture::new("vae.decoder.weight", &[1], &[1.0])];
     support::exercise_family(&fixture, &REGISTRATIONS, &extras, &["model", "runtime_conditioning", "text_encoder", "vae"], "native.blocks.0.ffn.2.weight")?;
-    super::write_model_family_row_artifact(camera::MODEL_FAMILY_FIXTURE, camera::MODEL_FAMILY_FEATURE_ID, camera::MODEL_FAMILY_IDENTIFIER, camera::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_camera_comfy_model_0149", &["source-and-catalog-provenance", "camera22-absence-discriminator-detection", "shape-reduced-camera22-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-image-bias-malformed-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
+    super::write_model_family_row_artifact(camera::MODEL_FAMILY_FIXTURE, camera::MODEL_FAMILY_FEATURE_ID, camera::MODEL_FAMILY_IDENTIFIER, camera::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_camera_sim_model_0149", &["source-and-catalog-provenance", "camera22-absence-discriminator-detection", "shape-reduced-camera22-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-image-bias-malformed-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
 }

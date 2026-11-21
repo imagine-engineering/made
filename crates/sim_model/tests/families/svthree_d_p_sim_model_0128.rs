@@ -48,7 +48,7 @@ fn case() -> VideoFamilyCase {
         identifier: sv3d_p::MODEL_FAMILY_IDENTIFIER,
         feature_id: sv3d_p::MODEL_FAMILY_FEATURE_ID,
         fixture: sv3d_p::MODEL_FAMILY_FIXTURE,
-        module: "svthree_d_p_comfy_model_0128",
+        module: "svthree_d_p_sim_model_0128",
         source_ordinal: sv3d_p::MODEL_FAMILY_SOURCE_ORDINAL,
         source_architecture: "model_base.SV3D_p",
         architecture_version: "sv3d-pose-conditioned-unet-v1",

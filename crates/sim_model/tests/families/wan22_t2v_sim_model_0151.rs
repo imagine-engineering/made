@@ -21,11 +21,11 @@ fn val_model_family_row_001_wan22_t2v_source_configuration_and_state_plan() -> R
     let mut misleading = probe.clone(); misleading.metadata.insert("config".to_owned(), "{\"transformer\":{\"out_dim\":16}}".to_owned()); assert!(t2v::configuration_for_probe(&misleading).is_err());
     let mut diffusers = probe.clone(); diffusers.metadata.insert("model_layout".to_owned(), "diffusers".to_owned()); assert!(matches!(t2v::configuration_for_probe(&diffusers), Err(ModelFamilyError::InvalidSelectorOutput(message)) if message.contains("Diffusers")));
     assert!(matches!(ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe), Err(ModelFamilyError::AmbiguousDetection { score: 1_000, .. })));
-    support::verify_owner_delegation("wan22_t2v_comfy_model_0151")?; Ok(())
+    support::verify_owner_delegation("wan22_t2v_sim_model_0151")?; Ok(())
 }
 #[test]
 fn val_model_family_row_001_wan22_t2v_forward_patch_memory_and_platform() -> Result<(), Box<dyn std::error::Error>> {
     let fixture = support::load_fixture(t2v::MODEL_FAMILY_FIXTURE)?; let extras = [support::TensorFixture::new("text_encoders.umt5xxl.transformer.block.weight", &[1], &[1.0]), support::TensorFixture::new("vae.decoder.weight", &[1], &[1.0])];
     support::exercise_family(&fixture, &REGISTRATIONS, &extras, &["model", "runtime_conditioning", "text_encoder", "vae"], "native.blocks.0.ffn.2.weight")?;
-    super::write_model_family_row_artifact(t2v::MODEL_FAMILY_FIXTURE, t2v::MODEL_FAMILY_FEATURE_ID, t2v::MODEL_FAMILY_IDENTIFIER, t2v::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_t2v_comfy_model_0151", &["source-and-catalog-provenance", "wan22-output-geometry-detection", "wan22-latent-image-to-video-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-adapter-wan21-metadata-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
+    super::write_model_family_row_artifact(t2v::MODEL_FAMILY_FIXTURE, t2v::MODEL_FAMILY_FEATURE_ID, t2v::MODEL_FAMILY_IDENTIFIER, t2v::MODEL_FAMILY_SOURCE_ORDINAL, "wan22_t2v_sim_model_0151", &["source-and-catalog-provenance", "wan22-output-geometry-detection", "wan22-latent-image-to-video-configuration", "transactional-model-runtime-text-vae-routing", "named-native-forward-and-patch-order", "dynamic-memory-oom-dtype-device-cancellation", "diffusers-adapter-wan21-metadata-ambiguity-failures", "authoritative-owner-delegation"])?; Ok(())
 }

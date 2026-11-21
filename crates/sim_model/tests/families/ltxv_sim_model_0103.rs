@@ -105,7 +105,7 @@ fn val_model_family_row_001_ltxv_mapping_forward_patch_memory_and_failures()
         ltxv::MODEL_FAMILY_FEATURE_ID,
         ltxv::MODEL_FAMILY_IDENTIFIER,
         ltxv::MODEL_FAMILY_SOURCE_ORDINAL,
-        "ltxv_comfy_model_0103",
+        "ltxv_sim_model_0103",
         &[
             "source-provenance-registration-descriptor",
             "source-exact-video-configuration-and-profile",

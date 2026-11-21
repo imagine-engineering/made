@@ -113,7 +113,7 @@ fn val_model_family_row_001_wan21_humo_source_configuration_and_state_plan()
         ModelFamilyRegistry::checked_registrations(&AMBIGUOUS_REGISTRATIONS)?.detect(&probe),
         Err(ModelFamilyError::AmbiguousDetection { score: 1_200, .. })
     ));
-    support::verify_owner_delegation("wan21_humo_comfy_model_0142")?;
+    support::verify_owner_delegation("wan21_humo_sim_model_0142")?;
     Ok(())
 }
 
@@ -137,7 +137,7 @@ fn val_model_family_row_001_wan21_humo_forward_patch_memory_and_platform()
         humo::MODEL_FAMILY_FEATURE_ID,
         humo::MODEL_FAMILY_IDENTIFIER,
         humo::MODEL_FAMILY_SOURCE_ORDINAL,
-        "wan21_humo_comfy_model_0142",
+        "wan21_humo_sim_model_0142",
         &[
             "source-and-catalog-provenance",
             "audio-projection-precedence-detection",

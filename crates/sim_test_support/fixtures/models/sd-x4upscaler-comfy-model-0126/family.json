@@ -1,5 +1,5 @@
 {
-  "fixture_id": "sd-x4upscaler-sim-model-0126",
+  "fixture_id": "sd-x4upscaler-comfy-model-0126",
   "feature_id": "COMFY-MODEL-0126",
   "detector": {
     "tensor_shapes": {

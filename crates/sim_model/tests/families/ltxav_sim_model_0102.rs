@@ -108,7 +108,7 @@ fn val_model_family_row_001_ltxav_mapping_forward_patch_memory_and_failures()
         ltxav::MODEL_FAMILY_FEATURE_ID,
         ltxav::MODEL_FAMILY_IDENTIFIER,
         ltxav::MODEL_FAMILY_SOURCE_ORDINAL,
-        "ltxav_comfy_model_0102",
+        "ltxav_sim_model_0102",
         &[
             "source-provenance-registration-descriptor",
             "source-exact-audio-video-configuration-and-profile",

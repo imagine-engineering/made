@@ -76,7 +76,7 @@ fn case() -> VideoFamilyCase {
         identifier: svd::MODEL_FAMILY_IDENTIFIER,
         feature_id: svd::MODEL_FAMILY_FEATURE_ID,
         fixture: svd::MODEL_FAMILY_FIXTURE,
-        module: "svd_img2vid_comfy_model_0130",
+        module: "svd_img2vid_sim_model_0130",
         source_ordinal: svd::MODEL_FAMILY_SOURCE_ORDINAL,
         source_architecture: "model_base.SVD_img2vid",
         architecture_version: "svd-image-to-video-unet-v1",

@@ -140,7 +140,7 @@ fn case() -> CascadeFamilyCase {
         identifier: cascade_b::MODEL_FAMILY_IDENTIFIER,
         feature_id: cascade_b::MODEL_FAMILY_FEATURE_ID,
         fixture: cascade_b::MODEL_FAMILY_FIXTURE,
-        module: "stable_cascade_b_comfy_model_0134",
+        module: "stable_cascade_b_sim_model_0134",
         source_ordinal: cascade_b::MODEL_FAMILY_SOURCE_ORDINAL,
         source_architecture: cascade_b::SOURCE_ARCHITECTURE,
         projection_sha256: cascade_b::MODEL_FAMILY_PROJECTION_SHA256,

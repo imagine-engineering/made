@@ -1,5 +1,5 @@
 {
-  "fixture_id": "rt-detr-v4-sim-model-0114",
+  "fixture_id": "rt-detr-v4-comfy-model-0114",
   "feature_id": "COMFY-MODEL-0114",
   "detector": {
     "tensor_shapes": {

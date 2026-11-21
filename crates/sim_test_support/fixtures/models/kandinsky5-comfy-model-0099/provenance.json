@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "fixture_id": "kandinsky5-sim-model-0099",
+  "fixture_id": "kandinsky5-comfy-model-0099",
   "feature_id": "COMFY-MODEL-0099",
   "source_symbol": "Kandinsky5",
   "source_ordinal": 83,
@@ -9,11 +9,11 @@
   "latent_identifier": "HunyuanVideo",
   "catalog_projection_sha256": "3ebe95468ad1e7e8429178ed043dbddabd25e291242ca328988a1022ddac5114",
   "source_files": [
-    {"path": "projects/sim/ComfyUI/sim/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
-    {"path": "projects/sim/ComfyUI/sim/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
-    {"path": "projects/sim/ComfyUI/sim/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
-    {"path": "projects/sim/ComfyUI/sim/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
-    {"path": "crates/sim_model/src/kandinsky5_family.rs", "sha256": "b3021e8deaa185da743f8fde6183994058da90d98010d9fadd43a90debf159c3"},
+    {"path": "projects/comfy/ComfyUI/comfy/supported_models.py", "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"},
+    {"path": "projects/comfy/ComfyUI/comfy/supported_models_base.py", "sha256": "a42dc13d789ede0dcb140fc0a4ab36bb57d820be0aa2b931c274863ec7666596"},
+    {"path": "projects/comfy/ComfyUI/comfy/model_detection.py", "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"},
+    {"path": "projects/comfy/ComfyUI/comfy/model_base.py", "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"},
+    {"path": "crates/sim_model/src/kandinsky5_family.rs", "sha256": "85c7844d555076654eea874fac9ca92396582041f23666596dfb930aa173fd01"},
     {"path": "crates/sim_model/src/latent_formats/hunyuanvideo_sim_model_0037.rs", "sha256": "4df46e4d74034b0b1f8ef60bf860dc948fc1b418c08c6f6e2b7e363aaa198854"},
     {"path": "crates/sim_model/src/latent_formats/flux_sim_model_0029.rs", "sha256": "22c3b314c00dd31a7c4e777c541521c946ab335bb1bdd7b930fd88a6b7c03751"}
   ],

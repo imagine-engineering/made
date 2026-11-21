@@ -139,11 +139,11 @@ fn val_model_family_row_001_sd20_source_configuration_detection_and_provenance()
         let clip = &resolved.clip_target().candidates()[0];
         assert_eq!(
             clip.tokenizer().identifier(),
-            "sim.text_encoders.sd2_clip.SD2Tokenizer"
+            "comfy.text_encoders.sd2_clip.SD2Tokenizer"
         );
         assert_eq!(
             clip.clip_model().target().as_str(),
-            "sim.text_encoders.sd2_clip.SD2ClipModel"
+            "comfy.text_encoders.sd2_clip.SD2ClipModel"
         );
     }
     let store_probe = probe_through_model_store(None)?;
@@ -359,7 +359,7 @@ fn generated_sd20_sim_model_0119_writes_validation_artifact()
         sd20::MODEL_FAMILY_FEATURE_ID,
         sd20::MODEL_FAMILY_IDENTIFIER,
         sd20::MODEL_FAMILY_SOURCE_ORDINAL,
-        "sd20_comfy_model_0119",
+        "sd20_sim_model_0119",
         &[
             "source-provenance-catalog-registration-descriptor",
             "native-diffusers-inpaint-and-loaded-statistic-configuration",

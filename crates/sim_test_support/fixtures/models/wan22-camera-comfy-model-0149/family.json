@@ -1,5 +1,5 @@
 {
-  "fixture_id":"wan22-camera-sim-model-0149","feature_id":"COMFY-MODEL-0149",
+  "fixture_id":"wan22-camera-comfy-model-0149","feature_id":"COMFY-MODEL-0149",
   "detector":{"tensor_shapes":{
     "model.diffusion_model.blocks.0.ffn.0.weight":[256,128],"model.diffusion_model.blocks.0.ffn.2.weight":[2,2],
     "model.diffusion_model.control_adapter.conv.weight":[128,24,2,2],"model.diffusion_model.head.head.weight":[64,128],

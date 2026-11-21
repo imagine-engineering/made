@@ -58,7 +58,7 @@ const SPEC: RowSpec = RowSpec {
     feature_id: row_dit::MODEL_FAMILY_FEATURE_ID,
     identifier: row_dit::MODEL_FAMILY_IDENTIFIER,
     fixture: row_dit::MODEL_FAMILY_FIXTURE,
-    module: "hunyuandit_comfy_model_0087",
+    module: "hunyuandit_sim_model_0087",
     source_ordinal: row_dit::MODEL_FAMILY_SOURCE_ORDINAL,
     architecture_version: "hunyuandit-v-prediction-transformer-v1",
     image_model: "hydit",
@@ -105,11 +105,11 @@ pub(super) fn assert_source_contract(spec: RowSpec) -> Result<(), Box<dyn std::e
     assert_eq!(registration.definition.clip_target.candidates.len(), 1);
     assert_eq!(
         registration.definition.clip_target.candidates[0].tokenizer,
-        "sim.text_encoders.hydit.HyditTokenizer"
+        "comfy.text_encoders.hydit.HyditTokenizer"
     );
     assert_eq!(
         registration.definition.clip_target.candidates[0].clip_model,
-        "sim.text_encoders.hydit.HyditModel"
+        "comfy.text_encoders.hydit.HyditModel"
     );
     assert_eq!(HUNYUANDIT_MEMORY_USAGE_FACTOR, 1.3);
     assert_eq!(HUNYUANDIT_NUMBER_OF_HEADS, 16);

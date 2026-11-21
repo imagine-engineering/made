@@ -1,24 +1,24 @@
 {
   "schema_version": 1,
-  "fixture_id": "hidream-sim-model-0082",
+  "fixture_id": "hidream-comfy-model-0082",
   "feature_id": "COMFY-MODEL-0082",
   "source_symbol": "HiDream",
   "source_ordinal": 69,
   "source_files": [
     {
-      "path": "projects/sim/ComfyUI/sim/supported_models.py",
+      "path": "projects/comfy/ComfyUI/comfy/supported_models.py",
       "sha256": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/model_detection.py",
+      "path": "projects/comfy/ComfyUI/comfy/model_detection.py",
       "sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/model_base.py",
+      "path": "projects/comfy/ComfyUI/comfy/model_base.py",
       "sha256": "99dc53baee665eca1a6aea70cfb9ab071d55784dff339b5e919dc14ae4fde8bd"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/ldm/hidream/model.py",
+      "path": "projects/comfy/ComfyUI/comfy/ldm/hidream/model.py",
       "sha256": "8b8f8a2b776a7f6bae998f9bd4d024eebf9aaa975a9aee34eaa9e68ed874f20e"
     },
     {

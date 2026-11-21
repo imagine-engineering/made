@@ -40,12 +40,12 @@ pub const ZIMAGE_PIXEL_LATENT_FORMAT: &LatentFormatDefinition =
 
 pub const LUMINA_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const LUMINA_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.lumina2.LuminaTokenizer",
-        clip_model: "sim.text_encoders.lumina2.te",
+        tokenizer: "comfy.text_encoders.lumina2.LuminaTokenizer",
+        clip_model: "comfy.text_encoders.lumina2.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: LUMINA_CLIP_CONFIGURATION,
         },
@@ -57,12 +57,12 @@ pub static LUMINA_CLIP_TARGET: ModelClipTargetDefinition = ModelClipTargetDefini
 
 pub const ZIMAGE_CLIP_CONFIGURATION: &[ModelClipConfigurationFactDefinition] =
     &[ModelClipConfigurationFactDefinition::Expand {
-        source: "sim.text_encoders.hunyuan_video.llama_detect",
+        source: "comfy.text_encoders.hunyuan_video.llama_detect",
     }];
 pub const ZIMAGE_CLIP_CANDIDATES: &[ModelClipTargetCandidateDefinition] =
     &[ModelClipTargetCandidateDefinition {
-        tokenizer: "sim.text_encoders.z_image.ZImageTokenizer",
-        clip_model: "sim.text_encoders.z_image.te",
+        tokenizer: "comfy.text_encoders.z_image.ZImageTokenizer",
+        clip_model: "comfy.text_encoders.z_image.te",
         invocation: ModelClipModelInvocationDefinition::Factory {
             configuration: ZIMAGE_CLIP_CONFIGURATION,
         },

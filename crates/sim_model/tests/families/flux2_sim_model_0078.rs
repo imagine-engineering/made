@@ -201,7 +201,7 @@ fn val_model_family_row_001_flux2_source_projection_descriptor_and_ownership()
         flux2::MODEL_FAMILY_FEATURE_ID,
         flux2::MODEL_FAMILY_IDENTIFIER,
         flux2::MODEL_FAMILY_SOURCE_ORDINAL,
-        "flux2_comfy_model_0078",
+        "flux2_sim_model_0078",
         &[
             "source-provenance-registration-descriptor",
             "model-store-native-unprefixed-and-diffusers-detection",
