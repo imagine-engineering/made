@@ -276,6 +276,10 @@ pub enum GddArchiveError {
     UnsupportedGraphContentConnection,
     #[error("Choose the exported root Artboard to save its SVG.")]
     UnsupportedArtboardSvgExport,
+    #[error("Choose an Artboard with editable Location and Dimensions.")]
+    UnsupportedArtboardGeometry,
+    #[error("The Artboard geometry exceeds the finite SVG bounds.")]
+    InvalidArtboardGeometry,
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -708,7 +712,66 @@ enum SavedGraphicProfile {
 }
 
 const LAYER_CONTENT_INPUT: usize = 1;
+const ARTBOARD_LOCATION_INPUT: usize = 2;
+const ARTBOARD_DIMENSIONS_INPUT: usize = 3;
 const ARTBOARD_CLIP_INPUT: usize = 5;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GddArtboardGeometry {
+    pub location: DVec2,
+    pub dimensions: DVec2,
+}
+
+impl GddArtboardGeometry {
+    pub fn parse(location: &str, dimensions: &str) -> Result<Self, GddArchiveError> {
+        Ok(Self {
+            location: parse_graph_vector(location)?,
+            dimensions: parse_graph_vector(dimensions)?,
+        })
+    }
+
+    fn read(document: &DocumentNode) -> Option<Self> {
+        let Some(TaggedValue::DVec2(location)) =
+            document.inputs.get(ARTBOARD_LOCATION_INPUT)?.as_value()
+        else {
+            return None;
+        };
+        let Some(TaggedValue::DVec2(dimensions)) =
+            document.inputs.get(ARTBOARD_DIMENSIONS_INPUT)?.as_value()
+        else {
+            return None;
+        };
+        Some(Self {
+            location: *location,
+            dimensions: *dimensions,
+        })
+    }
+
+    fn hidden(document: &DocumentNode) -> Option<Self> {
+        [ARTBOARD_LOCATION_INPUT, ARTBOARD_DIMENSIONS_INPUT]
+            .into_iter()
+            .all(|index| {
+                matches!(
+                    document.inputs.get(index),
+                    Some(NodeInput::Value { exposed: false, .. })
+                )
+            })
+            .then(|| Self::read(document))
+            .flatten()
+    }
+
+    fn normalized(self) -> Option<(DVec2, DVec2)> {
+        let opposite_corner = self.location + self.dimensions;
+        // CreateArtboard normalizes the starting corner before clamping the extent.
+        let origin = self.location.min(opposite_corner);
+        let size = self.dimensions.abs().max(DVec2::ONE);
+        (self.location.is_finite()
+            && self.dimensions.is_finite()
+            && opposite_corner.is_finite()
+            && (origin + size).is_finite())
+        .then_some((origin, size))
+    }
+}
 
 #[derive(Clone)]
 pub struct GddGraphNode {
@@ -725,6 +788,7 @@ pub struct GddGraphNode {
     pinned_order: Option<(usize, usize)>,
     numeric_input: Option<GddNumericInput>,
     boolean_input: Option<GddGraphBooleanInput>,
+    artboard_geometry: Option<GddArtboardGeometry>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
@@ -836,35 +900,40 @@ pub enum GddNumericValue {
     NumberList(Arc<[f64]>),
 }
 
+fn finite_graph_number(text: &str) -> Option<f64> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
+fn parse_graph_vector(text: &str) -> Result<DVec2, GddArchiveError> {
+    let (first, second) = text
+        .split_once(',')
+        .ok_or(GddArchiveError::InvalidGraphVector)?;
+    let first = finite_graph_number(first).ok_or(GddArchiveError::InvalidGraphVector)?;
+    let second = finite_graph_number(second).ok_or(GddArchiveError::InvalidGraphVector)?;
+    Ok(DVec2::new(first, second))
+}
+
 impl GddNumericValue {
     pub fn parse_like(&self, text: &str) -> Result<Self, GddArchiveError> {
         let text = text.trim();
-        let finite_number = |text: &str| {
-            text.trim()
-                .parse::<f64>()
-                .ok()
-                .filter(|value| value.is_finite())
-        };
         match self {
-            Self::Number(_) => finite_number(text)
+            Self::Number(_) => finite_graph_number(text)
                 .map(Self::Number)
                 .ok_or(GddArchiveError::InvalidGraphNumber),
             Self::Integer(_) => text
                 .parse::<i64>()
                 .map(Self::Integer)
                 .map_err(|_| GddArchiveError::InvalidGraphInteger),
-            Self::Vector(_) => {
-                let (first, second) = text
-                    .split_once(',')
-                    .ok_or(GddArchiveError::InvalidGraphVector)?;
-                let first = finite_number(first).ok_or(GddArchiveError::InvalidGraphVector)?;
-                let second = finite_number(second).ok_or(GddArchiveError::InvalidGraphVector)?;
-                Ok(Self::Vector([first, second]))
-            }
+            Self::Vector(_) => parse_graph_vector(text).map(|value| Self::Vector(value.to_array())),
             Self::NumberList(_) if text.is_empty() => Ok(Self::NumberList(Arc::from([]))),
             Self::NumberList(_) => text
                 .split(',')
-                .map(|part| finite_number(part).ok_or(GddArchiveError::InvalidGraphNumberList))
+                .map(|part| {
+                    finite_graph_number(part).ok_or(GddArchiveError::InvalidGraphNumberList)
+                })
                 .collect::<Result<Vec<_>, _>>()
                 .map(|values| Self::NumberList(values.into())),
         }
@@ -1057,6 +1126,10 @@ impl GddGraphNode {
 
     pub fn boolean_input(&self) -> Option<GddGraphBooleanInput> {
         self.boolean_input
+    }
+
+    pub fn artboard_geometry(&self) -> Option<GddArtboardGeometry> {
+        self.artboard_geometry
     }
 
     pub fn has_numeric_connection(&self) -> bool {
@@ -1382,6 +1455,7 @@ impl InspectedGddV1 {
                     pinned_order: None,
                     numeric_input: None,
                     boolean_input: None,
+                    artboard_geometry: None,
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
@@ -1608,6 +1682,7 @@ impl InspectedGddV1 {
                         empty_document_output && interface.is_layer(&node.local_id, path);
                     node.boolean_input =
                         hidden_graph_boolean(&document.inputs, ARTBOARD_CLIP_INPUT, "Clip");
+                    node.artboard_geometry = GddArtboardGeometry::hidden(document);
                 }
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
@@ -4349,6 +4424,103 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn set_artboard_geometry_in_copy(
+        &self,
+        node: &GddGraphNode,
+        requested: GddArtboardGeometry,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let previous = node
+            .artboard_geometry()
+            .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?;
+        let same_vector = |left: DVec2, right: DVec2| {
+            left.to_array().map(f64::to_bits) == right.to_array().map(f64::to_bits)
+        };
+        let rounded_edit = |original: DVec2, entered: DVec2| {
+            // The pinned integer widgets round edited values, while legacy literals remain exact.
+            DVec2::from_array([(original.x, entered.x), (original.y, entered.y)].map(
+                |(original, entered)| {
+                    if original.to_bits() == entered.to_bits() {
+                        original
+                    } else {
+                        entered.round()
+                    }
+                },
+            ))
+        };
+        let proposed = GddArtboardGeometry {
+            location: rounded_edit(previous.location, requested.location),
+            dimensions: rounded_edit(previous.dimensions, requested.dimensions),
+        };
+        if proposed.normalized().is_none() {
+            return Err(GddArchiveError::InvalidArtboardGeometry);
+        }
+        let path = node.network_path.as_slice();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let matching_geometry = |interface: &NodeNetworkInterface,
+                                 expected: GddArtboardGeometry| {
+            interface
+                .document_node(&node.local_id, path)
+                .and_then(GddArtboardGeometry::hidden)
+                .is_some_and(|actual| {
+                    same_vector(actual.location, expected.location)
+                        && same_vector(actual.dimensions, expected.dimensions)
+                })
+        };
+        if !matching_geometry(&interface, previous) {
+            return Err(GddArchiveError::UnsupportedArtboardGeometry);
+        }
+        let mut edits = Vec::with_capacity(2);
+        let mut indices = Vec::with_capacity(2);
+        for (index, before, after) in [
+            (
+                ARTBOARD_LOCATION_INPUT,
+                previous.location,
+                proposed.location,
+            ),
+            (
+                ARTBOARD_DIMENSIONS_INPUT,
+                previous.dimensions,
+                proposed.dimensions,
+            ),
+        ] {
+            if same_vector(before, after) {
+                continue;
+            }
+            let connector = InputConnector::node_at_index(node.local_id, index);
+            let input = NodeInput::value(TaggedValue::DVec2(after), false);
+            interface.set_input(&connector, input.clone(), path);
+            edits.push(write_graph_connector(path, connector, input));
+            indices.push(index);
+        }
+        if edits.is_empty() {
+            return Err(GddArchiveError::UnchangedGraphInput);
+        }
+        if !matching_geometry(&interface, proposed) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        if batch.ops.len() != indices.len()
+            || !batch.ops.iter().zip(indices).all(|(operation, expected)| {
+                matches!(
+                    operation,
+                    RegistryDelta::ChangeNodeInput { id, index, .. }
+                        if *id == node.storage_id && usize::try_from(*index).ok() == Some(expected)
+                )
+            })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if !matching_geometry(&actual, proposed) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
     pub async fn set_graph_numeric_input_exposed_in_copy(
         &self,
         node: &GddGraphNode,
@@ -5390,29 +5562,15 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                     SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
                 ),
                 [_, _, location, dimensions, background, clip] => {
-                    let (
-                        Some(TaggedValue::DVec2(location_value)),
-                        Some(TaggedValue::DVec2(dimensions_value)),
-                    ) = (location.as_value(), dimensions.as_value())
-                    else {
-                        return None;
-                    };
-                    let opposite_corner = *location_value + *dimensions_value;
-                    // Use the pinned CreateArtboard normalization when framing saved output.
-                    let origin = location_value.min(opposite_corner);
-                    let size = dimensions_value.abs().max(DVec2::ONE);
-                    if !location_value.is_finite()
-                        || !dimensions_value.is_finite()
-                        || !opposite_corner.is_finite()
-                        || !(origin + size).is_finite()
-                        || !matches!(background.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()) && (color.a() * 1000.).is_finite())
+                    let (origin, size) = GddArtboardGeometry::read(node)?.normalized()?;
+                    if !matches!(background.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()) && (color.a() * 1000.).is_finite())
                         || !matches!(clip.as_value(), Some(TaggedValue::Bool(_)))
                     {
                         return None;
                     }
                     replacements.extend([
-                        (2, location),
-                        (3, dimensions),
+                        (ARTBOARD_LOCATION_INPUT, location),
+                        (ARTBOARD_DIMENSIONS_INPUT, dimensions),
                         (4, background),
                         (ARTBOARD_CLIP_INPUT, clip),
                     ]);
@@ -9483,6 +9641,103 @@ mod tests {
             assert!(checked_saved_graphic_node(&board).is_none());
             *board.inputs.get_mut(index).expect("pinned input") = original;
         }
+    }
+
+    #[test]
+    fn at_gra_node_282_2_edits_only_saved_artboard_geometry_literals() {
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let mut template = artboard_node_definition()
+                .expect("pinned Artboard")
+                .default_node_template();
+            let original_geometry = GddArtboardGeometry {
+                location: DVec2::new(-1.25, 3.25),
+                dimensions: DVec2::new(100.5, 50.25),
+            };
+            for (index, value) in [
+                (ARTBOARD_LOCATION_INPUT, original_geometry.location),
+                (ARTBOARD_DIMENSIONS_INPUT, original_geometry.dimensions),
+            ] {
+                *template
+                    .inputs
+                    .get_mut(index)
+                    .expect("original geometry slot") =
+                    NodeInput::value(TaggedValue::DVec2(value), false);
+            }
+            let board_id = NodeId(15);
+            let source = template.into_parts().0;
+            let network = NodeNetwork {
+                nodes: [(board_id, source.clone())].into_iter().collect(),
+                exports: vec![NodeInput::node(board_id, 0)],
+                ..Default::default()
+            };
+            let resources = HashMapResourceStorage::new();
+            let mut owner = document();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save original signed and fractional coordinates");
+            let original: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source archive")
+                .into();
+            let archive = open_gdd_zip(&original, budget())
+                .await
+                .expect("reopen original board");
+            let nodes = archive.graph_nodes().await.expect("saved graph");
+            let node = nodes
+                .iter()
+                .find(|node| node.artboard_geometry().is_some())
+                .expect("Artboard");
+            assert_eq!(node.artboard_geometry(), Some(original_geometry));
+            assert!(matches!(
+                archive
+                    .set_artboard_geometry_in_copy(node, original_geometry, budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInput)
+            ));
+            assert!(matches!(
+                archive
+                    .set_artboard_geometry_in_copy(
+                        node,
+                        GddArtboardGeometry {
+                            location: DVec2::splat(f64::MAX),
+                            dimensions: DVec2::splat(f64::MAX),
+                        },
+                        budget()
+                    )
+                    .await,
+                Err(GddArchiveError::InvalidArtboardGeometry)
+            ));
+            let requested =
+                GddArtboardGeometry::parse("-1.25, -8.5", "100.5, 50.25").expect("finite geometry");
+            let staged = archive
+                .set_artboard_geometry_in_copy(node, requested, budget())
+                .await
+                .expect("edit and round only the changed component");
+            assert_eq!(staged.history_len(), archive.history_len() + 1);
+            let current = staged.runtime_graph().await.expect("saved revision");
+            let mut expected = source;
+            *expected
+                .inputs
+                .get_mut(ARTBOARD_LOCATION_INPUT)
+                .expect("typed Location") =
+                NodeInput::value(TaggedValue::DVec2(DVec2::new(-1.25, -9.)), false);
+            assert_eq!(current.network.nodes.get(&board_id), Some(&expected));
+            assert_eq!(current.network.exports, network.exports);
+            assert!(matches!(
+                staged
+                    .set_artboard_geometry_in_copy(node, requested, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+        });
     }
 
     #[test]

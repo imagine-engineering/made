@@ -15,8 +15,8 @@ use gpui::{
 use graphics_core::evaluate::{CpuSvgEvaluationBudget, UnaryNumericOperation};
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
-        GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
+        ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardGeometry, GddExportContent,
+        GddGraphGeometry, GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
         GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
         GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
         ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
@@ -1135,6 +1135,7 @@ enum NodeCopyChange {
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
     BooleanInput(bool),
+    ArtboardGeometry(GddArtboardGeometry),
     SetDocumentArtboard,
     ConnectGraphicContent(Box<GddGraphNode>),
     DisconnectNumericInput,
@@ -1195,6 +1196,11 @@ impl NodeCopyChange {
             Self::BooleanInput(value) => {
                 archive
                     .set_graph_boolean_input_in_copy(node, value, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::ArtboardGeometry(geometry) => {
+                archive
+                    .set_artboard_geometry_in_copy(node, geometry, ARCHIVE_BUDGET)
                     .await
             }
             Self::SetDocumentArtboard => {
@@ -1771,6 +1777,16 @@ impl GraphiteDocumentItem {
             if let Some([x, y]) = node.grid_position() {
                 form.position.update(cx, |editor, cx| {
                     editor.set_text(format!("{x}, {y}"), window, cx)
+                });
+            }
+            if let Some(geometry) = node.artboard_geometry() {
+                let [x, y] = geometry.location.to_array();
+                let [width, height] = geometry.dimensions.to_array();
+                form.position.update(cx, |editor, cx| {
+                    editor.set_text(format!("{x}, {y}"), window, cx)
+                });
+                form.value.update(cx, |editor, cx| {
+                    editor.set_text(format!("{width}, {height}"), window, cx)
                 });
             }
             cx.notify();
@@ -3231,6 +3247,39 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn change_artboard_geometry(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form
+            .selected_node()
+            .filter(|node| node.artboard_geometry().is_some())
+        else {
+            return;
+        };
+        let geometry = GddArtboardGeometry::parse(
+            &form.position.read(cx).text(cx),
+            &form.value.read(cx).text(cx),
+        );
+        match geometry {
+            Ok(geometry) => self.apply_graph_edit(
+                GraphiteCopy::EditNode {
+                    node: Box::new(node.clone()),
+                    change: NodeCopyChange::ArtboardGeometry(geometry),
+                },
+                window,
+                cx,
+            ),
+            Err(error) => {
+                self.copy_feedback = Some((error.to_string().into(), Color::Error));
+                cx.notify();
+            }
+        }
+    }
+
     fn stage_working_snapshot(
         &mut self,
         expected: Arc<()>,
@@ -3511,6 +3560,57 @@ impl GraphiteDocumentItem {
                 .debug_selector(move || selector.into())
                 .child(DropdownMenu::new(selector, label, menu)),
         )
+    }
+
+    fn render_artboard_geometry(
+        &self,
+        form: &NodeCopyForm,
+        working: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        v_flex()
+            .gap_2()
+            .children(
+                [
+                    (
+                        "Location (x, y) in px",
+                        "GRAPHITE-GDD-ARTBOARD-LOCATION",
+                        &form.position,
+                    ),
+                    (
+                        "Dimensions (w, h) in px",
+                        "GRAPHITE-GDD-ARTBOARD-DIMENSIONS",
+                        &form.value,
+                    ),
+                ]
+                .map(|(label, selector, field)| {
+                    v_flex().gap_1().child(Label::new(label)).child(
+                        div()
+                            .id(selector)
+                            .aria_label(label)
+                            .debug_selector(move || selector.into())
+                            .child(field.clone()),
+                    )
+                }),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-APPLY-ARTBOARD-GEOMETRY".into())
+                    .child(
+                        Button::new(
+                            "graphite-gdd-apply-artboard-geometry",
+                            if working {
+                                "Apply Geometry"
+                            } else {
+                                "Save Geometry in a Copy"
+                            },
+                        )
+                        .disabled(self.copy_task.is_some())
+                        .on_click(cx.listener(|item, _, window, cx| {
+                            item.change_artboard_geometry(window, cx)
+                        })),
+                    ),
+            )
     }
 
     fn render_graphic_content_menu(
@@ -4338,6 +4438,9 @@ impl GraphiteDocumentItem {
                                     ),
                                 )
                             })
+                            .when(selected.artboard_geometry().is_some(), |panel| {
+                                panel.child(self.render_artboard_geometry(form, working, cx))
+                            })
                             .when(selected.has_numeric_connection(), |panel| {
                                 panel.child(
                                     div()
@@ -4805,7 +4908,10 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Reordered",
                     GraphiteCopy::EditNode {
-                        change: NodeCopyChange::NumericInput(_) | NodeCopyChange::BooleanInput(_),
+                        change:
+                            NodeCopyChange::NumericInput(_)
+                            | NodeCopyChange::BooleanInput(_)
+                            | NodeCopyChange::ArtboardGeometry(_),
                         ..
                     } => "Edited",
                     GraphiteCopy::EditNode {
@@ -12233,6 +12339,129 @@ mod tests {
                 original
             );
         }
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_282_2_workspace_edits_saved_artboard_geometry(cx: &mut TestAppContext) {
+        let stage = create_gdd_folder(621, 187, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("native source")
+            .insert_root_catalog_node_in_copy("NETWORK:Artboard", [2, 0], ARCHIVE_BUDGET)
+            .await
+            .expect("pinned catalog Artboard");
+        let nodes = stage.graph_nodes().await.expect("working nodes");
+        let root = nodes
+            .iter()
+            .find(|node| node.can_set_document_artboard())
+            .expect("root Artboard");
+        let stage = stage
+            .set_document_artboard_in_copy(root, ARCHIVE_BUDGET)
+            .await
+            .expect("set document Artboard");
+        let original = stage
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/geometry-artboard.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("original source");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the source Artboard")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let read_geometry = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Artboard geometry");
+                };
+                let node = form.selected_node().expect("selected Artboard");
+                (
+                    node.storage_id(),
+                    node.artboard_geometry().expect("native geometry fields"),
+                )
+            })
+        };
+        let (address, initial) = read_geometry(window);
+        assert_eq!(initial.location, DVec2::ZERO);
+        assert_eq!(initial.dimensions, DVec2::new(1920., 1080.));
+        let set_field = |window: &mut gpui::VisualTestContext, selector, value: &str| {
+            click(window, selector);
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(value);
+            window.run_until_parked();
+            paint(window);
+        };
+        let apply_geometry = "GRAPHITE-GDD-APPLY-ARTBOARD-GEOMETRY";
+        set_field(window, "GRAPHITE-GDD-ARTBOARD-LOCATION", "invalid");
+        click(window, apply_geometry);
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert!(matches!(item.copy_feedback, Some((_, Color::Error))));
+        });
+        assert_eq!(read_geometry(window), (address, initial));
+        set_field(window, "GRAPHITE-GDD-ARTBOARD-LOCATION", "85.5, -18.5");
+        set_field(window, "GRAPHITE-GDD-ARTBOARD-DIMENSIONS", "-64.5, 31.5");
+        click(window, apply_geometry);
+        let expected = GddArtboardGeometry {
+            location: DVec2::new(86., -19.),
+            dimensions: DVec2::new(-65., 32.),
+        };
+        assert_eq!(read_geometry(window), (address, expected));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(read_geometry(window), (address, initial));
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(read_geometry(window), (address, expected));
+        let exported = PathBuf::from("/project/changed-artboard-bounds.svg");
+        click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
+        window.simulate_new_path_selection(|_| Some(exported.clone()));
+        window.run_until_parked();
+        paint(window);
+        let bytes = filesystem
+            .load_bytes(&exported)
+            .await
+            .expect("exported document SVG");
+        assert!(
+            std::str::from_utf8(&bytes)
+                .expect("SVG text")
+                .contains(r#"viewBox="0 0 65 32" width="65" height="32""#)
+        );
+        let saved = PathBuf::from("/project/changed-artboard-bounds.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(saved.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &saved)
+            .await
+            .expect("reopened geometry");
+        let nodes = saved.graph_nodes().await.expect("saved GDD nodes");
+        let board = nodes
+            .iter()
+            .find(|node| node.storage_id() == address)
+            .expect("same Artboard address");
+        assert_eq!(board.artboard_geometry(), Some(expected));
+        assert!(matches!(
+            board.layer_preview(),
+            Some(GddGraphLayerPreview::Artboard { origin, size })
+                if origin == DVec2::new(21., -19.) && size == DVec2::new(65., 32.)
+        ));
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("original ZIP"),
+            original
+        );
     }
 
     #[gpui::test]
