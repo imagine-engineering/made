@@ -64,7 +64,7 @@ use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
 use crate::evaluate::{
-    UnaryNumericOperation, evaluate_detached_numeric_network, typecheck_detached_numeric_network,
+    NumericGraphEvaluator, UnaryNumericOperation, typecheck_detached_numeric_network,
 };
 
 mod xz;
@@ -345,6 +345,19 @@ pub struct GddNetworkView {
 pub struct GddGraphInspection {
     pub nodes: Vec<GddGraphNode>,
     pub networks: Vec<GddGraphNetwork>,
+}
+
+pub struct GddNumericGraphEvaluator(NumericGraphEvaluator);
+
+impl GddNumericGraphEvaluator {
+    pub async fn evaluate(&self) -> Result<GddNumericValue, GddArchiveError> {
+        let output = self
+            .0
+            .evaluate()
+            .await
+            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)?;
+        preview_numeric_value(&output)
+    }
 }
 
 pub struct GddGraphGeometry {
@@ -2964,6 +2977,16 @@ impl InspectedGddV1 {
         &self,
         node: &GddGraphNode,
     ) -> Result<GddNumericValue, GddArchiveError> {
+        self.prepare_graph_numeric_output(node)
+            .await?
+            .evaluate()
+            .await
+    }
+
+    pub async fn prepare_graph_numeric_output(
+        &self,
+        node: &GddGraphNode,
+    ) -> Result<GddNumericGraphEvaluator, GddArchiveError> {
         self.check_node_edit_target(node)?;
         if !node.can_preview_numeric_output() {
             return Err(GddArchiveError::UnsupportedGraphNumericPreview);
@@ -2976,10 +2999,10 @@ impl InspectedGddV1 {
         let imports = enclosing_network_inputs(&graph.network, &node.network_path)
             .ok_or(GddArchiveError::StaleGraphNode)?;
         let detached = numeric_preview_network(source, node.local_id, imports)?;
-        let output = evaluate_detached_numeric_network(detached)
+        NumericGraphEvaluator::prepare(detached)
             .await
-            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)?;
-        preview_numeric_value(&output)
+            .map(GddNumericGraphEvaluator)
+            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)
     }
 
     pub async fn duplicate_graph_numeric_node_in_copy(
@@ -5411,6 +5434,15 @@ fn zip_directory(bytes: &[u8], max_entries: usize) -> Result<(usize, u64), GddAr
 
 #[cfg(test)]
 mod tests {
+    async fn evaluate_detached_numeric_network(
+        network: NodeNetwork,
+    ) -> Result<TaggedValue, String> {
+        NumericGraphEvaluator::prepare(network)
+            .await?
+            .evaluate()
+            .await
+    }
+
     use super::*;
     use graphite_document_format::Codec;
     use graphite_editor::messages::portfolio::document::DocumentMessageHandler;

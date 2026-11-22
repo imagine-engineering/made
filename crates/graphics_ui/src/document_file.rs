@@ -16,10 +16,10 @@ use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
-        GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection, GddNumericValue,
-        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
-        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
-        open_gdd_archive,
+        GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection,
+        GddNumericGraphEvaluator, GddNumericValue, GddPinnedNodeMove, GddRecoverySource,
+        GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport, InspectedGddV1,
+        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -600,6 +600,7 @@ struct NodeCopyForm {
     position: Entity<Editor>,
     output_preview: NodeOutputPreview,
     document_run: NodeOutputPreview,
+    document_run_evaluator: Option<Arc<GddNumericGraphEvaluator>>,
     port_rename: Option<PortRenameForm>,
     node_selection: BTreeSet<usize>,
     layer_selection_anchor: Option<usize>,
@@ -640,6 +641,7 @@ impl NodeCopyForm {
             position: cx.new(|cx| Editor::single_line(window, cx)),
             output_preview: NodeOutputPreview::Hidden,
             document_run: NodeOutputPreview::Hidden,
+            document_run_evaluator: None,
             port_rename: None,
             node_selection: BTreeSet::new(),
             layer_selection_anchor: None,
@@ -681,6 +683,7 @@ impl NodeCopyForm {
         self.snapshot = snapshot;
         self.revision = revision;
         self.document_run = NodeOutputPreview::Hidden;
+        self.document_run_evaluator = None;
         self.nodes.clone_from(&inspection.nodes);
         self.networks.clone_from(&inspection.networks);
         let active_network =
@@ -2631,7 +2634,7 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
-    fn run_document_graph(&mut self, cx: &mut Context<Self>) {
+    fn run_document_graph(&mut self, force: bool, cx: &mut Context<Self>) {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
         };
@@ -2639,8 +2642,10 @@ impl GraphiteDocumentItem {
             return;
         }
         if matches!(form.document_run, NodeOutputPreview::Pending { .. }) {
-            form.document_run = NodeOutputPreview::Hidden;
-            cx.notify();
+            if !force {
+                form.document_run = NodeOutputPreview::Hidden;
+                cx.notify();
+            }
             return;
         }
         let Some(node) = form
@@ -2659,9 +2664,17 @@ impl GraphiteDocumentItem {
         };
         let contents = form.snapshot.clone();
         let revision = form.revision.clone();
+        let cached = form.document_run_evaluator.clone().filter(|_| !force);
         let evaluation = cx.background_spawn(async move {
-            futures::executor::block_on(contents.preview_graph_numeric_output(&node))
-                .map_err(|error| format!("{}: {error}", node.label()))
+            futures::executor::block_on(async {
+                let evaluator = match cached {
+                    Some(evaluator) => evaluator,
+                    None => Arc::new(contents.prepare_graph_numeric_output(&node).await?),
+                };
+                let value = evaluator.evaluate().await?;
+                Ok::<_, GddArchiveError>((evaluator, value))
+            })
+            .map_err(|error| format!("{}: {error}", node.label()))
         });
         form.document_run = NodeOutputPreview::Pending {
             _task: cx.spawn(async move |item, cx| {
@@ -2677,7 +2690,10 @@ impl GraphiteDocumentItem {
                         return;
                     }
                     form.document_run = match result {
-                        Ok(value) => NodeOutputPreview::Ready(value),
+                        Ok((evaluator, value)) => {
+                            form.document_run_evaluator = Some(evaluator);
+                            NodeOutputPreview::Ready(value)
+                        }
                         Err(error) => NodeOutputPreview::Failed(error.into()),
                     };
                     cx.notify();
@@ -2856,20 +2872,27 @@ impl GraphiteDocumentItem {
     }
 
     fn render_document_run(run: &NodeOutputPreview, cx: &mut Context<Self>) -> impl IntoElement {
-        let label = if matches!(run, NodeOutputPreview::Pending { .. }) {
-            "Cancel Run"
-        } else {
-            "Run Graph"
-        };
+        let pending = matches!(run, NodeOutputPreview::Pending { .. });
+        let label = if pending { "Cancel Run" } else { "Run Graph" };
         h_flex()
             .gap_2()
             .flex_wrap()
             .child(
                 div()
                     .debug_selector(|| "GRAPHITE-GDD-RUN-GRAPH".into())
+                    .child(Button::new("graphite-gdd-run-graph", label).on_click(
+                        cx.listener(|item, _, _, cx| item.run_document_graph(false, cx)),
+                    )),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-FORCE-RUN-GRAPH".into())
                     .child(
-                        Button::new("graphite-gdd-run-graph", label)
-                            .on_click(cx.listener(|item, _, _, cx| item.run_document_graph(cx))),
+                        Button::new("graphite-gdd-force-run-graph", "Force Run")
+                            .disabled(pending)
+                            .on_click(
+                                cx.listener(|item, _, _, cx| item.run_document_graph(true, cx)),
+                            ),
                     ),
             )
             .when_some(run.feedback(), |row, (message, color)| {
@@ -9604,6 +9627,85 @@ mod tests {
                 .await
                 .expect("original layer archive"),
             unsupported
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_038_2_workspace_forces_a_fresh_numeric_graph_evaluator(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::RootExport, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/force-numeric-graph-run.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        let invoke = |window: &mut gpui::VisualTestContext, selector| {
+            paint(window);
+            click(window, selector);
+            window.run_until_parked();
+            paint(window);
+        };
+        invoke(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        let original_revision =
+            item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        let evaluator = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready graph")
+                };
+                assert!(matches!(
+                    form.document_run,
+                    NodeOutputPreview::Ready(GddNumericValue::Integer(17))
+                ));
+                assert!(Arc::ptr_eq(
+                    &item.model.read(cx).revision,
+                    &original_revision
+                ));
+                assert_eq!(
+                    item.model
+                        .read(cx)
+                        .gdd_contents()
+                        .expect("GDD")
+                        .history_len(),
+                    history
+                );
+                assert!(!item.is_dirty(cx));
+                form.document_run_evaluator
+                    .clone()
+                    .expect("current typed evaluator")
+            })
+        };
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        let initial = evaluator(window);
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        assert!(Arc::ptr_eq(&initial, &evaluator(window)));
+        invoke(window, "GRAPHITE-GDD-FORCE-RUN-GRAPH");
+        let forced = evaluator(window);
+        assert!(!Arc::ptr_eq(&initial, &forced));
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        assert!(Arc::ptr_eq(&forced, &evaluator(window)));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("unchanged source ZIP"),
+            original
         );
     }
 

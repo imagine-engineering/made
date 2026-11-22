@@ -375,26 +375,34 @@ impl UnaryNumericOperation {
     }
 }
 
-pub(crate) async fn evaluate_detached_numeric_network(
-    network: NodeNetwork,
-) -> Result<TaggedValue, String> {
-    AssertUnwindSafe(async {
-        let proto = compile_detached_numeric_network(network)?;
-        let executor = DynamicExecutor::new(proto)
+pub(crate) struct NumericGraphEvaluator(DynamicExecutor);
+
+impl NumericGraphEvaluator {
+    pub(crate) async fn prepare(network: NodeNetwork) -> Result<Self, String> {
+        AssertUnwindSafe(async {
+            let proto = compile_detached_numeric_network(network)?;
+            let executor = DynamicExecutor::new(proto)
+                .await
+                .map_err(|errors| format!("{errors:?}"))?;
+            if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>)) {
+                return Err("Unexpected Graphite evaluation context.".into());
+            }
+            Ok(Self(executor))
+        })
+        .catch_unwind()
+        .await
+        .unwrap_or_else(|_| {
+            Err("The pinned Graphite evaluator stopped while preparing the numeric graph.".into())
+        })
+    }
+
+    pub(crate) async fn evaluate(&self) -> Result<TaggedValue, String> {
+        AssertUnwindSafe(async { Executor::execute(&&self.0, Context::default()).await })
+            .catch_unwind()
             .await
-            .map_err(|errors| format!("{errors:?}"))?;
-        if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>)) {
-            return Err("Unexpected Graphite evaluation context.".into());
-        }
-        Executor::execute(&&executor, Context::default())
-            .await
+            .map_err(|_| "The pinned Graphite evaluator stopped while running the numeric graph.")?
             .map_err(|error| error.to_string())
-    })
-    .catch_unwind()
-    .await
-    .unwrap_or_else(|_| {
-        Err("The pinned Graphite evaluator stopped while preparing the numeric graph.".into())
-    })
+    }
 }
 
 pub(crate) fn typecheck_detached_numeric_network(network: NodeNetwork) -> Result<(), String> {
