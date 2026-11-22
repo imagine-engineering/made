@@ -496,7 +496,7 @@ LegacyInstallationMigrationResult and its import DTO are bounded read-only bound
 
 Ownership is enforced at the public API boundary as well as by definition counts: canonical internals cannot expose mutable guards, raw index handles, partial persistence mutations, or direct lifecycle implementations that bypass the owner. `ComponentHostRouter` is the sole Comfy `ComponentLifecycleAdapter` implementation. A worker failure `cancelled` bit is an untrusted bounded observation and must map through the active attempt's canonical token and durable termination intent before a terminal transition. `SubgraphBlueprintLibrary` and its GPUI catalog are focused, refreshed AssetService projections and own no index, security decision, path check, or persistence transaction. `GraphContextActionBinding` is the sealed graph-context feature identity, and `GraphWorkspaceItem::dispatch_context_action` is the only context availability, stale-invocation, input, confirmation, and action-transition entry point; shell and rendered-menu adapters must call it rather than repeating those transitions.
 
-The production component path is one closed chain: ExtensionStore validates and bounds the installed manifest/component pair, ComponentHost verifies the signed manifest and seals a path-free generation, ComponentHostRouter retains that immutable replay snapshot, and PrivateWorkerPluginExecutor serially transfers the deployment and invocation to RuntimeSupervisor. The outer framed worker envelope remains Postcard; invocation and result payload DTOs use independently bounded JSON because the versioned plugin value union uses tagged serialization that Postcard cannot represent. WorkerCapabilityBridge maps only bounded `PluginServiceWireRequest`/`PluginServiceWireResponse` bytes and holds no service, authorization, path, persistence, or commit state. `PluginCapabilityBroker` is the sole invocation-scoped service coordinator: it checks sealed PermissionPolicy capabilities, delegates exact provider decisions to ProviderPolicy, reaches the shared AssetService/ArtifactIndex and ModelStore, obtains narrowly scoped secret bytes through the credentials actuator, reads SystemClock, and leases RngTransaction state that commits only after invocation success. The Zed provider and credential bridges are effect adapters over the existing HttpClient and `zed_credentials_provider`; they cannot authorize requests or persist a parallel secret inventory. Worker loss aborts the active broker session, discards uncommitted RNG state, resets the actor, and causes the next invocation to launch a fresh worker and redeploy the latest verified generation. Plugins and workers may return proposals only; PluginOutputPublicationAdapter maps them into the sole OutputCommitter, which alone publishes, journals, rolls back, and reconciles final outputs. <!-- impl: crates/sim_plugin_host/src/private_worker.rs#PrivateWorkerPluginExecutor --> <!-- impl: crates/sim_runtime/src/plugin_services.rs#PluginCapabilityBroker --> <!-- impl: crates/sim_worker/src/plugin_runtime.rs#WorkerCapabilityBridge --> <!-- impl: crates/zed/src/comfy_plugin_services.rs#private_worker_boundary -->
+The production component path is one closed chain: ExtensionStore validates and bounds the installed manifest/component pair, ComponentHost verifies the signed manifest and seals a path-free generation, ComponentHostRouter retains that immutable replay snapshot, and PrivateWorkerPluginExecutor serially transfers the deployment and invocation to RuntimeSupervisor. The outer framed worker envelope remains Postcard; invocation and result payload DTOs use independently bounded JSON because the versioned plugin value union uses tagged serialization that Postcard cannot represent. WorkerCapabilityBridge maps only bounded `PluginServiceWireRequest`/`PluginServiceWireResponse` bytes and holds no service, authorization, path, persistence, or commit state. `PluginCapabilityBroker` is the sole invocation-scoped service coordinator: it checks sealed PermissionPolicy capabilities, delegates exact provider decisions to ProviderPolicy, reaches the shared AssetService/ArtifactIndex and ModelStore, obtains narrowly scoped secret bytes through the credentials actuator, reads SystemClock, and leases RngTransaction state that commits only after invocation success. The Zed provider and credential bridges are effect adapters over the existing HttpClient and `zed_credentials_provider`; they cannot authorize requests or persist a parallel secret inventory. Worker loss aborts the active broker session, discards uncommitted RNG state, resets the actor, and causes the next invocation to launch a fresh worker and redeploy the latest verified generation. Plugins and workers may return proposals only; PluginOutputPublicationAdapter maps them into the sole OutputCommitter, which alone publishes, journals, rolls back, and reconciles final outputs. <!-- impl: crates/sim_plugin_host/src/private_worker.rs#PrivateWorkerPluginExecutor --> <!-- impl: crates/sim_runtime/src/plugin_services.rs#PluginCapabilityBroker --> <!-- impl: crates/sim_worker/src/plugin_runtime.rs#WorkerCapabilityBridge --> <!-- impl: crates/zed/src/sim_plugin_services.rs#private_worker_boundary -->
 
 One `NativeNodeRegistry` snapshot derived from that ComponentHost generation is consumed rather than reconstructed at each boundary. GPUI retains it through ComponentHostRouter and places the same deployment on native-worker startup; `NativeRuntimeApiHost::with_registry` passes it into `NativeRuntimeHttpServices`; and the headless factory consumes that API host without creating a second registry. For signed component nodes, `RuntimeNodePresentation` is populated atomically from the exact verified `PluginNode` display name, category, and ordered output-port names beside its executable descriptor. API compatibility projection enumerates every comprehensive executable, provider-required, and unavailable binding. Built-ins join the canonical `NodeRegistry`/`ObjectInfoRegistry`, whose checked `source_file` projection supplies the exact compatibility `python_module` (`nodes`, `comfy_extras.<stem>`, or `comfy_api_nodes.<stem>`); inactive rows retain that defining-source provenance plus their explicit reason without implying Python execution or registration. Signed plugins absent from the built-in catalog use their checked implementation namespace. Missing built-in metadata or presentation, a plugin without a signed namespace, or an accidentally unbound executable entry fails closed, and the API never invents component metadata or source identity. Explicit `conformance_in_process` mode remains development/test-only and never becomes a production fallback. <!-- impl: crates/zed/src/zed.rs#initialize_native_comfy_components --> <!-- impl: crates/sim_runtime/src/executor.rs#NativeNodeRegistry --> <!-- impl: crates/sim_plugin_host/src/registry_adapter.rs#registry_with_installed_plugins --> <!-- impl: crates/sim_api/src/sim_api.rs#NativeRuntimeApiHost --> <!-- impl: crates/sim_api/src/services.rs#project_component_node -->
 
@@ -2299,8 +2299,8 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_backend_corex",
                 "crates/sim_ui/src/execution_model.rs",
                 "crates/sim_ui/src/execution_panel.rs",
-                "crates/zed/src/comfy_cli.rs",
-                "crates/zed/src/comfy_plugin_services.rs",
+                "crates/zed/src/sim_cli.rs",
+                "crates/zed/src/sim_plugin_services.rs",
                 "crates/zed/src/zed.rs",
             ],
             [
@@ -2346,8 +2346,8 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_api/src/sim_api.rs",
                 "crates/sim_ui/src/execution_model.rs",
                 "crates/sim_ui/src/execution_panel.rs",
-                "crates/zed/src/comfy_cli.rs",
-                "crates/zed/src/comfy_plugin_services.rs",
+                "crates/zed/src/sim_cli.rs",
+                "crates/zed/src/sim_plugin_services.rs",
                 "crates/zed/src/zed.rs",
                 "target/comfy-parity/val-plugin-001.json",
                 "target/comfy-parity/val-runtime-trust-001.json",
@@ -2469,7 +2469,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_api/src/headless.rs",
                 "crates/sim_plugin_host/src/capabilities.rs",
                 "crates/sim_ui/src/execution_model.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/workspace",
                 "crates/db",
                 "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
@@ -2492,7 +2492,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_plugin_host/src/component_host.rs",
                 "crates/sim_ui/Cargo.toml",
                 "crates/sim_ui/src/execution_model.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/zed/src/zed.rs",
                 "crates/sim_worker/tests/ipc_framing.rs",
                 "crates/sim_worker/Cargo.toml",
@@ -2550,7 +2550,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_api/src/headless.rs",
                 "crates/sim_api/src/http.rs",
                 "crates/zed/src/zed.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/tests/support/native_controller.rs",
                 "crates/sim_test_support/tests/native_image_recovery.rs",
                 "crates/sim_test_support/tests/plugin_e2e.rs",
@@ -2578,7 +2578,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_api/src/headless.rs",
                 "crates/sim_api/src/http.rs",
                 "crates/zed/src/zed.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/tests/ownership_consolidation.rs",
                 "crates/sim_test_support/tests/support/native_controller.rs",
                 "crates/sim_test_support/tests/native_image_recovery.rs",
@@ -2624,7 +2624,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_ui/src/context_menu.rs",
                 "crates/sim_ui/src/context_menu_tests.rs",
                 "crates/sim_ui/src/workflow_item.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/tests/ownership_consolidation.rs",
                 "crates/sim_test_support/tests/native_image_recovery.rs",
             ],
@@ -2657,7 +2657,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_ui/src/context_menu_tests.rs",
                 "crates/sim_ui/src/graph_commands.rs",
                 "crates/sim_ui/src/workflow_item.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/tests/ownership_consolidation.rs",
                 "crates/sim_test_support/Cargo.toml",
                 "crates/sim_worker/Cargo.toml",
@@ -2784,7 +2784,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_runtime/src/execution_presentation.rs",
                 "crates/sim_runtime/src/permissions.rs",
                 "crates/sim_runtime/src/runtime_supervisor.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/tests/ownership_consolidation.rs",
                 "crates/sim_test_support/tests/plugin_e2e.rs",
                 "crates/sim_test_support/parity/regenerate_native_planning.py",
@@ -2883,7 +2883,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_ui/Cargo.toml",
                 "crates/sim_worker/Cargo.toml",
                 "crates/sim_test_support/Cargo.toml",
-                "crates/zed/src/comfy_plugin_services.rs",
+                "crates/zed/src/sim_plugin_services.rs",
                 "crates/zed/src/zed.rs",
                 "target/comfy-parity/val-ownership-001.json",
                 "target/comfy-parity/val-ownership-domain-001.json",
@@ -2923,7 +2923,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_test_support/parity/tasks.md",
                 "crates/sim_test_support/parity/traceability.md",
                 "crates/sim_test_support/parity/validation.md",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/zed/src/main.rs",
                 "crates/sim_api/src/headless.rs",
                 "crates/sim_api/src/sim_api.rs",
@@ -2946,7 +2946,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_runtime/src/settings.rs",
                 "crates/sim_runtime/src/persistence.rs",
                 "crates/sim_api",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/parity/ownership-policy.json",
                 "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
             ],
@@ -3122,7 +3122,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_runtime/src/runtime_supervisor.rs",
                 "crates/sim_worker/src/sim_worker.rs",
                 "crates/zed/src/zed.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_ui/src/shell.rs",
                 "assets/settings/default.json",
                 "script/bundle-mac",
@@ -3138,7 +3138,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/zed/resources/windows/zed.iss",
                 "crates/sim_runtime/src/runtime_supervisor.rs",
                 "crates/zed/src/zed.rs",
-                "crates/zed/src/comfy_cli.rs",
+                "crates/zed/src/sim_cli.rs",
                 "crates/sim_test_support/tests/native_release_boundary.rs",
                 "crates/sim_test_support/parity/ownership-policy.json",
                 "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
@@ -6172,14 +6172,15 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
         name = row["name"]
         suffix = row["feature_id"].casefold()
         module = rust_slug(name)
+        model_number = suffix.removeprefix("comfy-model-")
+        rust_module = f"{module}_sim_model_{model_number}"
         if kind == "model family":
             identifier = f"comfy-parity-native-model-family-{slug(name)}-{suffix}"
-            family_number = suffix.removeprefix("comfy-model-")
             family_paths = []
             for directory in ("src", "tests"):
                 family_directory = Path(f"crates/sim_model/{directory}/families")
                 candidates = sorted(
-                    (REPOSITORY_ROOT / family_directory).glob(f"*_sim_model_{family_number}.rs")
+                    (REPOSITORY_ROOT / family_directory).glob(f"*_sim_model_{model_number}.rs")
                 )
                 if len(candidates) != 1:
                     raise ValueError(
@@ -6791,14 +6792,14 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "comfy-parity-integrate-device-intel-xpu-comfy-model-0021"
                 )
             implementation_writes = [
-                f"crates/sim_tensor/src/backends/{module}_{suffix.replace('-', '_')}.rs",
-                f"crates/sim_tensor/tests/backends/{module}_{suffix.replace('-', '_')}.rs",
-                f"crates/sim_tensor/tests/{module}_{suffix.replace('-', '_')}.rs",
+                f"crates/sim_tensor/src/backends/{rust_module}.rs",
+                f"crates/sim_tensor/tests/backends/{rust_module}.rs",
+                f"crates/sim_tensor/tests/{rust_module}.rs",
             ]
             if device_feature not in {"rocm", "metal"}:
                 implementation_writes.insert(
                     1,
-                    f"crates/sim_tensor/src/ops/backend_{module}_{suffix.replace('-', '_')}.rs",
+                    f"crates/sim_tensor/src/ops/backend_{rust_module}.rs",
                 )
             if device_feature == "cpu":
                 implementation_writes.extend([
@@ -7015,7 +7016,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                         "crates/sim_worker/src/supervisor.rs",
                         "crates/sim_worker/src/memory_modes.rs",
                         "crates/zed/src/zed.rs",
-                        "crates/zed/src/comfy_cli.rs",
+                        "crates/zed/src/sim_cli.rs",
                         "crates/sim_ui/src/execution_surfaces.rs",
                         "script/bundle-mac",
                         "script/bundle-linux",
@@ -7037,7 +7038,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                         "crates/sim_worker/src/sim_worker_main.rs",
                         "crates/sim_worker/tests/ipc_framing.rs",
                         "crates/zed/src/zed.rs",
-                        "crates/zed/src/comfy_cli.rs",
+                        "crates/zed/src/sim_cli.rs",
                         "crates/sim_ui/src/execution_surfaces.rs",
                         "crates/sim_ui/src/execution_tests.rs",
                         "crates/sim_test_support/tests/native_controller_e2e.rs",
@@ -7168,7 +7169,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                         "crates/sim_worker/src/supervisor.rs",
                         "crates/sim_worker/src/memory_modes.rs",
                         "crates/zed/src/zed.rs",
-                        "crates/zed/src/comfy_cli.rs",
+                        "crates/zed/src/sim_cli.rs",
                         "crates/sim_ui/src/execution_surfaces.rs",
                         "crates/sim_ui/src/execution_model.rs",
                         "script/bundle-mac",
@@ -7191,7 +7192,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                         "crates/sim_worker/src/sim_worker_main.rs",
                         "crates/sim_worker/tests/ipc_framing.rs",
                         "crates/zed/src/zed.rs",
-                        "crates/zed/src/comfy_cli.rs",
+                        "crates/zed/src/sim_cli.rs",
                         "crates/sim_ui/src/execution_surfaces.rs",
                         "crates/sim_ui/src/execution_model.rs",
                         "crates/sim_ui/src/execution_tests.rs",
@@ -7381,12 +7382,12 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                             else []
                         ),
                         f"crates/sim_runtime/src/native_ffi_{device_feature}.rs",
-                        f"crates/sim_tensor/src/backends/{module}_{suffix.replace('-', '_')}.rs",
+                        f"crates/sim_tensor/src/backends/{rust_module}.rs",
                         "crates/sim_runtime/src/runtime_supervisor.rs",
                         "crates/sim_worker/src/sim_worker.rs",
                         "crates/sim_worker/src/supervisor.rs",
                         "crates/zed/src/zed.rs",
-                        "crates/zed/src/comfy_cli.rs",
+                        "crates/zed/src/sim_cli.rs",
                         "crates/sim_ui/src/execution_surfaces.rs",
                     ],
                     [
@@ -7406,14 +7407,14 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                         "crates/sim_runtime/src/runtime_supervisor.rs",
                         "crates/sim_tensor/src/sim_tensor.rs",
                         "crates/sim_tensor/src/operation.rs",
-                        f"crates/sim_tensor/src/backends/{module}_{suffix.replace('-', '_')}.rs",
+                        f"crates/sim_tensor/src/backends/{rust_module}.rs",
                         "crates/sim_types/src/worker_protocol.rs",
                         "crates/sim_worker/src/sim_worker.rs",
                         "crates/sim_worker/src/supervisor.rs",
                         "crates/sim_worker/src/sim_worker_main.rs",
                         "crates/sim_worker/tests/ipc_framing.rs",
                         "crates/zed/src/zed.rs",
-                        "crates/zed/src/comfy_cli.rs",
+                        "crates/zed/src/sim_cli.rs",
                         "crates/sim_ui/src/execution_surfaces.rs",
                         "crates/sim_ui/src/execution_tests.rs",
                         "crates/sim_test_support/tests/native_controller_e2e.rs",
@@ -7464,14 +7465,14 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                 last_vendor_trust_task = trust_provisioning
                 last_vendor_integration_task = production_integration
             certification_reads = [
-                f"crates/sim_tensor/src/backends/{module}_{suffix.replace('-', '_')}.rs",
+                f"crates/sim_tensor/src/backends/{rust_module}.rs",
                 "crates/sim_test_support/src/device_certification.rs",
                 "crates/sim_test_support/parity/catalogs/native-tensor-operation-contracts.csv",
             ]
             if foundation is not None:
                 certification_reads.append(f"crates/sim_test_support/parity/catalogs/native-backend-abi/{device_feature}.json")
             certification_writes = [
-                f"crates/sim_test_support/tests/device_{module}_{suffix.replace('-', '_')}.rs",
+                f"crates/sim_test_support/tests/device_{rust_module}.rs",
                 f"crates/sim_test_support/parity/catalogs/native-device-certification/{slug(name)}-{suffix}.json",
             ]
             certification_dependencies = [production_integration]
@@ -7608,8 +7609,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                 "crates/sim_tensor/src/sim_tensor.rs",
             ]
             sampler_writes = [
-                f"crates/sim_sampler/src/algorithms/{module}_{suffix.replace('-', '_')}.rs",
-                f"crates/sim_sampler/tests/algorithms/{module}_{suffix.replace('-', '_')}.rs",
+                f"crates/sim_sampler/src/algorithms/{rust_module}.rs",
+                f"crates/sim_sampler/tests/algorithms/{rust_module}.rs",
                 f"crates/sim_test_support/fixtures/samplers/{module}_{suffix.replace('-', '_')}",
             ]
             sampler_outcome = f"Implement only sampler `{name}` with its exact equations, RNG phases, callbacks, boundaries, progress, cancellation, and errors as an immutable definition and algorithm-specific equation adapter over the authoritative sampling foundation."
@@ -7789,7 +7790,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
             special[row["feature_id"]].append(identifier)
         elif kind == "scheduler":
             identifier = f"comfy-parity-native-scheduler-{slug(name)}-{suffix}"
-            tasks.append(task(identifier, f"Implement native scheduler: {name}", [7, 34, 37], [26, 33, 39], ["VAL-SCHEDULER-001", "VAL-RNG-001", "VAL-SAMPLING-FOUNDATION-001"], f"Implement only scheduler `{name}` with exact sigma equations as an immutable definition and algorithm-specific adapter over the authoritative scheduler request, slicing, source-order, default, and sampling-profile owners.", ["crates/sim_test_support/parity/catalogs/backend-models.csv", "projects/comfy/ComfyUI/comfy/samplers.py", "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py", "crates/sim_sampler/src/scheduler.rs", "crates/sim_sampler/src/sampling_profile.rs"], [f"crates/sim_sampler/src/schedulers/{module}_{suffix.replace('-', '_')}.rs", f"crates/sim_sampler/tests/schedulers/{module}_{suffix.replace('-', '_')}.rs", f"crates/sim_test_support/fixtures/schedulers/{module}_{suffix.replace('-', '_')}"], "The assigned scheduler's complete sigma arrays and invalid/boundary behavior match fixtures exactly where source output is exact, and every source file used by its provenance fixture is declared in Reads, while the row owns no shared validation, slicing, workspace allocation, registry, persistence, security, or commit behavior.", [tensor_semantic_foundation_task_id, sampler_foundation_task_id]))
+            tasks.append(task(identifier, f"Implement native scheduler: {name}", [7, 34, 37], [26, 33, 39], ["VAL-SCHEDULER-001", "VAL-RNG-001", "VAL-SAMPLING-FOUNDATION-001"], f"Implement only scheduler `{name}` with exact sigma equations as an immutable definition and algorithm-specific adapter over the authoritative scheduler request, slicing, source-order, default, and sampling-profile owners.", ["crates/sim_test_support/parity/catalogs/backend-models.csv", "projects/comfy/ComfyUI/comfy/samplers.py", "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py", "crates/sim_sampler/src/scheduler.rs", "crates/sim_sampler/src/sampling_profile.rs"], [f"crates/sim_sampler/src/schedulers/{rust_module}.rs", f"crates/sim_sampler/tests/schedulers/{rust_module}.rs", f"crates/sim_test_support/fixtures/schedulers/{module}_{suffix.replace('-', '_')}"], "The assigned scheduler's complete sigma arrays and invalid/boundary behavior match fixtures exactly where source output is exact, and every source file used by its provenance fixture is declared in Reads, while the row owns no shared validation, slicing, workspace allocation, registry, persistence, security, or commit behavior.", [tensor_semantic_foundation_task_id, sampler_foundation_task_id]))
             breadth_dependencies.append(identifier)
             special[row["feature_id"]].append(identifier)
         elif kind == "latent format":
@@ -7801,8 +7802,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                 "crates/sim_model/src/latent_format.rs",
             ]
             latent_writes = [
-                f"crates/sim_model/src/latent_formats/{module}_{suffix.replace('-', '_')}.rs",
-                f"crates/sim_model/tests/latent_formats/{module}_{suffix.replace('-', '_')}.rs",
+                f"crates/sim_model/src/latent_formats/{rust_module}.rs",
+                f"crates/sim_model/tests/latent_formats/{rust_module}.rs",
             ]
             latent_outcome = f"Implement only latent-format row {row['feature_id']} as an immutable definition and focused selector over the authoritative sim_model::latent_format owner, with exact channels, scale/shift, spatial/temporal rules, empty latent construction, preview mapping, and errors."
             latent_done = "The assigned format passes shapes, scaling, batching, dtype/device, preview, invalid input, cancellation, and serialization fixtures; ownership tests prove the row adapter delegates all validation, allocation, serialization, and transforms to the canonical owner."
@@ -11245,7 +11246,7 @@ def native_node_provider_invocation_foundation_task(dependency: str) -> dict[str
         [8, 12, 13, 17, 18, 20, 21, 22, 29, 32, 34, 35, 39, 40, 41],
         ["VAL-NODE-001", "VAL-NODE-REGISTRY-001", "VAL-DOMAIN-004", "VAL-PLUGIN-HOST-001", "VAL-E2E-003", "VAL-WORKER-PLUGIN-001", "VAL-RUNTIME-TRUST-001", "VAL-NATIVE-API-001", "VAL-CANCEL-001", "VAL-NATIVE-E2E-001", "VAL-OWNERSHIP-001"],
         "Adapt provider-required generated bindings through a versioned verified Rust/WASM provider ABI so an admitted signed complete binding set can materialize canonical native payloads under explicit provider, secret, upload, cost, and cancellation grants while offline, disabled, denied, stale, or absent providers preserve descriptors and make zero request.",
-        ["crates/sim_test_support/parity/catalogs/backend-nodes.csv", "crates/sim_test_support/parity/catalogs/backend-node-contracts.json", "crates/sim_nodes/src/execution.rs", "crates/sim_nodes/src/stored_payload.rs", "crates/sim_nodes/src/registry_generator.rs", "crates/sim_plugin_sdk/src/sim_plugin_sdk.rs", "crates/sim_plugin_sdk/src/type_ids.rs", "crates/sim_plugin_sdk/wit/sim-plugin.wit", "crates/sim_plugin_sdk/schema/plugin-manifest-v1.schema.json", "crates/sim_plugin_host", "crates/sim_runtime/src/trust.rs", "crates/sim_runtime/src/permissions.rs", "crates/sim_runtime/src/plugin_services.rs", "crates/sim_runtime/src/executor.rs", "crates/sim_runtime/src/runtime_supervisor.rs", "crates/sim_runtime/src/prompt_compiler.rs", "crates/sim_worker", "crates/sim_api/src/services.rs", "crates/sim_api/src/http.rs", "crates/sim_api/src/security.rs", "crates/zed/src/comfy_plugin_services.rs"],
+        ["crates/sim_test_support/parity/catalogs/backend-nodes.csv", "crates/sim_test_support/parity/catalogs/backend-node-contracts.json", "crates/sim_nodes/src/execution.rs", "crates/sim_nodes/src/stored_payload.rs", "crates/sim_nodes/src/registry_generator.rs", "crates/sim_plugin_sdk/src/sim_plugin_sdk.rs", "crates/sim_plugin_sdk/src/type_ids.rs", "crates/sim_plugin_sdk/wit/sim-plugin.wit", "crates/sim_plugin_sdk/schema/plugin-manifest-v1.schema.json", "crates/sim_plugin_host", "crates/sim_runtime/src/trust.rs", "crates/sim_runtime/src/permissions.rs", "crates/sim_runtime/src/plugin_services.rs", "crates/sim_runtime/src/executor.rs", "crates/sim_runtime/src/runtime_supervisor.rs", "crates/sim_runtime/src/prompt_compiler.rs", "crates/sim_worker", "crates/sim_api/src/services.rs", "crates/sim_api/src/http.rs", "crates/sim_api/src/security.rs", "crates/zed/src/sim_plugin_services.rs"],
         [
             "Cargo.lock",
             "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
@@ -11297,9 +11298,9 @@ def native_node_provider_invocation_foundation_task(dependency: str) -> dict[str
             "crates/sim_ui/src/execution_model.rs",
             "crates/sim_ui/src/execution_tests.rs",
             "crates/sim_ui/src/properties_panel_tests.rs",
-            "crates/zed/src/comfy_plugin_services.rs",
+            "crates/zed/src/sim_plugin_services.rs",
             "crates/zed/src/zed.rs",
-            "crates/zed/src/comfy_cli.rs",
+            "crates/zed/src/sim_cli.rs",
             "crates/sim_test_support/tests/support/native_controller.rs",
             "crates/sim_test_support/tests/native_diffusion_e2e.rs",
             "crates/sim_test_support/tests/plugin_e2e.rs",
@@ -11990,9 +11991,9 @@ def provider_component_foundation_tasks(
             "crates/sim_plugin_host/src/component_host.rs",
             "crates/sim_ui/src/execution_model.rs",
             "crates/sim_ui/src/sim_ui.rs",
-            "crates/zed/src/comfy_plugin_services.rs",
+            "crates/zed/src/sim_plugin_services.rs",
             "crates/zed/src/zed.rs",
-            "crates/zed/src/comfy_cli.rs",
+            "crates/zed/src/sim_cli.rs",
             "crates/sim_test_support/parity/generate_ownership_catalog.py",
             "crates/sim_test_support/parity/ownership-policy.json",
             "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
@@ -12002,7 +12003,7 @@ def provider_component_foundation_tasks(
             "crates/sim_runtime/src/native_execution_controller.rs",
             "crates/sim_plugin_host/src/private_worker.rs",
             "crates/sim_ui/src/execution_model.rs",
-            "crates/zed/src/comfy_plugin_services.rs",
+            "crates/zed/src/sim_plugin_services.rs",
             "crates/zed/src/zed.rs",
             "crates/sim_test_support/parity/ownership-policy.json",
             "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
@@ -12035,9 +12036,9 @@ def provider_component_foundation_tasks(
             "crates/sim_runtime/src/trust.rs",
             "crates/sim_runtime/src/native_execution_controller.rs",
             "crates/sim_ui/src/execution_model.rs",
-            "crates/zed/src/comfy_plugin_services.rs",
+            "crates/zed/src/sim_plugin_services.rs",
             "crates/zed/src/zed.rs",
-            "crates/zed/src/comfy_cli.rs",
+            "crates/zed/src/sim_cli.rs",
             "crates/sim_test_support/src/bin/sim_test_worker_fixture.rs",
             "crates/sim_test_support/tests/provider_worker_stream_bridge.rs",
             "crates/sim_test_support/tests/native_controller_e2e.rs",
@@ -12099,8 +12100,8 @@ def provider_component_foundation_tasks(
             "crates/sim_runtime/src/plugin_services.rs",
             "crates/sim_plugin_host/src/private_worker.rs",
             "crates/sim_plugin_host/src/component_host.rs",
-            "crates/zed/src/comfy_plugin_services.rs",
-            "crates/zed/src/comfy_cli.rs",
+            "crates/zed/src/sim_plugin_services.rs",
+            "crates/zed/src/sim_cli.rs",
             "crates/zed/Cargo.toml",
             "crates/sim_api/src/headless.rs",
             "crates/extension_host/src/extension_host.rs",
@@ -12129,8 +12130,8 @@ def provider_component_foundation_tasks(
             "Cargo.lock",
             "crates/sim_test_support/parity/catalogs/native-backend-dependencies.json",
             "crates/sim_test_support/parity/validate_backend_dependencies.py",
-            "crates/zed/src/comfy_plugin_services.rs",
-            "crates/zed/src/comfy_cli.rs",
+            "crates/zed/src/sim_plugin_services.rs",
+            "crates/zed/src/sim_cli.rs",
             "crates/zed/src/zed.rs",
             "crates/sim_api/src/services.rs",
             "crates/sim_api/src/headless.rs",
@@ -21353,7 +21354,7 @@ def write_design(criteria: dict[int, list[str]]) -> None:
         "5. Previews cross IPC as bounded encoded payloads. Final effects use prepare/commit transactions; cancellation, worker loss, OOM, plugin fault, or application crash before commit cannot create a successful output/history record.",
         "6. GPUI reducers update visible panels and graph overlays. Public HTTP/WebSocket clients receive a projection of the same state, not a second executor.",
         "",
-        "`zed comfy` is a focused adapter over these owners, not a second runtime, queue, asset index, persistence layer, capability model, or transaction service. Its `NativeExecutionPlan` sends discovery, redacted environment presence, and selected native-profile reporting through side-effect-free local projections; help is generated from the checked catalogs; and supported automation uses `NativeHeadlessService` plus `NativeRuntimeApiHost`. The CLI never exposes environment values and never applies source engine configuration. A catalog-native path whose canonical service belongs to a later executable task returns a fail-closed response naming that exact task; it may not fall through to an unowned unavailable facade, silently ignore a behavior-changing parameter, or map to an unrelated endpoint. The headless adapter therefore represents only native, migration, and task-owned deferred mappings/results; no public generic unavailable mapping or CLI operation is constructable. Source architecture conflicts and source-deferred network/account operations retain explicit migration/defer dispositions, and no disposition may launch a Python, ComfyUI, Node, or browser process. <!-- impl: crates/zed/src/comfy_cli.rs#NativeExecutionPlan -->",
+        "`zed comfy` is a focused adapter over these owners, not a second runtime, queue, asset index, persistence layer, capability model, or transaction service. Its `NativeExecutionPlan` sends discovery, redacted environment presence, and selected native-profile reporting through side-effect-free local projections; help is generated from the checked catalogs; and supported automation uses `NativeHeadlessService` plus `NativeRuntimeApiHost`. The CLI never exposes environment values and never applies source engine configuration. A catalog-native path whose canonical service belongs to a later executable task returns a fail-closed response naming that exact task; it may not fall through to an unowned unavailable facade, silently ignore a behavior-changing parameter, or map to an unrelated endpoint. The headless adapter therefore represents only native, migration, and task-owned deferred mappings/results; no public generic unavailable mapping or CLI operation is constructable. Source architecture conflicts and source-deferred network/account operations retain explicit migration/defer dispositions, and no disposition may launch a Python, ComfyUI, Node, or browser process. <!-- impl: crates/zed/src/sim_cli.rs#NativeExecutionPlan -->",
         "",
         "## Persistence, failure, and recovery",
         "",
@@ -21785,7 +21786,7 @@ def task_validation_commands(item: dict[str, object]) -> str:
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test restricted_pickle_allowlist val_model_format_001 -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test latent_formats val_latent_001_all_formats_emit_complete_artifact -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_sampler --test sampling_foundation val_sampling_foundation_001 -- --exact",
-            "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test model_families every_generated_model_family_fixture_executes_the_canonical_harness -- --exact",
+            "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test model_families val_model_family_001_every_generated_model_family_fixture_executes_the_canonical_harness -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_test_support --test cancellation_ownership val_cancel_001_canonical_cancellation_ownership -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_001 -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_001 -- --exact",
@@ -22183,7 +22184,7 @@ def task_validation_commands(item: dict[str, object]) -> str:
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_test_support --test autograd_breadth",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_tensor val_rng_001",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_tensor --all-features val_device_001",
-            "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test model_families every_generated_model_family_fixture_executes_the_canonical_harness -- --exact",
+            "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test model_families val_model_family_001_every_generated_model_family_fixture_executes_the_canonical_harness -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test latent_formats val_latent_001_all_formats_emit_complete_artifact -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --lib patch_graph::tests::val_patch_001_catalog_manifest_is_exact_digest_bound_and_executable -- --exact",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test patch_adapters val_patch_adapter_001_exact_catalog_manifest_and_artifact_are_current -- --exact",
@@ -23208,7 +23209,7 @@ def task_validation_commands(item: dict[str, object]) -> str:
             "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/conditioning-auxiliary-resource-foundation/generate_oracle.py --check",
             "cargo test --locked -p sim_nodes native_model_resource_service -- --nocapture",
             "cargo test --locked -p sim_runtime native_model_resource_service -- --nocapture",
-            "cargo test --locked -p sim_test_support --test native_node_family_e2e native_model_resource_service_loads_style_photomaker_and_gligen -- --exact --nocapture",
+            "cargo test --locked -p sim_test_support --test native_node_family_e2e native_model_resource_service_recipe_matrix -- --exact --nocapture",
             "cargo test --locked -p sim_test_support --test native_worker_resilience val_recovery_005 -- --exact --nocapture",
             "cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_task400_native_model_resource_service_001 -- --exact --nocapture",
             "cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_001 -- --exact --nocapture",
