@@ -2440,7 +2440,7 @@ impl GraphiteDocumentItem {
                                     return;
                                 };
                                 if form.includes_node(&target) {
-                                    item.save_copy(
+                                    item.edit_numeric_wire(
                                         GraphiteCopy::EditNode {
                                             node: Box::new(target.clone()),
                                             change: NodeCopyChange::InsertNumericOnWire(operation),
@@ -2465,11 +2465,16 @@ impl GraphiteDocumentItem {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let menu = Self::numeric_wire_insertion_menu(cx.entity().downgrade(), target, window, cx);
+        let label = if self.model.read(cx).working.is_some() {
+            "Insert a Node on Wire"
+        } else {
+            "Insert a Node on Wire in a Copy"
+        };
         div()
             .debug_selector(|| "GRAPHITE-GDD-INSERT-ON-WIRE".into())
             .child(DropdownMenu::new(
                 "graphite-gdd-insert-on-wire",
-                "Insert a Node on Wire in a Copy",
+                label,
                 menu,
             ))
     }
@@ -5529,6 +5534,179 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         verify_workspace_inserts_numeric_node_on_wire(cx, true).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_010_2_workspace_inserts_a_node_on_a_working_canvas_wire(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::Connection, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/working-insert-wire.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("original archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open wired archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let (field, source_id, target_id) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("numeric graph")
+            };
+            let [source, target] = form.nodes.as_slice() else {
+                panic!("one original wire")
+            };
+            (form.value.clone(), source.storage_id(), target.storage_id())
+        });
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("-19", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let canvas = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
+            .expect("visible working canvas");
+        right_click_saved_graph(window, "GRAPHITE-GDD-GRAPH-NODE-INPUT-1");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-INSERT-ON-WIRE-Sign")
+                .is_some()
+        );
+        click_graph_point(
+            window,
+            canvas.origin + gpui::point(px(550.), px(180.)),
+            gpui::MouseButton::Left,
+            gpui::Modifiers::default(),
+        );
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-INSERT-ON-WIRE-Sign")
+                .is_none()
+        );
+        let before = item.read_with(window, |item, cx| {
+            assert!(matches!(&item.node_copy, NodeCopyPanel::Ready(form) if form.nodes.len() == 2));
+            item.model.read(cx).revision.clone()
+        });
+
+        right_click_saved_graph(window, "GRAPHITE-GDD-GRAPH-NODE-INPUT-1");
+        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Sign");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains("could not type-check the inserted node")));
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &before));
+        });
+
+        right_click_saved_graph(window, "GRAPHITE-GDD-GRAPH-NODE-INPUT-1");
+        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Absolute Value");
+        window.run_until_parked();
+        paint(window);
+        let inserted_id = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working graph")
+            };
+            let target = form
+                .nodes
+                .iter()
+                .find(|node| node.storage_id() == target_id)
+                .expect("original target");
+            let inserted = target
+                .numeric_connection_source(&form.nodes)
+                .expect("rewired target");
+            assert_eq!(inserted.display_name(), "Absolute Value");
+            assert_ne!(inserted.storage_id(), source_id);
+            assert_eq!(
+                inserted
+                    .numeric_connection_source(&form.nodes)
+                    .map(GddGraphNode::storage_id),
+                Some(source_id)
+            );
+            assert!(
+                matches!(&form.saved_graph, SavedGraphPanel::Ready(graph) if graph.wires.len() == 2)
+            );
+            inserted.storage_id()
+        });
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+        paint(window);
+        for (history, upstream) in [
+            (None, inserted_id),
+            (Some("GRAPHITE-GDD-UNDO"), source_id),
+            (Some("GRAPHITE-GDD-REDO"), inserted_id),
+        ] {
+            if let Some(action) = history {
+                click(window, action);
+                window.run_until_parked();
+                paint(window);
+            }
+            click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+            window.run_until_parked();
+            paint(window);
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("working graph")
+                };
+                let target = form.selected_node().expect("retained target");
+                assert_eq!(target.storage_id(), target_id);
+                assert_eq!(
+                    target
+                        .numeric_connection_source(&form.nodes)
+                        .map(GddGraphNode::storage_id),
+                    Some(upstream)
+                );
+                assert!(matches!(
+                    form.output_preview,
+                    NodeOutputPreview::Ready(GddNumericValue::Integer(19))
+                ));
+            });
+        }
+
+        let destination = PathBuf::from("/project/saved-working-insert-wire.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("published working copy");
+        let nodes = saved.graph_nodes().await.expect("reopened working wires");
+        let target = nodes
+            .iter()
+            .find(|node| node.storage_id() == target_id)
+            .expect("durable original target");
+        assert_eq!(
+            target
+                .numeric_connection_source(&nodes)
+                .map(GddGraphNode::storage_id),
+            Some(inserted_id)
+        );
+        assert!(matches!(
+            saved.preview_graph_numeric_output(target).await,
+            Ok(GddNumericValue::Integer(19))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("preserved original archive"),
+            original
+        );
     }
 
     async fn verify_workspace_inserts_numeric_node_on_wire(cx: &mut TestAppContext, canvas: bool) {
