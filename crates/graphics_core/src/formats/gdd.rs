@@ -25,6 +25,7 @@ use graphite_document_graph_storage::{
     NodeMetadataEntry, PeerId, ROOT_NETWORK, Registry, RegistryDelta, from_runtime,
     to_runtime::ConversionError,
 };
+pub use graphite_editor::messages::portfolio::document::utility_types::network_interface::ImportOrExport;
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
     node_graph::document_node_definitions::{DocumentNodeDefinition, resolve_proto_node_type},
@@ -147,6 +148,10 @@ pub enum GddArchiveError {
     UnsupportedGraphExportRemoval,
     #[error("Select an eligible export and a different slot in the same nested Graphite network.")]
     UnsupportedGraphExportMove,
+    #[error("Select an eligible port in a standalone nested Graphite network.")]
+    UnsupportedGraphPortRename,
+    #[error("Enter a different Graphite port name.")]
+    UnchangedGraphPortName,
     #[error("Select an ordinary numeric output in the same Graphite network and an empty export.")]
     UnsupportedGraphExportConnection,
     #[error("Graphite could not resolve the selected export type. {0}")]
@@ -1599,6 +1604,114 @@ impl InspectedGddV1 {
             || rewired.iter().any(|(connector, input)| {
                 actual.input_from_connector(connector, parent_path) != Some(input)
             })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn rename_nested_network_port_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        port: ImportOrExport,
+        name: String,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::node::{input::ui::NAME, ui::OUTPUT_NAMES};
+
+        self.check_network_edit_target(network)?;
+        let port_exists = match port {
+            ImportOrExport::Import(index) => index < network.import_count,
+            ImportOrExport::Export(index) => index < network.export_count,
+        };
+        if !network.can_extend_ports_in_copy() || !port_exists {
+            return Err(GddArchiveError::UnsupportedGraphPortRename);
+        }
+        if name.len() as u64 > budget.max_entry_bytes {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        let path = &network.path;
+        let (&owner_id, parent_path) = path
+            .split_last()
+            .ok_or(GddArchiveError::UnsupportedGraphPortRename)?;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let metadata = interface
+            .node_metadata(&owner_id, parent_path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        let mut expected = metadata.persistent_metadata.clone();
+        let owner_storage = expected
+            .storage_id
+            .map(StorageNodeId)
+            .ok_or(GddArchiveError::MissingGraphNetwork)?;
+        let original_name = match port {
+            ImportOrExport::Import(index) => expected
+                .input_metadata
+                .get_mut(index)
+                .map(|input| &mut input.persistent_metadata.input_name),
+            ImportOrExport::Export(index) => expected.output_names.get_mut(index),
+        }
+        .ok_or(GddArchiveError::UnsupportedGraphPortRename)?;
+        if *original_name == name {
+            return Err(GddArchiveError::UnchangedGraphPortName);
+        }
+        original_name.clone_from(&name);
+        let owner_inputs = interface
+            .document_node(&owner_id, parent_path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?
+            .inputs
+            .clone();
+        let exports = interface
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?
+            .exports
+            .clone();
+        let change = match port {
+            ImportOrExport::Import(index) => NodeMetadataChange::InputName {
+                index,
+                name: name.clone(),
+            },
+            ImportOrExport::Export(_) => {
+                NodeMetadataChange::OutputNames(expected.output_names.clone())
+            }
+        };
+        let has_expected_metadata = move |interface: &NodeNetworkInterface| {
+            interface
+                .node_metadata(&owner_id, parent_path)
+                .is_some_and(|metadata| metadata.persistent_metadata == expected)
+        };
+        interface.set_import_export_name(name, port, path);
+        if !has_expected_metadata(&interface) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let edit = EditorDelta::NodeMetadata {
+            network_path: parent_path.to_vec(),
+            node_id: owner_id,
+            change,
+        };
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
+        let valid_edit = match (port, batch.ops.as_slice()) {
+            (
+                ImportOrExport::Import(port),
+                [RegistryDelta::ChangeNodeInputAttribute { id, index, delta }],
+            ) => *id == owner_storage && *index as usize == port && delta.key == NAME,
+            (ImportOrExport::Export(_), [RegistryDelta::ChangeNodeAttribute { id, delta }]) => {
+                *id == owner_storage && delta.key == OUTPUT_NAMES
+            }
+            _ => false,
+        };
+        if !valid_edit {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if !has_expected_metadata(&actual)
+            || !actual
+                .document_node(&owner_id, parent_path)
+                .is_some_and(|node| node.inputs == owner_inputs)
+            || !actual
+                .nested_network(path)
+                .is_some_and(|network| network.exports == exports)
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -4634,6 +4747,139 @@ mod tests {
                     .value_equal(original_registry)
             );
             assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_027_1_renames_exact_ports_without_changing_bindings_or_types() {
+        futures::executor::block_on(async {
+            let (original, owner_id) = network_import_fixture().await;
+            let graph = original.graph_inspection().await.expect("source networks");
+            let [root, nested] = graph.networks.as_slice() else {
+                panic!("expected the root and its original nested network");
+            };
+            let port = ImportOrExport::Import(1);
+            for (network, port) in [(root, port), (nested, ImportOrExport::Import(2))] {
+                assert!(matches!(
+                    original
+                        .rename_nested_network_port_in_copy(
+                            network,
+                            port,
+                            "Ignored".into(),
+                            budget()
+                        )
+                        .await,
+                    Err(GddArchiveError::UnsupportedGraphPortRename)
+                ));
+            }
+            let name = "Amount Δ";
+            let copy = original
+                .rename_nested_network_port_in_copy(nested, port, name.into(), budget())
+                .await
+                .expect("rename the addressed import");
+            assert!(matches!(
+                copy.rename_nested_network_port_in_copy(nested, port, "Stale".into(), budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let expected = original.document.registry();
+            let actual = copy.document.registry();
+            assert_eq!(actual.networks, expected.networks);
+            let [prior_first, prior_second] = expected.node_instances[&owner_id].inputs() else {
+                panic!("expected both source slots");
+            };
+            let [first, second] = actual.node_instances[&owner_id].inputs() else {
+                panic!("expected both renamed slots");
+            };
+            assert_eq!(first, prior_first);
+            assert_eq!(second.input, prior_second.input);
+            for slot in [second, prior_second] {
+                assert_eq!(
+                    slot.attributes
+                        .get_typed::<String>("fixture::opaque-import")
+                        .as_deref(),
+                    Some("surviving input")
+                );
+            }
+            let graph = copy.graph_inspection().await.expect("reopen imported name");
+            let current = graph
+                .networks
+                .iter()
+                .find(|network| network.id == nested.id)
+                .expect("same stable nested network");
+            assert_eq!(current.import_name(0), None);
+            assert_eq!(current.import_name(1), Some(name));
+            assert!(matches!(
+                copy.rename_nested_network_port_in_copy(current, port, name.into(), budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphPortName)
+            ));
+            let cleared = copy
+                .rename_nested_network_port_in_copy(current, port, String::new(), budget())
+                .await
+                .expect("clear the addressed name with the pinned default");
+            assert!(cleared.document.registry().value_equal(expected));
+            assert_eq!(copy.history_len(), original.history_len() + 1);
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one Undo restores the original label");
+            assert!(undo.document.registry().value_equal(expected));
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one Redo restores the renamed label");
+            assert!(redo.document.registry().value_equal(actual));
+
+            let (exports, bytes) = network_export_fixture().await;
+            let graph = exports
+                .graph_inspection()
+                .await
+                .expect("source export names");
+            let [_, nested] = graph.networks.as_slice() else {
+                panic!("expected the original nested outputs");
+            };
+            let copy = exports
+                .rename_nested_network_port_in_copy(
+                    nested,
+                    ImportOrExport::Export(1),
+                    "Computed output".into(),
+                    budget(),
+                )
+                .await
+                .expect("rename the addressed export");
+            let graph = copy.graph_inspection().await.expect("reopen exported name");
+            let current = graph
+                .networks
+                .iter()
+                .find(|network| network.id == nested.id)
+                .expect("same stable nested network");
+            assert_eq!(current.export_name(0), Some("Removed port"));
+            assert_eq!(current.export_name(1), Some("Computed output"));
+            assert_eq!(
+                copy.document.registry().networks,
+                exports.document.registry().networks
+            );
+            assert_eq!(copy.history_len(), exports.history_len() + 1);
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one Undo restores both export names");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(exports.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one Redo restores the renamed export");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(copy.document.registry())
+            );
+            assert_eq!(exports.original_bytes(), bytes.as_ref());
         });
     }
 

@@ -15,7 +15,8 @@ use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNetwork, GddGraphNode,
         GddHistoryDirection, GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddSavedView,
-        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -467,6 +468,7 @@ struct NodeCopyForm {
     value: Entity<Editor>,
     position: Entity<Editor>,
     output_preview: NodeOutputPreview,
+    port_rename: Option<PortRenameForm>,
 }
 
 impl NodeCopyForm {
@@ -488,7 +490,14 @@ impl NodeCopyForm {
         self.active_network = index;
         self.selected = None;
         self.output_preview = NodeOutputPreview::Hidden;
+        self.port_rename = None;
     }
+}
+
+struct PortRenameForm {
+    kind: NetworkPortKind,
+    index: usize,
+    name: Entity<Editor>,
 }
 
 enum NodeOutputPreview {
@@ -532,6 +541,11 @@ enum GraphiteCopy {
         network: Box<GddGraphNetwork>,
         change: NetworkPortChange,
     },
+    RenameNetworkPort {
+        network: Box<GddGraphNetwork>,
+        port: ImportOrExport,
+        name: String,
+    },
     ConnectNetworkExport {
         network: Box<GddGraphNetwork>,
         source: Box<GddGraphNode>,
@@ -563,6 +577,19 @@ impl NetworkPortKind {
             Self::Export => network.export_name(index),
         }
     }
+
+    fn port(self, index: usize) -> ImportOrExport {
+        match self {
+            Self::Import => ImportOrExport::Import(index),
+            Self::Export => ImportOrExport::Export(index),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum NetworkPortMenuAction {
+    Copy(NetworkPortChange),
+    Rename,
 }
 
 #[derive(Clone, Copy)]
@@ -836,6 +863,7 @@ impl GraphiteDocumentItem {
                                     value: cx.new(|cx| Editor::single_line(window, cx)),
                                     position: cx.new(|cx| Editor::single_line(window, cx)),
                                     output_preview: NodeOutputPreview::Hidden,
+                                    port_rename: None,
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -994,6 +1022,53 @@ impl GraphiteDocumentItem {
                 cx,
             );
         }
+    }
+
+    fn begin_network_port_rename(
+        &mut self,
+        network: &GddGraphNetwork,
+        kind: NetworkPortKind,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if !form
+            .active_network()
+            .is_some_and(|active| active.id == network.id)
+            || index >= kind.count(network)
+        {
+            return;
+        }
+        let current_name = kind.name(network, index).unwrap_or_default();
+        let name = cx.new(|cx| {
+            let mut editor = Editor::single_line(window, cx);
+            editor.set_text(current_name, window, cx);
+            editor
+        });
+        name.focus_handle(cx).focus(window, cx);
+        form.port_rename = Some(PortRenameForm { kind, index, name });
+        cx.notify();
+    }
+
+    fn save_network_port_name(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some((network, port)) = form.active_network().zip(form.port_rename.as_ref()) else {
+            return;
+        };
+        self.save_copy(
+            GraphiteCopy::RenameNetworkPort {
+                network: Box::new(network.clone()),
+                port: port.kind.port(port.index),
+                name: port.name.read(cx).text(cx),
+            },
+            window,
+            cx,
+        );
     }
 
     fn toggle_node_output_preview(&mut self, cx: &mut Context<Self>) {
@@ -1361,7 +1436,6 @@ impl GraphiteDocumentItem {
                                         if count == 0 {
                                             return None;
                                         }
-                                        let can_move = count > 1;
                                         let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
                                             let network = Arc::new(network.clone());
                                             for index in 0..count {
@@ -1369,23 +1443,30 @@ impl GraphiteDocumentItem {
                                                     Some(name) => format!("{noun} {} ({name})", index + 1),
                                                     None => format!("{noun} {}", index + 1),
                                                 };
-                                                let remove = std::iter::once((
-                                                    NetworkPortChange::Remove { kind, index },
-                                                    format!("Remove {port}"),
-                                                    format!("{selector}-{index}"),
-                                                ));
+                                                let commands = [
+                                                    (
+                                                        NetworkPortMenuAction::Copy(NetworkPortChange::Remove { kind, index }),
+                                                        format!("Remove {port}"),
+                                                        format!("{selector}-{index}"),
+                                                    ),
+                                                    (
+                                                        NetworkPortMenuAction::Rename,
+                                                        format!("Rename {port}"),
+                                                        format!("GRAPHITE-GDD-RENAME-{}-{index}", noun.to_ascii_uppercase()),
+                                                    ),
+                                                ];
                                                 let move_targets = [
                                                     (index.checked_sub(1), "Up", "UP"),
                                                     ((index + 1 < count).then_some(index + 1), "Down", "DOWN"),
                                                 ].into_iter().filter_map(|(target, direction, selector_suffix)| {
                                                     let target = target?;
                                                     Some((
-                                                        NetworkPortChange::Move { kind, from: index, to: target },
+                                                        NetworkPortMenuAction::Copy(NetworkPortChange::Move { kind, from: index, to: target }),
                                                         format!("Move {port} {direction}"),
                                                         format!("{move_selector}-{index}-{selector_suffix}"),
                                                     ))
                                                 });
-                                                for (change, label, selector) in remove.chain(move_targets) {
+                                                for (action, label, selector) in commands.into_iter().chain(move_targets) {
                                                     let item = item.clone();
                                                     let network = network.clone();
                                                     menu = menu.custom_entry(
@@ -1401,8 +1482,13 @@ impl GraphiteDocumentItem {
                                                         },
                                                         move |window, cx| {
                                                             if let Some(item) = item.upgrade() {
-                                                                item.update(cx, |item, cx| {
-                                                                    item.edit_network_port(&network, change, window, cx);
+                                                                item.update(cx, |item, cx| match action {
+                                                                    NetworkPortMenuAction::Copy(change) => {
+                                                                        item.edit_network_port(&network, change, window, cx)
+                                                                    }
+                                                                    NetworkPortMenuAction::Rename => {
+                                                                        item.begin_network_port_rename(&network, kind, index, window, cx)
+                                                                    }
                                                                 });
                                                             }
                                                         },
@@ -1415,15 +1501,40 @@ impl GraphiteDocumentItem {
                                             .debug_selector(move || selector.into())
                                             .child(DropdownMenu::new(
                                                 selector,
-                                                if can_move {
-                                                    format!("Edit {noun}s in a Copy")
-                                                } else {
-                                                    format!("Remove {noun} in a Copy")
-                                                },
+                                                format!("Edit {noun}s in a Copy"),
                                                 menu,
                                             )))
                                     }),
                                 ))
+                            })
+                            .when_some(form.port_rename.as_ref(), |panel, form| {
+                                panel
+                                    .child(Label::new(match form.kind {
+                                        NetworkPortKind::Import => format!("Import {} name", form.index + 1),
+                                        NetworkPortKind::Export => format!("Export {} name", form.index + 1),
+                                    }))
+                                    .child(
+                                        div()
+                                            .debug_selector(|| "GRAPHITE-GDD-PORT-NAME".into())
+                                            .child(form.name.clone()),
+                                    )
+                                    .child(h_flex().gap_2().children([
+                                        div().debug_selector(|| "GRAPHITE-GDD-SAVE-PORT-NAME".into()).child(
+                                            Button::new("graphite-gdd-save-port-name", "Save Renamed Folder")
+                                                .disabled(self.copy_task.is_some())
+                                                .on_click(cx.listener(|item, _, window, cx| item.save_network_port_name(window, cx))),
+                                        ),
+                                        div().debug_selector(|| "GRAPHITE-GDD-CANCEL-PORT-NAME".into()).child(
+                                            Button::new("graphite-gdd-cancel-port-name", "Cancel")
+                                                .on_click(cx.listener(|item, _, window, cx| {
+                                                    if let NodeCopyPanel::Ready(form) = &mut item.node_copy {
+                                                        form.port_rename = None;
+                                                        item.focus_handle.focus(window, cx);
+                                                        cx.notify();
+                                                    }
+                                                })),
+                                        ),
+                                    ]))
                             })
                     })
                     .when(has_nodes, |panel| panel.child(
@@ -1922,6 +2033,7 @@ impl GraphiteDocumentItem {
                             },
                         ..
                     } => "Reordered exports in",
+                    GraphiteCopy::RenameNetworkPort { .. } => "Renamed port in",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
                     GraphiteCopy::InsertNumericNode { .. }
@@ -2179,6 +2291,20 @@ impl GraphiteDocumentItem {
                                     }
                                 })
                             }
+                            GraphiteCopy::RenameNetworkPort {
+                                network,
+                                port,
+                                name,
+                            } => Some(
+                                archive
+                                    .rename_nested_network_port_in_copy(
+                                        &network,
+                                        port,
+                                        name,
+                                        ARCHIVE_BUDGET,
+                                    )
+                                    .await?,
+                            ),
                             GraphiteCopy::InsertNumericNode {
                                 operation,
                                 position,
@@ -3350,6 +3476,127 @@ mod tests {
         assert_eq!(network.import_count, 2);
         assert_eq!(network.export_count, 2);
         assert_eq!(contents.history_len(), original_history + added_history);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_027_2_workspace_renames_addressed_import_and_export_names(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/rename-ports.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let mut current = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source network")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        for (kind, menu, selector, old_name, name, destination, added_history) in [
+            (
+                NetworkPortKind::Import,
+                "GRAPHITE-GDD-REMOVE-IMPORT",
+                "GRAPHITE-GDD-RENAME-IMPORT-1",
+                "Second numeric input",
+                "Adjustment",
+                "/project/renamed-import.gdd",
+                1,
+            ),
+            (
+                NetworkPortKind::Export,
+                "GRAPHITE-GDD-REMOVE-EXPORT",
+                "GRAPHITE-GDD-RENAME-EXPORT-1",
+                "Second numeric output",
+                "Computed result",
+                "/project/renamed-export.gdd",
+                2,
+            ),
+        ] {
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+            click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+            paint(window);
+            let network_id = current.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("expected scoped graph");
+                };
+                form.active_network().expect("same nested network").id
+            });
+            click(window, menu);
+            paint(window);
+            click(window, selector);
+            paint(window);
+            current.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("expected the name form");
+                };
+                let port = form.port_rename.as_ref().expect("selected rename");
+                assert_eq!(port.name.read(cx).text(cx), old_name);
+            });
+            click(window, "GRAPHITE-GDD-CANCEL-PORT-NAME");
+            paint(window);
+            assert!(!current.read_with(window, |item, cx| item.is_dirty(cx)));
+
+            click(window, menu);
+            paint(window);
+            click(window, selector);
+            paint(window);
+            click(window, "GRAPHITE-GDD-PORT-NAME");
+            window.simulate_keystrokes("ctrl-a");
+            window.simulate_input(name);
+            paint(window);
+            click(window, "GRAPHITE-GDD-SAVE-PORT-NAME");
+            let path = PathBuf::from(destination);
+            window.simulate_new_path_selection(|_| Some(path.clone()));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![path]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("reopen the renamed folder");
+            assert_ne!(reopened, current);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected native Graphite folder");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            let graph = contents
+                .graph_inspection()
+                .await
+                .expect("reopened nested network");
+            let network = graph
+                .networks
+                .iter()
+                .find(|network| network.id == network_id)
+                .expect("same nested network identity");
+            assert_eq!(kind.name(network, 1), Some(name));
+            assert_eq!(network.import_name(0), Some("First numeric input"));
+            assert_eq!(network.export_name(0), Some("First numeric output"));
+            assert_eq!(network.import_count, 2);
+            assert_eq!(network.export_count, 2);
+            assert_eq!(contents.history_len(), original_history + added_history);
+            current = reopened;
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
