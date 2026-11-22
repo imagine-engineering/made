@@ -483,7 +483,10 @@ enum NodeCopyChange {
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
     DisconnectNumericInput,
-    ConnectNumericInput(Box<GddGraphNode>),
+    ConnectNumericInput {
+        source: Box<GddGraphNode>,
+        previous: Option<Box<GddGraphNode>>,
+    },
 }
 
 enum PreparedCopy {
@@ -610,11 +613,15 @@ impl GraphiteDocumentItem {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
+        let previous = target.numeric_connection_source(&form.nodes);
         let sources = form
             .nodes
             .iter()
             .enumerate()
-            .filter(|(_, source)| target.can_connect_numeric_input_from(source))
+            .filter(|(_, source)| match previous {
+                Some(previous) => target.can_reconnect_numeric_input_from(previous, source),
+                None => target.can_connect_numeric_input_from(source),
+            })
             .collect::<Vec<_>>();
         if sources.is_empty() || self.copy_task.is_some() {
             return None;
@@ -625,6 +632,7 @@ impl GraphiteDocumentItem {
                 let item = item.clone();
                 let target = target.clone();
                 let source = source.clone();
+                let previous = previous.cloned();
                 let label = SharedString::from(source.label().to_owned());
                 menu = menu.custom_entry(
                     move |_, _| {
@@ -640,9 +648,10 @@ impl GraphiteDocumentItem {
                                 item.save_copy(
                                     GraphiteCopy::EditNode {
                                         node: target.clone(),
-                                        change: NodeCopyChange::ConnectNumericInput(Box::new(
-                                            source.clone(),
-                                        )),
+                                        change: NodeCopyChange::ConnectNumericInput {
+                                            source: Box::new(source.clone()),
+                                            previous: previous.clone().map(Box::new),
+                                        },
                                     },
                                     window,
                                     cx,
@@ -654,14 +663,15 @@ impl GraphiteDocumentItem {
             }
             menu
         });
+        let (selector, label) = if previous.is_some() {
+            ("GRAPHITE-GDD-RECONNECT-VALUE", "Reconnect Value in a Copy")
+        } else {
+            ("GRAPHITE-GDD-CONNECT-VALUE", "Connect Value in a Copy")
+        };
         Some(
             div()
-                .debug_selector(|| "GRAPHITE-GDD-CONNECT-VALUE".into())
-                .child(DropdownMenu::new(
-                    "graphite-gdd-connect-value",
-                    "Connect Value in a Copy",
-                    menu,
-                )),
+                .debug_selector(move || selector.into())
+                .child(DropdownMenu::new(selector, label, menu)),
         )
     }
 
@@ -1085,7 +1095,14 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Disconnected",
                     GraphiteCopy::EditNode {
-                        change: NodeCopyChange::ConnectNumericInput(_),
+                        change:
+                            NodeCopyChange::ConnectNumericInput {
+                                previous: Some(_), ..
+                            },
+                        ..
+                    } => "Reconnected",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::ConnectNumericInput { previous: None, .. },
                         ..
                     } => "Connected",
                 };
@@ -1248,7 +1265,23 @@ impl GraphiteDocumentItem {
                                         )
                                         .await?
                                 }
-                                NodeCopyChange::ConnectNumericInput(source) => {
+                                NodeCopyChange::ConnectNumericInput {
+                                    source,
+                                    previous: Some(previous),
+                                } => {
+                                    archive
+                                        .reconnect_graph_numeric_input_in_copy(
+                                            &node,
+                                            &previous,
+                                            &source,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NodeCopyChange::ConnectNumericInput {
+                                    source,
+                                    previous: None,
+                                } => {
                                     archive
                                         .connect_graph_numeric_input_in_copy(
                                             &node,
@@ -1791,6 +1824,7 @@ mod tests {
         SingleNode,
         ExposedInput,
         Connection,
+        Reconnection,
     }
 
     async fn numeric_graph_archive(fixture: NumericGraphFixture) -> (Vec<u8>, usize) {
@@ -1816,7 +1850,9 @@ mod tests {
             NumericGraphFixture::ExposedInput => {
                 Some(NodeInput::value(TaggedValue::Integer(0), true))
             }
-            NumericGraphFixture::Connection => Some(NodeInput::node(NodeId(7), 0)),
+            NumericGraphFixture::Connection | NumericGraphFixture::Reconnection => {
+                Some(NodeInput::node(NodeId(7), 0))
+            }
         };
         if let Some(second_input) = second_input {
             graph.nodes.insert(
@@ -1826,6 +1862,18 @@ mod tests {
                         absolute_value::IDENTIFIER,
                     ),
                     inputs: vec![second_input],
+                    ..Default::default()
+                },
+            );
+        }
+        if matches!(fixture, NumericGraphFixture::Reconnection) {
+            graph.nodes.insert(
+                NodeId(9),
+                DocumentNode {
+                    implementation: DocumentNodeImplementation::ProtoNode(
+                        absolute_value::IDENTIFIER,
+                    ),
+                    inputs: vec![NodeInput::value(TaggedValue::Integer(-31), false)],
                     ..Default::default()
                 },
             );
@@ -1934,6 +1982,99 @@ mod tests {
         ));
         assert!(connected.has_numeric_connection());
         assert_eq!(contents.history_len(), original_history + 1);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_008_2_workspace_reconnects_a_value_in_a_new_folder(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::Reconnection).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/old-wire.gdd.zip");
+        let destination = PathBuf::from("/project/reconnected.gdd");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let original_item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        for publish in [false, true] {
+            click(window, "GRAPHITE-GDD-RECONNECT-VALUE");
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-0")
+                    .is_none()
+            );
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-1")
+                    .is_none()
+            );
+            click(window, "GRAPHITE-GDD-CONNECT-SOURCE-2");
+            window.simulate_new_path_selection(|_| publish.then(|| destination.clone()));
+            window.run_until_parked();
+            assert_eq!(
+                filesystem
+                    .metadata(&destination)
+                    .await
+                    .expect("copy publication")
+                    .is_some(),
+                publish
+            );
+            paint(window);
+        }
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("new document");
+        assert_ne!(reopened, original_item);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected GDD document");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents.graph_nodes().await.expect("original nodes");
+        let [previous, target, replacement] = nodes.as_slice() else {
+            panic!("expected the original three nodes");
+        };
+        assert!(matches!(
+            previous.numeric_input(),
+            Some(GddNumericValue::Integer(-17))
+        ));
+        assert!(matches!(
+            replacement.numeric_input(),
+            Some(GddNumericValue::Integer(-31))
+        ));
+        let current_source = target
+            .numeric_connection_source(&nodes)
+            .expect("replacement wire");
+        assert_eq!(current_source.label(), replacement.label());
+        assert_eq!(contents.history_len(), original_history + 2);
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
