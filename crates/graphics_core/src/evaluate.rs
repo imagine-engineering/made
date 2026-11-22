@@ -1119,82 +1119,96 @@ impl CpuSvgEvaluation {
     }
 
     pub async fn evaluate(self) -> CpuSvgCompletion {
-        let result = AssertUnwindSafe(async {
-            // The private network has either no resource or exactly one sealed PNG.
-            // Its original memory proxy grants no filesystem or host-service authority.
-            let mut application_io = PlatformApplicationIo::default();
-            if let Some(input) = &self.checkpoint.encoded_png {
-                let storage = HashMapResourceStorage::new();
-                storage.store(input.source.encoded_bytes().as_ref());
-                application_io.inject_resource_proxy(Box::new(storage));
-            }
-            let api = Arc::new(PlatformEditorApi {
-                application_io: Some(Arc::new(application_io)),
-                editor_preferences: Box::new(SvgPreferences(
-                    self.checkpoint.budget.max_viewport_pixels,
-                )),
-                ..PlatformEditorApi::default()
-            });
-            let mut network = graphite_interpreted_executor::util::wrap_network_in_scope(
-                (*self.checkpoint.network).clone(),
-                api,
-            );
-            graphite_preprocessor::Preprocessor::new()
-                .preprocess(&mut network, &|_| None)
-                .map_err(|error| CpuSvgEvaluationError::Preprocessing(error.to_string()))?;
-            let proto = Compiler {}
-                .compile_single(network)
-                .map_err(CpuSvgEvaluationError::Compilation)?;
-            let executor = DynamicExecutor::new(proto)
-                .await
-                .map_err(|errors| CpuSvgEvaluationError::Construction(Box::new(errors)))?;
-            if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>))
-                || executor.output_type() != Some(graphite_std::future!(Item<RenderOutput>))
-            {
-                return Err(CpuSvgEvaluationError::UnexpectedContract);
-            }
-            let value = Executor::execute(&&executor, self.checkpoint.configuration.into_context())
-                .await
-                .map_err(|error| {
-                    CpuSvgEvaluationError::Execution(CpuSvgExecutionError(error.to_string()))
-                })?;
-            if let Some(input) = &self.checkpoint.encoded_png {
-                validate_decoded_image(&executor, self.checkpoint.node_id, input)?;
-            }
-            let TaggedValue::RenderOutput(output) = value else {
-                return Err(CpuSvgEvaluationError::UnexpectedOutput);
-            };
-            let RenderOutputType::Svg { svg, image_data } = &output.data else {
-                return Err(CpuSvgEvaluationError::UnexpectedOutput);
-            };
-            if !image_data.is_empty() {
-                return Err(CpuSvgEvaluationError::UnexpectedOutput);
-            }
-            if svg.len() > self.checkpoint.budget.max_output_bytes {
-                return Err(CpuSvgEvaluationError::OutputBudgetExceeded);
-            }
-            Ok(output)
-        })
-        .catch_unwind()
-        .await
-        .unwrap_or_else(|payload| {
-            let detail = payload
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| {
-                    payload
-                        .downcast_ref::<&str>()
-                        .map(|detail| (*detail).to_owned())
-                })
-                .unwrap_or_else(|| "Non-string panic payload".to_owned());
-            Err(CpuSvgEvaluationError::SourcePanic(detail))
-        });
+        let result = evaluate_cpu_svg(
+            &self.checkpoint.network,
+            self.checkpoint.configuration,
+            self.checkpoint.budget,
+            self.checkpoint
+                .encoded_png
+                .as_ref()
+                .map(|input| (self.checkpoint.node_id, input)),
+        )
+        .await;
         CpuSvgCompletion {
             checkpoint: self.checkpoint,
             submission: self.submission,
             result,
         }
     }
+}
+
+pub(crate) async fn evaluate_cpu_svg(
+    network: &NodeNetwork,
+    configuration: RenderConfig,
+    budget: CpuSvgEvaluationBudget,
+    encoded_png: Option<(NodeId, &CpuSvgEncodedPngInput)>,
+) -> Result<RenderOutput, CpuSvgEvaluationError> {
+    AssertUnwindSafe(async {
+        // The private network has either no resource or exactly one sealed PNG.
+        // Its original memory proxy grants no filesystem or host-service authority.
+        let mut application_io = PlatformApplicationIo::default();
+        if let Some((_, input)) = encoded_png {
+            let storage = HashMapResourceStorage::new();
+            storage.store(input.source.encoded_bytes().as_ref());
+            application_io.inject_resource_proxy(Box::new(storage));
+        }
+        let api = Arc::new(PlatformEditorApi {
+            application_io: Some(Arc::new(application_io)),
+            editor_preferences: Box::new(SvgPreferences(budget.max_viewport_pixels)),
+            ..PlatformEditorApi::default()
+        });
+        let mut network =
+            graphite_interpreted_executor::util::wrap_network_in_scope(network.clone(), api);
+        graphite_preprocessor::Preprocessor::new()
+            .preprocess(&mut network, &|_| None)
+            .map_err(|error| CpuSvgEvaluationError::Preprocessing(error.to_string()))?;
+        let proto = Compiler {}
+            .compile_single(network)
+            .map_err(CpuSvgEvaluationError::Compilation)?;
+        let executor = DynamicExecutor::new(proto)
+            .await
+            .map_err(|errors| CpuSvgEvaluationError::Construction(Box::new(errors)))?;
+        if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>))
+            || executor.output_type() != Some(graphite_std::future!(Item<RenderOutput>))
+        {
+            return Err(CpuSvgEvaluationError::UnexpectedContract);
+        }
+        let value = Executor::execute(&&executor, configuration.into_context())
+            .await
+            .map_err(|error| {
+                CpuSvgEvaluationError::Execution(CpuSvgExecutionError(error.to_string()))
+            })?;
+        if let Some((node, input)) = encoded_png {
+            validate_decoded_image(&executor, node, input)?;
+        }
+        let TaggedValue::RenderOutput(output) = value else {
+            return Err(CpuSvgEvaluationError::UnexpectedOutput);
+        };
+        let RenderOutputType::Svg { svg, image_data } = &output.data else {
+            return Err(CpuSvgEvaluationError::UnexpectedOutput);
+        };
+        if !image_data.is_empty() {
+            return Err(CpuSvgEvaluationError::UnexpectedOutput);
+        }
+        if svg.len() > budget.max_output_bytes {
+            return Err(CpuSvgEvaluationError::OutputBudgetExceeded);
+        }
+        Ok(output)
+    })
+    .catch_unwind()
+    .await
+    .unwrap_or_else(|payload| {
+        let detail = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| {
+                payload
+                    .downcast_ref::<&str>()
+                    .map(|detail| (*detail).to_owned())
+            })
+            .unwrap_or_else(|| "Non-string panic payload".to_owned());
+        Err(CpuSvgEvaluationError::SourcePanic(detail))
+    })
 }
 
 fn source_network(
@@ -1431,8 +1445,7 @@ fn same_configuration(first: RenderConfig, second: RenderConfig) -> bool {
         && first.for_eyedropper == second.for_eyedropper
 }
 
-fn validate(
-    parameters: CpuSvgArtboardParameters,
+pub(crate) fn validate_svg_configuration(
     configuration: RenderConfig,
     budget: CpuSvgEvaluationBudget,
 ) -> Result<(), CpuSvgDocumentError> {
@@ -1465,6 +1478,18 @@ fn validate(
     if pixels > u64::from(budget.max_viewport_pixels) {
         return Err(CpuSvgDocumentError::ViewportBudgetExceeded);
     }
+    Ok(())
+}
+
+fn validate(
+    parameters: CpuSvgArtboardParameters,
+    configuration: RenderConfig,
+    budget: CpuSvgEvaluationBudget,
+) -> Result<(), CpuSvgDocumentError> {
+    validate_svg_configuration(configuration, budget)?;
+    let scale = configuration.scale;
+    let physical = DAffine2::from_scale(DVec2::splat(scale)) * configuration.viewport.transform;
+    let logical = DAffine2::from_scale(DVec2::splat(1. / scale)) * physical;
     if !parameters.location.is_finite()
         || !parameters.dimensions.is_finite()
         || !(parameters.location + parameters.dimensions).is_finite()

@@ -55,18 +55,23 @@ use graphite_graph_craft::application_io::resource::{
 use graphite_graph_craft::{
     document::{
         DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
-        value::TaggedValue,
+        value::{RenderOutput, TaggedValue},
     },
     runtime_delta::RuntimeDelta,
 };
 use graphite_interpreted_executor::node_registry::NODE_REGISTRY;
 use graphite_math_nodes::modulo;
+use graphite_std::{
+    application_io::RenderConfig,
+    vector_nodes::{fill, generator_nodes::rectangle},
+};
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
 use crate::evaluate::{
-    NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator, NumericGraphPreparationError,
-    UnaryNumericOperation, typecheck_detached_numeric_network,
+    CpuSvgEvaluationBudget, NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator,
+    NumericGraphPreparationError, UnaryNumericOperation, evaluate_cpu_svg,
+    typecheck_detached_numeric_network, validate_svg_configuration,
 };
 
 use crate::registry::{
@@ -255,6 +260,12 @@ pub enum GddArchiveError {
     GraphNumericPreviewBudget,
     #[error("Graphite could not evaluate the selected node. {0}")]
     GraphNumericPreviewEvaluation(String),
+    #[error("Graphite preview requires a saved root Merge with supported rectangle layers.")]
+    UnsupportedGraphMergePreview,
+    #[error("The saved Merge graph exceeds the preview budget.")]
+    GraphMergePreviewBudget,
+    #[error("Graphite could not render the saved Merge graph. {0}")]
+    GraphMergePreviewEvaluation(String),
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -3230,6 +3241,38 @@ impl InspectedGddV1 {
         })
     }
 
+    pub async fn render_document_merge_svg(
+        &self,
+        node: &GddGraphNode,
+        configuration: RenderConfig,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<RenderOutput, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        if !node.network_path.is_empty() || node.nested_network.is_none() {
+            return Err(GddArchiveError::UnsupportedGraphMergePreview);
+        }
+        let graph = self.runtime_graph().await?;
+        let selected = node.local_id;
+        if graph.network.exports != [NodeInput::node(selected, 0)] {
+            return Err(GddArchiveError::UnsupportedGraphMergePreview);
+        }
+        validate_svg_configuration(configuration, budget)
+            .map_err(|error| GddArchiveError::GraphMergePreviewEvaluation(error.to_string()))?;
+        let mut detached = NodeNetwork {
+            exports: vec![NodeInput::node(selected, 0)],
+            ..Default::default()
+        };
+        collect_merge_preview_node(
+            &graph.network,
+            selected,
+            &mut detached,
+            &mut BTreeSet::new(),
+        )?;
+        evaluate_cpu_svg(&detached, configuration, budget, None)
+            .await
+            .map_err(|error| GddArchiveError::GraphMergePreviewEvaluation(error.to_string()))
+    }
+
     pub async fn duplicate_graph_numeric_node_in_copy(
         &self,
         node: &GddGraphNode,
@@ -4919,6 +4962,107 @@ fn enclosing_network_inputs<'a>(root: &'a NodeNetwork, path: &[NodeId]) -> Optio
         }
         None => Some(&[]),
     }
+}
+
+fn collect_merge_preview_node(
+    source: &NodeNetwork,
+    node_id: NodeId,
+    detached: &mut NodeNetwork,
+    visiting: &mut BTreeSet<NodeId>,
+) -> Result<(), GddArchiveError> {
+    const MAX_PREVIEW_NODES: usize = 32;
+    if detached.nodes.contains_key(&node_id) {
+        return Ok(());
+    }
+    if !visiting.insert(node_id) {
+        return Err(GddArchiveError::UnsupportedGraphMergePreview);
+    }
+    if detached.nodes.len() + visiting.len() > MAX_PREVIEW_NODES {
+        return Err(GddArchiveError::GraphMergePreviewBudget);
+    }
+    let source_node = source
+        .nodes
+        .get(&node_id)
+        .ok_or(GddArchiveError::UnsupportedGraphMergePreview)?;
+    let node = checked_merge_preview_node(source_node)
+        .ok_or(GddArchiveError::UnsupportedGraphMergePreview)?;
+    for input in &node.inputs {
+        if let NodeInput::Node {
+            node_id,
+            output_index: 0,
+        } = input
+        {
+            collect_merge_preview_node(source, *node_id, detached, visiting)?;
+        }
+    }
+    visiting.remove(&node_id);
+    detached.nodes.insert(node_id, node);
+    Ok(())
+}
+
+fn checked_merge_preview_node(node: &DocumentNode) -> Option<DocumentNode> {
+    let output_wire = |input: &NodeInput| {
+        matches!(
+            input,
+            NodeInput::Node {
+                output_index: 0,
+                ..
+            }
+        )
+    };
+    let (definition, replacements) = match &node.implementation {
+        DocumentNodeImplementation::Network(_) => {
+            let [base, content] = node.inputs.as_slice() else {
+                return None;
+            };
+            let replacements = [(0, base), (1, content)]
+                .into_iter()
+                .filter(|(_, input)| output_wire(input))
+                .collect::<Vec<_>>();
+            (merge_node_definition()?, replacements)
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &rectangle::IDENTIFIER =>
+        {
+            let dimensions = [rectangle::WidthInput::INDEX, rectangle::HeightInput::INDEX];
+            let mut replacements = Vec::with_capacity(dimensions.len());
+            for index in dimensions {
+                let input = node.inputs.get(index)?;
+                if !matches!(input.as_value(), Some(TaggedValue::Number(value)) if value.is_finite() && *value >= 0.)
+                {
+                    return None;
+                }
+                replacements.push((index, input));
+            }
+            (
+                resolve_proto_node_type(rectangle::IDENTIFIER)?,
+                replacements,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
+            let content_index = fill::ContentInput::INDEX;
+            let paint_index = fill::PaintInput::INDEX;
+            let content = node.inputs.get(content_index)?;
+            let paint = node.inputs.get(paint_index)?;
+            if !output_wire(content)
+                || !matches!(paint.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()))
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(fill::IDENTIFIER)?,
+                vec![(content_index, content), (paint_index, paint)],
+            )
+        }
+        _ => return None,
+    };
+    let mut expected = definition.default_node_template();
+    expected.normalize_stored_types();
+    let mut expected = expected.into_parts().0;
+    for (index, input) in replacements {
+        *expected.inputs.get_mut(index)? = input.clone();
+    }
+    (expected == *node).then_some(expected)
 }
 
 fn document_numeric_export_network(
@@ -9052,6 +9196,17 @@ mod tests {
             exports: vec![NodeInput::node(second_layer, 0)],
             ..Default::default()
         };
+        let configuration = RenderConfig {
+            viewport: Footprint {
+                transform: DAffine2::from_translation(DVec2::splat(64.)),
+                resolution: UVec2::splat(128),
+                ..Footprint::DEFAULT
+            },
+            scale: 1.,
+            export_format: RenderFormat::Svg,
+            for_export: true,
+            ..Default::default()
+        };
         let render = |network: NodeNetwork| async move {
             let api = Arc::new(PlatformEditorApi {
                 application_io: Some(Arc::new(PlatformApplicationIo::default())),
@@ -9067,17 +9222,6 @@ mod tests {
             let executor = DynamicExecutor::new(proto)
                 .await
                 .expect("construct the registered Merge pipeline");
-            let configuration = RenderConfig {
-                viewport: Footprint {
-                    transform: DAffine2::from_translation(DVec2::splat(64.)),
-                    resolution: UVec2::splat(128),
-                    ..Footprint::DEFAULT
-                },
-                scale: 1.,
-                export_format: RenderFormat::Svg,
-                for_export: true,
-                ..Default::default()
-            };
             let output = Executor::execute(&&executor, configuration.into_context())
                 .await
                 .expect("CPU SVG Merge output");
@@ -9182,7 +9326,131 @@ mod tests {
                 .await
                 .expect("reopened overlapping layers");
             let graph = saved.runtime_graph().await.expect("saved graph");
-            assert_eq!(render(graph.network).await, expected);
+            assert_eq!(render(graph.network.clone()).await, expected);
+
+            let nodes = saved.graph_nodes().await.expect("saved layer addresses");
+            let root = nodes
+                .iter()
+                .find(|node| node.local_id == second_layer && node.network_path.is_empty())
+                .expect("actual root export");
+            let render_budget = CpuSvgEvaluationBudget {
+                max_viewport_pixels: 128 * 128,
+                max_output_bytes: 64 * 1024,
+            };
+            let output = saved
+                .render_document_merge_svg(root, configuration, render_budget)
+                .await
+                .expect("render the saved Merge without external resources");
+            let RenderOutputType::Svg { svg, image_data } = output.data else {
+                panic!("bounded source SVG")
+            };
+            assert!(image_data.is_empty());
+            assert_eq!(svg.to_ascii_lowercase(), expected.0);
+            assert_eq!(
+                output
+                    .metadata
+                    .click_targets
+                    .keys()
+                    .copied()
+                    .collect::<BTreeSet<_>>(),
+                BTreeSet::from([first_layer, second_layer])
+            );
+            let wrong_root = nodes
+                .iter()
+                .find(|node| node.local_id == first_layer && node.network_path.is_empty())
+                .expect("base layer");
+            assert!(matches!(
+                saved
+                    .render_document_merge_svg(wrong_root, configuration, render_budget)
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphMergePreview)
+            ));
+            let foreign = open_gdd_zip(&original, budget)
+                .await
+                .expect("independent snapshot");
+            assert!(matches!(
+                foreign
+                    .render_document_merge_svg(root, configuration, render_budget)
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let insufficient = CpuSvgEvaluationBudget {
+                max_output_bytes: 1,
+                ..render_budget
+            };
+            assert!(matches!(
+                saved
+                    .render_document_merge_svg(root, configuration, insufficient)
+                    .await,
+                Err(GddArchiveError::GraphMergePreviewEvaluation(_))
+            ));
+            let insufficient = CpuSvgEvaluationBudget {
+                max_viewport_pixels: 1,
+                ..render_budget
+            };
+            assert!(matches!(
+                saved
+                    .render_document_merge_svg(root, configuration, insufficient)
+                    .await,
+                Err(GddArchiveError::GraphMergePreviewEvaluation(_))
+            ));
+
+            let mut cyclic = graph.network.clone();
+            let base = cyclic.nodes.get_mut(&first_layer).expect("base Merge");
+            *base.inputs.first_mut().expect("Base input") = NodeInput::node(second_layer, 0);
+            assert!(matches!(
+                collect_merge_preview_node(
+                    &cyclic,
+                    second_layer,
+                    &mut NodeNetwork::default(),
+                    &mut BTreeSet::new()
+                ),
+                Err(GddArchiveError::UnsupportedGraphMergePreview)
+            ));
+            let mut deep = NodeNetwork::default();
+            let mut template = merge_node_definition()
+                .expect("pinned layer")
+                .default_node_template();
+            template.normalize_stored_types();
+            for index in 1..=33 {
+                let mut layer = template.clone().into_parts().0;
+                if index > 1 {
+                    *layer.inputs.first_mut().expect("Base input") =
+                        NodeInput::node(NodeId(index - 1), 0);
+                }
+                deep.nodes.insert(NodeId(index), layer);
+            }
+            let mut bounded = NodeNetwork::default();
+            collect_merge_preview_node(&deep, NodeId(32), &mut bounded, &mut BTreeSet::new())
+                .expect("maximum bounded preview");
+            assert_eq!(bounded.nodes.len(), 32);
+            assert!(matches!(
+                collect_merge_preview_node(
+                    &deep,
+                    NodeId(33),
+                    &mut NodeNetwork::default(),
+                    &mut BTreeSet::new()
+                ),
+                Err(GddArchiveError::GraphMergePreviewBudget)
+            ));
+            let mut altered = graph.network;
+            let shape = altered
+                .nodes
+                .get_mut(&NodeId(11))
+                .expect("reachable rectangle");
+            *shape
+                .inputs
+                .get_mut(rectangle::WidthInput::INDEX)
+                .expect("width port") = NodeInput::scope("unresolved-scope");
+            assert!(matches!(
+                collect_merge_preview_node(
+                    &altered,
+                    second_layer,
+                    &mut NodeNetwork::default(),
+                    &mut BTreeSet::new()
+                ),
+                Err(GddArchiveError::UnsupportedGraphMergePreview)
+            ));
         });
     }
 
