@@ -658,6 +658,7 @@ impl DependencyDiagramItem {
     /// Toggles the minimap-style Structure overview panel.
     pub fn toggle_structure(&mut self, cx: &mut Context<Self>) {
         self.structure_visible = !self.structure_visible;
+        self.overview_drag = false;
         cx.notify();
     }
 
@@ -1438,6 +1439,7 @@ impl DependencyDiagramItem {
             .border_color(theme.border)
             .bg(theme.background.opacity(0.9))
             .overflow_hidden()
+            .block_mouse_except_scroll()
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|item, event: &gpui::MouseDownEvent, _, cx| {
@@ -1452,7 +1454,7 @@ impl DependencyDiagramItem {
                 }),
             )
             .on_mouse_move(cx.listener(|item, event: &gpui::MouseMoveEvent, _, cx| {
-                if item.overview_drag {
+                if item.overview_drag && event.pressed_button == Some(gpui::MouseButton::Left) {
                     item.move_viewport_to_overview(
                         sim_runtime::graph::GraphPoint {
                             x: event.position.x.into(),
@@ -1464,10 +1466,11 @@ impl DependencyDiagramItem {
             }))
             .on_mouse_up(
                 gpui::MouseButton::Left,
-                cx.listener(|item, _: &gpui::MouseUpEvent, _, cx| {
-                    item.overview_drag = false;
-                    cx.notify();
-                }),
+                cx.listener(Self::finish_overview_drag),
+            )
+            .on_mouse_up_out(
+                gpui::MouseButton::Left,
+                cx.listener(Self::finish_overview_drag),
             )
             .child(gpui::canvas(
                 move |bounds, _, _| {
@@ -1514,6 +1517,15 @@ impl DependencyDiagramItem {
             }
         }
         overview
+    }
+
+    fn finish_overview_drag(
+        &mut self,
+        _: &gpui::MouseUpEvent,
+        _: &mut gpui::Window,
+        _: &mut Context<Self>,
+    ) {
+        self.overview_drag = false;
     }
 
     /// Recentres the canvas viewport on the graph position the pointer points
@@ -1823,7 +1835,7 @@ mod tests {
     use crate::dependency_graph_canvas::{
         CanvasEdge, CanvasEdgeVariant, CanvasNode, CanvasNodeKind, layout_canvas_graph,
     };
-    use gpui::{InputEvent as _, TestAppContext};
+    use gpui::{InputEvent as _, TestAppContext, px};
     use settings::SettingsStore;
     use theme::LoadThemes;
     use workspace::Item as _;
@@ -2320,11 +2332,12 @@ mod tests {
             canvas_size.width > 0.0 && canvas_size.height > 0.0,
             "the diagram fills the editor body: {canvas_size:?}"
         );
-        let pointer = sim_runtime::graph::GraphPoint {
+        let pointer = GraphPoint {
             x: overview_origin.x + 60.0,
             y: overview_origin.y + 30.0,
         };
-        item.update(cx, |item, cx| item.move_viewport_to_overview(pointer, cx));
+        let press = gpui::point(px(pointer.x), px(pointer.y));
+        cx.simulate_mouse_down(press, gpui::MouseButton::Left, Default::default());
         let offset = cx.update(|_, cx| item.read(cx).canvas.read(cx).viewport.offset);
         let expected = sim_runtime::graph::GraphPoint {
             x: canvas_size.width / 2.0 - (bounds_origin.x + 60.0 / scale) * viewport_scale,
@@ -2334,6 +2347,20 @@ mod tests {
             (offset.x - expected.x).abs() < 0.01 && (offset.y - expected.y).abs() < 0.01,
             "the overview recentres the viewport on the pointed graph position; offset {offset:?} expected {expected:?} origin {overview_origin:?} scale {scale} viewport scale {viewport_scale} canvas size {canvas_size:?}"
         );
+        let drag = gpui::point(press.x + px(30.0), press.y);
+        cx.simulate_mouse_move(drag, gpui::MouseButton::Left, Default::default());
+        let dragged_offset = cx.update(|_, cx| item.read(cx).canvas.read(cx).viewport.offset);
+        assert!((dragged_offset.x - (expected.x - 30.0 / scale * viewport_scale)).abs() < 0.01);
+        assert!((dragged_offset.y - expected.y).abs() < 0.01);
+        let outside = gpui::point(drag.x, px(overview_origin.y - 10.0));
+        cx.simulate_mouse_move(outside, gpui::MouseButton::Left, Default::default());
+        cx.simulate_mouse_up(outside, gpui::MouseButton::Left, Default::default());
+        cx.simulate_mouse_move(press, None, Default::default());
+        cx.update(|_, cx| {
+            let item = item.read(cx);
+            assert_eq!(item.canvas.read(cx).viewport.offset, dragged_offset);
+            assert!(!item.overview_drag);
+        });
 
         // Selection highlight: the selected block is announced in the
         // overview's accessibility tree.
