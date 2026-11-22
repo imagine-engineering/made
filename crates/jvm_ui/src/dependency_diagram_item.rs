@@ -15,7 +15,7 @@ use crate::dependency_diagram_menu::{
     DependencyDiagramContextTarget, DependencyDiagramMenuCommand, DependencyDiagramMenuSnapshot,
     dependency_diagram_menu_available, stage_dependency_diagram_target,
 };
-use crate::dependency_graph_canvas::{CanvasNode, CanvasNodeKind, CanvasState};
+use crate::dependency_graph_canvas::{CanvasGraph, CanvasNode, CanvasNodeKind, CanvasState};
 use gpui::{
     App, AppContext as _, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
     Render, SharedString, Task, Window, actions,
@@ -98,6 +98,48 @@ impl DependencySearch {
     pub(crate) fn popover(self, window: &mut Window, cx: &mut App) -> gpui::Entity<Picker<Self>> {
         cx.new(|cx| Picker::uniform_list(self, window, cx).popover())
     }
+}
+
+fn diagram_search_entries(
+    graph: &CanvasGraph,
+    receipt: Option<&DependencyGraphReceipt>,
+) -> Vec<DependencySearchEntry> {
+    let entry = |node: &CanvasNode| DependencySearchEntry {
+        id: node.id.clone(),
+        label: match &node.version {
+            Some(version) => format!("{}:{version}", node.label),
+            None => node.label.clone(),
+        },
+    };
+    if graph.truncated
+        && let Some(nodes) = receipt.and_then(DependencyGraphReceipt::canvas_nodes)
+    {
+        return nodes.iter().map(entry).collect();
+    }
+    graph.nodes.iter().map(entry).collect()
+}
+
+fn diagram_search_control(
+    id: &'static str,
+    label: &'static str,
+    handle: ui::PopoverMenuHandle<Picker<DependencySearch>>,
+    menu: impl Fn(&mut Window, &mut App) -> Option<gpui::Entity<Picker<DependencySearch>>> + 'static,
+) -> ui::PopoverMenu<Picker<DependencySearch>> {
+    use ui::prelude::*;
+
+    ui::PopoverMenu::new(id)
+        .with_handle(handle)
+        .trigger(
+            IconButton::new(
+                "dependency-diagram-search-icon",
+                ui::IconName::MagnifyingGlass,
+            )
+            .shape(ui::IconButtonShape::Square)
+            .tab_index(0_isize)
+            .aria_label(label)
+            .tooltip(ui::Tooltip::text("Search dependencies")),
+        )
+        .menu(menu)
 }
 
 impl PickerDelegate for DependencySearch {
@@ -223,6 +265,18 @@ pub struct DependencyDiagramSource {
     /// The opening panel, for context-menu command routing through the
     /// panel's own action handlers and enablement logic.
     pub panel: gpui::WeakEntity<crate::dependencies_panel::DependenciesPanel>,
+}
+
+impl DependencyDiagramSource {
+    fn project_neighbourhood(
+        &self,
+        id: &str,
+        scope: &DependencyDiagramScope,
+        cx: &App,
+    ) -> Option<DependencyDiagramDerivation> {
+        derive_dependency_diagram(self.project.read(cx), &self.selection, id, Some(scope), cx)
+            .filter(|derivation| derivation.canvas.node(id).is_some())
+    }
 }
 
 /// The bundle the diagram surfaces hand to the item or popup when opening:
@@ -552,23 +606,7 @@ impl DependencyDiagramItem {
         if !self.receipt_is_current(cx) {
             return Vec::new();
         }
-        let graph = &self.canvas.read(cx).graph;
-        let entry = |node: &CanvasNode| DependencySearchEntry {
-            id: node.id.clone(),
-            label: match &node.version {
-                Some(version) => format!("{}:{version}", node.label),
-                None => node.label.clone(),
-            },
-        };
-        if graph.truncated
-            && let Some(nodes) = self
-                .receipt
-                .as_ref()
-                .and_then(DependencyGraphReceipt::canvas_nodes)
-        {
-            return nodes.iter().map(entry).collect();
-        }
-        graph.nodes.iter().map(entry).collect()
+        diagram_search_entries(&self.canvas.read(cx).graph, self.receipt.as_ref())
     }
 
     pub fn reveal_node_by_id(&mut self, id: &str, cx: &mut Context<Self>) {
@@ -596,20 +634,15 @@ impl DependencyDiagramItem {
         let Some(source) = &mut self.source else {
             return false;
         };
-        let Some(derivation) = derive_dependency_diagram(
-            source.project.read(cx),
-            &source.selection,
-            id,
-            Some(&self.scope),
-            cx,
-        ) else {
-            return false;
-        };
-        let Some(node) = derivation.canvas.node(id) else {
+        let Some(derivation) = source.project_neighbourhood(id, &self.scope, cx) else {
             return false;
         };
         // An unresolved placeholder's ordinal is local to this graph revision.
-        if node.kind != CanvasNodeKind::Unresolved {
+        if derivation
+            .canvas
+            .node(id)
+            .is_some_and(|node| node.kind != CanvasNodeKind::Unresolved)
+        {
             source.node = id.to_owned();
         }
         self.replace_derivation(derivation, cx);
@@ -1102,33 +1135,24 @@ impl Render for DependencyDiagramItem {
                         }))
                     }),
             )
-            .child(
-                ui::PopoverMenu::new("dependency-diagram-search")
-                    .with_handle(self.search_handle.clone())
-                    .trigger(
-                        IconButton::new(
-                            "dependency-diagram-search-icon",
-                            ui::IconName::MagnifyingGlass,
-                        )
-                        .shape(ui::IconButtonShape::Square)
-                        .tab_index(0_isize)
-                        .aria_label("Search dependency diagram nodes")
-                        .tooltip(ui::Tooltip::text("Search dependencies")),
+            .child(diagram_search_control(
+                "dependency-diagram-search",
+                "Search dependency diagram nodes",
+                self.search_handle.clone(),
+                move |window, cx| {
+                    let item = search_item.upgrade()?;
+                    let entries = item.read(cx).search_entries(cx);
+                    let item = search_item.clone();
+                    Some(
+                        DependencySearch::new(entries, move |id, cx| {
+                            if let Some(item) = item.upgrade() {
+                                item.update(cx, |item, cx| item.reveal_node_by_id(id, cx));
+                            }
+                        })
+                        .popover(window, cx),
                     )
-                    .menu(move |window, cx| {
-                        let item = search_item.upgrade()?;
-                        let entries = item.read(cx).search_entries(cx);
-                        let item = search_item.clone();
-                        Some(
-                            DependencySearch::new(entries, move |id, cx| {
-                                if let Some(item) = item.upgrade() {
-                                    item.update(cx, |item, cx| item.reveal_node_by_id(id, cx));
-                                }
-                            })
-                            .popover(window, cx),
-                        )
-                    }),
-            )
+                },
+            ))
             .children(
                 [
                     (
@@ -1613,7 +1637,10 @@ impl workspace::ModalView for DependencyDiagramPopup {}
 pub struct DependencyDiagramPopup {
     canvas: gpui::Entity<CanvasState>,
     target: DependencyDiagramTarget,
+    admitted: Option<(DependencyDiagramSource, DependencyGraphReceipt)>,
+    scope: DependencyDiagramScope,
     focus_handle: FocusHandle,
+    search_handle: ui::PopoverMenuHandle<Picker<DependencySearch>>,
     _panel_subscription: Option<gpui::Subscription>,
 }
 
@@ -1623,13 +1650,9 @@ impl DependencyDiagramPopup {
         let receipt =
             current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx);
         let panel_subscription = source.panel.upgrade().map(|panel| {
-            cx.observe(&panel, move |popup, _, cx| {
-                let current = current_dependency_graph_receipt(
-                    source.project.read(cx),
-                    &source.selection,
-                    cx,
-                );
-                if current != receipt {
+            cx.observe(&panel, |popup, _, cx| {
+                if popup.current_source(cx).is_none() {
+                    popup.search_handle.hide(cx);
                     popup.canvas.update(cx, |canvas, cx| {
                         canvas.replace_graph(Default::default());
                         cx.notify();
@@ -1643,7 +1666,10 @@ impl DependencyDiagramPopup {
         Self {
             canvas: cx.new(|_| canvas),
             target: derivation.target,
+            admitted: receipt.map(|receipt| (source, receipt)),
+            scope: derivation.scope,
             focus_handle: cx.focus_handle(),
+            search_handle: ui::PopoverMenuHandle::default(),
             _panel_subscription: panel_subscription,
         }
     }
@@ -1654,6 +1680,39 @@ impl DependencyDiagramPopup {
 
     pub fn target(&self) -> &DependencyDiagramTarget {
         &self.target
+    }
+
+    fn current_source(
+        &self,
+        cx: &App,
+    ) -> Option<(&DependencyDiagramSource, &DependencyGraphReceipt)> {
+        let (source, receipt) = self.admitted.as_ref()?;
+        let current =
+            current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx)?;
+        (current == *receipt).then_some((source, receipt))
+    }
+
+    fn reveal_node(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some((source, _)) = self.current_source(cx) else {
+            return;
+        };
+        let canvas = self.canvas.read(cx);
+        let projection = if canvas.graph.truncated {
+            let Some(derivation) = source.project_neighbourhood(id, &self.scope, cx) else {
+                return;
+            };
+            Some(derivation.canvas)
+        } else {
+            None
+        };
+        self.canvas.update(cx, |canvas, cx| {
+            if let Some(graph) = projection {
+                canvas.replace_graph(graph);
+            }
+            if canvas.reveal_node(id) {
+                cx.notify();
+            }
+        });
     }
 
     fn fit_canvas(&self, cx: &mut Context<Self>) {
@@ -1674,6 +1733,7 @@ impl Render for DependencyDiagramPopup {
 
         let theme = cx.theme().colors().clone();
         let title = self.target.title();
+        let search_popup = cx.weak_entity();
         let viewport = window.viewport_size();
         let margin = window.rem_size();
         let width = (viewport.width - margin * 2.).max(px(0.)).min(px(960.));
@@ -1682,9 +1742,15 @@ impl Render for DependencyDiagramPopup {
         div()
             .key_context("DependencyDiagramPopup")
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(|_, _: &DismissDependencyDiagramPopup, _, cx| {
-                cx.emit(DismissEvent);
-            }))
+            .on_action(
+                cx.listener(|popup, _: &DismissDependencyDiagramPopup, _, cx| {
+                    if popup.search_handle.is_deployed() {
+                        popup.search_handle.hide(cx);
+                    } else {
+                        cx.emit(DismissEvent);
+                    }
+                }),
+            )
             .on_action(cx.listener(|popup, _: &FitDependencyDiagram, _, cx| popup.fit_canvas(cx)))
             .w(width)
             .h(height)
@@ -1704,6 +1770,27 @@ impl Render for DependencyDiagramPopup {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.text)
                     .child(div().flex_1().min_w_0().truncate().child(title))
+                    .child(diagram_search_control(
+                        "dependency-preview-search",
+                        "Search dependency preview nodes",
+                        self.search_handle.clone(),
+                        move |window, cx| {
+                            let popup = search_popup.upgrade()?;
+                            let popup = popup.read(cx);
+                            let (_, receipt) = popup.current_source(cx)?;
+                            let entries =
+                                diagram_search_entries(&popup.canvas.read(cx).graph, Some(receipt));
+                            let popup = search_popup.clone();
+                            Some(
+                                DependencySearch::new(entries, move |id, cx| {
+                                    if let Some(popup) = popup.upgrade() {
+                                        popup.update(cx, |popup, cx| popup.reveal_node(id, cx));
+                                    }
+                                })
+                                .popover(window, cx),
+                            )
+                        },
+                    ))
                     .child(
                         ui::IconButton::new("dependency-popup-fit", ui::IconName::Maximize)
                             .shape(ui::IconButtonShape::Square)
@@ -1812,7 +1899,10 @@ mod tests {
                     provider: DependencyDiagramProvider::Maven,
                     configuration: None,
                 },
+                admitted: None,
+                scope: DependencyDiagramScope::MavenScope("All scopes".into()),
                 focus_handle: cx.focus_handle(),
+                search_handle: ui::PopoverMenuHandle::default(),
                 _panel_subscription: None,
             });
         });

@@ -14782,7 +14782,7 @@ mod tests {
                     assert!(graph.node(target).is_none());
                     assert!(graph.node(unresolved).is_none());
                 });
-                let search_and_confirm = |cx: &mut gpui::VisualTestContext, query, label| {
+                let open_search = |cx: &mut gpui::VisualTestContext, control_label: &str| {
                     assert!(
                         (0..32).any(|_| cx.update(|window, cx| {
                             window.focus_next(cx);
@@ -14792,8 +14792,7 @@ mod tests {
                             )
                             .expect("accessibility JSON");
                             tree["gpui_focus"].as_str().is_some_and(|focus| {
-                                tree["nodes"][focus]["aria"]["label"]
-                                    == "Search dependency diagram nodes"
+                                tree["nodes"][focus]["aria"]["label"] == control_label
                             })
                         })),
                         "keyboard focus reaches diagram search"
@@ -14805,6 +14804,12 @@ mod tests {
                             window.simulate_next_frame(cx);
                         });
                     }
+                };
+                let search_and_confirm = |cx: &mut gpui::VisualTestContext,
+                                          control_label: &str,
+                                          query: &str,
+                                          label: &str| {
+                    open_search(cx, control_label);
                     cx.simulate_input(query);
                     cx.update(|window, cx| {
                         window.draw(cx).clear(cx);
@@ -14829,7 +14834,14 @@ mod tests {
                     });
                     cx.run_until_parked();
                 };
-                search_and_confirm(cx, "growth-unresolved", "evidence:growth-unresolved:1.0");
+                let diagram_search = "Search dependency diagram nodes";
+                let preview_search = "Search dependency preview nodes";
+                search_and_confirm(
+                    cx,
+                    diagram_search,
+                    "growth-unresolved",
+                    "evidence:growth-unresolved:1.0",
+                );
                 diagram.read_with(cx, |item, cx| {
                     let canvas = item.canvas().read(cx);
                     assert_eq!(canvas.selection, BTreeSet::from([unresolved.to_owned()]));
@@ -14843,7 +14855,12 @@ mod tests {
                     assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
                 });
                 assert_eq!(commands.load(Ordering::SeqCst), 3);
-                search_and_confirm(cx, "279", "evidence:growth-dependency-279:1.0");
+                search_and_confirm(
+                    cx,
+                    diagram_search,
+                    "279",
+                    "evidence:growth-dependency-279:1.0",
+                );
                 diagram.read_with(cx, |item, cx| {
                     let canvas = item.canvas().read(cx);
                     assert_eq!(canvas.selection, BTreeSet::from([target.to_owned()]));
@@ -14859,6 +14876,60 @@ mod tests {
                     assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
                     assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
                 });
+                let open_preview = |cx: &mut gpui::VisualTestContext| {
+                    panel.update(cx, |panel, cx| panel.show_dependency_diagram_popup(cx));
+                    cx.run_until_parked();
+                    workspace
+                        .read_with(cx, |workspace, cx| {
+                            workspace.active_modal::<DependencyDiagramPopup>(cx)
+                        })
+                        .expect("dependency preview")
+                };
+                let original_viewport = cx.update(|window, _| window.viewport_size());
+                cx.simulate_resize(gpui::size(gpui::px(480.), gpui::px(360.)));
+                let preview = open_preview(cx);
+                preview.read_with(cx, |popup, cx| {
+                    assert!(popup.canvas().read(cx).graph.node(unresolved).is_none());
+                });
+                search_and_confirm(
+                    cx,
+                    preview_search,
+                    "growth-unresolved",
+                    "evidence:growth-unresolved:1.0",
+                );
+                preview.read_with(cx, |popup, cx| {
+                    let canvas = popup.canvas().read(cx);
+                    assert_eq!(canvas.selection, BTreeSet::from([unresolved.to_owned()]));
+                    assert_eq!(canvas.focus.as_deref(), Some(unresolved));
+                    assert!(canvas.graph.edges.iter().any(|edge| {
+                        edge.from == target
+                            && edge.to == unresolved
+                            && edge.variant == CanvasEdgeVariant::Unresolved
+                    }));
+                    assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
+                    assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
+                });
+                open_search(cx, preview_search);
+                cx.simulate_keystrokes("escape");
+                assert!(workspace.read_with(cx, |workspace, cx| {
+                    workspace
+                        .active_modal::<DependencyDiagramPopup>(cx)
+                        .is_some()
+                }));
+                cx.simulate_keystrokes("escape");
+                assert!(workspace.read_with(cx, |workspace, cx| {
+                    workspace
+                        .active_modal::<DependencyDiagramPopup>(cx)
+                        .is_none()
+                }));
+                cx.simulate_resize(original_viewport);
+                assert_eq!(
+                    diagram
+                        .read_with(cx, |item, cx| item.canvas().read(cx).focus.clone())
+                        .as_deref(),
+                    Some(target)
+                );
+                assert_eq!(commands.load(Ordering::SeqCst), 3);
                 diagram.update(cx, |item, cx| {
                     item.canvas().update(cx, |canvas, cx| {
                         assert!(canvas.set_layout(CanvasLayout::TopToBottom));
@@ -15017,6 +15088,8 @@ mod tests {
                     expected_svg.as_bytes()
                 );
                 export_image(cx);
+                let revoked_preview = open_preview(cx);
+                open_search(cx, preview_search);
                 trust.update(cx, |trusted, cx| {
                     trusted.restrict(
                         worktree_store.downgrade(),
@@ -15025,6 +15098,14 @@ mod tests {
                     )
                 });
                 cx.run_until_parked();
+                assert!(workspace.read_with(cx, |workspace, cx| {
+                    workspace
+                        .active_modal::<DependencyDiagramPopup>(cx)
+                        .is_none()
+                }));
+                revoked_preview.read_with(cx, |popup, cx| {
+                    assert!(popup.canvas().read(cx).graph.nodes.is_empty());
+                });
                 let revoked_image = std::path::PathBuf::from("/groovy-graph/revoked.svg");
                 cx.simulate_new_path_selection(|_| Some(revoked_image.clone()));
                 cx.run_until_parked();

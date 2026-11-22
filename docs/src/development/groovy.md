@@ -267,6 +267,8 @@ the blank-canvas menu to switch between left-to-right and top-to-bottom ranks.
 Search includes dependencies beyond the initial canvas view, including
 Gradle requests that failed to resolve. Choosing one brings the occurrence
 and its immediate connections into the bounded view of the graph.
+The temporary diagram preview offers the same search. Escape closes the
+search first, then closes the preview and returns to the workspace.
 On a larger graph, **Copy Diagram Source** copies the current bounded canvas
 as Mermaid source and identifies the limited coverage in the copied text.
 
