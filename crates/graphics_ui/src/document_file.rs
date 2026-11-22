@@ -2510,6 +2510,19 @@ mod tests {
         };
         assert!(added.label().contains("Add"));
         assert_eq!(added.grid_position(), Some([6, -9]));
+        let saved_history = contents.history_len();
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        window.run_until_parked();
+        reopened.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the selected source Add node");
+            };
+            assert!(matches!(&form.output_preview,
+                NodeOutputPreview::Ready(GddNumericValue::NumberList(values)) if values.is_empty()));
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(contents.history_len(), saved_history);
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)

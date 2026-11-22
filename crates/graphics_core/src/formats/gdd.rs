@@ -49,7 +49,10 @@ use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
 use graphite_graph_craft::{
-    document::{DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork, value::TaggedValue},
+    document::{
+        DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
+        value::TaggedValue,
+    },
     runtime_delta::RuntimeDelta,
 };
 use zip::ZipArchive;
@@ -176,11 +179,11 @@ pub enum GddArchiveError {
     UnchangedGraphGridPosition,
     #[error("The change in Graphite grid coordinates is outside the supported range.")]
     GraphGridMoveOutOfRange,
-    #[error("Graphite preview requires a supported numeric chain with literal inputs.")]
+    #[error("Graphite preview requires a supported numeric graph with literal inputs.")]
     UnsupportedGraphNumericPreview,
-    #[error("The selected Graphite numeric chain has a cycle.")]
+    #[error("The selected Graphite numeric graph has a cycle.")]
     CyclicGraphNumericPreview,
-    #[error("The selected Graphite numeric chain exceeds the preview budget.")]
+    #[error("The selected Graphite numeric graph exceeds the preview budget.")]
     GraphNumericPreviewBudget,
     #[error("Graphite could not evaluate the selected node. {0}")]
     GraphNumericPreviewEvaluation(String),
@@ -287,6 +290,7 @@ pub struct GddGraphNode {
     numeric_input: Option<GddNumericInput>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
+    can_preview_numeric_output: bool,
     grid_position: Option<[i32; 2]>,
 }
 
@@ -447,7 +451,7 @@ impl GddGraphNode {
     }
 
     pub fn can_preview_numeric_output(&self) -> bool {
-        self.numeric_input.is_some()
+        self.can_preview_numeric_output
     }
 
     pub fn validate_grid_move(&self, destination: [i32; 2]) -> Result<(), GddArchiveError> {
@@ -672,6 +676,7 @@ impl InspectedGddV1 {
                 numeric_input: None,
                 can_delete_in_copy: false,
                 can_duplicate_in_copy: false,
+                can_preview_numeric_output: false,
                 grid_position: None,
             })
             .collect();
@@ -708,6 +713,10 @@ impl InspectedGddV1 {
             let label = interface.display_name(&node.local_id, path);
             node.label = format!("{parent} · {label} [{}]", node.local_id.0);
             node.numeric_input = graph_numeric_input(&interface, node);
+            node.can_preview_numeric_output = !interface.is_layer(&node.local_id, path)
+                && interface
+                    .document_node(&node.local_id, path)
+                    .is_some_and(|document| numeric_preview_inputs(document).is_some());
             node.can_duplicate_in_copy = node.numeric_input.is_some()
                 && !interface.is_chain(&node.local_id, path)
                 && interface
@@ -1965,56 +1974,90 @@ fn numeric_preview_network(
     source: &NodeNetwork,
     selected: NodeId,
 ) -> Result<NodeNetwork, GddArchiveError> {
-    const MAX_PREVIEW_NODES: usize = 32;
-    let identifiers = [
-        UnaryNumericOperation::AbsoluteValue,
-        UnaryNumericOperation::Ceiling,
-        UnaryNumericOperation::Floor,
-        UnaryNumericOperation::Round,
-        UnaryNumericOperation::Sign,
-    ]
-    .map(numeric_node_identifier);
     let mut detached = NodeNetwork {
         exports: vec![NodeInput::node(selected, 0)],
         ..Default::default()
     };
-    let mut current = selected;
-    loop {
-        if detached.nodes.contains_key(&current) {
-            return Err(GddArchiveError::CyclicGraphNumericPreview);
-        }
-        if detached.nodes.len() >= MAX_PREVIEW_NODES {
-            return Err(GddArchiveError::GraphNumericPreviewBudget);
-        }
-        let document = source
-            .nodes
-            .get(&current)
-            .ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
-        if !matches!(&document.implementation, DocumentNodeImplementation::ProtoNode(identifier)
-            if identifiers.contains(identifier))
-            || document.context_features != Default::default()
-        {
-            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
-        }
-        let upstream = match document.inputs.as_slice() {
-            [NodeInput::Value { tagged_value, .. }] => {
-                preview_numeric_value(tagged_value)?;
-                None
-            }
-            [
-                NodeInput::Node {
-                    node_id,
-                    output_index: 0,
-                },
-            ] => Some(*node_id),
-            _ => return Err(GddArchiveError::UnsupportedGraphNumericPreview),
-        };
-        detached.nodes.insert(current, document.clone());
-        let Some(upstream) = upstream else {
-            return Ok(detached);
-        };
-        current = upstream;
+    collect_numeric_preview_node(source, selected, &mut detached, &mut BTreeSet::new())?;
+    Ok(detached)
+}
+
+fn collect_numeric_preview_node(
+    source: &NodeNetwork,
+    node_id: NodeId,
+    detached: &mut NodeNetwork,
+    visiting: &mut BTreeSet<NodeId>,
+) -> Result<(), GddArchiveError> {
+    const MAX_PREVIEW_NODES: usize = 32;
+    if detached.nodes.contains_key(&node_id) {
+        return Ok(());
     }
+    if !visiting.insert(node_id) {
+        return Err(GddArchiveError::CyclicGraphNumericPreview);
+    }
+    if detached.nodes.len() + visiting.len() > MAX_PREVIEW_NODES {
+        return Err(GddArchiveError::GraphNumericPreviewBudget);
+    }
+    let document = source
+        .nodes
+        .get(&node_id)
+        .ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
+    let inputs =
+        numeric_preview_inputs(document).ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
+    for input in inputs {
+        match input {
+            NodeInput::Value { tagged_value, .. } => {
+                preview_numeric_value(tagged_value)?;
+            }
+            NodeInput::Node {
+                node_id,
+                output_index: 0,
+            } => {
+                collect_numeric_preview_node(source, *node_id, detached, visiting)?;
+            }
+            _ => return Err(GddArchiveError::UnsupportedGraphNumericPreview),
+        }
+    }
+    visiting.remove(&node_id);
+    detached.nodes.insert(node_id, document.clone());
+    Ok(())
+}
+
+fn numeric_preview_inputs(document: &DocumentNode) -> Option<&[NodeInput]> {
+    use graphite_math_nodes::{
+        absolute_value, add, ceiling, divide, floor, multiply, reciprocal, root, round, sign,
+        subtract,
+    };
+
+    let DocumentNodeImplementation::ProtoNode(identifier) = &document.implementation else {
+        return None;
+    };
+    let count = if [
+        absolute_value::IDENTIFIER,
+        ceiling::IDENTIFIER,
+        floor::IDENTIFIER,
+        reciprocal::IDENTIFIER,
+        round::IDENTIFIER,
+        sign::IDENTIFIER,
+    ]
+    .contains(identifier)
+    {
+        1
+    } else if [
+        add::IDENTIFIER,
+        divide::IDENTIFIER,
+        multiply::IDENTIFIER,
+        root::IDENTIFIER,
+        subtract::IDENTIFIER,
+    ]
+    .contains(identifier)
+    {
+        2
+    } else {
+        return None;
+    };
+    (document.inputs.len() == count && document.context_features == Default::default())
+        .then_some(document.inputs.as_slice())
 }
 
 fn preview_numeric_value(value: &TaggedValue) -> Result<GddNumericValue, GddArchiveError> {
@@ -3061,6 +3104,104 @@ mod tests {
             assert_eq!(original.history_len(), original_history);
             assert_eq!(original.document.session().head_rev(), original_head);
             assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn numeric_preview_evaluates_pinned_binary_branches_and_reuses_shared_inputs() {
+        use graphite_math_nodes::{
+            absolute_value, add, divide, multiply, reciprocal, root, subtract,
+        };
+        use graphite_std::platform_application_io::resource;
+
+        futures::executor::block_on(async {
+            let document = |identifier, inputs| DocumentNode {
+                implementation: DocumentNodeImplementation::ProtoNode(identifier),
+                inputs,
+                ..Default::default()
+            };
+            let literal = |value| NodeInput::value(TaggedValue::Number(value), false);
+            let selected = NodeId(40);
+            for (identifier, inputs, expected) in [
+                (add::IDENTIFIER, vec![literal(8.), literal(2.)], 10.),
+                (subtract::IDENTIFIER, vec![literal(8.), literal(2.)], 6.),
+                (multiply::IDENTIFIER, vec![literal(8.), literal(2.)], 16.),
+                (divide::IDENTIFIER, vec![literal(8.), literal(2.)], 4.),
+                (root::IDENTIFIER, vec![literal(8.), literal(3.)], 2.),
+                (reciprocal::IDENTIFIER, vec![literal(-8.)], -0.125),
+            ] {
+                let source = NodeNetwork {
+                    nodes: [(selected, document(identifier, inputs))]
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                };
+                let detached =
+                    numeric_preview_network(&source, selected).expect("admitted source operation");
+                assert!(
+                    preview_numeric_value(
+                        &evaluate_detached_numeric_network(detached)
+                            .await
+                            .expect("pinned numeric output")
+                    )
+                    .expect("numeric preview")
+                    .same_value(&GddNumericValue::Number(expected))
+                );
+            }
+            let shared = NodeId(12);
+            let other = NodeId(13);
+            let sum = NodeId(14);
+            let mut source = NodeNetwork {
+                nodes: [
+                    (
+                        shared,
+                        document(absolute_value::IDENTIFIER, vec![literal(-7.)]),
+                    ),
+                    (
+                        other,
+                        document(absolute_value::IDENTIFIER, vec![literal(-4.)]),
+                    ),
+                    (
+                        sum,
+                        document(
+                            add::IDENTIFIER,
+                            vec![NodeInput::node(shared, 0), NodeInput::node(other, 0)],
+                        ),
+                    ),
+                    (
+                        selected,
+                        document(
+                            subtract::IDENTIFIER,
+                            vec![NodeInput::node(sum, 0), NodeInput::node(shared, 0)],
+                        ),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+                exports: vec![NodeInput::node(sum, 0)],
+                ..Default::default()
+            };
+            let detached =
+                numeric_preview_network(&source, selected).expect("shared input is not a cycle");
+            assert_eq!(detached.nodes.len(), 4);
+            assert_eq!(detached.exports, vec![NodeInput::node(selected, 0)]);
+            assert_eq!(source.exports, vec![NodeInput::node(sum, 0)]);
+            assert!(matches!(
+                evaluate_detached_numeric_network(detached)
+                    .await
+                    .expect("selected branch"),
+                TaggedValue::Number(4.)
+            ));
+            assert!(
+                source
+                    .nodes
+                    .insert(other, document(resource::IDENTIFIER, vec![literal(4.)]))
+                    .is_some()
+            );
+            assert!(matches!(
+                numeric_preview_network(&source, selected),
+                Err(GddArchiveError::UnsupportedGraphNumericPreview)
+            ));
         });
     }
 
