@@ -330,6 +330,11 @@ section to review the order, remove the last operation, clear the queue, or
 run offline. Saved run configurations appear in the queue row's context menu
 when available. Cancel a running queue from its Task terminal.
 
+**Saved configurations** lists project and user Tasks with their source
+locations. The selected row, quick-run button, and queue menu all target the
+same saved entry. When labels match, choose by source location. Removing a
+configuration invalidates its old quick-run and queue targets.
+
 To inspect an effective POM, expand **Plugins** under the Maven project and
 choose the `effective-pom` goal under `maven-help-plugin` when the provider
 reports its cached descriptor. Use the selected operation’s profile options

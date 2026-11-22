@@ -1370,10 +1370,17 @@ impl Inventory {
         hooks: &HashSet<TaskHook>,
         worktree: WorktreeId,
     ) -> Vec<(TaskSourceKind, TaskTemplate)> {
-        self.worktree_templates_from_settings(worktree)
-            .chain(self.global_templates_from_settings())
+        self.saved_task_templates(worktree)
             .filter(|(_, template)| !template.hooks.is_disjoint(hooks))
             .collect()
+    }
+
+    pub fn saved_task_templates(
+        &self,
+        worktree: WorktreeId,
+    ) -> impl '_ + Iterator<Item = (TaskSourceKind, TaskTemplate)> {
+        self.worktree_templates_from_settings(worktree)
+            .chain(self.global_templates_from_settings())
     }
 
     fn global_templates_from_settings(

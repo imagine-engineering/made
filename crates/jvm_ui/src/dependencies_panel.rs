@@ -26,7 +26,7 @@ use project::{
     task_inventory::{MavenSettingsFile, TaskSourceKind},
     trusted_worktrees::TrustedWorktrees,
 };
-use task::{TaskContext, TaskTemplate, VariableName};
+use task::{TaskContext, VariableName};
 use ui::{Tooltip, prelude::*};
 use util::rel_path::RelPath;
 use workspace::{
@@ -88,15 +88,15 @@ actions!(
     ]
 );
 
-/// Runs one saved configuration, dispatched by the ordered-operations queue
-/// menu's run-configuration selector; the worktree identity travels as its
-/// numeric handle because action payloads stay plain data.
+/// Runs one saved configuration from the ordered-operations queue.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema, gpui::Action)]
 #[action(namespace = groovy_dependencies_panel)]
 #[serde(deny_unknown_fields)]
 pub struct RunOrderedConfiguration {
     pub worktree_id: usize,
     pub label: String,
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -689,10 +689,8 @@ pub struct DependenciesPanel {
     preferences_write: Option<gpui::Task<()>>,
     preferences_generation: u64,
     show_options: bool,
-    saved_configurations: Vec<(WorktreeId, String)>,
-    recent_configurations: VecDeque<(WorktreeId, String)>,
-    configuration_selections: HashMap<LanguageToolNodeId, (WorktreeId, String)>,
-    configurations_refresh: Option<gpui::Task<()>>,
+    recent_configurations: VecDeque<SavedConfiguration>,
+    configuration_selections: HashMap<LanguageToolNodeId, SavedConfiguration>,
     configuration_notice: Option<String>,
     _subscriptions: Vec<Subscription>,
 }
@@ -3084,10 +3082,8 @@ impl DependenciesPanel {
                     preferences_write: None,
                     preferences_generation: 0,
                     show_options: false,
-                    saved_configurations: Vec::new(),
                     recent_configurations: VecDeque::new(),
                     configuration_selections: HashMap::new(),
-                    configurations_refresh: None,
                     configuration_notice: None,
                     _subscriptions: subscriptions,
                 }
@@ -4243,6 +4239,27 @@ impl DependenciesPanel {
             .selected()
             .is_some_and(|selected| self.operation_selections.contains_key(selected));
         let queue = self.ordered_queue_menu(cx);
+        let queue_configurations = queue
+            .configurations
+            .iter()
+            .filter(|_| is_queue_row)
+            .map(|target| {
+                let label = if queue
+                    .configurations
+                    .iter()
+                    .any(|other| other != target && other.label == target.label)
+                {
+                    format!(
+                        "{} ({})",
+                        target.label,
+                        target.origin(self.project.read(cx), cx)
+                    )
+                } else {
+                    target.label.clone()
+                };
+                (label, target.queue_action())
+            })
+            .collect::<Vec<_>>();
         let eligible = self.resolve_selected_canvas_graph(cx).is_some();
         let can_collect_graph = self.selected_graph().is_some()
             && self.graph_query_token.is_none()
@@ -4334,26 +4351,17 @@ impl DependenciesPanel {
                             Box::new(ClearOrderedOperations),
                         )
                         .separator();
-                    if queue.configurations.is_empty() {
+                    if queue_configurations.is_empty() {
                         menu = menu.action_disabled_when(
                             true,
                             "No saved run configuration",
                             Box::new(RunSelectedConfiguration),
                         );
                     } else {
-                        // The submenu builder is stored for re-invocation, so
-                        // it owns its configuration list.
-                        let queue_configurations = queue.configurations.clone();
                         menu = menu.submenu("Run Configuration", move |submenu, _, _| {
                             let mut submenu = submenu;
-                            for (worktree_id, label) in &queue_configurations {
-                                submenu = submenu.action(
-                                    label.clone(),
-                                    Box::new(RunOrderedConfiguration {
-                                        worktree_id: *worktree_id,
-                                        label: label.clone(),
-                                    }),
-                                );
+                            for (label, action) in &queue_configurations {
+                                submenu = submenu.action(label.clone(), Box::new(action.clone()));
                             }
                             submenu
                         });
@@ -4698,6 +4706,7 @@ impl DependenciesPanel {
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         if self.host_unavailable(cx) {
             self.navigation.clear();
+            self.configuration_selections.clear();
             self.graph_inspection = None;
             self.graph_pin = None;
             self.graph_selection_set.clear();
@@ -4721,6 +4730,7 @@ impl DependenciesPanel {
         }
         let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) else {
             self.navigation.clear();
+            self.configuration_selections.clear();
             self.graph_inspection = None;
             self.graph_pin = None;
             self.graph_selection_set.clear();
@@ -5096,26 +5106,45 @@ impl DependenciesPanel {
         if !self.ordered_operations.is_empty() {
             roots.push(ordered_operation_tree(&self.ordered_operations));
         }
-        if self.saved_configurations.is_empty() {
-            self.configuration_selections.clear();
-        } else {
-            // Recently activated configurations lead their saved entry points,
-            // so the quick-run action and tree activation target the same rows.
-            let mut ordered_configurations: Vec<(WorktreeId, String)> = Vec::new();
-            let mut listed = HashSet::new();
-            for (worktree_id, label) in self.recent_configurations.iter() {
-                let entry = (*worktree_id, label.clone());
-                if self.saved_configurations.contains(&entry) && listed.insert(entry.clone()) {
-                    ordered_configurations.push(entry);
+        let project = self.project.read(cx);
+        let mut saved_configurations = Vec::new();
+        if !project.is_remote()
+            && let Some(inventory) = project.task_store().read(cx).task_inventory()
+        {
+            let inventory = inventory.read(cx);
+            for worktree in worktree_store.read(cx).worktrees() {
+                let worktree = worktree.read(cx);
+                let worktree_id = worktree.id();
+                if !worktree.is_visible() || restricted_worktrees.contains(&worktree_id) {
+                    continue;
+                }
+                let mut entries = inventory
+                    .saved_task_templates(worktree_id)
+                    .map(|(source, template)| SavedConfiguration {
+                        worktree_id,
+                        source,
+                        label: template.label,
+                    })
+                    .collect::<Vec<_>>();
+                entries.sort_unstable_by(SavedConfiguration::compare);
+                entries.dedup();
+                let remaining = SAVED_CONFIGURATION_LIMIT - saved_configurations.len();
+                saved_configurations.extend(entries.into_iter().take(remaining));
+                if saved_configurations.len() == SAVED_CONFIGURATION_LIMIT {
+                    break;
                 }
             }
-            for entry in self.saved_configurations.iter() {
-                if listed.insert(entry.clone()) {
-                    ordered_configurations.push(entry.clone());
-                }
-            }
+        }
+        self.configuration_selections.clear();
+        if !saved_configurations.is_empty() {
+            saved_configurations.sort_by_key(|entry| {
+                self.recent_configurations
+                    .iter()
+                    .position(|recent| recent == entry)
+                    .unwrap_or(RECENT_CONFIGURATION_LIMIT)
+            });
             let (configuration_root, configuration_selections) =
-                saved_configuration_tree(&ordered_configurations);
+                saved_configuration_tree(saved_configurations, project, cx);
             roots.push(configuration_root);
             self.configuration_selections = configuration_selections;
         }
@@ -5130,7 +5159,7 @@ impl DependenciesPanel {
         self.host
             .replace_snapshot(LanguageToolSnapshot { roots, status });
         self.host.expand_nodes(graph_search_expansion);
-        if !self.saved_configurations.is_empty() {
+        if !self.configuration_selections.is_empty() {
             self.host.expand_nodes([saved_configuration_root_id()]);
         }
         // The ordered-operations section is a preference-owned disclosure;
@@ -5235,9 +5264,9 @@ impl DependenciesPanel {
             .host
             .selected()
             .and_then(|id| self.configuration_selections.get(id).cloned())
-            .or_else(|| self.recent_configurations.front().cloned());
+            .or_else(|| self.recent_configuration().cloned());
         match target {
-            Some((worktree_id, label)) => self.run_configuration(worktree_id, label, window, cx),
+            Some(target) => self.run_configuration(target, window, cx),
             None => {
                 self.configuration_notice = Some(
                     "No saved configuration entry point yet; activate a saved configuration row to add one."
@@ -5248,94 +5277,55 @@ impl DependenciesPanel {
         }
     }
 
-    fn quick_run_recent_configuration(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.recent_configurations.front().cloned() {
-            Some((worktree_id, label)) => self.run_configuration(worktree_id, label, window, cx),
-            None => {
-                self.configuration_notice = Some(
-                    "No recent configuration; activate a saved configuration row first.".into(),
-                );
-                cx.notify();
-            }
-        }
+    fn recent_configuration(&self) -> Option<&SavedConfiguration> {
+        self.recent_configurations.iter().find(|recent| {
+            self.configuration_selections
+                .values()
+                .any(|target| target == *recent)
+        })
     }
 
-    fn record_recent_configuration(&mut self, worktree_id: WorktreeId, label: String) {
+    fn record_recent_configuration(&mut self, target: SavedConfiguration) {
         self.recent_configurations
-            .retain(|(recent_id, recent_label)| {
-                !(recent_id == &worktree_id && recent_label == &label)
-            });
-        self.recent_configurations.push_front((worktree_id, label));
-        while self.recent_configurations.len() > RECENT_CONFIGURATION_LIMIT {
-            self.recent_configurations.pop_back();
-        }
+            .retain(|recent| recent != &target);
+        self.recent_configurations.push_front(target);
+        self.recent_configurations
+            .truncate(RECENT_CONFIGURATION_LIMIT);
     }
 
-    fn refresh_saved_configurations(&mut self, cx: &mut Context<Self>) {
-        let Some(inventory) = self
-            .project
-            .read(cx)
-            .task_store()
-            .read(cx)
-            .task_inventory()
-            .cloned()
-        else {
-            return;
-        };
-        let worktree_ids: Vec<WorktreeId> = self
-            .project
-            .read(cx)
-            .worktrees(cx)
-            .map(|worktree| worktree.read(cx).id())
-            .collect();
-        let entry_tasks: Vec<_> = worktree_ids
-            .into_iter()
-            .map(|worktree_id| {
-                let entries = inventory
-                    .read(cx)
-                    .list_tasks(None, None, Some(worktree_id), cx);
-                (worktree_id, entries)
-            })
-            .collect();
-        let previous = self.configurations_refresh.take();
-        self.configurations_refresh = Some(cx.spawn(async move |panel, cx| {
-            if let Some(previous) = previous {
-                previous.await;
-            }
-            let mut saved = Vec::new();
-            for (worktree_id, entries) in entry_tasks {
-                for (_, template) in entries.await {
-                    if saved.len() >= SAVED_CONFIGURATION_LIMIT {
-                        break;
-                    }
-                    if saved.iter().all(|(saved_id, saved_label)| {
-                        !(saved_id == &worktree_id && saved_label == &template.label)
-                    }) {
-                        saved.push((worktree_id, template.label.clone()));
-                    }
-                }
-            }
-            if let Err(closed) = panel.update(cx, |panel, cx| {
-                panel.saved_configurations = saved;
-                panel.rebuild(cx);
+    fn run_ordered_configuration(
+        &mut self,
+        action: &RunOrderedConfiguration,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let worktree_id = WorktreeId::from_usize(action.worktree_id);
+        let mut matches = self.configuration_selections.values().filter(|target| {
+            target.worktree_id == worktree_id
+                && target.label == action.label
+                && action
+                    .source
+                    .as_ref()
+                    .is_none_or(|source| &target.source.to_id_base() == source)
+        });
+        match (matches.next().cloned(), matches.next()) {
+            (Some(target), None) => self.run_configuration(target, window, cx),
+            _ => {
+                self.configuration_notice = Some(format!(
+                    "Choose a current saved configuration for '{}'.",
+                    action.label
+                ));
                 cx.notify();
-            }) {
-                log::debug!(
-                    "Groovy panel closed before saved configurations refreshed: {closed:#}"
-                );
             }
-        }));
+        }
     }
 
     fn prepare_configuration_dispatch(
         &self,
-        worktree_id: WorktreeId,
+        target: &SavedConfiguration,
         cx: &App,
-    ) -> anyhow::Result<(
-        Entity<Workspace>,
-        gpui::Task<Vec<(TaskSourceKind, TaskTemplate)>>,
-        TaskContext,
-    )> {
+    ) -> anyhow::Result<(Entity<Workspace>, task::ResolvedTask)> {
+        let worktree_id = target.worktree_id;
         anyhow::ensure!(
             !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
             "The project host is unavailable; reconnect and refresh before running configurations"
@@ -5366,109 +5356,75 @@ impl DependenciesPanel {
             .ok_or_else(|| {
                 anyhow::anyhow!("The build Task inventory is unavailable; reopen the project")
             })?;
-        let worktree_root = project
-            .worktree_for_id(worktree_id, cx)
-            .map(|worktree| worktree.read(cx).abs_path());
+        let worktree = project.worktree_for_id(worktree_id, cx).context(
+            "The saved configuration's project folder is unavailable; refresh the panel",
+        )?;
+        let worktree = worktree.read(cx);
         anyhow::ensure!(
-            worktree_root.is_some(),
+            worktree.is_visible(),
             "The saved configuration's project folder is unavailable; refresh the panel"
         );
-        let mut context = TaskContext::default();
-        if let Some(root) = &worktree_root {
-            context.cwd = Some(root.to_path_buf());
-            context.task_variables.insert(
-                VariableName::WorktreeRoot,
-                root.to_string_lossy().into_owned(),
-            );
-        }
-        let entries = inventory
+        let root = worktree.abs_path();
+        let mut context = TaskContext {
+            cwd: Some(root.to_path_buf()),
+            ..TaskContext::default()
+        };
+        context.task_variables.insert(
+            VariableName::WorktreeRoot,
+            root.to_string_lossy().into_owned(),
+        );
+
+        let template = inventory
             .read(cx)
-            .list_tasks(None, None, Some(worktree_id), cx);
-        Ok((workspace, entries, context))
+            .saved_task_templates(worktree_id)
+            .find(|(source, template)| *source == target.source && template.label == target.label)
+            .map(|(_, template)| template)
+            .with_context(|| {
+                format!("Named configuration '{}' is no longer saved", target.label)
+            })?;
+        let id_base = target.source.to_id_base();
+        let resolved = if template.literal_arguments {
+            template.resolve_task_with_literal_arguments(&id_base, &context)
+        } else {
+            template.resolve_task(&id_base, &context)
+        }
+        .with_context(|| format!(
+            "Named configuration '{}' did not resolve in the current project context; run it from the task list",
+            target.label
+        ))?;
+        Ok((workspace, resolved))
     }
 
     fn run_configuration(
         &mut self,
-        worktree_id: WorktreeId,
-        label: String,
+        target: SavedConfiguration,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match self.prepare_configuration_dispatch(worktree_id, cx) {
-            Ok((workspace, entries, context)) => {
-                cx.spawn_in(window, async move |panel, cx| {
-                    let entries = entries.await;
-                    let Some((source_kind, template)) = entries
-                        .into_iter()
-                        .find(|(_, template)| template.label == label)
-                    else {
-                        // The saved identity is rechecked against the current
-                        // inventory owner right before dispatch; a removed
-                        // saved task never dispatches.
-                        if let Err(closed) = panel.update(cx, |panel, cx| {
-                            panel.configuration_notice = Some(format!(
-                                "Named configuration '{label}' is no longer saved; refresh the saved configuration entry points."
-                            ));
-                            panel
-                                .recent_configurations
-                                .retain(|(recent_id, recent_label)| {
-                                    !(recent_id == &worktree_id && recent_label == &label)
-                                });
-                            panel.refresh_saved_configurations(cx);
-                            cx.notify();
-                        }) {
-                            log::debug!(
-                                "Groovy panel closed before stale configuration notice: {closed:#}"
-                            );
-                        }
-                        return;
-                    };
-                    let id_base = source_kind.to_id_base();
-                    let resolved = if template.literal_arguments {
-                        template.resolve_task_with_literal_arguments(&id_base, &context)
-                    } else {
-                        template.resolve_task(&id_base, &context)
-                    };
-                    let Some(resolved) = resolved else {
-                        if let Err(closed) = panel.update(cx, |panel, cx| {
-                            panel.configuration_notice = Some(format!(
-                                "Named configuration '{label}' did not resolve in the current project context; run it from the task list."
-                            ));
-                            cx.notify();
-                        }) {
-                            log::debug!(
-                                "Groovy panel closed before configuration resolution notice: {closed:#}"
-                            );
-                        }
-                        return;
-                    };
-                    if let Err(closed) = workspace.update_in(cx, |workspace, window, cx| {
-                        workspace.schedule_resolved_task(source_kind, resolved, false, window, cx);
-                    }) {
-                        log::debug!(
-                            "Groovy panel workspace closed before configuration dispatch: {closed:#}"
-                        );
-                        return;
-                    }
-                    if let Err(closed) = panel.update(cx, |panel, cx| {
-                        panel.record_recent_configuration(worktree_id, label.clone());
-                        panel.configuration_notice = Some(format!(
-                            "Named configuration '{label}' sent to Tasks. Follow terminal output for the outcome."
-                        ));
-                        panel.refresh_saved_configurations(cx);
-                        cx.notify();
-                    }) {
-                        log::debug!("Groovy panel closed after configuration dispatch: {closed:#}");
-                    }
-                })
-                .detach();
-                cx.notify();
+        self.configuration_notice = Some(match self.prepare_configuration_dispatch(&target, cx) {
+            Ok((workspace, resolved)) => {
+                workspace.update(cx, |workspace, cx| {
+                    workspace.schedule_resolved_task(
+                        target.source.clone(),
+                        resolved,
+                        false,
+                        window,
+                        cx,
+                    );
+                });
+                let label = target.label.clone();
+                self.record_recent_configuration(target);
+                format!(
+                    "Named configuration '{label}' sent to Tasks. Follow terminal output for the outcome."
+                )
             }
             Err(error) => {
-                self.configuration_notice = Some(error.to_string());
-                cx.notify();
+                self.recent_configurations
+                    .retain(|recent| recent != &target);
+                error.to_string()
             }
-        }
+        });
+        self.rebuild(cx);
     }
 
     fn add_selected_ordered_operation(&mut self, cx: &mut Context<Self>) {
@@ -5990,12 +5946,12 @@ impl DependenciesPanel {
         if !self.host.can_activate() {
             return;
         }
-        if let Some((worktree_id, label)) = self
+        if let Some(target) = self
             .host
             .selected()
             .and_then(|id| self.configuration_selections.get(id).cloned())
         {
-            self.run_configuration(worktree_id, label, window, cx);
+            self.run_configuration(target, window, cx);
             return;
         }
         let Some(navigation) = self.host.selected().and_then(|id| self.navigation.get(id)) else {
@@ -7485,52 +7441,45 @@ fn has_current_operation(
 /// the strip's buttons exactly so menu, toolbar and keyboard invocations
 /// share one enablement path.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct OrderedQueueMenuAvailability {
-    pub add_to_queue: bool,
-    pub remove_last: bool,
-    pub clear_queue: bool,
-    pub run_ordered: bool,
-    /// Saved configurations for the run-configuration selector, deduplicated
-    /// by label, sorted, and bounded like the other menu families.
-    pub configurations: Vec<(usize, String)>,
+struct OrderedQueueMenuAvailability {
+    add_to_queue: bool,
+    remove_last: bool,
+    clear_queue: bool,
+    run_ordered: bool,
+    configurations: Vec<SavedConfiguration>,
 }
 
 /// The maximum run configurations the queue menu's selector lists.
 const MAX_QUEUE_MENU_CONFIGURATIONS: usize = 8;
 
-/// Bounds the run-configuration selector: dedup by label, sort, truncate.
-pub(crate) fn bounded_saved_configurations(
-    saved: &HashMap<LanguageToolNodeId, (WorktreeId, String)>,
-) -> Vec<(usize, String)> {
-    let mut configurations: Vec<(usize, String)> = saved
-        .values()
-        .map(|(worktree_id, label)| (usize::from(*worktree_id), label.clone()))
-        .collect();
-    configurations.sort_by(|(worktree_a, label_a), (worktree_b, label_b)| {
-        label_a
-            .cmp(label_b)
-            .then_with(|| worktree_a.cmp(worktree_b))
-    });
-    configurations.dedup_by(|(.., label_a), (.., label_b)| label_a == label_b);
+fn bounded_saved_configurations(
+    saved: &HashMap<LanguageToolNodeId, SavedConfiguration>,
+) -> Vec<SavedConfiguration> {
+    let mut configurations = saved.values().cloned().collect::<Vec<_>>();
+    configurations.sort_unstable_by(SavedConfiguration::compare);
     configurations.truncate(MAX_QUEUE_MENU_CONFIGURATIONS);
     configurations
 }
 
 /// The queue menu family's availability rules, explicit so tests cover the
 /// gating without a panel window.
-pub(crate) fn ordered_queue_menu_availability(
+fn ordered_queue_menu_availability(
     operation_row_selected: bool,
     operations_len: usize,
     ordered_composes: bool,
     host_ok: bool,
-    saved_configurations: &HashMap<LanguageToolNodeId, (WorktreeId, String)>,
+    saved_configurations: &HashMap<LanguageToolNodeId, SavedConfiguration>,
 ) -> OrderedQueueMenuAvailability {
     OrderedQueueMenuAvailability {
         add_to_queue: operation_row_selected && operations_len < 32 && host_ok,
         remove_last: operations_len > 0,
         clear_queue: operations_len > 0,
         run_ordered: host_ok && ordered_composes,
-        configurations: bounded_saved_configurations(saved_configurations),
+        configurations: if host_ok {
+            bounded_saved_configurations(saved_configurations)
+        } else {
+            Vec::new()
+        },
     }
 }
 
@@ -7645,29 +7594,86 @@ fn ordered_operation_tree(ordered: &[JvmBuildOperationReceipt]) -> LanguageToolN
 const RECENT_CONFIGURATION_LIMIT: usize = 8;
 const SAVED_CONFIGURATION_LIMIT: usize = 32;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SavedConfiguration {
+    worktree_id: WorktreeId,
+    source: TaskSourceKind,
+    label: String,
+}
+
+impl SavedConfiguration {
+    fn queue_action(&self) -> RunOrderedConfiguration {
+        RunOrderedConfiguration {
+            worktree_id: usize::from(self.worktree_id),
+            label: self.label.clone(),
+            source: Some(self.source.to_id_base()),
+        }
+    }
+
+    fn compare(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.label, self.worktree_id, &self.source).cmp(&(
+            &other.label,
+            other.worktree_id,
+            &other.source,
+        ))
+    }
+
+    fn origin(&self, project: &Project, cx: &App) -> String {
+        let root = project
+            .worktree_for_id(self.worktree_id, cx)
+            .map(|worktree| worktree.read(cx).abs_path());
+        match (&self.source, root) {
+            (
+                TaskSourceKind::Worktree {
+                    directory_in_worktree,
+                    ..
+                },
+                Some(root),
+            ) => root
+                .join(directory_in_worktree.as_std_path())
+                .display()
+                .to_string(),
+            (TaskSourceKind::AbsPath { abs_path, .. }, Some(root)) => {
+                format!("{} in {}", abs_path.display(), root.display())
+            }
+            _ => format!("Project folder {}", self.worktree_id),
+        }
+    }
+}
+
 fn saved_configuration_root_id() -> LanguageToolNodeId {
     LanguageToolNodeId("groovy-saved-configurations".into())
 }
 
 fn saved_configuration_tree(
-    ordered: &[(WorktreeId, String)],
+    ordered: Vec<SavedConfiguration>,
+    project: &Project,
+    cx: &App,
 ) -> (
     LanguageToolNode,
-    HashMap<LanguageToolNodeId, (WorktreeId, String)>,
+    HashMap<LanguageToolNodeId, SavedConfiguration>,
 ) {
     let mut selections = HashMap::new();
+    let heading = format!("Saved configurations ({})", ordered.len());
     let children = ordered
-        .iter()
-        .map(|(worktree_id, label)| {
-            let id = LanguageToolNodeId(format!("groovy-configuration:{worktree_id}:{label}"));
-            selections.insert(id.clone(), (*worktree_id, label.clone()));
+        .into_iter()
+        .map(|target| {
+            let id = LanguageToolNodeId(format!(
+                "groovy-configuration:{}:{:?}:{:?}",
+                target.worktree_id,
+                target.source.to_id_base(),
+                target.label,
+            ));
+            let origin = target.origin(project, cx);
+            let label = target.label.clone();
+            selections.insert(id.clone(), target);
             LanguageToolNode {
                 id,
                 label: label.clone(),
-                secondary_label: None,
+                secondary_label: Some(origin.clone()),
                 icon: None,
                 accessibility_label: format!(
-                    "Named configuration {label}; activation runs the saved task identity through the existing Tasks owner"
+                    "Named configuration {label} from {origin}. Activate to run in Tasks."
                 ),
                 children: Vec::new(),
                 enabled: true,
@@ -7675,7 +7681,6 @@ fn saved_configuration_tree(
             }
         })
         .collect();
-    let heading = format!("Saved configurations ({})", ordered.len());
     (
         LanguageToolNode {
             id: saved_configuration_root_id(),
@@ -8263,7 +8268,6 @@ impl Panel for DependenciesPanel {
         if active {
             self.host.take_dirty();
             self.refresh(cx);
-            self.refresh_saved_configurations(cx);
         }
     }
 
@@ -8361,12 +8365,7 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &RunOrderedOfflineOperations, window, cx| panel.run_ordered_offline_operations(window, cx)))
             .on_action(cx.listener(
                 |panel, event: &RunOrderedConfiguration, window, cx| {
-                    panel.run_configuration(
-                        WorktreeId::from_usize(event.worktree_id),
-                        event.label.clone(),
-                        window,
-                        cx,
-                    );
+                    panel.run_ordered_configuration(event, window, cx);
                 },
             ))
             .on_action(cx.listener(|panel, _: &ApplySavedMavenSelection, _, cx| panel.apply_saved_build_selection(true, cx)))
@@ -8707,12 +8706,12 @@ impl Render for DependenciesPanel {
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.unlink_selected_gradle_project(cx)))
                     ))
-                    .when_some(self.recent_configurations.front(), |header, (_, label)| header.child(
-                        Button::new("groovy-quick-run-configuration", format!("Run {label}"))
-                            .aria_label(format!("Quick-run the most recent saved configuration: {label}"))
+                    .when_some(self.recent_configuration().cloned(), |header, target| header.child(
+                        Button::new("groovy-quick-run-configuration", format!("Run {}", target.label))
+                            .aria_label(format!("Quick-run the most recent saved configuration: {}, {}", target.label, target.origin(self.project.read(cx), cx)))
                             .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, window, cx| {
-                                panel.quick_run_recent_configuration(window, cx)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.run_configuration(target.clone(), window, cx)
                             })),
                     ))
                     .when(!icon_toolbar_active, |header| header.child(
@@ -9115,20 +9114,34 @@ mod tests {
         }
     }
 
+    fn saved_worktree_configuration(worktree_id: WorktreeId, label: String) -> SavedConfiguration {
+        SavedConfiguration {
+            worktree_id,
+            source: TaskSourceKind::Worktree {
+                id: worktree_id,
+                directory_in_worktree: RelPath::from_unix_str(".zed")
+                    .expect("fixture task directory")
+                    .into(),
+                id_base: "fixture".into(),
+            },
+            label,
+        }
+    }
+
     #[test]
     fn dependency_menu_targets_queue_eligibility_gates() {
         let saved = HashMap::from([
             (
                 LanguageToolNodeId("groovy-configuration:build-a".into()),
-                (WorktreeId::from_usize(1), "build".into()),
+                saved_worktree_configuration(WorktreeId::from_usize(1), "build".into()),
             ),
             (
                 LanguageToolNodeId("groovy-configuration:build-b".into()),
-                (WorktreeId::from_usize(2), "build".into()),
+                saved_worktree_configuration(WorktreeId::from_usize(2), "build".into()),
             ),
             (
                 LanguageToolNodeId("groovy-configuration:assemble".into()),
-                (WorktreeId::from_usize(3), "assemble".into()),
+                saved_worktree_configuration(WorktreeId::from_usize(3), "assemble".into()),
             ),
         ]);
 
@@ -9137,11 +9150,13 @@ mod tests {
         assert!(availability.add_to_queue);
         assert!(availability.remove_last && availability.clear_queue);
         assert!(availability.run_ordered);
-        // The run-configuration selector deduplicates by label, sorts and
-        // keeps the first worktree per label.
         assert_eq!(
-            availability.configurations,
-            [(3, "assemble".to_owned()), (1, "build".to_owned())]
+            availability
+                .configurations
+                .iter()
+                .map(|target| (usize::from(target.worktree_id), target.label.as_str()))
+                .collect::<Vec<_>>(),
+            [(3, "assemble"), (1, "build"), (2, "build")]
         );
 
         // Add to Queue only applies to eligible operation rows.
@@ -9153,10 +9168,9 @@ mod tests {
             !ordered_queue_menu_availability(true, 32, true, true, &saved).add_to_queue,
             "a full queue offers no Add to Queue"
         );
-        assert!(
-            !ordered_queue_menu_availability(true, 3, true, false, &saved).add_to_queue,
-            "an unavailable host offers no Add to Queue"
-        );
+        let unavailable = ordered_queue_menu_availability(true, 3, true, false, &saved);
+        assert!(!unavailable.add_to_queue);
+        assert!(unavailable.configurations.is_empty());
 
         // An empty queue removes nothing and cannot run.
         let availability = ordered_queue_menu_availability(true, 0, false, true, &saved);
@@ -9177,7 +9191,10 @@ mod tests {
         for index in 0..12 {
             saved.insert(
                 LanguageToolNodeId(format!("groovy-configuration:c{index}")),
-                (WorktreeId::from_usize(index), format!("config-{index}")),
+                saved_worktree_configuration(
+                    WorktreeId::from_usize(index),
+                    format!("config-{index}"),
+                ),
             );
         }
         assert_eq!(
@@ -9269,7 +9286,7 @@ mod tests {
         let fs = project::FakeFs::new(cx.executor());
         fs.insert_tree(
             "/groovy-config",
-            serde_json::json!({"pom.xml": "<project/>"}),
+            serde_json::json!({"pom.xml": "<project/>", "mvnw": "fixture", "mvnw.cmd": "fixture"}),
         )
         .await;
         let project = Project::test(fs, ["/groovy-config".as_ref()], cx).await;
@@ -9302,10 +9319,7 @@ mod tests {
         let panel = DependenciesPanel::load(workspace.downgrade(), async_cx)
             .await
             .expect("configuration panel");
-        panel.update(cx, |panel, cx| {
-            panel.active = true;
-            panel.refresh_saved_configurations(cx);
-        });
+        panel.update(cx, |panel, _| panel.active = true);
 
         let inventory = project.read_with(cx, |project, cx| {
             project
@@ -9316,6 +9330,7 @@ mod tests {
                 .expect("inventory")
         });
         let zed_dir = RelPath::from_unix_str(".zed").expect(".zed");
+        let user_tasks = std::path::Path::new("/groovy-config-user/tasks.json");
         inventory.update(cx, |inventory, _| {
             inventory
                 .update_file_based_tasks(
@@ -9337,19 +9352,49 @@ mod tests {
                     )
                     .as_deref(),
                 )
-                .unwrap();
+                .expect("project task");
+            inventory
+                .update_file_based_tasks(
+                    project::task_store::TaskSettingsLocation::Global(user_tasks),
+                    Some(r#"[{"label":"provider-build","command":"gradle","args":["--offline","check"]}]"#),
+                )
+                .expect("user task with the same label");
         });
-        panel.update(cx, |panel, cx| panel.refresh_saved_configurations(cx));
-        cx.run_until_parked();
-        let row = panel
-            .read_with(cx, |panel, _| {
-                panel
-                    .configuration_selections
-                    .iter()
-                    .find(|(_, (_, label))| label == "provider-build")
-                    .map(|(id, _)| id.clone())
-            })
-            .expect("saved configuration row");
+        let listed = inventory.read_with(cx, |inventory, cx| {
+            inventory.list_tasks(None, None, Some(worktree_id), cx)
+        });
+        assert!(listed.await.iter().any(|(source, template)| {
+            source.groovy_jvm_build_worktree() == Some(worktree_id)
+                && template.label == "Build Maven project"
+        }));
+        panel.update(cx, |panel, cx| panel.rebuild(cx));
+        let (row, project_target, user_target) = panel.read_with(cx, |panel, cx| {
+            let entries = &panel.configuration_selections;
+            assert!(
+                entries
+                    .values()
+                    .all(|target| target.label != "Build Maven project")
+            );
+            let (row, project_target) = entries
+                .iter()
+                .find(|(_, target)| {
+                    target.label == "provider-build"
+                        && matches!(target.source, TaskSourceKind::Worktree { .. })
+                })
+                .expect("project configuration row");
+            let (user_row, user_target) = entries
+                .iter()
+                .find(|(_, target)| {
+                    target.label == "provider-build"
+                        && matches!(target.source, TaskSourceKind::AbsPath { .. })
+                })
+                .expect("user configuration row");
+            assert_ne!(row, user_row);
+            let queue = panel.ordered_queue_menu(cx);
+            assert!(queue.configurations.contains(project_target));
+            assert!(queue.configurations.contains(user_target));
+            (row.clone(), project_target.clone(), user_target.clone())
+        });
         panel.update(cx, |panel, _| panel.host.select(row));
 
         // The keyboard shortcut handler runs the selected saved identity
@@ -9361,18 +9406,6 @@ mod tests {
             panel.run_selected_or_recent_configuration(window, cx)
         });
         cx.run_until_parked();
-        panel.read_with(cx, |panel, _| {
-            eprintln!(
-                "DEBUG notice={:?} recent={:?} selected={:?} visible_has_row={}",
-                panel.configuration_notice,
-                panel.recent_configurations,
-                panel.host.selected(),
-                panel
-                    .configuration_selections
-                    .keys()
-                    .any(|id| panel.host.selected() == Some(id))
-            );
-        });
         let first = {
             let events = events.lock().expect("Task events");
             assert_eq!(
@@ -9388,8 +9421,12 @@ mod tests {
 
         // The quick-run entry point targets the most recent configuration and
         // selects the same saved identity, not a second copy.
+        let quick_run_target = panel
+            .read_with(cx, |panel, _| panel.recent_configuration().cloned())
+            .expect("current quick-run target");
+        assert_eq!(quick_run_target, project_target);
         panel.update_in(cx, |panel, window, cx| {
-            panel.quick_run_recent_configuration(window, cx)
+            panel.run_configuration(quick_run_target.clone(), window, cx)
         });
         cx.run_until_parked();
         {
@@ -9399,6 +9436,39 @@ mod tests {
                 events[1].id, first,
                 "quick-run selects the same saved identity"
             );
+        }
+
+        panel.update_in(cx, |panel, window, cx| {
+            panel.run_ordered_configuration(
+                &RunOrderedConfiguration {
+                    source: None,
+                    ..project_target.queue_action()
+                },
+                window,
+                cx,
+            );
+            assert!(
+                panel.configuration_notice.as_deref().is_some_and(|notice| {
+                    notice.contains("Choose a current saved configuration")
+                })
+            );
+        });
+        cx.run_until_parked();
+        assert_eq!(events.lock().expect("Task events").len(), 2);
+
+        for target in [&user_target, &project_target] {
+            panel.update_in(cx, |panel, window, cx| {
+                panel.run_ordered_configuration(&target.queue_action(), window, cx);
+            });
+            cx.run_until_parked();
+        }
+        {
+            let events = events.lock().expect("Task events");
+            assert_eq!(events.len(), 4);
+            assert_eq!(events[2].command.as_deref(), Some("gradle"));
+            assert_eq!(events[2].args, ["--offline", "check"]);
+            assert_ne!(events[2].id, first);
+            assert_eq!(events[3].id, first);
         }
 
         // A removed saved task never dispatches: the entry point reports the
@@ -9414,12 +9484,13 @@ mod tests {
                     ),
                     None,
                 )
-                .unwrap();
+                .expect("remove project task");
         });
-        panel.update(cx, |panel, cx| panel.refresh_saved_configurations(cx));
+        panel.update(cx, |panel, cx| panel.rebuild(cx));
         cx.run_until_parked();
         panel.update_in(cx, |panel, window, cx| {
-            panel.quick_run_recent_configuration(window, cx)
+            assert_eq!(panel.recent_configuration(), Some(&user_target));
+            panel.run_configuration(quick_run_target, window, cx);
         });
         cx.run_until_parked();
         panel.read_with(cx, |panel, _| {
@@ -9429,22 +9500,33 @@ mod tests {
                 !panel
                     .recent_configurations
                     .iter()
-                    .any(|(_, label)| label == "provider-build"),
-                "stale entries leave the recent history"
+                    .any(|target| target == &project_target),
+                "the removed source leaves the recent history"
             );
+            assert!(panel.recent_configurations.contains(&user_target));
         });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.run_ordered_configuration(&project_target.queue_action(), window, cx);
+        });
+        cx.run_until_parked();
         assert_eq!(
             events.lock().expect("Task events").len(),
-            2,
-            "a stale configuration does not dispatch"
+            4,
+            "a stale configuration cannot run the same label from another source"
         );
 
         // The recent history is bounded and deduplicated.
         panel.update(cx, |panel, _| {
             for index in 0..12 {
-                panel.record_recent_configuration(worktree_id, format!("config-{index}"));
+                panel.record_recent_configuration(saved_worktree_configuration(
+                    worktree_id,
+                    format!("config-{index}"),
+                ));
             }
-            panel.record_recent_configuration(worktree_id, "config-7".into());
+            panel.record_recent_configuration(saved_worktree_configuration(
+                worktree_id,
+                "config-7".into(),
+            ));
             assert_eq!(
                 panel.recent_configurations.len(),
                 RECENT_CONFIGURATION_LIMIT
@@ -9453,7 +9535,7 @@ mod tests {
                 panel
                     .recent_configurations
                     .front()
-                    .map(|(_, label)| label.as_str()),
+                    .map(|target| target.label.as_str()),
                 Some("config-7"),
                 "re-activation moves the entry to the front"
             );
