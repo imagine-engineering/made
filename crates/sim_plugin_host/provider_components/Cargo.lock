@@ -452,6 +452,7 @@ dependencies = [
  "bytemuck",
  "sim_types",
  "half",
+ "libm",
  "naga",
  "pollster",
  "rayon",
