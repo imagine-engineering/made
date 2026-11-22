@@ -1134,6 +1134,7 @@ enum NodeCopyChange {
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
     BooleanInput(bool),
+    SetDocumentArtboard,
     DisconnectNumericInput,
     InsertNumericOnWire(UnaryNumericOperation),
     ConnectNumericInput {
@@ -1192,6 +1193,11 @@ impl NodeCopyChange {
             Self::BooleanInput(value) => {
                 archive
                     .set_graph_boolean_input_in_copy(node, value, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::SetDocumentArtboard => {
+                archive
+                    .set_document_artboard_in_copy(node, ARCHIVE_BUDGET)
                     .await
             }
             Self::DisconnectNumericInput => {
@@ -4262,6 +4268,24 @@ impl GraphiteDocumentItem {
                                 |panel| panel.child(self.render_numeric_wire_insertion(selected, window, cx)),
                             )
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
+                            .when(selected.can_set_document_artboard(), |panel| {
+                                let node = Box::new(selected.clone());
+                                panel.child(
+                                    div().debug_selector(|| "GRAPHITE-GDD-SET-DOCUMENT-ARTBOARD".into()).child(
+                                        Button::new(
+                                            "graphite-gdd-set-document-artboard",
+                                            if working { "Use as Document Artboard" } else { "Set Artboard in a Copy" },
+                                        )
+                                        .disabled(self.copy_task.is_some())
+                                        .on_click(cx.listener(move |item, _, window, cx| {
+                                            item.apply_graph_edit(GraphiteCopy::EditNode {
+                                                node: node.clone(),
+                                                change: NodeCopyChange::SetDocumentArtboard,
+                                            }, window, cx);
+                                        })),
+                                    ),
+                                )
+                            })
                             .when(selected.can_preview_numeric_output() || selected.layer_preview().is_some(), |panel| {
                                 panel.child(Self::render_node_output_preview(&form.output_preview, selected.layer_preview(), cx))
                             })
@@ -4667,6 +4691,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::NumericInput(_) | NodeCopyChange::BooleanInput(_),
                         ..
                     } => "Edited",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::SetDocumentArtboard,
+                        ..
+                    } => "Set Artboard in",
                     GraphiteCopy::EditNode {
                         change: NodeCopyChange::NumericInputExposure(true),
                         ..
@@ -11306,6 +11334,94 @@ mod tests {
         });
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("original ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_282_2_workspace_sets_the_document_artboard(cx: &mut TestAppContext) {
+        let blank = create_gdd_folder(621, 187, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source folder");
+        let initial = blank
+            .insert_root_catalog_node_in_copy("NETWORK:Artboard", [4, -3], ARCHIVE_BUDGET)
+            .await
+            .expect("unconnected catalog Artboard");
+        let original = initial
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/unconnected-artboard.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("input ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open ZIP")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let connect = "GRAPHITE-GDD-SET-DOCUMENT-ARTBOARD";
+        let preview = "GRAPHITE-GDD-PREVIEW-ARTBOARD";
+        assert!(window.debug_bounds(preview).is_none());
+        let address = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working Artboard")
+            };
+            form.selected_node().expect("catalog Artboard").storage_id()
+        });
+        click(window, connect);
+        assert!(window.debug_bounds(connect).is_none());
+        assert!(window.debug_bounds(preview).is_some());
+        click(window, preview);
+        assert!(window.debug_bounds("GRAPHITE-GDD-ARTBOARD-IMAGE").is_some());
+        let image = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working Artboard")
+            };
+            let NodeOutputPreview::ReadyImage(image) = &form.output_preview else {
+                panic!("native Artboard image")
+            };
+            image.clone()
+        });
+        assert!(window.update(|window, _| window.has_image_atlas_entry(&image)));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert!(window.debug_bounds(connect).is_some());
+        assert!(window.debug_bounds(preview).is_none());
+        click(window, "GRAPHITE-GDD-REDO");
+        assert!(window.debug_bounds(preview).is_some());
+        assert!(item.read_with(window, |item, cx| item.is_dirty(cx)));
+        let destination = PathBuf::from("/project/document-artboard.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("published Artboard");
+        let graph = saved.graph_inspection().await.expect("reopened graph");
+        let board = graph
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == address)
+            .expect("original Artboard address");
+        assert!(matches!(
+            board.layer_preview(),
+            Some(GddGraphLayerPreview::Artboard { .. })
+        ));
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("input ZIP"),
             original
         );
     }
