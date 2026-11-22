@@ -528,9 +528,10 @@ enum GraphiteCopy {
         network: Box<GddGraphNetwork>,
         kind: NetworkPortKind,
     },
-    RemoveNetworkImport {
+    RemoveNetworkPort {
         network: Box<GddGraphNetwork>,
-        import_index: usize,
+        kind: NetworkPortKind,
+        index: usize,
     },
     ConnectNetworkExport {
         network: Box<GddGraphNetwork>,
@@ -547,6 +548,15 @@ enum GraphiteCopy {
 enum NetworkPortKind {
     Import,
     Export,
+}
+
+impl NetworkPortKind {
+    fn count(self, network: &GddGraphNetwork) -> usize {
+        match self {
+            Self::Import => network.import_count,
+            Self::Export => network.export_count,
+        }
+    }
 }
 
 enum NodeCopyChange {
@@ -942,10 +952,11 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn remove_network_import(
+    fn remove_network_port(
         &mut self,
         network: &GddGraphNetwork,
-        import_index: usize,
+        kind: NetworkPortKind,
+        index: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -955,12 +966,13 @@ impl GraphiteDocumentItem {
         if form
             .active_network()
             .is_some_and(|active| active.id == network.id)
-            && import_index < network.import_count
+            && index < kind.count(network)
         {
             self.save_copy(
-                GraphiteCopy::RemoveNetworkImport {
+                GraphiteCopy::RemoveNetworkPort {
                     network: Box::new(network.clone()),
-                    import_index,
+                    kind,
+                    index,
                 },
                 window,
                 cx,
@@ -1323,46 +1335,46 @@ impl GraphiteDocumentItem {
                                         }))
                                     }),
                             )
-                            .when(
-                                network.can_extend_ports_in_copy()
-                                    && network.import_count > 0
-                                    && self.copy_task.is_none(),
-                                |panel| {
-                                    let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
-                                        let network = Arc::new(network.clone());
-                                        for index in 0..network.import_count {
-                                            let item = item.clone();
-                                            let network = network.clone();
-                                            menu = menu.custom_entry(
-                                                move |_, _| {
-                                                    div()
-                                                        .debug_selector(move || format!("GRAPHITE-GDD-REMOVE-IMPORT-{index}"))
-                                                        .p_2()
-                                                        .child(Label::new(format!("Import {}", index + 1)))
-                                                        .into_any_element()
-                                                },
-                                                move |window, cx| {
-                                                    if let Some(item) = item.upgrade() {
-                                                        item.update(cx, |item, cx| {
-                                                            item.remove_network_import(&network, index, window, cx);
-                                                        });
-                                                    }
-                                                },
-                                            );
+                            .when(network.can_extend_ports_in_copy() && self.copy_task.is_none(), |panel| {
+                                panel.child(h_flex().gap_2().flex_wrap().children(
+                                    [
+                                        (NetworkPortKind::Import, "Import", "GRAPHITE-GDD-REMOVE-IMPORT"),
+                                        (NetworkPortKind::Export, "Export", "GRAPHITE-GDD-REMOVE-EXPORT"),
+                                    ].into_iter().filter_map(|(kind, noun, selector)| {
+                                        let count = kind.count(network);
+                                        if count == 0 {
+                                            return None;
                                         }
-                                        menu
-                                    });
-                                    panel.child(
-                                        div()
-                                            .debug_selector(|| "GRAPHITE-GDD-REMOVE-IMPORT".into())
-                                            .child(DropdownMenu::new(
-                                                "graphite-gdd-remove-import",
-                                                "Remove Import in a Copy",
-                                                menu,
-                                            )),
-                                    )
-                                },
-                            )
+                                        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+                                            let network = Arc::new(network.clone());
+                                            for index in 0..count {
+                                                let item = item.clone();
+                                                let network = network.clone();
+                                                menu = menu.custom_entry(
+                                                    move |_, _| {
+                                                        div()
+                                                            .debug_selector(move || format!("{selector}-{index}"))
+                                                            .p_2()
+                                                            .child(Label::new(format!("{noun} {}", index + 1)))
+                                                            .into_any_element()
+                                                    },
+                                                    move |window, cx| {
+                                                        if let Some(item) = item.upgrade() {
+                                                            item.update(cx, |item, cx| {
+                                                                item.remove_network_port(&network, kind, index, window, cx);
+                                                            });
+                                                        }
+                                                    },
+                                                );
+                                            }
+                                            menu
+                                        });
+                                        Some(div()
+                                            .debug_selector(move || selector.into())
+                                            .child(DropdownMenu::new(selector, format!("Remove {noun} in a Copy"), menu)))
+                                    }),
+                                ))
+                            })
                     })
                     .when(has_nodes, |panel| panel.child(
                         div()
@@ -1828,7 +1840,14 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Added export in",
                     GraphiteCopy::ConnectNetworkExport { .. } => "Connected export in",
-                    GraphiteCopy::RemoveNetworkImport { .. } => "Removed import in",
+                    GraphiteCopy::RemoveNetworkPort {
+                        kind: NetworkPortKind::Import,
+                        ..
+                    } => "Removed import in",
+                    GraphiteCopy::RemoveNetworkPort {
+                        kind: NetworkPortKind::Export,
+                        ..
+                    } => "Removed export in",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
                     GraphiteCopy::InsertNumericNode { .. }
@@ -2030,18 +2049,30 @@ impl GraphiteDocumentItem {
                                     )
                                     .await?,
                             ),
-                            GraphiteCopy::RemoveNetworkImport {
+                            GraphiteCopy::RemoveNetworkPort {
                                 network,
-                                import_index,
-                            } => Some(
-                                archive
-                                    .remove_nested_network_import_in_copy(
-                                        &network,
-                                        import_index,
-                                        ARCHIVE_BUDGET,
-                                    )
-                                    .await?,
-                            ),
+                                kind,
+                                index,
+                            } => Some(match kind {
+                                NetworkPortKind::Import => {
+                                    archive
+                                        .remove_nested_network_import_in_copy(
+                                            &network,
+                                            index,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NetworkPortKind::Export => {
+                                    archive
+                                        .remove_nested_network_export_in_copy(
+                                            &network,
+                                            index,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                            }),
                             GraphiteCopy::InsertNumericNode {
                                 operation,
                                 position,
@@ -3076,6 +3107,105 @@ mod tests {
         assert_eq!(network.import_count, 1);
         assert_eq!(network.export_count, 2);
         assert_eq!(contents.history_len(), original_history + 3);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_024_2_workspace_removes_and_restores_a_nested_export(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/remove-export.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source network")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        let network_id = source.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the scoped graph");
+            };
+            let network = form.active_network().expect("original nested network");
+            assert_eq!(network.export_count, 2);
+            network.id
+        });
+        click(window, "GRAPHITE-GDD-REMOVE-EXPORT");
+        paint(window);
+        click(window, "GRAPHITE-GDD-REMOVE-EXPORT-1");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
+
+        let mut previous = source;
+        for (selector, path, expected_exports) in [
+            (
+                "GRAPHITE-GDD-REMOVE-EXPORT-0",
+                "/project/removed-export.gdd",
+                1,
+            ),
+            ("GRAPHITE-GDD-SAVE-UNDO", "/project/restored-export.gdd", 2),
+            ("GRAPHITE-GDD-SAVE-REDO", "/project/redone-export.gdd", 1),
+        ] {
+            paint(window);
+            if selector == "GRAPHITE-GDD-REMOVE-EXPORT-0" {
+                click(window, "GRAPHITE-GDD-REMOVE-EXPORT");
+                paint(window);
+            }
+            click(window, selector);
+            let destination = PathBuf::from(path);
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![destination]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("reopen the saved signature");
+            assert_ne!(reopened, previous);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected native Graphite folder");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            let graph = contents
+                .graph_inspection()
+                .await
+                .expect("reopened nested scope");
+            let network = graph
+                .networks
+                .iter()
+                .find(|network| network.id == network_id)
+                .expect("same nested network identity");
+            assert_eq!(network.import_count, 2);
+            assert_eq!(network.export_count, expected_exports);
+            assert_eq!(contents.history_len(), original_history + 4);
+            previous = reopened;
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
