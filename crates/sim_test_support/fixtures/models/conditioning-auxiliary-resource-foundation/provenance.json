@@ -2,7 +2,7 @@
   "arithmetic_contract": "Pure Python standard-library source equations with explicit IEEE-754 binary32 rounding, exact-rational fused multiply-add with ties-to-even binary32 rounding, source-order f32 attention accumulation, f64 layer-normalization statistics, and f64 final matmul accumulation.",
   "command": "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/conditioning-auxiliary-resource-foundation/generate_oracle.py --check",
   "format": "conditioning-auxiliary-resource-foundation-provenance-v1",
-  "generator_sha256": "c7622869a2d8abf441dc45a8f147a9d7d73548dfcd652343405eb8f757aa249c",
+  "generator_sha256": "4f42766e1557c89934177e5351fd571fc6544cfffe0f0d4c44d6fa5fb6cb1752",
   "gligen_state_count": 42,
   "mutations": [
     "photomaker_extra_projection",
@@ -16,21 +16,21 @@
     "style_value_projection"
   ],
   "oracle_domain": "conditioning-auxiliary-resource-foundation-v1",
-  "oracle_sha256": "c4d20e79b630efea4917ba7416831596cd9756e6ce9d72e0ac51fdf064a0eb6e",
+  "oracle_sha256": "c1834e97beb2d94be20b6684bdc8371f0c28b2d0cec15f338f94446282a0852e",
   "photomaker_state_count": 407,
   "pinned_sources": {
-    "projects/sim/ComfyUI/sim/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
-    "projects/sim/ComfyUI/sim/clip_vision.py": "8e3cc5d5d257b52d120885ba7427ff3fdf56129a485fdadac3b6215ae2c67b20",
-    "projects/sim/ComfyUI/sim/gligen.py": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
-    "projects/sim/ComfyUI/sim/ldm/flux/redux.py": "3b7abf43e15fc7b9613a64e701635f943351fa47f5036d87427ea672f93c7952",
-    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
-    "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/openaimodel.py": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
-    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
-    "projects/sim/ComfyUI/sim/samplers.py": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
-    "projects/sim/ComfyUI/sim/sd.py": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
-    "projects/sim/ComfyUI/sim/t2i_adapter/adapter.py": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
-    "projects/sim/ComfyUI/sim_extras/nodes_photomaker.py": "c7e86d4684d2884eda20250bd7122e31a8aaf7bfa003245ad0e0431a9ef1957e",
-    "projects/sim/ComfyUI/nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
+    "projects/comfy/ComfyUI/comfy/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+    "projects/comfy/ComfyUI/comfy/clip_vision.py": "8e3cc5d5d257b52d120885ba7427ff3fdf56129a485fdadac3b6215ae2c67b20",
+    "projects/comfy/ComfyUI/comfy/gligen.py": "87c4297809a1a0a7727e3623cef0930463080dfedc068eb97c5e19bc6e155d0c",
+    "projects/comfy/ComfyUI/comfy/ldm/flux/redux.py": "3b7abf43e15fc7b9613a64e701635f943351fa47f5036d87427ea672f93c7952",
+    "projects/comfy/ComfyUI/comfy/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/comfy/ComfyUI/comfy/ldm/modules/diffusionmodules/openaimodel.py": "9d27fb036cab8a262ef3d866a643f7fdc40994022616f1b8be14b7d919f57f96",
+    "projects/comfy/ComfyUI/comfy/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/comfy/ComfyUI/comfy/samplers.py": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "projects/comfy/ComfyUI/comfy/sd.py": "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42",
+    "projects/comfy/ComfyUI/comfy/t2i_adapter/adapter.py": "efc52cc85f941e11b509c0339e8950a6680d031b09bec36736d8834b9ccfa1af",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_photomaker.py": "c7e86d4684d2884eda20250bd7122e31a8aaf7bfa003245ad0e0431a9ef1957e",
+    "projects/comfy/ComfyUI/nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b"
   },
   "profiles": [
     "style",

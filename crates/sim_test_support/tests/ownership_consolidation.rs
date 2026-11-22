@@ -1412,7 +1412,7 @@ fn val_ownership_task397_conditioning_auxiliary_resources_001()
         .ok_or("STYLE_MODEL ownership concern is missing")?;
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(style_concern)?)),
-        "99dcdc8147873af5190bf3db75279634c0c1ddf854ea0ed1c16955b5ffbe102b"
+        "80711674d276f39f5047f4a042af523da1195df68f5c03e5628cac917a3a3a78"
     );
 
     let catalog = fs::read_to_string(

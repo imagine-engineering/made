@@ -3887,19 +3887,19 @@ fn conditioning_auxiliary_resource_roles() -> Result<(), Box<dyn Error>> {
     for (bytes, expected) in [
         (
             STYLE_MODEL_MANIFEST,
-            "2c38283c6f54a76077cafd56dd653e4f1f9f7f943110db4c632ed7486e57c405",
+            "18a1d1a4e2dd84f8efff4ac9eb4684eb4020fb7f08970f9e506dff9a4d737af3",
         ),
         (
             STYLE_MODEL_PROVENANCE,
-            "7149301049024767c50963bc25d7b00abd7e69979d532e28e788e6ac59e08c22",
+            "cf8380aab639a3c145f0053f5d545bbe5dbcc54c0222c6ad0071f6c3749fb9b4",
         ),
         (
             STYLE_MODEL_ORACLE,
-            "c4d20e79b630efea4917ba7416831596cd9756e6ce9d72e0ac51fdf064a0eb6e",
+            "c1834e97beb2d94be20b6684bdc8371f0c28b2d0cec15f338f94446282a0852e",
         ),
         (
             STYLE_MODEL_GENERATOR,
-            "c7622869a2d8abf441dc45a8f147a9d7d73548dfcd652343405eb8f757aa249c",
+            "4f42766e1557c89934177e5351fd571fc6544cfffe0f0d4c44d6fa5fb6cb1752",
         ),
         (
             STYLE_MODEL_SOURCE_GRAPH,

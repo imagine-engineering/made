@@ -1,6 +1,6 @@
 {
   "format": "conditioning-auxiliary-resource-foundation-manifest-v1",
-  "generator_sha256": "c7622869a2d8abf441dc45a8f147a9d7d73548dfcd652343405eb8f757aa249c",
+  "generator_sha256": "4f42766e1557c89934177e5351fd571fc6544cfffe0f0d4c44d6fa5fb6cb1752",
   "gligen_state_count": 42,
   "mutations": [
     "photomaker_extra_projection",
@@ -14,7 +14,7 @@
     "style_value_projection"
   ],
   "oracle_domain": "conditioning-auxiliary-resource-foundation-v1",
-  "oracle_sha256": "c4d20e79b630efea4917ba7416831596cd9756e6ce9d72e0ac51fdf064a0eb6e",
+  "oracle_sha256": "c1834e97beb2d94be20b6684bdc8371f0c28b2d0cec15f338f94446282a0852e",
   "photomaker_state_count": 407,
   "profiles": [
     "style",
