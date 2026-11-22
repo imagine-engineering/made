@@ -225,9 +225,132 @@ fn press_enter(cx: &mut VisualTestContext) {
 }
 
 #[cfg(all(test, unix))]
+fn type_fixture_options(cx: &mut VisualTestContext, control: &str, editor: &str, options: &str) {
+    focus_control(cx, control);
+    press_enter(cx);
+    for _ in 0..2 {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window.simulate_next_frame(cx);
+        });
+    }
+    cx.simulate_input(options);
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let tree: serde_json::Value =
+            serde_json::from_str(&window.debug_a11y_tree_json().expect("Task options editor"))
+                .expect("accessibility JSON");
+        assert!(
+            tree["nodes"]
+                .as_object()
+                .expect("accessibility nodes")
+                .values()
+                .any(|node| node["aria"]["label"] == editor && node["aria"]["value"] == options),
+            "keyboard input reaches {editor}"
+        );
+    });
+}
+
+#[cfg(all(test, unix))]
+async fn mount_fixture_terminal(
+    workspace: &Entity<Workspace>,
+    cx: &mut VisualTestContext,
+) -> Entity<terminal_view::terminal_panel::TerminalPanel> {
+    let async_cx = cx.update(|window, cx| window.to_async(cx));
+    let terminal_panel =
+        terminal_view::terminal_panel::TerminalPanel::load(workspace.downgrade(), async_cx)
+            .await
+            .expect("production terminal panel");
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.add_panel(terminal_panel.clone(), window, cx);
+    });
+    terminal_panel
+}
+
+#[cfg(all(test, unix))]
+async fn assert_fixture_task(
+    terminal_panel: &Entity<terminal_view::terminal_panel::TerminalPanel>,
+    root: &std::path::Path,
+    executable: &std::path::Path,
+    arguments: &[String],
+    cx: &mut VisualTestContext,
+) -> String {
+    use futures::future::{Either, select};
+    use terminal_view::TerminalView;
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let terminal = loop {
+        cx.run_until_parked();
+        let terminal = terminal_panel.read_with(cx, |panel, cx| {
+            panel.panes().into_iter().find_map(|pane| {
+                pane.read(cx).items().find_map(|item| {
+                    let view = item.downcast::<TerminalView>()?;
+                    let terminal = view.read(cx).terminal();
+                    terminal.read(cx).task().map(|_| terminal.clone())
+                })
+            })
+        });
+        if let Some(terminal) = terminal {
+            break terminal;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the build did not open a Task terminal"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    let completed = terminal.read_with(cx, |terminal, cx| {
+        let task = &terminal.task().expect("build Task").spawned_task;
+        let (shell, shell_arguments) = task::ShellBuilder::new(&task.shell, false)
+            .build_with_command_intent(
+                Some(executable.to_str().expect("executable path").to_owned()),
+                arguments,
+                true,
+                arguments.len(),
+            );
+        assert_eq!(task.command.as_deref(), Some(shell.as_str()));
+        assert_eq!(task.args, shell_arguments);
+        assert_eq!(task.cwd.as_deref(), Some(root));
+        terminal.wait_for_completed_task(cx)
+    });
+    let result = match select(
+        completed,
+        cx.background_executor.timer(Duration::from_secs(70)),
+    )
+    .await
+    {
+        Either::Left((result, _)) => result.expect("Task exit status"),
+        Either::Right(_) => panic!("the build Task did not finish"),
+    };
+    let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
+    assert!(result.success(), "the build Task failed: {transcript}");
+    transcript
+}
+
+#[cfg(all(test, unix))]
 #[gpui::test]
 #[ignore = "requires a disposable offline Gradle graph, pinned JDTLS and its Gradle delegate"]
 async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestAppContext) {
+    run_cached_gradle_fixture(GradleFixtureRun::Diagram, cx).await;
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires the pinned offline Gradle fixture with the ordered Task probes"]
+async fn cached_gradle_ordered_operations_keep_declared_options(cx: &mut TestAppContext) {
+    run_cached_gradle_fixture(GradleFixtureRun::OrderedTasks, cx).await;
+}
+
+#[cfg(all(test, unix))]
+enum GradleFixtureRun {
+    Diagram,
+    OrderedTasks,
+}
+
+#[cfg(all(test, unix))]
+async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContext) {
     use self::dispatch_graph_action as dispatch;
     use jvm_ui::{
         DependenciesPanel, ShowGradle,
@@ -295,6 +418,9 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         cx.background_executor
             .timer(Duration::from_millis(100))
             .await;
+    }
+    if matches!(run, GradleFixtureRun::OrderedTasks) {
+        cx.update(terminal_view::init);
     }
     let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
     cx.run_until_parked();
@@ -374,6 +500,19 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         cx.background_executor
             .timer(Duration::from_millis(100))
             .await;
+    }
+    if matches!(run, GradleFixtureRun::OrderedTasks) {
+        verify_gradle_queue(
+            &root,
+            &build_java,
+            &gradle_installation,
+            &gradle_user_home,
+            &workspace,
+            &panel,
+            cx,
+        )
+        .await;
+        return;
     }
     let select_configuration = |cx: &mut VisualTestContext| {
         workspace.update_in(cx, |workspace, window, cx| {
@@ -654,6 +793,137 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         assert_eq!(analyzer.scope().label(), "qualificationGraph");
     });
     eprintln!("Mounted Gradle opened the diagram popup and analyzer from the same admitted scope");
+}
+
+#[cfg(all(test, unix))]
+async fn verify_gradle_queue(
+    root: &std::path::Path,
+    build_java: &std::path::Path,
+    gradle_installation: &std::path::Path,
+    gradle_user_home: &std::path::Path,
+    workspace: &Entity<Workspace>,
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    cx: &mut VisualTestContext,
+) {
+    use jvm_ui::DependenciesPanel;
+    use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
+
+    const WRITE: &str = ":application:qualificationQueueWrite";
+    const READ: &str = ":application:qualificationQueueRead";
+    const MESSAGE: &str = "value $ZED_FILE :library:help";
+    let output = root.join("application/build/qualification/queue-message.txt");
+    assert!(
+        !output.exists(),
+        "the disposable fixture has no Task output"
+    );
+    let terminal_panel = mount_fixture_terminal(workspace, cx).await;
+
+    let select_task = |cx: &mut VisualTestContext, path| {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<DependenciesPanel>(window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.dispatch_action(ExpandAll);
+        let task_row = panel.read_with(cx, |panel, _| {
+            let (_, rows, _) = panel.snapshot_for_test();
+            let (index, row) = rows
+                .iter()
+                .enumerate()
+                .find(|(_, row)| row.label == path && row.id.0.contains(":gradle-task:"))
+                .unwrap_or_else(|| panic!("missing provider Gradle task {path}"));
+            assert!(
+                row.secondary_label
+                    .as_deref()
+                    .is_some_and(|label| label.contains("run offline through Tasks"))
+            );
+            assert!(row.accessibility_label.contains("or Task options"));
+            if path == WRITE {
+                assert!(
+                    rows.iter().any(|option| {
+                        option.label == "--project-dir"
+                            && option.id.0.contains(":gradle-option:")
+                            && option
+                                .id
+                                .0
+                                .ends_with(":application:qualificationQueueWrite:project-dir")
+                    }),
+                    "the option is declared by the Gradle provider"
+                );
+            }
+            index
+        });
+        cx.dispatch_action(SelectFirst);
+        for _ in 0..task_row {
+            cx.dispatch_action(SelectNext);
+        }
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    };
+    select_task(cx, WRITE);
+    let option = format!("--project-dir={MESSAGE}");
+    let options = serde_json::to_string(&[&option]).expect("literal Gradle option JSON");
+    type_fixture_options(
+        cx,
+        "Configure declared options for the selected Gradle task",
+        "Gradle task options",
+        &options,
+    );
+    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    select_task(cx, READ);
+    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+    let queue = panel.read_with(cx, |panel, _| {
+        panel
+            .snapshot_for_test()
+            .1
+            .into_iter()
+            .filter(|row| row.id.0.starts_with("groovy-ordered-operation:"))
+            .map(|row| row.label.clone())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        queue,
+        [format!("1. {WRITE} (1 options)"), format!("2. {READ}")]
+    );
+    assert!(
+        !output.exists(),
+        "queueing operations does not start a Task"
+    );
+    dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
+    let arguments = [
+        "--offline".to_owned(),
+        format!("-Dorg.gradle.java.home={}", build_java.display()),
+        "--gradle-user-home".to_owned(),
+        gradle_user_home
+            .to_str()
+            .expect("Gradle home path")
+            .to_owned(),
+        "--".to_owned(),
+        WRITE.to_owned(),
+        option,
+        READ.to_owned(),
+    ];
+    let transcript = assert_fixture_task(
+        &terminal_panel,
+        root,
+        &gradle_installation.join("bin/gradle"),
+        &arguments,
+        cx,
+    )
+    .await;
+    let write = transcript
+        .find("QUALIFICATION_QUEUE_WRITE")
+        .expect("Gradle write task");
+    let read = transcript
+        .find(&format!("QUALIFICATION_QUEUE_READ={MESSAGE}"))
+        .expect("Gradle read task saw the exact option");
+    assert!(write < read, "{transcript}");
+    assert_eq!(
+        std::fs::read_to_string(output).expect("Gradle output"),
+        MESSAGE
+    );
+    eprintln!(
+        "Mounted Gradle ran both tasks in order and preserved the literal option in one offline Task"
+    );
 }
 
 #[cfg(all(test, unix))]
@@ -1082,10 +1352,8 @@ enum MavenGoalRun {
 
 #[cfg(all(test, unix))]
 async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
-    use futures::future::{Either, select};
     use jvm_ui::DependenciesPanel;
     use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
-    use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
 
     let (plugin, version, root_key, settings_key, source, profile) = match run {
         MavenGoalRun::ResolveSources { .. } => (
@@ -1160,13 +1428,7 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
     .await;
 
     let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
-    let async_cx = cx.update(|window, cx| window.to_async(cx));
-    let terminal_panel = TerminalPanel::load(workspace.downgrade(), async_cx)
-        .await
-        .expect("production terminal panel");
-    workspace.update_in(cx, |workspace, window, cx| {
-        workspace.add_panel(terminal_panel.clone(), window, cx);
-    });
+    let terminal_panel = mount_fixture_terminal(&workspace, cx).await;
     show_ready_maven_view(&lsp_store, worktree_id, cx).await;
     cx.dispatch_action(ExpandAll);
     let select_goal = |cx: &mut VisualTestContext, goal| {
@@ -1217,35 +1479,12 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
     match run {
         MavenGoalRun::OrderedHelp => {
             select_goal(cx, "active-profiles");
-            focus_control(
+            type_fixture_options(
                 cx,
                 "Configure profiles, test settings and reactor behavior for the selected Maven operation",
+                "Maven operation options",
+                r#"["-P!evidence-selected"]"#,
             );
-            press_enter(cx);
-            for _ in 0..2 {
-                cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    window.simulate_next_frame(cx);
-                });
-            }
-            let options = r#"["-P!evidence-selected"]"#;
-            cx.simulate_input(options);
-            cx.update(|window, cx| {
-                window.draw(cx).clear(cx);
-                let tree: serde_json::Value = serde_json::from_str(
-                    &window.debug_a11y_tree_json().expect("Maven options editor"),
-                )
-                .expect("accessibility JSON");
-                assert!(
-                    tree["nodes"]
-                        .as_object()
-                        .expect("accessibility nodes")
-                        .values()
-                        .any(|node| node["aria"]["label"] == "Maven operation options"
-                            && node["aria"]["value"] == options),
-                    "keyboard input reaches the Maven operation options editor"
-                );
-            });
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             select_goal(cx, "effective-pom");
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
@@ -1285,78 +1524,23 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
             dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
         }
     }
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let terminal = loop {
-        cx.run_until_parked();
-        let terminal = terminal_panel.read_with(cx, |panel, cx| {
-            panel.panes().into_iter().find_map(|pane| {
-                pane.read(cx).items().find_map(|item| {
-                    let view = item.downcast::<TerminalView>()?;
-                    let terminal = view.read(cx).terminal();
-                    terminal.read(cx).task().map(|_| terminal.clone())
-                })
-            })
-        });
-        if let Some(terminal) = terminal {
-            break terminal;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the selected Maven goal did not open a Task terminal"
-        );
-        cx.background_executor
-            .timer(Duration::from_millis(100))
-            .await;
-    };
-    let completed = terminal.read_with(cx, |terminal, cx| {
-        let task = &terminal.task().expect("Maven Task").spawned_task;
-        let mut arguments = [
-            "--offline",
-            "--settings",
-            settings.to_str().expect("settings path"),
-            "--file",
-            "pom.xml",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-        if matches!(run, MavenGoalRun::OrderedHelp) {
-            arguments.extend(["--activate-profiles", "!evidence-selected"].map(str::to_owned));
-        }
-        arguments.extend(coordinates);
-        let (shell, shell_arguments) = task::ShellBuilder::new(&task.shell, false)
-            .build_with_command_intent(
-                Some(root.join("mvnw").to_str().expect("wrapper path").to_owned()),
-                &arguments,
-                true,
-                arguments.len(),
-            );
-        assert_eq!(task.command.as_deref(), Some(shell.as_str()));
-        assert_eq!(task.args, shell_arguments);
-        assert_eq!(
-            task.cwd.as_deref(),
-            Some(root.as_path()),
-            "the goal runs from the imported Maven root"
-        );
-        terminal.wait_for_completed_task(cx)
-    });
-    let result = match select(
-        completed,
-        cx.background_executor.timer(Duration::from_secs(70)),
-    )
-    .await
-    {
-        Either::Left((result, _)) => result.expect("Maven exit status"),
-        Either::Right(_) => panic!("the Maven Task did not finish"),
-    };
-    assert!(
-        result.success(),
-        "the Maven Task failed: {}",
-        terminal.read_with(cx, |terminal, _| terminal.get_content())
-    );
+    let mut arguments = [
+        "--offline",
+        "--settings",
+        settings.to_str().expect("settings path"),
+        "--file",
+        "pom.xml",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    if matches!(run, MavenGoalRun::OrderedHelp) {
+        arguments.extend(["--activate-profiles", "!evidence-selected"].map(str::to_owned));
+    }
+    arguments.extend(coordinates);
+    let transcript =
+        assert_fixture_task(&terminal_panel, &root, &root.join("mvnw"), &arguments, cx).await;
     match run {
         MavenGoalRun::ResolveSources { cached } => {
-            let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
             let (_, artifacts) = transcript
                 .split_once("The following files have been resolved:")
                 .expect("Maven's resolved artifact report");
@@ -1389,7 +1573,6 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
                 .expect("end effective properties");
             if matches!(run, MavenGoalRun::OrderedHelp) {
                 assert!(properties.contains("<effective.fixture>base</effective.fixture>"));
-                let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
                 let profile_report = transcript
                     .find("Active profile report written to:")
                     .expect("active profiles ran in Maven");

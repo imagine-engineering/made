@@ -6373,12 +6373,9 @@ fn project_rows_for_view(
             children.push(LanguageToolNode {
                 id: LanguageToolNodeId(format!("{}:gradle-tasks", module_id.0)),
                 label: "Gradle tasks".to_string(),
-                secondary_label: Some(
-                    "Discovered tasks and declared options; execution pending".to_string(),
-                ),
+                secondary_label: Some("Discovered tasks and declared options".to_string()),
                 accessibility_label:
-                    "Gradle provider tasks; declared options where available; task execution unavailable"
-                        .to_string(),
+                    "Gradle provider tasks; declared options where available".to_string(),
                 icon: None,
                 children: gradle
                     .tasks
@@ -6386,7 +6383,10 @@ fn project_rows_for_view(
                     .map(|task| LanguageToolNode {
                         id: gradle_task_node_id(&module_id,gradle,&task.path),
                         label: task.path.clone(),
-                        secondary_label: task.group.clone(),
+                        secondary_label: Some(match &task.group {
+                            Some(group) => format!("{group}; execution unavailable"),
+                            None => "execution unavailable".to_string(),
+                        }),
                         accessibility_label: format!(
                             "Gradle task {}; group {}; {}; option declarations {}; accepted values unknown; execution unavailable",
                             task.path,

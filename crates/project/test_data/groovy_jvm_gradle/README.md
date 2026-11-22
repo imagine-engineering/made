@@ -99,3 +99,17 @@ request, a two-node cycle, and 96 paths to `verification:shared-observer:1.0`.
 The generated `fixture-inputs.json` records the expected provider facts and
 source file digests. The mounted test exercises GPUI and the real provider.
 Desktop screenshots and timings use the separate native journey.
+
+### Mounted ordered Gradle Tasks
+
+Prepare a fresh fixture with `prepare-diagram-fixture.py --ordered-tasks
+"$fixture"` and use the same pinned Gradle, JDK, JDTLS, and isolated offline
+settings. Run the mounted test
+`test_explorer::jvm_workflow::cached_gradle_ordered_operations_keep_declared_options`
+with the same Cargo target and test flags.
+
+The first task declares a task-local `--project-dir` option that has the same
+name as a global Gradle flag. The test enters a literal value through **Task
+options**, queues the writer and reader, and verifies a single offline Task
+with the option after the Gradle argument separator. The reader checks the
+writer's output without declaring a Gradle task dependency.

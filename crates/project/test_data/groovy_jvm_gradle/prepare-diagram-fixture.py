@@ -9,7 +9,9 @@ from zipfile import ZipFile, ZipInfo
 
 parser = argparse.ArgumentParser(description='Create the offline Groovy dependency diagram fixture')
 parser.add_argument('workspace', type=Path, help='existing directory for a new graph-project')
-workspace = parser.parse_args().workspace.resolve()
+parser.add_argument('--ordered-tasks', action='store_true', help='include the ordered Gradle Task probes')
+args = parser.parse_args()
+workspace = args.workspace.resolve()
 root = workspace / 'graph-project'
 root.mkdir()
 source = Path(__file__).resolve().parent
@@ -85,6 +87,31 @@ configurations.create('qualificationRuntime') {
 dependencies {
     qualificationGraph project(':library')
 """ + declarations + '}\n')
+    if args.ordered_tasks:
+        build_file.write("""
+abstract class QualificationQueueWrite extends DefaultTask {
+    private String message = 'default'
+
+    @org.gradle.api.tasks.options.Option(option = 'project-dir', description = 'Literal fixture message')
+    void setMessage(String value) { message = value }
+
+    @TaskAction
+    void report() {
+        def output = project.layout.buildDirectory.file('qualification/queue-message.txt').get().asFile
+        output.parentFile.mkdirs()
+        output.text = message
+        println 'QUALIFICATION_QUEUE_WRITE'
+    }
+}
+tasks.register('qualificationQueueWrite', QualificationQueueWrite) {
+    group = 'qualification'
+}
+def queueMessage = layout.buildDirectory.file('qualification/queue-message.txt')
+tasks.register('qualificationQueueRead') {
+    group = 'qualification'
+    doLast { println 'QUALIFICATION_QUEUE_READ=' + queueMessage.get().asFile.text }
+}
+""")
 identities = sorted(f'{name}:{version}' for (name, version) in members if (name, version) != ('shared-version', '1.0'))
 assert len(identities) == 124
 receipt = {
