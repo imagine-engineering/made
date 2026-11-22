@@ -707,7 +707,7 @@ enum SavedGraphicProfile {
     Layer(GddGraphLayerPreview),
 }
 
-const ARTBOARD_CONTENT_INPUT: usize = 1;
+const LAYER_CONTENT_INPUT: usize = 1;
 
 #[derive(Clone)]
 pub struct GddGraphNode {
@@ -996,7 +996,23 @@ impl GddGraphNode {
             (
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
-            ) if self.is_document_output => ARTBOARD_CONTENT_INPUT,
+            ) if self.is_document_output => LAYER_CONTENT_INPUT,
+            (
+                SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
+                SavedGraphicProfile::Fill,
+            ) if matches!(
+                source
+                    .input_ports
+                    .get(fill::ContentInput::INDEX)
+                    .and_then(|port| port.source.as_ref()),
+                Some(GddGraphPortSource::Node {
+                    output_index: 0,
+                    ..
+                })
+            ) =>
+            {
+                LAYER_CONTENT_INPUT
+            }
             _ => return None,
         };
         self.input_ports
@@ -3464,6 +3480,8 @@ impl InspectedGddV1 {
         source: &GddGraphNode,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::node::ui::{IS_LAYER, POSITION};
+
         self.check_node_edit_target(node)?;
         self.check_node_edit_target(source)?;
         let input_index = node
@@ -3486,24 +3504,112 @@ impl InspectedGddV1 {
             &connector,
             path,
         );
-        if interface.input_from_connector(&connector, path) != Some(&wire)
-            || graph_port_edit_layout(&interface, [path])? != layout
-        {
+        if interface.input_from_connector(&connector, path) != Some(&wire) {
             return Err(GddArchiveError::UnsupportedGraphContentConnection);
         }
+        let mut detached = NodeNetwork::default();
         collect_layer_preview_node(
             interface.document_network(),
             node.local_id,
-            &mut NodeNetwork::default(),
+            &mut detached,
             &mut BTreeSet::new(),
         )?;
-        let copy = self
-            .finish_graph_input(node, interface, input_index, None, budget)
-            .await?;
+        let upstream_rectangle = if matches!(
+            source.graphic_profile,
+            Some(SavedGraphicProfile::Fill)
+        ) {
+            let Some(NodeInput::Node {
+                node_id,
+                output_index: 0,
+            }) = detached
+                .nodes
+                .get(&source.local_id)
+                .and_then(|node| node.inputs.get(fill::ContentInput::INDEX))
+            else {
+                return Err(GddArchiveError::UnsupportedGraphContentConnection);
+            };
+            if !matches!(
+                detached.nodes.get(node_id).map(|node| &node.implementation),
+                Some(DocumentNodeImplementation::ProtoNode(identifier)) if *identifier == rectangle::IDENTIFIER
+            ) {
+                return Err(GddArchiveError::UnsupportedGraphContentConnection);
+            }
+            Some(*node_id)
+        } else {
+            None
+        };
+        let updated_layout = graph_port_edit_layout(&interface, [path])?;
+        let copy = if layout == updated_layout {
+            self.finish_graph_input(node, interface, input_index, None, budget)
+                .await?
+        } else {
+            let mut edits = vec![write_graph_connector(path, connector, wire.clone())];
+            let mut changed = Vec::new();
+            for (&key, position) in &updated_layout {
+                if layout.get(&key) == Some(position) {
+                    continue;
+                }
+                let (_, local_id) = key;
+                if (local_id != source.local_id && Some(local_id) != upstream_rectangle)
+                    || !matches!(layout.get(&key), Some(NodeTypePersistentMetadata::Node(node)) if matches!(node.position(), NodePosition::Absolute(_)))
+                    || !matches!(position, NodeTypePersistentMetadata::Node(node) if *node.position() == NodePosition::Chain)
+                {
+                    return Err(GddArchiveError::UnsupportedGraphContentConnection);
+                }
+                let metadata = &interface
+                    .node_metadata(&local_id, path)
+                    .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?
+                    .persistent_metadata;
+                changed.push(
+                    metadata
+                        .storage_id
+                        .map(StorageNodeId)
+                        .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?,
+                );
+                edits.push(EditorDelta::NodeMetadata {
+                    network_path: path.to_vec(),
+                    node_id: local_id,
+                    change: NodeMetadataChange::NodeType(position.clone()),
+                });
+            }
+            let (owner, staged) = self.fork_working_copy(&budget).await?;
+            let mut batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+            let Some((wire_edit, layout_edits)) = batch.ops.split_first() else {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            };
+            let (pairs, remainder) = layout_edits.as_chunks::<2>();
+            if !matches!(
+                wire_edit,
+                RegistryDelta::ChangeNodeInput {
+                    id, index,
+                    new_input: graphite_document_graph_storage::NodeInput::Node { id: source_id, index: 0 },
+                } if *id == node.storage_id && usize::try_from(*index).ok() == Some(input_index) && *source_id == source.storage_id
+            ) || !remainder.is_empty()
+                || pairs.len() != changed.len()
+                || !pairs.iter().zip(changed).all(|(pair, expected)| {
+                    matches!(
+                        pair,
+                        [RegistryDelta::ChangeNodeAttribute { id, delta },
+                         RegistryDelta::ChangeNodeAttribute { id: mode_id, delta: mode }]
+                            if *id == expected && *mode_id == expected
+                                && delta.key == POSITION && mode.key == IS_LAYER && mode.value.is_none()
+                    )
+                })
+            {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
+            batch.ops.retain(|operation| {
+                !matches!(
+                    operation,
+                    RegistryDelta::ChangeNodeAttribute { delta, .. } if delta.key == IS_LAYER
+                )
+            });
+            finish_graph_node_edit(owner, staged, batch, &budget).await?
+        };
         let actual = copy.runtime_graph().await?.into_interface()?;
         if actual.document_network().exports != exports
             || actual.input_from_connector(&connector, path) != Some(&wire)
-            || graph_port_edit_layout(&actual, [path])? != layout
+            || graph_port_edit_layout(&actual, [path])? != updated_layout
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -9581,7 +9687,7 @@ mod tests {
             ));
             assert_eq!(
                 board.graphic_content_input_from(merge),
-                Some(ARTBOARD_CONTENT_INPUT)
+                Some(LAYER_CONTENT_INPUT)
             );
             let attached = working
                 .connect_graphic_content_in_copy(board, merge, budget())
@@ -9600,7 +9706,7 @@ mod tests {
                 .find(|node| node.storage_id == merge.storage_id)
                 .expect("same Merge address");
             assert!(matches!(
-                target.input_ports.get(ARTBOARD_CONTENT_INPUT).and_then(|port| port.source.as_ref()),
+                target.input_ports.get(LAYER_CONTENT_INPUT).and_then(|port| port.source.as_ref()),
                 Some(GddGraphPortSource::Node { storage_id, output_index: 0 }) if *storage_id == merge.storage_id
             ));
             assert!(matches!(
@@ -9749,6 +9855,121 @@ mod tests {
                     .registry()
                     .value_equal(graph.document.registry())
             );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_281_2_journals_the_pinned_paint_chain_with_its_merge_wire() {
+        futures::executor::block_on(async {
+            for (merge_position, chained) in [([0, 0], true), ([0, 5], false)] {
+                let blank = create_gdd_folder(621, 992, "Painted layer".into(), budget())
+                    .await
+                    .expect("blank saved graph");
+                let graph = blank
+                    .insert_root_catalog_node_in_copy(
+                        "PROTONODE:vector_nodes::generator_nodes::RectangleNode",
+                        [-14, 0],
+                        budget(),
+                    )
+                    .await
+                    .expect("pinned Rectangle");
+                let graph = graph
+                    .insert_root_catalog_node_in_copy(
+                        "PROTONODE:graphene_core::vector::FillNode",
+                        [-7, 0],
+                        budget(),
+                    )
+                    .await
+                    .expect("pinned Fill");
+                let graph = graph
+                    .insert_root_catalog_node_in_copy(
+                        MERGE_NODE_IDENTIFIER,
+                        merge_position,
+                        budget(),
+                    )
+                    .await
+                    .expect("pinned Merge");
+                let nodes = graph.graph_nodes().await.expect("saved addresses");
+                let profiles: [fn(Option<SavedGraphicProfile>) -> bool; 3] = [
+                    |profile| matches!(profile, Some(SavedGraphicProfile::Rectangle)),
+                    |profile| matches!(profile, Some(SavedGraphicProfile::Fill)),
+                    |profile| {
+                        matches!(
+                            profile,
+                            Some(SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge))
+                        )
+                    },
+                ];
+                let [rectangle, fill, merge] = profiles.map(|matches| {
+                    nodes
+                        .iter()
+                        .find(|node| matches(node.graphic_profile))
+                        .expect("source catalog node")
+                });
+                assert_eq!(merge.graphic_content_input_from(fill), None);
+                let ready = graph
+                    .connect_graphic_content_in_copy(fill, rectangle, budget())
+                    .await
+                    .expect("typed Rectangle-to-Fill wire");
+                let nodes = ready.graph_nodes().await.expect("current candidates");
+                let [fill, merge] = [fill, merge].map(|previous| {
+                    nodes
+                        .iter()
+                        .find(|node| node.storage_id == previous.storage_id)
+                        .expect("same storage address")
+                });
+                assert_eq!(
+                    merge.graphic_content_input_from(fill),
+                    Some(LAYER_CONTENT_INPUT)
+                );
+                let linked = ready
+                    .connect_graphic_content_in_copy(merge, fill, budget())
+                    .await
+                    .expect("journal the source wire and requested chain");
+                assert_eq!(
+                    linked.history_len(),
+                    ready.history_len() + 1 + if chained { 2 } else { 0 }
+                );
+                let actual = linked
+                    .runtime_graph()
+                    .await
+                    .expect("saved runtime")
+                    .into_interface()
+                    .expect("reopened layout");
+                assert_eq!(actual.is_chain(&rectangle.local_id, &[]), chained);
+                assert_eq!(actual.is_chain(&fill.local_id, &[]), chained);
+                assert_eq!(
+                    actual.position(&merge.local_id, &[]),
+                    Some(IVec2::from_array(merge_position))
+                );
+                assert_eq!(
+                    actual.input_from_connector(
+                        &InputConnector::node_at_index(merge.local_id, LAYER_CONTENT_INPUT),
+                        &[]
+                    ),
+                    Some(&NodeInput::node(fill.local_id, 0))
+                );
+                let undone = linked
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await
+                    .expect("undo wire and chain together");
+                assert!(
+                    undone
+                        .document
+                        .registry()
+                        .value_equal(ready.document.registry())
+                );
+                let redone = undone
+                    .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                    .await
+                    .expect("redo wire and chain together");
+                assert!(
+                    redone
+                        .document
+                        .registry()
+                        .value_equal(linked.document.registry())
+                );
+            }
         });
     }
 

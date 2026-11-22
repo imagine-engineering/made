@@ -11583,10 +11583,9 @@ mod tests {
             .default_node_template();
         *artboard.inputs.get_mut(3).expect("Artboard dimensions") =
             NodeInput::value(TaggedValue::DVec2(DVec2::new(128., 64.)), false);
-        let mut merge = resolve_network_node_type("Merge")
+        let merge = resolve_network_node_type("Merge")
             .expect("pinned Merge")
             .default_node_template();
-        *merge.inputs.get_mut(1).expect("Merge Content") = NodeInput::node(NodeId(12), 0);
         let [shape, (paint_id, mut fill_node)] =
             preview_rectangle(NodeId(11), NodeId(12), 24., 24., Color::BLUE);
         let default_fill = resolve_proto_node_type(fill::IDENTIFIER)
@@ -11678,6 +11677,26 @@ mod tests {
                 .is_none()
         );
         click(window, "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-0");
+        assert!(window.debug_bounds(attach).is_none());
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert!(window.debug_bounds(attach).is_some());
+        click(window, "GRAPHITE-GDD-REDO");
+        assert!(window.debug_bounds(attach).is_none());
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        let merge_address = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("saved Merge projection");
+            };
+            form.selected_node().expect("Merge").storage_id()
+        });
+        click(window, attach);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-0")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-1");
         assert!(window.debug_bounds(attach).is_none());
         click(window, "GRAPHITE-GDD-UNDO");
         assert!(window.debug_bounds(attach).is_some());
@@ -11783,6 +11802,15 @@ mod tests {
             painted.input_ports().get(fill::ContentInput::INDEX).and_then(|port| port.source.as_ref()),
             Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
                 if *storage_id == rectangle_address
+        ));
+        let merged = nodes
+            .iter()
+            .find(|node| node.storage_id() == merge_address)
+            .expect("same Merge address after reopening");
+        assert!(matches!(
+            merged.input_ports().get(1).and_then(|port| port.source.as_ref()),
+            Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
+                if *storage_id == fill_address
         ));
         let board = nodes
             .iter()
