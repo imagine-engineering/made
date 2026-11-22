@@ -5,7 +5,7 @@
 //! the Usages pane live on the item so they survive tab switches.
 
 use crate::dependencies_panel::{
-    BuildToolView, DependencyGraphReceipt, GraphQueryTarget, GraphSelection, ShowDependencyRowMenu,
+    DependencyGraphReceipt, GraphQueryTarget, GraphSelection, ShowDependencyRowMenu,
     current_dependency_graph_receipt, derive_dependency_analyzer,
 };
 use crate::dependency_diagram_item::{
@@ -178,7 +178,6 @@ pub struct DependencyAnalyzerDerivation {
 pub struct DependencyAnalyzerSource {
     pub project: gpui::Entity<project::Project>,
     pub selection: GraphSelection,
-    pub view: BuildToolView,
     pub panel: gpui::WeakEntity<crate::dependencies_panel::DependenciesPanel>,
 }
 
@@ -929,7 +928,6 @@ impl DependencyAnalyzerItem {
         let derivation = receipt.as_ref().and_then(|receipt| {
             derive_dependency_analyzer(
                 project,
-                source.view,
                 &receipt.selection,
                 Some(&self.derivation.scope),
                 cx,
@@ -1079,8 +1077,7 @@ impl DependencyAnalyzerItem {
             DependencyDiagramScope::MavenScope(_) => DependencyDiagramScope::MavenScope(label),
         };
         let project = source.project.read(cx);
-        match derive_dependency_analyzer(project, source.view, &source.selection, Some(&scope), cx)
-        {
+        match derive_dependency_analyzer(project, &source.selection, Some(&scope), cx) {
             Some(derivation) => {
                 self.derivation = derivation;
                 self.selected_key = None;
@@ -1875,13 +1872,12 @@ impl workspace::Item for DependencyAnalyzerItem {
 /// Read-only; never queries a provider.
 pub(crate) fn dependency_analyzer_for_selection(
     snapshot: &JdtlsProjectSnapshot,
-    view: BuildToolView,
     selection: &GraphSelection,
     scope: Option<&DependencyDiagramScope>,
 ) -> Option<DependencyAnalyzerDerivation> {
     for module in &snapshot.projects {
         match selection.target() {
-            GraphQueryTarget::Maven(pom) if view != BuildToolView::Gradle => {
+            GraphQueryTarget::Maven(pom) => {
                 let Some(maven) = module.maven.as_ref().filter(|maven| maven.pom == *pom) else {
                     continue;
                 };
@@ -1923,8 +1919,12 @@ pub(crate) fn dependency_analyzer_for_selection(
             GraphQueryTarget::Gradle {
                 module: module_root,
                 configuration,
-            } if view != BuildToolView::Maven => {
-                if module.module_root != *module_root {
+            } => {
+                if module.module_root != *module_root
+                    || scope.is_some_and(|scope| {
+                        !matches!(scope, DependencyDiagramScope::GradleConfiguration(name) if name == configuration)
+                    })
+                {
                     continue;
                 }
                 let Some(gradle) = &module.gradle else {
@@ -1939,20 +1939,14 @@ pub(crate) fn dependency_analyzer_for_selection(
                     .filter(|configuration| gradle.configurations_known && configuration.resolvable)
                     .map(|configuration| configuration.name.clone())
                     .collect();
-                let chosen_configuration = match scope {
-                    Some(DependencyDiagramScope::GradleConfiguration(name)) => Some(name.clone()),
-                    Some(_) => continue,
-                    None => None,
-                };
-                let configuration = chosen_configuration.unwrap_or_else(|| configuration.clone());
-                if !scope_options.iter().any(|option| option == &configuration) {
+                if !scope_options.iter().any(|option| option == configuration) {
                     scope_options.push(configuration.clone());
                     scope_options.sort();
                 }
                 let Some(graph) = gradle
                     .dependency_graph
                     .as_ref()
-                    .filter(|graph| graph.resolution.configuration == configuration)
+                    .filter(|graph| graph.resolution.configuration == *configuration)
                 else {
                     continue;
                 };
@@ -1969,11 +1963,10 @@ pub(crate) fn dependency_analyzer_for_selection(
                         provider: DependencyDiagramProvider::Gradle,
                         configuration: Some(configuration.clone()),
                     },
-                    scope: DependencyDiagramScope::GradleConfiguration(configuration),
+                    scope: DependencyDiagramScope::GradleConfiguration(configuration.clone()),
                     scope_options,
                 });
             }
-            _ => {}
         }
     }
     None

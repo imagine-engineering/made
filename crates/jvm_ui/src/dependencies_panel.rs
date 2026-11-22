@@ -824,6 +824,17 @@ impl GraphSelection {
         &self.target
     }
 
+    fn build_tool_view(&self) -> BuildToolView {
+        match self.target {
+            GraphQueryTarget::Maven(_) => BuildToolView::Maven,
+            GraphQueryTarget::Gradle { .. } => BuildToolView::Gradle,
+        }
+    }
+
+    fn is_visible_in(&self, view: BuildToolView) -> bool {
+        view == BuildToolView::Dependencies || view == self.build_tool_view()
+    }
+
     fn worktree_id(&self) -> settings::WorktreeId {
         match &self.target {
             GraphQueryTarget::Maven(pom) => pom.worktree_id,
@@ -967,14 +978,13 @@ pub(crate) fn dependency_module_label(module_root: &ProjectPath) -> String {
 /// Reads admitted facts only; never queries a provider.
 fn dependency_canvas_for_selection(
     snapshot: &JdtlsProjectSnapshot,
-    view: BuildToolView,
     selection: &GraphSelection,
     node: &str,
     scope: Option<&DependencyDiagramScope>,
 ) -> Option<DependencyDiagramDerivation> {
     for module in &snapshot.projects {
         match &selection.target {
-            GraphQueryTarget::Maven(pom) if view != BuildToolView::Gradle => {
+            GraphQueryTarget::Maven(pom) => {
                 let Some(maven) = module.maven.as_ref().filter(|maven| maven.pom == *pom) else {
                     continue;
                 };
@@ -1011,8 +1021,12 @@ fn dependency_canvas_for_selection(
             GraphQueryTarget::Gradle {
                 module: module_root,
                 configuration,
-            } if view != BuildToolView::Maven => {
-                if module.module_root != *module_root {
+            } => {
+                if module.module_root != *module_root
+                    || scope.is_some_and(|scope| {
+                        !matches!(scope, DependencyDiagramScope::GradleConfiguration(name) if name == configuration)
+                    })
+                {
                     continue;
                 }
                 let Some(gradle) = &module.gradle else {
@@ -1027,20 +1041,14 @@ fn dependency_canvas_for_selection(
                     .filter(|configuration| gradle.configurations_known && configuration.resolvable)
                     .map(|configuration| configuration.name.clone())
                     .collect();
-                let chosen_configuration = match scope {
-                    Some(DependencyDiagramScope::GradleConfiguration(name)) => Some(name.clone()),
-                    Some(_) => continue,
-                    None => None,
-                };
-                let configuration = chosen_configuration.unwrap_or_else(|| configuration.clone());
-                if !scope_options.iter().any(|option| option == &configuration) {
+                if !scope_options.iter().any(|option| option == configuration) {
                     scope_options.push(configuration.clone());
                     scope_options.sort();
                 }
                 let Some(graph) = gradle
                     .dependency_graph
                     .as_ref()
-                    .filter(|graph| graph.resolution.configuration == configuration)
+                    .filter(|graph| graph.resolution.configuration == *configuration)
                 else {
                     continue;
                 };
@@ -1054,11 +1062,10 @@ fn dependency_canvas_for_selection(
                         configuration: Some(configuration.clone()),
                     },
                     selected,
-                    scope: DependencyDiagramScope::GradleConfiguration(configuration),
+                    scope: DependencyDiagramScope::GradleConfiguration(configuration.clone()),
                     scope_options,
                 });
             }
-            _ => {}
         }
     }
     None
@@ -1209,7 +1216,6 @@ pub(crate) fn current_dependency_graph_receipt(
 
 pub(crate) fn derive_dependency_diagram(
     project: &Project,
-    view: BuildToolView,
     selection: &GraphSelection,
     node: &str,
     scope: Option<&DependencyDiagramScope>,
@@ -1219,12 +1225,11 @@ pub(crate) fn derive_dependency_diagram(
     if !selection.matches(snapshot, true) {
         return None;
     }
-    dependency_canvas_for_selection(snapshot, view, selection, node, scope)
+    dependency_canvas_for_selection(snapshot, selection, node, scope)
 }
 
 pub(crate) fn derive_dependency_analyzer(
     project: &Project,
-    view: BuildToolView,
     selection: &GraphSelection,
     scope: Option<&DependencyDiagramScope>,
     cx: &App,
@@ -1233,19 +1238,16 @@ pub(crate) fn derive_dependency_analyzer(
     if !selection.matches(snapshot, true) {
         return None;
     }
-    crate::dependency_analyzer_item::dependency_analyzer_for_selection(
-        snapshot, view, selection, scope,
-    )
+    crate::dependency_analyzer_item::dependency_analyzer_for_selection(snapshot, selection, scope)
 }
 
 pub(crate) fn dependency_diagram_source_export(
     project: &Project,
-    view: BuildToolView,
     selection: &GraphSelection,
     cx: &App,
 ) -> Option<String> {
     let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)?;
-    dependency_diagram_source(snapshot, true, view, selection)
+    dependency_diagram_source(snapshot, true, selection.build_tool_view(), selection)
         .ok()
         .flatten()
 }
@@ -3340,13 +3342,10 @@ impl DependenciesPanel {
             inspection.maven_scope = maven_scope;
         }
         self.prepare_pair_inspection(&mut inspection)?;
-        let graph_view = match selection.target() {
-            GraphQueryTarget::Gradle { .. } => BuildToolView::Gradle,
-            GraphQueryTarget::Maven(_) => BuildToolView::Maven,
-        };
-        let projection = graph_inspection_projection(snapshot, graph_view, &inspection)
-            .context("The target has no current provider dependency facts to inspect.")?;
-        if self.view == graph_view || self.view == BuildToolView::Dependencies {
+        let projection =
+            graph_inspection_projection(snapshot, selection.build_tool_view(), &inspection)
+                .context("The target has no current provider dependency facts to inspect.")?;
+        if selection.is_visible_in(self.view) {
             self.display_graph_inspection(inspection, cx);
         }
         Ok(projection.overlay)
@@ -3547,21 +3546,14 @@ impl DependenciesPanel {
             return None;
         }
         let project = self.project.clone();
-        let derivation = derive_dependency_diagram(
-            self.project.read(cx),
-            self.view,
-            selection,
-            node,
-            scope,
-            cx,
-        )?;
+        let derivation =
+            derive_dependency_diagram(self.project.read(cx), selection, node, scope, cx)?;
         Some(DependencyDiagramOpen {
             derivation,
             source: DependencyDiagramSource {
                 project,
                 selection: selection.clone(),
                 node: node.to_owned(),
-                view: self.view,
                 panel,
             },
         })
@@ -3635,9 +3627,11 @@ impl DependenciesPanel {
             open.derivation.canvas.node(node).is_some(),
             "This dependency is outside the nodes visible in the diagram."
         );
-        self.graph_notice = None;
-        self.graph_diagram_selection = Some(selection.clone());
-        self.rebuild(cx);
+        if selection.is_visible_in(self.view) {
+            self.graph_notice = None;
+            self.graph_diagram_selection = Some(selection.clone());
+            self.rebuild(cx);
+        }
 
         let item = self.open_or_focus_diagram_tab(open, cx)?;
         anyhow::ensure!(
@@ -3762,7 +3756,6 @@ impl DependenciesPanel {
         let occurrence = self.resolve_selected_graph(cx).map(|(_, node)| node);
         let derivation = crate::dependencies_panel::derive_dependency_analyzer(
             self.project.read(cx),
-            self.view,
             &selection,
             None,
             cx,
@@ -3777,7 +3770,6 @@ impl DependenciesPanel {
         let source = crate::dependency_analyzer_item::DependencyAnalyzerSource {
             project: self.project.clone(),
             selection,
-            view: self.view,
             panel,
         };
         if let Err(error) =
@@ -3823,18 +3815,12 @@ impl DependenciesPanel {
         scope: &DependencyDiagramScope,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        let derivation = derive_dependency_analyzer(
-            self.project.read(cx),
-            self.view,
-            selection,
-            Some(scope),
-            cx,
-        )
-        .context("Collect a current dependency graph before opening All usages.")?;
+        let derivation =
+            derive_dependency_analyzer(self.project.read(cx), selection, Some(scope), cx)
+                .context("Collect a current dependency graph before opening All usages.")?;
         let source = crate::dependency_analyzer_item::DependencyAnalyzerSource {
             project: self.project.clone(),
             selection: selection.clone(),
-            view: self.view,
             panel: cx.weak_entity(),
         };
         self.open_or_focus_analyzer_tab(derivation, source, Some(node), cx)
@@ -15528,6 +15514,9 @@ mod tests {
                 3,
                 "canvas inspection reads admitted facts"
             );
+            panel.update_in(cx, |panel, window, cx| {
+                panel.set_view(other_view, window, cx);
+            });
             diagram_item.update(cx, |item, cx| {
                 item.canvas().update(cx, |canvas, cx| {
                     canvas.selection = BTreeSet::from([root.clone()]);
@@ -15550,6 +15539,7 @@ mod tests {
             diagram_item.update(cx, |item, cx| {
                 item.inspect_canvas_target(DependencyDiagramMenuCommand::AllUsages, &target, cx);
             });
+            cx.run_until_parked();
             linked_analyzer.read_with(cx, |item, _| {
                 assert_eq!(
                     item.selected_key(),
@@ -15558,8 +15548,36 @@ mod tests {
                 );
             });
             linked_analyzer.update(cx, |item, cx| item.show_in_dependency_diagram(&node, cx));
+            cx.run_until_parked();
             diagram_item.read_with(cx, |item, cx| {
-                assert!(item.canvas().read(cx).selection.contains(&node));
+                assert_eq!(
+                    item.canvas().read(cx).selection,
+                    BTreeSet::from([node.clone()])
+                );
+            });
+            workspace.read_with(cx, |workspace, cx| {
+                assert_eq!(
+                    workspace.items_of_type::<DependencyDiagramItem>(cx).count(),
+                    1
+                );
+                assert_eq!(
+                    workspace
+                        .items_of_type::<DependencyAnalyzerItem>(cx)
+                        .count(),
+                    1
+                );
+                assert_eq!(
+                    workspace.active_item(cx).map(|item| item.item_id()),
+                    Some(diagram_item.entity_id())
+                );
+            });
+            panel.update_in(cx, |panel, window, cx| {
+                assert_eq!(panel.view, other_view);
+                assert!(panel.graph_diagram_selection.is_none());
+                panel.set_view(view, window, cx);
+                panel.host.expand_all();
+                panel.host.select(inspection_target.clone());
+                panel.show_dependency_diagram(cx);
             });
             assert_eq!(
                 commands.load(Ordering::SeqCst),
@@ -16056,19 +16074,12 @@ mod tests {
             foreign_receipt.generation = foreign_receipt.generation.wrapping_add(1);
             panel.read_with(cx, |panel, cx| {
                 assert!(
-                    derive_dependency_analyzer(
-                        panel.project.read(cx),
-                        panel.view,
-                        &foreign_receipt,
-                        None,
-                        cx,
-                    )
-                    .is_none()
+                    derive_dependency_analyzer(panel.project.read(cx), &foreign_receipt, None, cx,)
+                        .is_none()
                 );
                 assert!(
                     derive_dependency_diagram(
                         panel.project.read(cx),
-                        panel.view,
                         &foreign_receipt,
                         "",
                         None,
@@ -16076,6 +16087,33 @@ mod tests {
                     )
                     .is_none()
                 );
+                let mut wrong_configuration = captured.1.clone();
+                if let GraphQueryTarget::Gradle { configuration, .. } =
+                    &mut wrong_configuration.target
+                {
+                    let active_scope =
+                        DependencyDiagramScope::GradleConfiguration(configuration.clone());
+                    *configuration = "__different-configuration__".into();
+                    assert!(
+                        derive_dependency_analyzer(
+                            panel.project.read(cx),
+                            &wrong_configuration,
+                            Some(&active_scope),
+                            cx
+                        )
+                        .is_none()
+                    );
+                    assert!(
+                        derive_dependency_diagram(
+                            panel.project.read(cx),
+                            &wrong_configuration,
+                            "",
+                            Some(&active_scope),
+                            cx
+                        )
+                        .is_none()
+                    );
+                }
             });
             panel.update(cx, |panel, cx| {
                 panel.host.select(inspection_target.clone());

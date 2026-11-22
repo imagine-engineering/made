@@ -219,7 +219,6 @@ pub struct DependencyDiagramSource {
     pub project: gpui::Entity<project::Project>,
     pub selection: crate::GraphSelection,
     pub node: String,
-    pub view: crate::BuildToolView,
     /// The opening panel, for context-menu command routing through the
     /// panel's own action handlers and enablement logic.
     pub panel: gpui::WeakEntity<crate::dependencies_panel::DependenciesPanel>,
@@ -383,7 +382,6 @@ impl DependencyDiagramItem {
         let derivation = receipt.as_ref().and_then(|receipt| {
             derive_dependency_diagram(
                 project,
-                source.view,
                 &receipt.selection,
                 &source.node,
                 Some(&self.scope),
@@ -489,7 +487,6 @@ impl DependencyDiagramItem {
         let project = source.project.read(cx);
         match crate::dependencies_panel::dependency_diagram_source_export(
             project,
-            source.view,
             &source.selection,
             cx,
         ) {
@@ -522,14 +519,8 @@ impl DependencyDiagramItem {
             DependencyDiagramScope::MavenScope(_) => DependencyDiagramScope::MavenScope(label),
         };
         let project = source.project.read(cx);
-        match derive_dependency_diagram(
-            project,
-            source.view,
-            &source.selection,
-            &source.node,
-            Some(&scope),
-            cx,
-        ) {
+        match derive_dependency_diagram(project, &source.selection, &source.node, Some(&scope), cx)
+        {
             Some(derivation) => self.replace_derivation(derivation, cx),
             None => {
                 self.notice = Some(
@@ -599,7 +590,6 @@ impl DependencyDiagramItem {
         };
         let Some(derivation) = derive_dependency_diagram(
             source.project.read(cx),
-            source.view,
             &source.selection,
             id,
             Some(&self.scope),

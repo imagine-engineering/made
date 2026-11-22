@@ -6,7 +6,7 @@ pub mod dependency_diagram_item;
 pub mod dependency_diagram_menu;
 pub mod dependency_graph_canvas;
 
-pub(crate) use dependencies_panel::{BuildToolView, GraphSelection};
+pub(crate) use dependencies_panel::GraphSelection;
 pub use dependencies_panel::{DependenciesPanel, ShowGradle, ShowMaven, ToggleDependenciesPanel};
 
 use gpui::{App, KeyBinding, Pixels, Point, point, px};
