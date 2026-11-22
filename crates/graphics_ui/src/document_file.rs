@@ -17,8 +17,9 @@ use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection, GddNumericValue,
-        GddPinnedNodeMove, GddRecoverySource, GddRootLayerChange, GddSavedView, ImportOrExport,
-        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
+        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -605,6 +606,7 @@ struct NodeCopyForm {
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
     saved_graph_focus: FocusHandle,
+    saved_layers_focus: FocusHandle,
     saved_graph_drag_start: SavedGraphDragStart,
     saved_graph_box_selection: SavedGraphBoxSelection,
     pending_canvas_source: Option<SavedGraphConnectionSource>,
@@ -643,6 +645,7 @@ impl NodeCopyForm {
             show_saved_ports: false,
             saved_graph: SavedGraphPanel::Closed,
             saved_graph_focus: cx.focus_handle(),
+            saved_layers_focus: cx.focus_handle(),
             saved_graph_drag_start: Default::default(),
             saved_graph_box_selection: Default::default(),
             pending_canvas_source: None,
@@ -723,7 +726,7 @@ impl NodeCopyForm {
         })
     }
 
-    fn saved_layer_order(&self) -> Option<Vec<(usize, usize)>> {
+    fn saved_layer_rows(&self) -> Option<Vec<(usize, &GddRootLayer)>> {
         let SavedGraphPanel::Ready(graph) = &self.saved_graph else {
             return None;
         };
@@ -742,7 +745,7 @@ impl NodeCopyForm {
         Some(
             layers
                 .iter()
-                .filter_map(|layer| Some((*nodes_by_id.get(&layer.storage_id)?, layer.depth)))
+                .filter_map(|layer| Some((*nodes_by_id.get(&layer.storage_id)?, layer)))
                 .collect(),
         )
     }
@@ -1174,7 +1177,9 @@ impl GraphiteDocumentItem {
                     form.saved_graph,
                     SavedGraphPanel::Loading { .. } | SavedGraphPanel::Ready(_)
                 );
-                if form.saved_graph_focus.contains_focused(window, cx) {
+                if form.saved_graph_focus.contains_focused(window, cx)
+                    || form.saved_layers_focus.contains_focused(window, cx)
+                {
                     self.focus_handle.focus(window, cx);
                 }
                 if let Some(index) = form.replace_inspection(contents, revision, &inspection) {
@@ -1622,7 +1627,9 @@ impl GraphiteDocumentItem {
             form.saved_graph_drag_start.set(None);
             form.saved_graph_box_selection.set(None);
             form.pending_canvas_source = None;
-            if form.saved_graph_focus.contains_focused(window, cx) {
+            if form.saved_graph_focus.contains_focused(window, cx)
+                || form.saved_layers_focus.contains_focused(window, cx)
+            {
                 self.focus_handle.focus(window, cx);
             }
             cx.notify();
@@ -1749,6 +1756,8 @@ impl GraphiteDocumentItem {
             SavedGraphAction::MoveNode { index, position } => {
                 self.move_canvas_nodes(index, position, window, cx);
             }
+            SavedGraphAction::SelectAllLayers => self.set_saved_layer_selection(true, window, cx),
+            SavedGraphAction::DeselectLayers => self.set_saved_layer_selection(false, window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
                 self.toggle_saved_layer_expansion(index, recursive, cx);
             }
@@ -2035,7 +2044,7 @@ impl GraphiteDocumentItem {
         let Some(scope) = form.clipboard_scope().map(|network| network.id) else {
             return;
         };
-        let Some(rows) = form.saved_layer_order() else {
+        let Some(rows) = form.saved_layer_rows() else {
             return;
         };
         let order = rows.into_iter().map(|(index, _)| index).collect::<Vec<_>>();
@@ -2079,6 +2088,47 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn set_saved_layer_selection(
+        &mut self,
+        select_all: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if form.pending_canvas_source.is_some() {
+            return;
+        }
+        let Some(rows) = form.saved_layer_rows() else {
+            return;
+        };
+        if select_all {
+            form.node_selection = rows
+                .into_iter()
+                .filter(|(_, layer)| layer.select_all_eligible)
+                .map(|(index, _)| index)
+                .collect();
+        } else {
+            form.node_selection.clear();
+            form.layer_selection_anchor = None;
+        }
+        let active = form
+            .selected
+            .filter(|index| form.node_selection.contains(index))
+            .or_else(|| form.node_selection.first().copied());
+        if form.node_selection.len() == 1 {
+            form.node_selection.clear();
+        }
+        if let Some(active) = active {
+            self.select_copy_node(active, window, cx);
+        } else {
+            form.selected = None;
+            form.output_preview = NodeOutputPreview::Hidden;
+            cx.notify();
+        }
+    }
+
     fn toggle_saved_layer_expansion(
         &mut self,
         index: usize,
@@ -2088,9 +2138,13 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
         };
-        let Some(order) = form.saved_layer_order() else {
+        let Some(rows) = form.saved_layer_rows() else {
             return;
         };
+        let order = rows
+            .into_iter()
+            .map(|(index, layer)| (index, layer.depth))
+            .collect::<Vec<_>>();
         let mut subtree = order.into_iter().skip_while(|(row, _)| *row != index);
         let Some((_, depth)) = subtree.next() else {
             return;
@@ -3341,6 +3395,7 @@ impl GraphiteDocumentItem {
                                     SavedGraphView {
                                         network,
                                         focus: &form.saved_graph_focus,
+                                        layer_focus: &form.saved_layers_focus,
                                         selected: form.selected,
                                         selection: &form.node_selection,
                                         collapsed_layers: &form.collapsed_layers,
@@ -8773,6 +8828,114 @@ mod tests {
                 .expect("original archive"),
             original
         );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_003_004_2_workspace_selects_eligible_layers_and_deselects_locally(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) = graph_layer_archive_with_grandchild(true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let primary_path = PathBuf::from("/project/select-all-layers.gdd.zip");
+        let other_path = PathBuf::from("/project/other-layer-document.gdd.zip");
+        for path in [&primary_path, &other_path] {
+            filesystem
+                .write(path, &original)
+                .await
+                .expect("source archive");
+        }
+        window.run_until_parked();
+        let open = |path: PathBuf, window: &mut gpui::VisualTestContext| {
+            workspace.update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path, Default::default(), window, cx)
+            })
+        };
+        let open_layers = |window: &mut gpui::VisualTestContext| {
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-SAVED-LAYER-2");
+            paint(window);
+        };
+        let check = |window: &gpui::VisualTestContext,
+                     item: &Entity<GraphiteDocumentItem>,
+                     expected: &[usize],
+                     anchor,
+                     revision: &Arc<()>| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready layer Inspector")
+                };
+                let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                    panic!("ready layer graph")
+                };
+                let layers = graph.root_layers.as_ref().expect("pinned layer projection");
+                assert_eq!(
+                    layers
+                        .iter()
+                        .map(|layer| layer.select_all_eligible)
+                        .collect::<Vec<_>>(),
+                    [true, false, false, true]
+                );
+                let mut selection = form.node_selection.clone();
+                selection.extend(form.selected);
+                assert!(selection.iter().copied().eq(expected.iter().copied()));
+                assert_eq!(form.layer_selection_anchor, anchor);
+                assert!(!item.is_dirty(cx));
+                assert!(Arc::ptr_eq(&item.model.read(cx).revision, revision));
+                assert_eq!(
+                    item.model
+                        .read(cx)
+                        .gdd_contents()
+                        .expect("GDD")
+                        .history_len(),
+                    history
+                );
+            });
+        };
+        let first = open(primary_path.clone(), window)
+            .await
+            .expect("open first GDD")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("first native Inspector");
+        open_layers(window);
+        let first_revision =
+            first.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        let platform = if cfg!(target_os = "macos") {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        window.simulate_keystrokes(&format!("{platform}-a"));
+        window.run_until_parked();
+        paint(window);
+        check(window, &first, &[0, 1], Some(2), &first_revision);
+
+        let other = open(other_path.clone(), window)
+            .await
+            .expect("open independent GDD")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("other native Inspector");
+        assert_ne!(first, other);
+        open_layers(window);
+        let other_revision =
+            other.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        check(window, &other, &[2], Some(2), &other_revision);
+        window.simulate_keystrokes(&format!("{platform}-shift-a"));
+        window.run_until_parked();
+        paint(window);
+        check(window, &other, &[], None, &other_revision);
+        check(window, &first, &[0, 1], Some(2), &first_revision);
+        for path in [&primary_path, &other_path] {
+            assert_eq!(
+                filesystem.load_bytes(path).await.expect("original archive"),
+                original
+            );
+        }
     }
 
     #[gpui::test]

@@ -132,6 +132,8 @@ pub(crate) enum SavedGraphAction {
         extend: bool,
         range: bool,
     },
+    SelectAllLayers,
+    DeselectLayers,
     ToggleLayerExpansion {
         index: usize,
         recursive: bool,
@@ -247,6 +249,7 @@ pub(crate) enum SavedGraphMenuTarget {
 pub(crate) struct SavedGraphView<'a> {
     pub network: &'a GddGraphNetwork,
     pub focus: &'a FocusHandle,
+    pub layer_focus: &'a FocusHandle,
     pub selected: Option<usize>,
     pub selection: &'a BTreeSet<usize>,
     pub collapsed_layers: &'a BTreeSet<usize>,
@@ -767,10 +770,55 @@ pub(crate) fn render_saved_graph(
         Ok(layers) if layers.is_empty() => None,
         Ok(layers) => {
             let mut collapsed_depth = None;
+            let layers_focus = view.layer_focus.clone();
+            let can_select = view.pending_source.is_none();
+            let select_all = dispatch.clone();
+            let deselect = dispatch.clone();
+            let keyboard_select = dispatch.clone();
+            let keyboard_deselect = dispatch.clone();
             Some(
                 v_flex()
                     .gap_1()
-                    .child(Label::new("Layers"))
+                    .id("graphite-saved-layers")
+                    .track_focus(view.layer_focus)
+                    .key_context("GraphiteSavedLayers")
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        layers_focus.focus(window, cx)
+                    })
+                    .on_action(move |_: &SelectAllSavedLayers, window, cx| {
+                        if can_select {
+                            keyboard_select(SavedGraphAction::SelectAllLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &DeselectSavedLayers, window, cx| {
+                        if can_select {
+                            keyboard_deselect(SavedGraphAction::DeselectLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .flex_wrap()
+                            .child(Label::new("Layers"))
+                            .child(
+                                Button::new("graphite-saved-layers-select-all", "Select All")
+                                    .disabled(!can_select)
+                                    .on_click(move |_, window, cx| {
+                                        select_all(SavedGraphAction::SelectAllLayers, window, cx)
+                                    }),
+                            )
+                            .child(
+                                Button::new("graphite-saved-layers-deselect", "Deselect")
+                                    .disabled(!can_select)
+                                    .on_click(move |_, window, cx| {
+                                        deselect(SavedGraphAction::DeselectLayers, window, cx)
+                                    }),
+                            ),
+                    )
                     .children(layers.iter().enumerate().filter_map(|(position, layer)| {
                         if collapsed_depth.is_some_and(|depth| layer.depth > depth) {
                             return None;
@@ -1888,7 +1936,19 @@ pub fn open_numeric_document(
 }
 
 pub fn bind_keys(cx: &mut App) {
+    let (select_all, deselect) = if cfg!(target_os = "macos") {
+        ("cmd-a", "cmd-shift-a")
+    } else {
+        ("ctrl-a", "ctrl-shift-a")
+    };
     cx.bind_keys([
+        gpui::KeyBinding::new(
+            select_all,
+            SelectAllSavedLayers,
+            Some("GraphiteSavedLayers"),
+        ),
+        gpui::KeyBinding::new(deselect, DeselectSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new("alt-a", DeselectSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("escape", CancelSavedGraphBox, Some("GraphiteBoxSelection")),
         gpui::KeyBinding::new("tab", FocusNextArtboardControl, Some("GraphiteArtboard")),
         gpui::KeyBinding::new(
@@ -1917,6 +1977,10 @@ actions!(
     [
         /// Cancels the box selection in the focused saved graph.
         CancelSavedGraphBox,
+        /// Selects the eligible layers in the focused Graphite Layers view.
+        SelectAllSavedLayers,
+        /// Clears selection in the focused Graphite Layers view.
+        DeselectSavedLayers,
         /// Shows the original imported image in the focused Graphite item.
         ShowOriginalImage,
         /// Inverts the focused imported image with the original Graphite node.

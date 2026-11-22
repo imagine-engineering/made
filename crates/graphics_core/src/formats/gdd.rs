@@ -393,6 +393,7 @@ pub struct GddRootLayer {
     pub depth: usize,
     pub visible: bool,
     pub locked: bool,
+    pub select_all_eligible: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -4472,6 +4473,7 @@ fn project_root_layers(
     }
     interface.load_structure();
     let metadata = interface.document_metadata();
+    let selection = interface.selected_nodes();
     let mut pending = Vec::new();
     if let Some(layer) = LayerNodeIdentifier::ROOT_PARENT.last_child(metadata) {
         pending.extend(layer.downstream_siblings(metadata).map(|layer| (layer, 0)));
@@ -4490,6 +4492,9 @@ fn project_root_layers(
             depth,
             visible: interface.is_visible(&id, &[]),
             locked: interface.is_locked(&id, &[]),
+            select_all_eligible: !interface.is_artboard(&id, &[])
+                && selection.layer_visible(layer, interface)
+                && !selection.layer_locked(layer, interface),
         });
         if let Some(child) = layer.last_child(metadata) {
             pending.extend(
