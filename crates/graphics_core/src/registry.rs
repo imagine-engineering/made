@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt, sync::OnceLock};
 
 use graphite_core_types::{
-    NodeIOTypes, ProtoNodeIdentifier, list,
+    Color, NodeIOTypes, ProtoNodeIdentifier, list,
     registry::{NODE_METADATA, NODE_REGISTRY, NodeMetadata},
 };
 use graphite_editor::messages::portfolio::document::{
@@ -15,8 +15,11 @@ use graphite_editor::messages::portfolio::document::{
         NodeNetworkTemplate, NodeTemplateImplementation, NodeTypePersistentMetadata,
     },
 };
-use graphite_graph_craft::document::{NodeId, NodeInput};
-use graphite_std::Graphic;
+use graphite_graph_craft::document::{
+    NodeId, NodeInput,
+    value::{DVec2, TaggedValue},
+};
+use graphite_std::{Artboard, Graphic};
 
 #[derive(Clone, Debug)]
 pub struct RegisteredNode {
@@ -82,6 +85,8 @@ pub const CUSTOM_NODE_NAME: &str = "Custom Node";
 pub const CUSTOM_NODE_IDENTIFIER: &str = "NETWORK:Custom Node";
 pub(crate) const MERGE_NODE_NAME: &str = "Merge";
 pub(crate) const MERGE_NODE_IDENTIFIER: &str = "NETWORK:Merge";
+pub(crate) const ARTBOARD_NODE_NAME: &str = "Artboard";
+pub(crate) const ARTBOARD_NODE_IDENTIFIER: &str = "NETWORK:Artboard";
 
 pub(crate) fn custom_node_definition() -> Option<&'static DocumentNodeDefinition> {
     let definition = resolve_network_node_type(CUSTOM_NODE_NAME)?;
@@ -112,6 +117,32 @@ pub(crate) fn merge_node_definition() -> Option<&'static DocumentNodeDefinition>
         && network.scope_injections.is_empty()
         && network.nodes.len() == 6
         && network.exports.as_slice() == [NodeInput::node(NodeId(5), 0)])
+    .then_some(definition)
+}
+
+pub(crate) fn artboard_node_definition() -> Option<&'static DocumentNodeDefinition> {
+    let definition = resolve_network_node_type(ARTBOARD_NODE_NAME)?;
+    let template = &definition.node_template;
+    let NodeTemplateImplementation::Network(network) = &template.implementation else {
+        return None;
+    };
+    (matches!(
+        template.node_type_metadata,
+        NodeTypePersistentMetadata::Layer(_)
+    ) && template.inputs.as_slice()
+        == [
+            NodeInput::type_default(list!(Artboard), true),
+            NodeInput::type_default(list!(Graphic), true),
+            NodeInput::value(TaggedValue::DVec2(DVec2::ZERO), false),
+            NodeInput::value(TaggedValue::DVec2(DVec2::new(1920., 1080.)), false),
+            NodeInput::value(TaggedValue::Color(Color::WHITE), false),
+            NodeInput::value(TaggedValue::Bool(true), false),
+        ]
+        && template.output_names.as_slice() == ["Out"]
+        && network.reference.as_deref() == Some(ARTBOARD_NODE_NAME)
+        && network.scope_injections.is_empty()
+        && network.nodes.len() == 5
+        && network.exports.as_slice() == [NodeInput::node(NodeId(4), 0)])
     .then_some(definition)
 }
 
@@ -316,6 +347,85 @@ mod tests {
             assert_eq!(child.inputs, inputs);
             assert_eq!(child.skip_deduplication, index == 4);
         }
+    }
+
+    #[test]
+    fn at_gra_node_282_1_resolves_the_pinned_artboard_ports_and_widgets() {
+        use graphite_graph_craft::document::DocumentNodeMetadata;
+
+        let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
+        let groups = catalog.search("Artboard");
+        let entry = groups
+            .iter()
+            .flat_map(|group| &group.nodes)
+            .find(|node| node.identifier == ARTBOARD_NODE_IDENTIFIER)
+            .expect("canonical Artboard entry");
+        assert_eq!(entry.name, ARTBOARD_NODE_NAME);
+        assert_eq!(entry.category, "General");
+        let template = artboard_node_definition()
+            .expect("pinned Artboard")
+            .default_node_template();
+        let [base, content, location, dimensions, background, clip] =
+            template.input_metadata.as_slice()
+        else {
+            panic!("six ordered Artboard properties")
+        };
+        for (port, name, widget) in [
+            (base, "Base", None),
+            (content, "Content", Some("hidden")),
+            (location, "Location", Some("vec2")),
+            (dimensions, "Dimensions", Some("vec2")),
+            (background, "Background", Some("artboard_background")),
+            (clip, "Clip", None),
+        ] {
+            let metadata = &port.persistent_metadata;
+            assert_eq!(metadata.input_name, name);
+            assert_eq!(metadata.widget_override.as_deref(), widget);
+        }
+        for (port, x, y) in [(location, "X", "Y"), (dimensions, "W", "H")] {
+            let data = &port.persistent_metadata.input_data;
+            for (key, value) in [
+                ("x", serde_json::json!(x)),
+                ("y", serde_json::json!(y)),
+                ("unit", serde_json::json!(" px")),
+                ("is_integer", serde_json::json!(true)),
+            ] {
+                assert_eq!(data.get(key), Some(&value));
+            }
+        }
+        let NodeTemplateImplementation::Network(network) = template.implementation else {
+            panic!("exact Artboard network")
+        };
+        for (index, identifier) in [
+            (0, "graphic_nodes::artboard::CreateArtboardNode"),
+            (1, "graphic_nodes::graphic::PathOfSubgraphNode"),
+            (2, "graphic_nodes::graphic::WriteAttributeNode"),
+            (3, "graphene_core::memo::MonitorNode"),
+            (4, "graphic_nodes::graphic::ExtendNode"),
+        ] {
+            let child = network
+                .nodes
+                .get(&NodeId(index))
+                .expect("original internal node");
+            assert!(
+                matches!(&child.implementation, NodeTemplateImplementation::ProtoNode(actual) if actual.as_str() == identifier)
+            );
+            assert_eq!(child.skip_deduplication, index == 3);
+        }
+        let reflection = network.nodes.get(&NodeId(1)).expect("layer provenance");
+        assert_eq!(
+            reflection.inputs,
+            [NodeInput::Reflection(
+                DocumentNodeMetadata::DocumentNodePath
+            )]
+        );
+        let create = network
+            .nodes
+            .get(&NodeId(0))
+            .expect("source Create Artboard");
+        assert_eq!(create.inputs.len(), 5);
+        assert!(create.inputs.iter().zip(1..=5).all(|(input, index)|
+            matches!(input, NodeInput::Import { import_index, .. } if *import_index == index)));
     }
 
     #[test]

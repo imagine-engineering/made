@@ -11163,6 +11163,44 @@ mod tests {
     async fn at_gra_node_281_2_workspace_adds_the_pinned_merge_from_the_catalog(
         cx: &mut TestAppContext,
     ) {
+        assert_workspace_catalog_layer(
+            cx,
+            "Merge",
+            "GRAPHITE-NODE-CATALOG-ADD-Merge",
+            &[("Base", true), ("Content", true)],
+            6,
+        )
+        .await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_282_2_workspace_adds_the_pinned_artboard_from_the_catalog(
+        cx: &mut TestAppContext,
+    ) {
+        assert_workspace_catalog_layer(
+            cx,
+            "Artboard",
+            "GRAPHITE-NODE-CATALOG-ADD-Artboard",
+            &[
+                ("Base", true),
+                ("Content", true),
+                ("Location", false),
+                ("Dimensions", false),
+                ("Background", false),
+                ("Clip", false),
+            ],
+            5,
+        )
+        .await;
+    }
+
+    async fn assert_workspace_catalog_layer(
+        cx: &mut TestAppContext,
+        name: &'static str,
+        selector: &'static str,
+        expected_ports: &[(&str, bool)],
+        expected_children: usize,
+    ) {
         let blank = create_gdd_folder(621, 187, "Made".into(), ARCHIVE_BUDGET)
             .await
             .expect("source folder");
@@ -11173,7 +11211,7 @@ mod tests {
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
         });
-        let source = PathBuf::from("/project/merge-catalog.gdd.zip");
+        let source = PathBuf::from("/project/layer-catalog.gdd.zip");
         filesystem
             .write(&source, &original)
             .await
@@ -11188,11 +11226,11 @@ mod tests {
         paint(window);
         click(window, "GRAPHITE-NODE-CATALOG");
         click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
-        window.simulate_input("Merge");
+        window.simulate_input(name);
         window.run_until_parked();
         paint(window);
-        click(window, "GRAPHITE-NODE-CATALOG-ADD-Merge");
-        let destination = PathBuf::from("/project/merge-layer.gdd");
+        click(window, selector);
+        let destination = PathBuf::from("/project/catalog-layer.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
         window.dispatch_action(OpenGraphiteFolder);
@@ -11202,44 +11240,42 @@ mod tests {
             .read_with(window, |workspace, cx| {
                 workspace.active_item_as::<GraphiteDocumentItem>(cx)
             })
-            .expect("reopened native Merge");
+            .expect("reopened native layer");
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
         let child = item.read_with(window, |item, cx| {
             let NodeCopyPanel::Ready(form) = &item.node_copy else {
-                panic!("reopened Merge graph")
+                panic!("reopened layer graph")
             };
-            let owner = form.selected_node().expect("root Merge layer");
+            let owner = form.selected_node().expect("root layer owner");
             assert_eq!(
                 owner
                     .input_ports()
                     .iter()
-                    .map(|port| port.name.as_deref())
+                    .map(|port| (port.name.as_deref().unwrap_or_default(), port.exposed))
                     .collect::<Vec<_>>(),
-                [Some("Base"), Some("Content")]
+                expected_ports
             );
-            assert!(
-                owner
-                    .input_ports()
-                    .iter()
-                    .all(|port| port.exposed && port.source.is_none())
-            );
+            assert!(owner.input_ports().iter().all(|port| port.source.is_none()));
             assert!(!item.is_dirty(cx));
-            owner.nested_network().expect("exact Merge child network")
+            owner.nested_network().expect("exact layer child network")
         });
         click(window, "GRAPHITE-GDD-ENTER-NETWORK");
         item.read_with(window, |item, _| {
             let NodeCopyPanel::Ready(form) = &item.node_copy else {
-                panic!("entered Merge graph")
+                panic!("entered layer graph")
             };
-            let network = form.active_network().expect("active Merge child");
+            let network = form.active_network().expect("active layer child");
             assert_eq!(network.id, child);
-            assert_eq!((network.import_count, network.export_count), (2, 1));
+            assert_eq!(
+                (network.import_count, network.export_count),
+                (expected_ports.len(), 1)
+            );
             assert_eq!(
                 form.nodes
                     .iter()
                     .filter(|node| node.network_id() == child)
                     .count(),
-                6
+                expected_children
             );
             assert!(!network.can_extend_ports_in_copy());
         });
