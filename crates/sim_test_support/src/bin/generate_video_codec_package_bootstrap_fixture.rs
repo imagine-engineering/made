@@ -2,6 +2,10 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use ring::signature::{Ed25519KeyPair, KeyPair as _};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sim_runtime::{
+    general_video_codec_dependency_contract_signing_payload,
+    general_video_codec_package_signing_payload,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -10,8 +14,6 @@ use std::{
 
 const FIXTURE_SIGNER: &str = "sim.fixture.general-video";
 const FIXTURE_SEED_HEX: &str = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
-const PACKAGE_DOMAIN: &[u8] = b"zed-sim-general-video-codec-package-v1\0";
-const DEPENDENCY_DOMAIN: &[u8] = b"zed-sim-general-video-codec-dependency-contract-v1\0";
 const ARCHIVE_SHA256: &str = "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6";
 const SIGNATURE_SHA256: &str = "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617";
 const SIGNING_FINGERPRINT: &str = "FCF986EA15E6E293A5644F10B4322F04D67658D8";
@@ -134,12 +136,23 @@ struct SignatureReceipt {
 }
 
 fn main() -> Result<()> {
-    let check = std::env::args()
-        .skip(1)
-        .any(|argument| argument == "--check");
-    let fixture = build_fixture()?;
-    let root =
+    let mut check = false;
+    let mut root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/video/codec-package-bootstrap");
+    let mut arguments = std::env::args_os().skip(1);
+    while let Some(argument) = arguments.next() {
+        if argument == "--check" {
+            check = true;
+        } else if argument == "--output" {
+            root = arguments
+                .next()
+                .context("--output requires a directory")?
+                .into();
+        } else {
+            bail!("unrecognized argument {argument:?}");
+        }
+    }
+    let fixture = build_fixture()?;
     if check {
         check_fixture(&root, &fixture)
     } else {
@@ -270,9 +283,10 @@ fn build_fixture() -> Result<BTreeMap<String, Vec<u8>>> {
     let key_pair = fixture_key_pair()?;
     let dependency_receipt = sign_receipt(
         &key_pair,
-        DEPENDENCY_DOMAIN,
-        FIXTURE_SIGNER,
-        &dependency_bytes,
+        &general_video_codec_dependency_contract_signing_payload(
+            FIXTURE_SIGNER,
+            &dependency_bytes,
+        )?,
     )?;
     files.insert(
         "dependency-contract-v1.json".to_owned(),
@@ -355,7 +369,10 @@ fn build_fixture() -> Result<BTreeMap<String, Vec<u8>>> {
         let package_bytes = canonical_json(&package)?;
         files.insert("package-manifest.json".to_owned(), package_bytes);
         let coverage = coverage_bytes(&files)?;
-        let receipt = sign_receipt(&key_pair, PACKAGE_DOMAIN, FIXTURE_SIGNER, &coverage)?;
+        let receipt = sign_receipt(
+            &key_pair,
+            &general_video_codec_package_signing_payload(FIXTURE_SIGNER, &coverage)?,
+        )?;
         let metadata_bytes = u64::try_from(coverage.len())?
             .checked_add(u64::try_from(receipt.len())?)
             .and_then(|total| {
@@ -436,37 +453,12 @@ fn fixture_key_pair() -> Result<Ed25519KeyPair> {
     Ok(pair)
 }
 
-fn sign_receipt(
-    key_pair: &Ed25519KeyPair,
-    domain: &[u8],
-    signer: &str,
-    payload: &[u8],
-) -> Result<Vec<u8>> {
-    let signing_payload = signing_payload(domain, signer, payload)?;
+fn sign_receipt(key_pair: &Ed25519KeyPair, payload: &[u8]) -> Result<Vec<u8>> {
     canonical_json(&SignatureReceipt {
         schema_version: 1,
         algorithm: "ed25519",
-        signature: encode_hex(key_pair.sign(&signing_payload).as_ref()),
+        signature: encode_hex(key_pair.sign(payload).as_ref()),
     })
-}
-
-fn signing_payload(domain: &[u8], signer: &str, payload: &[u8]) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    bytes.try_reserve_exact(
-        domain
-            .len()
-            .checked_add(8)
-            .and_then(|length| length.checked_add(signer.len()))
-            .and_then(|length| length.checked_add(8))
-            .and_then(|length| length.checked_add(payload.len()))
-            .ok_or_else(|| anyhow!("signing payload length overflowed"))?,
-    )?;
-    bytes.extend_from_slice(domain);
-    bytes.extend_from_slice(&u64::try_from(signer.len())?.to_be_bytes());
-    bytes.extend_from_slice(signer.as_bytes());
-    bytes.extend_from_slice(&u64::try_from(payload.len())?.to_be_bytes());
-    bytes.extend_from_slice(payload);
-    Ok(bytes)
 }
 
 fn coverage_bytes(files: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>> {

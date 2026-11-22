@@ -4,15 +4,30 @@ use sim_runtime::{
     certify_general_video_codec_package,
 };
 use sim_tensor::{BackendWorkspaceAuthority, CancellationToken};
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, path::Path, process::Command, sync::Arc};
 
 const FIXTURE_SIGNER: &str = "sim.fixture.general-video";
 const FIXTURE_PUBLIC_KEY_HEX: &str =
     "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
 
-fn fixture_root() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures/video/codec-package-bootstrap")
+fn signed_fixture() -> Result<tempfile::TempDir> {
+    let directory = tempfile::tempdir()?;
+    for mode in [None, Some("--check")] {
+        let output = Command::new(env!(
+            "CARGO_BIN_EXE_generate_video_codec_package_bootstrap_fixture"
+        ))
+        .args(mode)
+        .arg("--output")
+        .arg(directory.path())
+        .output()?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "package fixture generator failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    Ok(directory)
 }
 
 fn fixture_settings(root: &Path) -> Result<NativeGeneralVideoCodecPackageSettings> {
@@ -26,6 +41,8 @@ fn fixture_settings(root: &Path) -> Result<NativeGeneralVideoCodecPackageSetting
 
 #[test]
 fn signed_general_video_package_certifies_and_relocates_stably() -> Result<()> {
+    let fixture = signed_fixture()?;
+    let root = fixture.path();
     for relative_path in [
         "lib/libavcodec.so.61",
         "lib/libavfilter.so.10",
@@ -37,7 +54,7 @@ fn signed_general_video_package_certifies_and_relocates_stably() -> Result<()> {
         "lib/libvpx.so.9",
         "lib/libx264.so.164",
     ] {
-        let bytes = fs::read(fixture_root().join(relative_path))?;
+        let bytes = fs::read(root.join(relative_path))?;
         let version = bytes
             .get(20..24)
             .and_then(|bytes| <[u8; 4]>::try_from(bytes).ok())
@@ -53,8 +70,7 @@ fn signed_general_video_package_certifies_and_relocates_stably() -> Result<()> {
     }
 
     let cancellation = CancellationToken::default();
-    let first =
-        certify_general_video_codec_package(&fixture_settings(&fixture_root())?, &cancellation)?;
+    let first = certify_general_video_codec_package(&fixture_settings(root)?, &cancellation)?;
     assert_eq!(first.libraries().len(), 6);
     assert_eq!(first.primary_certificate_count(), 6);
     assert_eq!(first.dependency_certificate_count(), 3);
@@ -63,7 +79,7 @@ fn signed_general_video_package_certifies_and_relocates_stably() -> Result<()> {
     assert_eq!(first.codec_scratch_bytes(), 2 * 1024 * 1024 * 1024);
 
     let relocated = tempfile::tempdir()?;
-    copy_tree(&fixture_root(), relocated.path())?;
+    copy_tree(root, relocated.path())?;
     let second =
         certify_general_video_codec_package(&fixture_settings(relocated.path())?, &cancellation)?;
     assert_eq!(first.semantic_identity(), second.semantic_identity());
@@ -77,10 +93,12 @@ fn signed_general_video_package_certifies_and_relocates_stably() -> Result<()> {
 
 #[test]
 fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<()> {
+    let fixture = signed_fixture()?;
+    let root = fixture.path();
     let cancellation = CancellationToken::default();
 
     let tampered = tempfile::tempdir()?;
-    copy_tree(&fixture_root(), tampered.path())?;
+    copy_tree(root, tampered.path())?;
     fs::write(
         tampered.path().join("licenses/ffmpeg-license.txt"),
         b"tampered\n",
@@ -91,7 +109,7 @@ fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<(
     );
 
     let extra = tempfile::tempdir()?;
-    copy_tree(&fixture_root(), extra.path())?;
+    copy_tree(root, extra.path())?;
     fs::write(extra.path().join("unexpected.bin"), b"extra")?;
     assert!(
         certify_general_video_codec_package(&fixture_settings(extra.path())?, &cancellation)
@@ -99,7 +117,7 @@ fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<(
     );
 
     let missing = tempfile::tempdir()?;
-    copy_tree(&fixture_root(), missing.path())?;
+    copy_tree(root, missing.path())?;
     fs::remove_file(missing.path().join("lib/libavfilter.so.10"))?;
     assert!(
         certify_general_video_codec_package(&fixture_settings(missing.path())?, &cancellation)
@@ -112,7 +130,7 @@ fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<(
         "dependency-contract-v1.signature.json",
     ] {
         let mutated = tempfile::tempdir()?;
-        copy_tree(&fixture_root(), mutated.path())?;
+        copy_tree(root, mutated.path())?;
         let path = mutated.path().join(relative_path);
         let mut bytes = fs::read(&path)?;
         let first = bytes
@@ -128,14 +146,14 @@ fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<(
     }
 
     let wrong_signer = NativeGeneralVideoCodecPackageSettings::from_fixture_authority(
-        &fixture_root(),
+        root,
         "sim.fixture.general-video.changed",
         FIXTURE_PUBLIC_KEY_HEX,
     )
     .map_err(|error| anyhow!(error))?;
     assert!(certify_general_video_codec_package(&wrong_signer, &cancellation).is_err());
     let wrong_key = NativeGeneralVideoCodecPackageSettings::from_fixture_authority(
-        &fixture_root(),
+        root,
         FIXTURE_SIGNER,
         &"11".repeat(32),
     )
@@ -147,13 +165,10 @@ fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<(
         use std::os::unix::fs::symlink;
 
         let linked = tempfile::tempdir()?;
-        copy_tree(&fixture_root(), linked.path())?;
+        copy_tree(root, linked.path())?;
         let license_path = linked.path().join("licenses/ffmpeg-license.txt");
         fs::remove_file(&license_path)?;
-        symlink(
-            fixture_root().join("licenses/ffmpeg-license.txt"),
-            &license_path,
-        )?;
+        symlink(root.join("licenses/ffmpeg-license.txt"), &license_path)?;
         let error = match certify_general_video_codec_package(
             &fixture_settings(linked.path())?,
             &cancellation,
@@ -171,7 +186,7 @@ fn signed_general_video_package_rejects_tree_and_payload_mutations() -> Result<(
     let cancellation = CancellationToken::default();
     cancellation.cancel();
     assert!(matches!(
-        certify_general_video_codec_package(&fixture_settings(&fixture_root())?, &cancellation,),
+        certify_general_video_codec_package(&fixture_settings(root)?, &cancellation,),
         Err(sim_runtime::GeneralVideoCodecPackageError::Cancelled)
     ));
     Ok(())
@@ -224,9 +239,10 @@ fn general_video_worker_publication_uses_one_ready_actor_and_three_shared_ports(
 
 #[test]
 fn general_video_worker_bundle_is_ready_or_typed_unsupported() -> Result<()> {
+    let fixture = signed_fixture()?;
     let cancellation = CancellationToken::default();
     let closure =
-        certify_general_video_codec_package(&fixture_settings(&fixture_root())?, &cancellation)?;
+        certify_general_video_codec_package(&fixture_settings(fixture.path())?, &cancellation)?;
     let (backend, _authority) = BackendWorkspaceAuthority::create_backend(4 * 1024 * 1024 * 1024)?;
     let result = NativeVideoCodecWorkerServices::start(closure, Arc::new(backend), &cancellation);
     #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]

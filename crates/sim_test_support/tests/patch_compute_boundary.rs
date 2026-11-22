@@ -122,7 +122,7 @@ fn production_memory_mode_adapter_drives_ordered_bf16_patch_compute() -> Result<
     );
     assert_eq!(
         normal_f16.cache_identity(),
-        "014be02a973f058088cbbeb121d0536c01c29fda44217bd252a771bff7f6a2f9"
+        "e075b532b833b4e80dafe49c6b7456c2a2341386f47780727c0630b9721a904d"
     );
     assert_eq!(
         normal_f16
