@@ -305,6 +305,134 @@ mod tests {
     }
 
     #[test]
+    fn at_gra_node_125_to_130_1_resolves_trigonometric_ports_and_overloads() {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_graph_craft::document::{NodeInput, value::TaggedValue};
+        use graphite_math_nodes::{
+            cosine, cosine_inverse, sine, sine_inverse, tangent, tangent_inverse,
+        };
+
+        for (identifier, canonical_name, label, first_port, bounded) in [
+            (
+                cosine::IDENTIFIER,
+                "math_nodes::CosineNode",
+                "Cosine",
+                "Theta",
+                false,
+            ),
+            (
+                cosine_inverse::IDENTIFIER,
+                "math_nodes::CosineInverseNode",
+                "Cosine Inverse",
+                "Value",
+                true,
+            ),
+            (
+                sine::IDENTIFIER,
+                "math_nodes::SineNode",
+                "Sine",
+                "Theta",
+                false,
+            ),
+            (
+                sine_inverse::IDENTIFIER,
+                "math_nodes::SineInverseNode",
+                "Sine Inverse",
+                "Value",
+                true,
+            ),
+            (
+                tangent::IDENTIFIER,
+                "math_nodes::TangentNode",
+                "Tangent",
+                "Theta",
+                false,
+            ),
+            (
+                tangent_inverse::IDENTIFIER,
+                "math_nodes::TangentInverseNode",
+                "Tangent Inverse",
+                "Value",
+                false,
+            ),
+        ] {
+            assert_eq!(identifier.as_str(), canonical_name);
+            let registered =
+                registered_node(identifier.as_str()).expect("pinned trigonometric node");
+            assert_eq!(registered.metadata.display_name, label);
+            assert_eq!(registered.metadata.category, "Math: Trig");
+            assert_eq!(registered.metadata.properties, None);
+            assert!(registered.metadata.context_features.is_empty());
+            let [value, radians] = registered.metadata.fields.as_slice() else {
+                panic!("two ordered input ports for {label}");
+            };
+            assert_eq!(value.name, first_port);
+            assert_eq!(
+                value.default_type,
+                Some(if bounded { item!(f64) } else { list!(f64) })
+            );
+            assert_eq!(value.number_hard_min, bounded.then_some(-1.));
+            assert_eq!(value.number_hard_max, bounded.then_some(1.));
+            assert_eq!(radians.name, "Radians");
+            assert_eq!(radians.default_type, Some(item!(bool)));
+            for field in [value, radians] {
+                assert!(matches!(field.value_source, RegistryValueSource::None));
+                assert!(matches!(
+                    field.widget_override,
+                    RegistryWidgetOverride::None
+                ));
+            }
+            let definition =
+                resolve_proto_node_type(identifier.clone()).expect("pinned definition");
+            let template = definition.default_node_template();
+            assert_eq!(
+                template.implementation,
+                NodeTemplateImplementation::ProtoNode(identifier.clone())
+            );
+            assert_eq!(
+                template.inputs,
+                vec![
+                    NodeInput::value(
+                        if bounded {
+                            TaggedValue::Number(0.)
+                        } else {
+                            TaggedValue::Numbers(Vec::new())
+                        },
+                        true
+                    ),
+                    NodeInput::value(TaggedValue::Bool(false), false),
+                ]
+            );
+
+            let mut signatures = HashSet::from([
+                binary_signature(item!(f64), item!(bool), concrete!(Item<f64>)),
+                binary_signature(list!(f64), list!(bool), concrete!(List<f64>)),
+            ]);
+            if !bounded {
+                let (item_output, list_output) = if identifier == tangent_inverse::IDENTIFIER {
+                    (concrete!(Item<f64>), concrete!(List<f64>))
+                } else {
+                    (concrete!(Item<DVec2>), concrete!(List<DVec2>))
+                };
+                signatures.extend([
+                    binary_signature(item!(DVec2), item!(bool), item_output),
+                    binary_signature(list!(DVec2), list!(bool), list_output),
+                ]);
+            }
+            assert_eq!(registered.signatures.len(), signatures.len(), "{label}");
+            assert_eq!(
+                registered.signatures.into_iter().collect::<HashSet<_>>(),
+                signatures,
+                "{label}"
+            );
+            assert!(matches!(
+                registered_node(label),
+                Err(RegistryError::MissingSourceNode)
+            ));
+        }
+    }
+
+    #[test]
     fn at_gra_node_101_103_113_1_rounding_keeps_exact_source_ports_and_signatures() {
         for (id, input_owner, input_index, name, expected_id) in [
             (

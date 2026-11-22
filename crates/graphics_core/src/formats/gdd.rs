@@ -4767,7 +4767,10 @@ fn graph_clipboard_input(
     imports: &[NodeInput],
 ) -> bool {
     match input {
-        NodeInput::Value { tagged_value, .. } => preview_numeric_value(tagged_value).is_ok(),
+        NodeInput::Value { tagged_value, .. } => {
+            matches!(**tagged_value, TaggedValue::Bool(_))
+                || preview_numeric_value(tagged_value).is_ok()
+        }
         NodeInput::Node {
             node_id,
             output_index: 0,
@@ -4924,7 +4927,11 @@ fn collect_numeric_preview_node(
     let inputs =
         numeric_preview_inputs(document).ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
     let mut resolved = Vec::with_capacity(inputs.len());
-    for input in inputs {
+    let has_radians_port = matches!(
+        &document.implementation,
+        DocumentNodeImplementation::ProtoNode(identifier) if is_trigonometric_proto(identifier)
+    );
+    for (index, input) in inputs.iter().enumerate() {
         let input = match input {
             // A detached pure branch receives the same literal the enclosing network holds.
             NodeInput::Import { import_index, .. } => imports
@@ -4935,7 +4942,12 @@ fn collect_numeric_preview_node(
         };
         match input {
             NodeInput::Value { tagged_value, .. } => {
-                preview_numeric_value(tagged_value)?;
+                if !(has_radians_port
+                    && index == 1
+                    && matches!(**tagged_value, TaggedValue::Bool(_)))
+                {
+                    preview_numeric_value(tagged_value)?;
+                }
             }
             NodeInput::Node {
                 node_id,
@@ -4988,11 +5000,28 @@ fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> 
         subtract::IDENTIFIER,
     ]
     .contains(identifier)
+        || is_trigonometric_proto(identifier)
     {
         Some(2)
     } else {
         None
     }
+}
+
+fn is_trigonometric_proto(identifier: &ProtoNodeIdentifier) -> bool {
+    use graphite_math_nodes::{
+        cosine, cosine_inverse, sine, sine_inverse, tangent, tangent_inverse,
+    };
+
+    [
+        cosine::IDENTIFIER,
+        cosine_inverse::IDENTIFIER,
+        sine::IDENTIFIER,
+        sine_inverse::IDENTIFIER,
+        tangent::IDENTIFIER,
+        tangent_inverse::IDENTIFIER,
+    ]
+    .contains(identifier)
 }
 
 fn preview_numeric_value(value: &TaggedValue) -> Result<GddNumericValue, GddArchiveError> {
@@ -8724,6 +8753,338 @@ mod tests {
                     .await
                     .expect("original graph")
                     .is_empty()
+            );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_125_to_130_2_saved_trigonometry_matches_pinned_numeric_nodes() {
+        use graphite_core_types::{
+            Context, Node,
+            list::{Item, List},
+        };
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_math_nodes::{
+            CosineInverseNode, CosineInverseNodeMapped, CosineNode, CosineNodeMapped,
+            SineInverseNode, SineInverseNodeMapped, SineNode, SineNodeMapped, TangentInverseNode,
+            TangentInverseNodeMapped, TangentNode, TangentNodeMapped, cosine, cosine_inverse, sine,
+            sine_inverse, tangent, tangent_inverse,
+        };
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let mut source = NodeNetwork::default();
+            let mut expected = BTreeMap::new();
+            let mut insert = |identifier, value, radians, output| {
+                let node = NodeId(source.nodes.len() as u64 + 1);
+                source.nodes.insert(
+                    node,
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::ProtoNode(identifier),
+                        inputs: vec![
+                            NodeInput::value(value, true),
+                            NodeInput::value(radians, false),
+                        ],
+                        ..Default::default()
+                    },
+                );
+                if let Some(output) = output {
+                    expected.insert(node, output);
+                }
+                node
+            };
+
+            macro_rules! evaluate {
+                ($node:ident, $value:expr, $radians:expr) => {
+                    $node::new(
+                        crate::Input(Item::new_from_element($value)),
+                        crate::Input(Item::new_from_element($radians)),
+                    )
+                    .eval(Context::default())
+                    .await
+                    .into_element()
+                };
+            }
+
+            for radians in [false, true] {
+                for (degrees, inverse_value) in [(0_f64, 0.), (90., 1.), (180., -1.), (30., -0.5)] {
+                    let theta = if radians {
+                        degrees.to_radians()
+                    } else {
+                        degrees
+                    };
+                    let angle = TaggedValue::Number;
+                    let vector = DVec2::new(theta, -theta * 0.5);
+                    for (identifier, input, output) in [
+                        (
+                            cosine::IDENTIFIER,
+                            angle(theta),
+                            evaluate!(CosineNode, theta, radians),
+                        ),
+                        (
+                            cosine_inverse::IDENTIFIER,
+                            angle(inverse_value),
+                            evaluate!(CosineInverseNode, inverse_value, radians),
+                        ),
+                        (
+                            sine::IDENTIFIER,
+                            angle(theta),
+                            evaluate!(SineNode, theta, radians),
+                        ),
+                        (
+                            sine_inverse::IDENTIFIER,
+                            angle(inverse_value),
+                            evaluate!(SineInverseNode, inverse_value, radians),
+                        ),
+                        (
+                            tangent::IDENTIFIER,
+                            angle(theta),
+                            evaluate!(TangentNode, theta, radians),
+                        ),
+                        (
+                            tangent_inverse::IDENTIFIER,
+                            angle(inverse_value),
+                            evaluate!(TangentInverseNode, inverse_value, radians),
+                        ),
+                        (
+                            tangent_inverse::IDENTIFIER,
+                            TaggedValue::DVec2(vector),
+                            evaluate!(TangentInverseNode, vector, radians),
+                        ),
+                    ] {
+                        insert(
+                            identifier,
+                            input,
+                            TaggedValue::Bool(radians),
+                            Some(GddNumericValue::Number(output)),
+                        );
+                    }
+                    for (identifier, output) in [
+                        (cosine::IDENTIFIER, evaluate!(CosineNode, vector, radians)),
+                        (sine::IDENTIFIER, evaluate!(SineNode, vector, radians)),
+                        (tangent::IDENTIFIER, evaluate!(TangentNode, vector, radians)),
+                    ] {
+                        insert(
+                            identifier,
+                            TaggedValue::DVec2(vector),
+                            TaggedValue::Bool(radians),
+                            Some(GddNumericValue::Vector(output.to_array())),
+                        );
+                    }
+                }
+                let angles = [0_f64, 90., 180.].map(|degrees| {
+                    if radians {
+                        degrees.to_radians()
+                    } else {
+                        degrees
+                    }
+                });
+                let inverse_domain = [-1.5, -1., 0., 1., 1.5];
+                let items = |values: &[f64]| {
+                    crate::Input(
+                        values
+                            .iter()
+                            .copied()
+                            .map(Item::new_from_element)
+                            .collect::<List<_>>(),
+                    )
+                };
+                let flags = || {
+                    crate::Input(
+                        std::iter::once(Item::new_from_element(radians)).collect::<List<_>>(),
+                    )
+                };
+                macro_rules! evaluate_list {
+                    ($node:ident, $values:expr) => {
+                        $node::new(items($values), flags())
+                            .eval(Context::default())
+                            .await
+                            .into_iter()
+                            .map(Item::into_element)
+                            .collect::<Vec<_>>()
+                            .into()
+                    };
+                }
+                for (identifier, values, output) in [
+                    (
+                        cosine::IDENTIFIER,
+                        angles.as_slice(),
+                        evaluate_list!(CosineNodeMapped, &angles),
+                    ),
+                    (
+                        cosine_inverse::IDENTIFIER,
+                        inverse_domain.as_slice(),
+                        evaluate_list!(CosineInverseNodeMapped, &inverse_domain),
+                    ),
+                    (
+                        sine::IDENTIFIER,
+                        angles.as_slice(),
+                        evaluate_list!(SineNodeMapped, &angles),
+                    ),
+                    (
+                        sine_inverse::IDENTIFIER,
+                        inverse_domain.as_slice(),
+                        evaluate_list!(SineInverseNodeMapped, &inverse_domain),
+                    ),
+                    (
+                        tangent::IDENTIFIER,
+                        angles.as_slice(),
+                        evaluate_list!(TangentNodeMapped, &angles),
+                    ),
+                    (
+                        tangent_inverse::IDENTIFIER,
+                        inverse_domain.as_slice(),
+                        evaluate_list!(TangentInverseNodeMapped, &inverse_domain),
+                    ),
+                    (
+                        sine::IDENTIFIER,
+                        &[][..],
+                        evaluate_list!(SineNodeMapped, &[]),
+                    ),
+                ] {
+                    insert(
+                        identifier,
+                        TaggedValue::Numbers(values.to_vec()),
+                        TaggedValue::Bool(radians),
+                        Some(GddNumericValue::NumberList(output)),
+                    );
+                }
+                for value in [-1.5, 1.5] {
+                    for (identifier, output) in [
+                        (
+                            cosine_inverse::IDENTIFIER,
+                            evaluate!(CosineInverseNode, value, radians),
+                        ),
+                        (
+                            sine_inverse::IDENTIFIER,
+                            evaluate!(SineInverseNode, value, radians),
+                        ),
+                    ] {
+                        insert(
+                            identifier,
+                            TaggedValue::Number(value),
+                            TaggedValue::Bool(radians),
+                            Some(GddNumericValue::Number(output)),
+                        );
+                    }
+                }
+            }
+            let wrong_port = insert(
+                sine::IDENTIFIER,
+                TaggedValue::Bool(true),
+                TaggedValue::Bool(false),
+                None,
+            );
+            let wrong_type = insert(
+                sine::IDENTIFIER,
+                TaggedValue::Number(0.5),
+                TaggedValue::Number(1.),
+                None,
+            );
+            let output_id = NodeId(1);
+            source.exports = vec![NodeInput::node(output_id, 0)];
+
+            let mut owner = document();
+            let resources = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(&source, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save the pinned trigonometric network");
+            let bytes: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("export with the source node definitions")
+                .into();
+            let budget = GddArchiveBudget {
+                max_entries: 512,
+                ..budget()
+            };
+            let saved = open_gdd_zip(&bytes, budget)
+                .await
+                .expect("reopen the saved trigonometric network");
+            let original_archive = saved
+                .export_archive(ArchiveFormat::Zip, budget.max_archive_bytes)
+                .expect("saved source archive");
+            let nodes = saved.graph_nodes().await.expect("saved node addresses");
+            assert_eq!(nodes.len(), expected.len() + 2);
+            for node in &nodes {
+                let result = saved.preview_graph_numeric_output(node).await;
+                match node.local_id {
+                    node_id if node_id == wrong_port => {
+                        assert!(
+                            matches!(result, Err(GddArchiveError::UnsupportedGraphNumericPreview)),
+                            "{node_id:?}: {result:?}"
+                        );
+                    }
+                    node_id if node_id == wrong_type => {
+                        assert!(
+                            matches!(
+                                result,
+                                Err(GddArchiveError::GraphNumericPreviewEvaluation(_))
+                            ),
+                            "{node_id:?}: {result:?}"
+                        );
+                    }
+                    node_id => {
+                        let output = result.expect("typed trigonometric output");
+                        assert!(
+                            output.same_value(expected.get(&node_id).expect("source result")),
+                            "{node_id:?}: {output:?}"
+                        );
+                    }
+                }
+            }
+            let node = nodes
+                .iter()
+                .find(|node| node.local_id == output_id)
+                .expect("exact saved root export");
+            let output = saved
+                .prepare_document_numeric_output(node, 0)
+                .await
+                .expect("pinned root export")
+                .evaluate()
+                .await
+                .expect("typed root export");
+            assert!(output.same_value(expected.get(&output_id).expect("source root output")));
+            let copied = saved
+                .copy_graph_nodes_to_clipboard(std::slice::from_ref(node), budget)
+                .await
+                .expect("copy the pinned scalar and Boolean inputs");
+            let root = saved
+                .graph_inspection()
+                .await
+                .expect("saved root")
+                .networks
+                .into_iter()
+                .find(|network| network.parent.is_none())
+                .expect("root scope");
+            let pasted = saved
+                .paste_graph_nodes_in_copy(&root, &copied, budget)
+                .await
+                .expect("paste and type-check the source node");
+            let copied_nodes = pasted.graph_nodes().await.expect("pasted node addresses");
+            let copy = copied_nodes
+                .iter()
+                .find(|candidate| {
+                    !nodes
+                        .iter()
+                        .any(|original| candidate.storage_id == original.storage_id)
+                })
+                .expect("fresh pasted identity");
+            let result = pasted
+                .preview_graph_numeric_output(copy)
+                .await
+                .expect("pasted trigonometric output");
+            assert!(result.same_value(&output));
+            assert_eq!(
+                saved
+                    .export_archive(ArchiveFormat::Zip, budget.max_archive_bytes)
+                    .expect("untouched source"),
+                original_archive
             );
         });
     }
