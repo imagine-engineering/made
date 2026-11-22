@@ -58,7 +58,9 @@ use graphite_graph_craft::{
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
-use crate::evaluate::{UnaryNumericOperation, evaluate_detached_numeric_network};
+use crate::evaluate::{
+    UnaryNumericOperation, evaluate_detached_numeric_network, typecheck_detached_numeric_network,
+};
 
 mod xz;
 
@@ -135,6 +137,10 @@ pub enum GddArchiveError {
     StaleGraphNetwork,
     #[error("Select a standalone nested Graphite network to append an export.")]
     UnsupportedGraphExportAppend,
+    #[error("Select an ordinary numeric output in the same Graphite network and an empty export.")]
+    UnsupportedGraphExportConnection,
+    #[error("Graphite could not resolve the selected export type. {0}")]
+    GraphExportTypeMismatch(String),
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
     #[error("The Graphite node already has the requested pin state.")]
@@ -300,11 +306,23 @@ pub struct GddGraphNetwork {
     snapshot: Arc<()>,
     path: Vec<NodeId>,
     can_append_export: bool,
+    empty_exports: Vec<usize>,
 }
 
 impl GddGraphNetwork {
     pub fn can_append_export_in_copy(&self) -> bool {
         self.can_append_export
+    }
+
+    pub fn empty_exports(&self) -> &[usize] {
+        &self.empty_exports
+    }
+
+    pub fn can_connect_export_from(&self, node: &GddGraphNode) -> bool {
+        self.can_append_export
+            && self.id == node.network_id
+            && Arc::ptr_eq(&self.snapshot, &node.snapshot)
+            && node.can_supply_numeric_export
     }
 }
 
@@ -324,6 +342,7 @@ pub struct GddGraphNode {
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
+    can_supply_numeric_export: bool,
     grid_position: Option<[i32; 2]>,
 }
 
@@ -730,6 +749,7 @@ impl InspectedGddV1 {
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
+                    can_supply_numeric_export: false,
                     grid_position: None,
                 })
             })
@@ -765,6 +785,14 @@ impl InspectedGddV1 {
                                 metadata.persistent_metadata.reference.is_none()
                             })
                     }),
+                    empty_exports: interface
+                        .nested_network(path)
+                        .ok_or(GddArchiveError::MissingGraphNetwork)?
+                        .exports
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, input)| empty_graph_export(input).then_some(index))
+                        .collect(),
                 })
             })
             .collect::<Result<_, GddArchiveError>>()?;
@@ -804,6 +832,9 @@ impl InspectedGddV1 {
                 && interface
                     .document_node(&node.local_id, path)
                     .is_some_and(|document| numeric_preview_inputs(document).is_some());
+            node.can_supply_numeric_export = node.can_preview_numeric_output
+                && !interface.is_chain(&node.local_id, path)
+                && interface.number_of_outputs(&node.local_id, path) == 1;
             node.can_duplicate_in_copy = node.numeric_input.is_some()
                 && !interface.is_chain(&node.local_id, path)
                 && interface
@@ -932,6 +963,83 @@ impl InspectedGddV1 {
             || !actual
                 .node_metadata(&owner_id, parent_path)
                 .is_some_and(|metadata| metadata.persistent_metadata.output_names == output_names)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn connect_numeric_network_export_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        source: &GddGraphNode,
+        export_index: usize,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(source)?;
+        if !Arc::ptr_eq(&self.snapshot, &network.snapshot) {
+            return Err(GddArchiveError::StaleGraphNetwork);
+        }
+        if !network.can_connect_export_from(source)
+            || !network.empty_exports().contains(&export_index)
+        {
+            return Err(GddArchiveError::UnsupportedGraphExportConnection);
+        }
+        let path = &network.path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let nested = interface
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        let mut expected_exports = nested.exports.clone();
+        let export = expected_exports
+            .get_mut(export_index)
+            .filter(|input| empty_graph_export(input))
+            .ok_or(GddArchiveError::UnsupportedGraphExportConnection)?;
+        let detached = numeric_preview_network(nested, source.local_id)?;
+        typecheck_detached_numeric_network(detached)
+            .map_err(GddArchiveError::GraphExportTypeMismatch)?;
+
+        let template = interface
+            .create_node_template(&source.local_id, path)
+            .ok_or(GddArchiveError::StaleGraphNode)?;
+        let wire = NodeInput::node(source.local_id, 0);
+        *export = wire.clone();
+        interface.create_wire(
+            &OutputConnector::primary_output(source.local_id),
+            &InputConnector::Export(export_index),
+            path,
+        );
+        if !interface
+            .nested_network(path)
+            .is_some_and(|nested| nested.exports == expected_exports)
+            || interface
+                .create_node_template(&source.local_id, path)
+                .as_ref()
+                != Some(&template)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let edit = EditorDelta::Graph(RuntimeDelta::SetExport {
+            network_path: path.clone(),
+            export_index,
+            input: Some(wire),
+        });
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
+        if !matches!(
+            batch.ops.as_slice(),
+            [RegistryDelta::SetNetworkExport {
+                id, index, export: Some(graphite_document_graph_storage::NodeInput::Node {id: source_id, index: 0})
+            }] if *id == network.id && *index as usize == export_index && *source_id == source.storage_id
+        ) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if !actual
+            .nested_network(path)
+            .is_some_and(|nested| nested.exports == expected_exports)
+            || actual.create_node_template(&source.local_id, path) != Some(template)
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -2142,6 +2250,10 @@ fn numeric_node_identifier(operation: UnaryNumericOperation) -> ProtoNodeIdentif
     }
 }
 
+fn empty_graph_export(input: &NodeInput) -> bool {
+    matches!(input, NodeInput::Value { tagged_value, exposed: true } if **tagged_value == TaggedValue::None)
+}
+
 fn numeric_preview_network(
     source: &NodeNetwork,
     selected: NodeId,
@@ -3187,6 +3299,106 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_021_022_1_connects_only_the_selected_empty_export_in_one_history_step() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget()).await.expect("source graph");
+            let original_graph = original
+                .graph_inspection()
+                .await
+                .expect("source network list");
+            let [_, original_network] = original_graph.networks.as_slice() else {
+                panic!("expected a nested network");
+            };
+            let appended = original
+                .append_nested_network_export_in_copy(original_network, budget())
+                .await
+                .expect("save an empty export");
+            let graph = appended.graph_inspection().await.expect("addressed graph");
+            let [_, selected_network] = graph.networks.as_slice() else {
+                panic!("expected the saved nested network");
+            };
+            let [root_node, _, source, ..] = graph.nodes.as_slice() else {
+                panic!("expected repeated local node IDs");
+            };
+            assert_eq!(root_node.local_id, source.local_id);
+            assert_eq!(selected_network.empty_exports(), &[0]);
+            assert!(!selected_network.can_connect_export_from(root_node));
+            assert!(matches!(
+                appended
+                    .connect_numeric_network_export_in_copy(
+                        selected_network,
+                        root_node,
+                        0,
+                        budget()
+                    )
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphExportConnection)
+            ));
+            assert!(matches!(
+                appended
+                    .connect_numeric_network_export_in_copy(original_network, source, 0, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let wired = appended
+                .connect_numeric_network_export_in_copy(selected_network, source, 0, budget())
+                .await
+                .expect("connect source primary output to the empty export");
+            assert_eq!(wired.history_len(), appended.history_len() + 1);
+            let registry = wired.document.registry();
+            assert_eq!(
+                registry.node_instances,
+                appended.document.registry().node_instances
+            );
+            let stored = registry.networks[&selected_network.id]
+                .exports
+                .first()
+                .expect("saved primary slot");
+            assert!(matches!(&stored.target,
+                Some(graphite_document_graph_storage::NodeInput::Node { id, index: 0 }) if *id == source.storage_id));
+            let resolved = wired
+                .graph_inspection()
+                .await
+                .expect("reopened connected export");
+            let [_, resolved_network] = resolved.networks.as_slice() else {
+                panic!("expected the connected nested network");
+            };
+            assert!(resolved_network.empty_exports().is_empty());
+            let replacement = resolved
+                .nodes
+                .iter()
+                .find(|node| node.storage_id == source.storage_id)
+                .expect("same source node");
+            assert!(matches!(
+                wired
+                    .connect_numeric_network_export_in_copy(
+                        resolved_network,
+                        replacement,
+                        0,
+                        budget()
+                    )
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphExportConnection)
+            ));
+            let undo = wired
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores the empty export");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(appended.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores that export wire");
+            assert!(redo.document.registry().value_equal(registry));
         });
     }
 

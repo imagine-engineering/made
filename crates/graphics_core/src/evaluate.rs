@@ -2,7 +2,7 @@ use std::{fmt, future::Future, ops::Sub, panic::AssertUnwindSafe, sync::Arc};
 
 use futures::FutureExt as _;
 use graphite_core_types::{
-    Color, Context, Node,
+    Color, Context, Node, Type,
     list::{Item, List},
 };
 use graphite_glam::{DAffine2, DVec2};
@@ -16,8 +16,11 @@ use graphite_graph_craft::{
         value::{RenderOutput, RenderOutputType, TaggedValue},
     },
     graphene_compiler::{Compiler, Executor},
+    proto::{ProtoNetwork, TypingContext},
 };
-use graphite_interpreted_executor::dynamic_executor::DynamicExecutor;
+use graphite_interpreted_executor::{
+    dynamic_executor::DynamicExecutor, node_registry::NODE_REGISTRY,
+};
 use graphite_math_nodes::{NthRoot, SafeDivide};
 use graphite_std::{
     ATTR_TRANSFORM, Artboard, Graphic,
@@ -376,36 +379,7 @@ pub(crate) async fn evaluate_detached_numeric_network(
     network: NodeNetwork,
 ) -> Result<TaggedValue, String> {
     AssertUnwindSafe(async {
-        let branch_id = NodeId(0);
-        let mut network = NodeNetwork {
-            nodes: [(
-                branch_id,
-                DocumentNode {
-                    implementation: DocumentNodeImplementation::Network(network),
-                    ..Default::default()
-                },
-            )]
-            .into_iter()
-            .collect(),
-            exports: vec![NodeInput::node(branch_id, 0)],
-            ..Default::default()
-        };
-        graphite_preprocessor::Preprocessor::new()
-            .preprocess(&mut network, &|_| None)
-            .map_err(|error| error.to_string())?;
-        if !network.nodes.get(&branch_id).is_some_and(|branch| {
-            matches!(
-                branch.implementation,
-                DocumentNodeImplementation::Network(_)
-            )
-        }) {
-            return Err(
-                "Graphite changed the selected numeric branch during preprocessing.".into(),
-            );
-        }
-        // The preprocessor injects registered scopes that the pure branch never uses.
-        network.remove_dead_nodes(0);
-        let proto = Compiler {}.compile_single(network)?;
+        let proto = compile_detached_numeric_network(network)?;
         let executor = DynamicExecutor::new(proto)
             .await
             .map_err(|errors| format!("{errors:?}"))?;
@@ -421,6 +395,66 @@ pub(crate) async fn evaluate_detached_numeric_network(
     .unwrap_or_else(|_| {
         Err("The pinned Graphite evaluator stopped while preparing the numeric graph.".into())
     })
+}
+
+pub(crate) fn typecheck_detached_numeric_network(network: NodeNetwork) -> Result<(), String> {
+    std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let proto = compile_detached_numeric_network(network)?;
+        let mut typing = TypingContext::new(&NODE_REGISTRY);
+        typing
+            .update(&proto)
+            .map_err(|error| format!("{error:?}"))?;
+        let types = typing
+            .type_of(proto.output)
+            .ok_or_else(|| "Graphite did not resolve the selected output type.".to_owned())?;
+        let numeric = match types.return_value.nested_type() {
+            Type::Item(element) | Type::List(element) => [
+                graphite_core_types::concrete!(f64),
+                graphite_core_types::concrete!(i64),
+                graphite_core_types::concrete!(DVec2),
+            ]
+            .contains(element.as_ref()),
+            _ => false,
+        };
+        if types.call_argument != graphite_core_types::concrete!(Context<'static>) || !numeric {
+            return Err("The selected output has an unsupported Graphite numeric type.".into());
+        }
+        Ok(())
+    }))
+    .unwrap_or_else(|_| {
+        Err("The pinned Graphite compiler stopped while typing the selected output.".into())
+    })
+}
+
+fn compile_detached_numeric_network(network: NodeNetwork) -> Result<ProtoNetwork, String> {
+    let branch_id = NodeId(0);
+    let mut network = NodeNetwork {
+        nodes: [(
+            branch_id,
+            DocumentNode {
+                implementation: DocumentNodeImplementation::Network(network),
+                ..Default::default()
+            },
+        )]
+        .into_iter()
+        .collect(),
+        exports: vec![NodeInput::node(branch_id, 0)],
+        ..Default::default()
+    };
+    graphite_preprocessor::Preprocessor::new()
+        .preprocess(&mut network, &|_| None)
+        .map_err(|error| error.to_string())?;
+    if !network.nodes.get(&branch_id).is_some_and(|branch| {
+        matches!(
+            branch.implementation,
+            DocumentNodeImplementation::Network(_)
+        )
+    }) {
+        return Err("Graphite changed the selected numeric branch during preprocessing.".into());
+    }
+    // The preprocessor injects registered scopes that the pure branch never uses.
+    network.remove_dead_nodes(0);
+    Compiler {}.compile_single(network)
 }
 
 pub fn evaluate_absolute_value_i64(value: i64) -> Result<i64, AddEvaluationError> {

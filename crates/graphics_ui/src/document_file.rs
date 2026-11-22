@@ -525,6 +525,11 @@ enum GraphiteCopy {
         position: [i32; 2],
     },
     AppendNetworkExport(Box<GddGraphNetwork>),
+    ConnectNetworkExport {
+        network: Box<GddGraphNetwork>,
+        source: Box<GddGraphNode>,
+        export_index: usize,
+    },
     EditNode {
         node: Box<GddGraphNode>,
         change: NodeCopyChange,
@@ -889,6 +894,33 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn connect_network_export(
+        &mut self,
+        export_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some((source, network)) = form.selected_node().zip(form.active_network()) else {
+            return;
+        };
+        if network.can_connect_export_from(source)
+            && network.empty_exports().contains(&export_index)
+        {
+            self.save_copy(
+                GraphiteCopy::ConnectNetworkExport {
+                    network: Box::new(network.clone()),
+                    source: Box::new(source.clone()),
+                    export_index,
+                },
+                window,
+                cx,
+            );
+        }
+    }
+
     fn toggle_node_output_preview(&mut self, cx: &mut Context<Self>) {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
@@ -1183,6 +1215,10 @@ impl GraphiteDocumentItem {
                 });
                 let selected = form.selected_node();
                 let has_nodes = form.nodes.iter().any(|node| form.includes_node(node));
+                let empty_exports = selected
+                    .zip(form.active_network())
+                    .filter(|(source, network)| network.can_connect_export_from(source))
+                    .map_or(&[][..], |(_, network)| network.empty_exports());
                 panel
                     .when_some(form.active_network(), |panel, network| {
                         panel
@@ -1241,6 +1277,22 @@ impl GraphiteDocumentItem {
                             )),
                     ))
                     .when(!has_nodes, |panel| panel.child(Label::new("This network has no nodes.")))
+                    .when(!empty_exports.is_empty(), |panel| {
+                        panel.child(
+                            h_flex().gap_2().flex_wrap().children(empty_exports.iter().copied().map(|export_index| {
+                                div()
+                                    .debug_selector(move || format!("GRAPHITE-GDD-CONNECT-EXPORT-{export_index}"))
+                                    .child(Button::new(
+                                        ("graphite-gdd-connect-export", export_index),
+                                        format!("Connect to Export {} in a Copy", export_index + 1),
+                                    )
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(move |item, _, window, cx| {
+                                        item.connect_network_export(export_index, window, cx);
+                                    })))
+                            })),
+                        )
+                    })
                     .when(selected.is_some_and(|node| node.nested_network().is_some()), |panel| {
                         panel.child(
                             div()
@@ -1668,6 +1720,7 @@ impl GraphiteDocumentItem {
                     GraphiteCopy::Original | GraphiteCopy::Export(_) => "Copy of",
                     GraphiteCopy::RecoverFolder => "Recovered",
                     GraphiteCopy::AppendNetworkExport(_) => "Added export in",
+                    GraphiteCopy::ConnectNetworkExport { .. } => "Connected export in",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
                     GraphiteCopy::InsertNumericNode { .. }
@@ -1840,6 +1893,20 @@ impl GraphiteDocumentItem {
                             GraphiteCopy::AppendNetworkExport(network) => Some(
                                 archive
                                     .append_nested_network_export_in_copy(&network, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
+                            GraphiteCopy::ConnectNetworkExport {
+                                network,
+                                source,
+                                export_index,
+                            } => Some(
+                                archive
+                                    .connect_numeric_network_export_in_copy(
+                                        &network,
+                                        &source,
+                                        export_index,
+                                        ARCHIVE_BUDGET,
+                                    )
                                     .await?,
                             ),
                             GraphiteCopy::InsertNumericNode {
@@ -2636,6 +2703,13 @@ mod tests {
                     ),
                 ),
                 (
+                    NodeId(12),
+                    proto(
+                        absolute_value::IDENTIFIER,
+                        vec![NodeInput::value(TaggedValue::Integer(-17), false)],
+                    ),
+                ),
+                (
                     NodeId(24),
                     DocumentNode {
                         implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
@@ -2702,7 +2776,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn at_gra_graph_022_2_workspace_appends_a_nested_export_in_a_copy(
+    async fn at_gra_graph_022_2_workspace_appends_and_connects_a_nested_export_in_copies(
         cx: &mut TestAppContext,
     ) {
         let (original, original_history) = graph_navigation_archive().await;
@@ -2769,7 +2843,52 @@ mod tests {
             .find(|network| network.id == original_network)
             .expect("same saved network");
         assert_eq!((network.import_count, network.export_count), (2, 3));
+        assert_eq!(network.empty_exports(), &[2]);
         assert_eq!(contents.history_len(), original_history + 2);
+
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
+        paint(window);
+        click(window, "GRAPHITE-GDD-CONNECT-EXPORT-2");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-CONNECT-EXPORT-2");
+        let destination = PathBuf::from("/project/wired-export.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let wired = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened wired copy");
+        assert_ne!(wired, reopened);
+        let wired_contents = wired.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the connected export folder");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let wired_networks = wired_contents
+            .graph_inspection()
+            .await
+            .expect("saved connected exports")
+            .networks;
+        let wired_network = wired_networks
+            .iter()
+            .find(|network| network.id == original_network)
+            .expect("same saved network");
+        assert_eq!(wired_network.export_count, 3);
+        assert!(wired_network.empty_exports().is_empty());
+        assert_eq!(wired_contents.history_len(), original_history + 3);
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
@@ -2817,7 +2936,7 @@ mod tests {
                     .iter()
                     .filter(|node| form.includes_node(node))
                     .count(),
-                5
+                6
             );
             assert_eq!(
                 form.nodes
@@ -2834,7 +2953,7 @@ mod tests {
                 .debug_bounds("GRAPHITE-GDD-NODE-COPY-ITEM-0")
                 .is_none()
         );
-        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-7");
         paint(window);
         click(window, "GRAPHITE-GDD-ENTER-NETWORK");
         paint(window);
@@ -2883,7 +3002,7 @@ mod tests {
         );
         assert!(
             window
-                .debug_bounds("GRAPHITE-GDD-NODE-COPY-ITEM-6")
+                .debug_bounds("GRAPHITE-GDD-NODE-COPY-ITEM-7")
                 .is_some()
         );
         assert_eq!(
